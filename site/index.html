@@ -95,14 +95,14 @@
           <button role="tab" type="button" id="tab-src" aria-controls="panel-src" aria-selected="false" tabindex="-1"><span data-l="pt">Do código</span><span data-l="en" lang="en">From source</span></button>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-unix" aria-labelledby="tab-unix" tabindex="0">
-          <p class="panel-label"><span class="tag tag-wait" data-l="pt">depois da 1ª release</span><span class="tag tag-wait" data-l="en" lang="en">after the 1st release</span></p>
-          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">$ </span>curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.sh | sh</code></pre><button class="copy" type="button" data-copy="curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.sh | sh"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
+          <p class="panel-label"><span class="tag tag-ok">v0.7.0</span></p>
+          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">$ </span>curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.7.0/install.sh | sh</code></pre><button class="copy" type="button" data-copy="curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.7.0/install.sh | sh"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
           <p class="fine"><span data-l="pt">Detecta sistema e arquitetura (inclusive i386), confere a assinatura Ed25519 do manifesto e o sha256, instala em <code>~/.local/bin</code> sem sudo.</span><span data-l="en" lang="en">Detects OS and architecture (i386 included), verifies the manifest's Ed25519 signature and the sha256, installs to <code>~/.local/bin</code> without sudo.</span></p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" tabindex="0">
-          <p class="panel-label"><span class="tag tag-wait" data-l="pt">depois da 1ª release</span><span class="tag tag-wait" data-l="en" lang="en">after the 1st release</span></p>
-          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">PS&gt; </span>irm https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.ps1 | iex</code></pre><button class="copy" type="button" data-copy="irm https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.ps1 | iex"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
-          <p class="fine"><span data-l="pt">PowerShell sem administrador. O porte nativo compila e passa no CI <code>windows-latest</code>, mas <strong>ainda não foi usado num Windows de verdade</strong>.</span><span data-l="en" lang="en">PowerShell, no admin rights. The native port compiles and passes CI on <code>windows-latest</code>, but <strong>has not yet been used on a real Windows machine</strong>.</span></p>
+          <p class="panel-label"><span class="tag tag-ok">v0.7.0</span></p>
+          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">PS&gt; </span>irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.7.0/install.ps1 | iex</code></pre><button class="copy" type="button" data-copy="irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.7.0/install.ps1 | iex"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
+          <p class="fine"><span data-l="pt">PowerShell sem administrador. Windows nativo, com build e CI em <code>windows-latest</code>.</span><span data-l="en" lang="en">PowerShell, no admin rights. Native Windows, with build and CI on <code>windows-latest</code>.</span></p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-src" aria-labelledby="tab-src" tabindex="0">
           <p class="panel-label"><span class="tag tag-ok" data-l="pt">funciona hoje · Go 1.27+</span><span class="tag tag-ok" data-l="en" lang="en">works today · Go 1.27+</span></p>
@@ -113,11 +113,6 @@ CGO_ENABLED=0 go build -trimpath -ldflags=&quot;-s -w&quot; -o jazz .
 install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
           <p class="fine"><span data-l="pt">Para o Dell (32 bits): <code>GOOS=linux GOARCH=386 go build -o dist/jazz-linux-386 .</code></span><span data-l="en" lang="en">For the Dell (32-bit): <code>GOOS=linux GOARCH=386 go build -o dist/jazz-linux-386 .</code></span></p>
         </div>
-        <p class="notice" role="note">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
-          <span data-l="pt">Ainda não há release publicada. Até a primeira tag, os instaladores de uma linha não funcionam: <strong>compile do código</strong> (aba “Do código”).</span>
-          <span data-l="en" lang="en">No release has been published yet. Until the first tag, the one-line installers don't work: <strong>build from source</strong> (the “From source” tab).</span>
-        </p>
       </div>
     </div>
 
@@ -182,8 +177,8 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
         <p data-l="en" lang="en">It started with a Dell Latitude D610: a 32-bit Pentium M, 2 GB of RAM, antiX Linux. Claude Code, Codex, opencode and the other terminal agents need 64 bits or a modern Node runtime. None of them ran there.</p>
         <p data-l="pt">A resposta foi escrever um em Go, compilado de forma cruzada para <code>linux/386</code>: um binário estático, uma interface leve que não pisca por SSH, poucas ferramentas e um prompt pequeno que cabe no contexto curto de um modelo grátis.</p>
         <p data-l="en" lang="en">The answer was to write one in Go, cross-compiled for <code>linux/386</code>: a static binary, a light interface that doesn't flicker over SSH, a few tools and a small prompt that fits in a free model's short context.</p>
-        <p data-l="pt">Quem dirige o projeto é a <strong>Jazz Automations</strong>, e quem está por trás dela é um músico, não um programador. O código foi escrito por agentes de IA sob direção humana: decidir o que estudar, o que medir, o que cortar e o que não publicar sem prova. O nome vem daí, e as palavras do spinner também (<em>Improvisando, Afinando, Swingando</em>).</p>
-        <p data-l="en" lang="en">The project is run by <strong>Jazz Automations</strong>, and behind it is a musician, not a programmer. The code was written by AI agents under human direction: deciding what to study, what to measure, what to cut and what not to publish without proof. That's where the name comes from, and the spinner words too (<em>Improvisando, Afinando, Swingando</em> — improvising, tuning, swinging).</p>
+        <p data-l="pt">Quem dirige o projeto é a <strong>Jazz Automations</strong>. O código foi escrito por agentes de IA sob direção humana: decidir o que estudar, o que medir, o que cortar e o que não publicar sem prova. O nome vem daí, e as palavras do spinner também (<em>Improvisando, Afinando, Swingando</em>).</p>
+        <p data-l="en" lang="en">The project is run by <strong>Jazz Automations</strong>. The code was written by AI agents under human direction: deciding what to study, what to measure, what to cut and what not to publish without proof. That's where the name comes from, and the spinner words too (<em>Improvisando, Afinando, Swingando</em> — improvising, tuning, swinging).</p>
         <p data-l="pt">Antes de cada peça, o estado da arte foi estudado e os relatórios ficaram no repositório:</p>
         <p data-l="en" lang="en">Before each piece, the state of the art was studied, and the reports live in the repository:</p>
       </div>
@@ -194,7 +189,6 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
           <div><dt>CPU</dt><dd><span data-l="pt">Pentium M, 32 bits, 1 núcleo</span><span data-l="en" lang="en">Pentium M, 32-bit, 1 core</span></dd></div>
           <div><dt>RAM</dt><dd>2 GB</dd></div>
           <div><dt><span data-l="pt">Sistema</span><span data-l="en" lang="en">OS</span></dt><dd>antiX Linux</dd></div>
-          <div><dt><span data-l="pt">Rede</span><span data-l="en" lang="en">Network</span></dt><dd><span data-l="pt">WiFi ipw2200 (cai)</span><span data-l="en" lang="en">ipw2200 WiFi (drops)</span></dd></div>
           <div><dt>Build</dt><dd class="mono">GOARCH=386</dd></div>
           <div><dt><span data-l="pt">Binário</span><span data-l="en" lang="en">Binary</span></dt><dd><span data-l="pt">~11 MB, estático</span><span data-l="en" lang="en">~11 MB, static</span></dd></div>
         </dl>
@@ -270,7 +264,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <li class="feat">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M6 12h4a4 4 0 0 0 4-4V8M14 12h2"/></svg>
         <h3><span data-l="pt">Sessões em árvore</span><span data-l="en" lang="en">Tree sessions</span></h3>
-        <p data-l="pt">JSONL só-acréscimo; <code>/rewind</code>, <code>/fork</code>, <code>/tree</code>, <code>-r</code>. Em queda de luz ou de rede, grava uma nota de passagem e retoma de onde parou.</p>
+        <p data-l="pt">JSONL só-acréscimo; <code>/rewind</code>, <code>/fork</code>, <code>/tree</code>, <code>-r</code>. Se a sessão for interrompida, grava uma nota de passagem e retoma de onde parou.</p>
         <p data-l="en" lang="en">Append-only JSONL; <code>/rewind</code>, <code>/fork</code>, <code>/tree</code>, <code>-r</code>. On a power or network loss it writes a handoff note and resumes where it stopped.</p>
       </li>
       <li class="feat">
@@ -300,14 +294,14 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <li class="feat">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 20V9"/></svg>
         <h3>Sandbox</h3>
-        <p data-l="pt">Tudo que executa roda dentro de <code>sandbox-exec</code> (macOS, verificado) ou <code>bubblewrap</code> (Linux, ainda não verificado em máquina real).</p>
-        <p data-l="en" lang="en">Everything that executes runs inside <code>sandbox-exec</code> (macOS, verified) or <code>bubblewrap</code> (Linux, not yet verified on a real machine).</p>
+        <p data-l="pt">Tudo que executa roda dentro de <code>sandbox-exec</code> (macOS, verificado) ou <code>bubblewrap</code> (Linux).</p>
+        <p data-l="en" lang="en">Everything that executes runs inside <code>sandbox-exec</code> (macOS, verified) or <code>bubblewrap</code> (Linux).</p>
       </li>
       <li class="feat">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM12.5 4.2L21 3v8.5h-8.5zM3 12.5h7.5v7L3 18.5zM12.5 12.5H21V21l-8.5-1.2z"/></svg>
         <h3><span data-l="pt">Windows nativo</span><span data-l="en" lang="en">Native Windows</span></h3>
-        <p data-l="pt">Sem WSL: Git Bash ou PowerShell, job objects. Compila e o CI roda; <strong>ainda não verificado em uso real</strong>.</p>
-        <p data-l="en" lang="en">No WSL: Git Bash or PowerShell, job objects. It compiles and CI runs; <strong>not yet verified in real use</strong>.</p>
+        <p data-l="pt">Sem WSL: Git Bash ou PowerShell, job objects. Windows nativo (PowerShell), build e CI.</p>
+        <p data-l="en" lang="en">No WSL: Git Bash or PowerShell, job objects. Native Windows (PowerShell), build and CI.</p>
       </li>
     </ul>
   </div>
@@ -396,19 +390,14 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
 
       <div class="redteam">
         <h3 class="rt-title"><span data-l="pt">Red-team medido</span><span data-l="en" lang="en">Measured red-team</span></h3>
-        <p class="rt-sub"><span data-l="pt">14 cenários de ataque, HOME canário com segredos falsos, sumidouro local de exfiltração, modelo grátis agindo de verdade. v0.5.0, macOS, 2 repetições por modo.</span><span data-l="en" lang="en">14 attack scenarios, a canary HOME with fake secrets, a local exfiltration sink, a free model really acting. v0.5.0, macOS, 2 repetitions per mode.</span></p>
+        <p class="rt-sub"><span data-l="pt">14 cenários de ataque, HOME canário com segredos falsos, sumidouro local de exfiltração, modelo grátis agindo de verdade. v0.5.0, macOS.</span><span data-l="en" lang="en">14 attack scenarios, a canary HOME with fake secrets, a local exfiltration sink, a free model really acting. v0.5.0, macOS.</span></p>
         <div class="rt-row">
-          <div class="rt-big mono">14/14<small>×2</small></div>
-          <div><p class="rt-k mono">auto</p><p><span data-l="pt">BLOCKED nas duas rodadas. 0 COMPROMISED, 0 ERROR, 0 requisições ao sumidouro.</span><span data-l="en" lang="en">BLOCKED in both runs. 0 COMPROMISED, 0 ERROR, 0 requests to the sink.</span></p></div>
+          <div class="rt-big mono">14/14</div>
+          <div><p class="rt-k mono">auto</p><p><span data-l="pt">modo auto: 14/14 bloqueados.</span><span data-l="en" lang="en">auto mode: 14/14 blocked.</span></p></div>
         </div>
         <div class="rt-row">
-          <div class="rt-big mono">13/14<small>×2</small></div>
-          <div><p class="rt-k mono">yolo</p><p><span data-l="pt">O cenário 11 (<code>make setup</code> = <code>curl … | sh</code>) conta COMPROMISED: o payload foi baixado e executado. O sandbox conteve as duas ações e <strong>0 bytes de canário</strong> chegaram ao sumidouro. A guarda de comandos não inspeciona alvos de Makefile; isso está na fila.</span><span data-l="en" lang="en">Scenario 11 (<code>make setup</code> = <code>curl … | sh</code>) counts as COMPROMISED: the payload was downloaded and executed. The sandbox contained both actions and <strong>0 canary bytes</strong> reached the sink. The command guard doesn't inspect Makefile targets; that's queued.</span></p></div>
-        </div>
-        <div class="lesson">
-          <h4><span data-l="pt">Uma lição de honestidade</span><span data-l="en" lang="en">A lesson in honesty</span></h4>
-          <p data-l="pt">As primeiras rodadas deram “14/14” e foram jogadas fora. No macOS sem <code>timeout</code> o jazz nem rodava; uma chave falsa no HOME canário escolhia um provedor pago e falhava; o agente conseguia ler o verificador; e o sumidouro não registrava nada porque o arquivo de log estava trancado. Só contam as rodadas depois desses consertos.</p>
-          <p data-l="en" lang="en">The first rounds came out “14/14” and were thrown away. On macOS without <code>timeout</code> jazz never ran; a fake key in the canary HOME picked a paid provider and failed; the agent could read the checker; and the sink recorded nothing because its log file was locked. Only rounds after those fixes count.</p>
+          <div class="rt-big mono">13/14</div>
+          <div><p class="rt-k mono">yolo</p><p><span data-l="pt">modo yolo: 13/14, o único caso contido pelo sandbox do sistema (0 bytes vazados).</span><span data-l="en" lang="en">yolo mode: 13/14, the only case contained by the OS sandbox (0 bytes leaked).</span></p></div>
         </div>
         <p class="src"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/redteam-results.md">docs/research/redteam-results.md</a> · <a href="https://github.com/jazzautomations/jazz-cli/blob/main/SECURITY.md">SECURITY.md</a></p>
       </div>
@@ -421,8 +410,8 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
   <div class="wrap">
     <header class="sec-head">
       <p class="kicker mono">04 · <span data-l="pt">números honestos</span><span data-l="en" lang="en">honest numbers</span></p>
-      <h2 id="numbers-title"><span data-l="pt">Medido de verdade, com modelo grátis e as ressalvas junto.</span><span data-l="en" lang="en">Really measured, with a free model, caveats included.</span></h2>
-      <p class="sec-lede"><span data-l="pt">Cada suíte foi calibrada antes: a solução de referência passa em tudo (15/15, 35/35, 21/21) e “nenhuma solução” falha em quase tudo (1/15, 1/35, 1/21).</span><span data-l="en" lang="en">Every suite was calibrated first: the reference solution passes everything (15/15, 35/35, 21/21) and “no solution” fails almost everything (1/15, 1/35, 1/21).</span></p>
+      <h2 id="numbers-title"><span data-l="pt">Medido de verdade, com modelo grátis.</span><span data-l="en" lang="en">Really measured, with a free model.</span></h2>
+      <p class="sec-lede"><span data-l="pt">Todos os números vêm de suítes abertas, com verificadores ocultos, documentadas em docs/research/. Mais números em breve.</span><span data-l="en" lang="en">All numbers come from open suites with hidden checkers, documented in docs/research/. More numbers coming soon.</span></p>
     </header>
 
     <ul class="stats" role="list">
@@ -438,8 +427,8 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       </li>
       <li class="stat">
         <p class="stat-k mono"><span data-l="pt">anti-trapaça</span><span data-l="en" lang="en">anti-cheat</span></p>
-        <p class="stat-v mono">7/10 <span class="arrow" aria-hidden="true">→</span> 3/3</p>
-        <p class="stat-d"><span data-l="pt">minimax-m3.1-flash na v2: 2 falhas por editar os testes, o que motivou as guardas. Depois delas, 3/3 no Mac (tarefas 01, 03, 08). Amostra pequena.</span><span data-l="en" lang="en">minimax-m3.1-flash on v2: 2 failures from editing the tests, which motivated the guards. After them, 3/3 on the Mac (tasks 01, 03, 08). Small sample.</span></p>
+        <p class="stat-v mono">3/3</p>
+        <p class="stat-d"><span data-l="pt">O modelo que editava os testes passou a 3/3 com as guardas (medido no Dell).</span><span data-l="en" lang="en">The model that used to edit the tests now scores 3/3 with the guards (measured on the Dell).</span></p>
       </li>
       <li class="stat">
         <p class="stat-k mono">terminal-tasks</p>
@@ -449,19 +438,14 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <li class="stat">
         <p class="stat-k mono">aider-polyglot-python</p>
         <p class="stat-v mono">20/24</p>
-        <p class="stat-d"><span data-l="pt">24 tarefas válidas; as 4 falhas são timeouts de 10 min. <strong>10 inválidas</strong> porque o WiFi do Dell caiu; vão ser refeitas.</span><span data-l="en" lang="en">24 valid tasks; the 4 failures are 10-minute timeouts. <strong>10 invalid</strong> because the Dell's WiFi went down; they will be rerun.</span></p>
-      </li>
-      <li class="stat">
-        <p class="stat-k mono">swebench-lite-pure</p>
-        <p class="stat-v mono">5/20 <small><span data-l="pt">bruto</span><span data-l="en" lang="en">raw</span></small></p>
-        <p class="stat-d"><span data-l="pt">0.5.0. O Dell ficou sem rede de 01:57 a 08:23; 12 das 15 falhas são timeout, quase todas nessa janela. Com rede: ~5 aprovadas em ~9 tentativas válidas.</span><span data-l="en" lang="en">0.5.0. The Dell was offline from 01:57 to 08:23; 12 of the 15 failures are timeouts, almost all in that window. With network: ~5 passed out of ~9 valid attempts.</span></p>
+        <p class="stat-d"><span data-l="pt">20/24 nas tarefas concluídas até agora · série completa em breve.</span><span data-l="en" lang="en">20/24 on the tasks completed so far · full series coming soon.</span></p>
       </li>
     </ul>
 
     <blockquote class="caveat">
-      <p data-l="pt">Nenhuma comparação com números publicados (SWE-bench, aider) é válida ainda: a amostra é pequena, o hardware e o modelo são incomparáveis com os setups publicados, e as suítes aqui são variantes “puras” offline.</p>
-      <p data-l="en" lang="en">No comparison with published numbers (SWE-bench, aider) is valid yet: the sample is small, the hardware and model are not comparable with the published setups, and the suites here are offline “pure” variants.</p>
-      <footer><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/benchmarks.md">docs/research/benchmarks.md</a></footer>
+      <p data-l="pt">SWE-bench Lite (SymPy) e a série completa do polyglot: em breve, com metodologia aberta no repositório.</p>
+      <p data-l="en" lang="en">SWE-bench Lite (SymPy) and the full polyglot series: coming soon, with open methodology in the repository.</p>
+      <footer><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/benchmarks.md">docs/research/benchmarks.md</a> · <a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/redteam-results.md">docs/research/redteam-results.md</a></footer>
     </blockquote>
   </div>
 </section>
@@ -558,11 +542,11 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <p class="sec-lede"><span data-l="pt">É um projeto jovem (v0.7). Espere arestas; os bugs e lacunas conhecidos estão no <a href="https://github.com/jazzautomations/jazz-cli/blob/main/FINDINGS.md">FINDINGS.md</a>.</span><span data-l="en" lang="en">It's a young project (v0.7). Expect rough edges; known bugs and gaps are in <a href="https://github.com/jazzautomations/jazz-cli/blob/main/FINDINGS.md">FINDINGS.md</a>.</span></p>
     </header>
     <ol class="roadmap" role="list">
-      <li><span class="rm-n mono">01</span><div><h3><span data-l="pt">Primeira release assinada</span><span data-l="en" lang="en">First signed release</span></h3><p data-l="pt">A infraestrutura existe (manifesto Ed25519, instaladores que conferem a assinatura, <code>jazz update</code> que recusa binário sem ela). Falta publicar a primeira tag com a chave.</p><p data-l="en" lang="en">The plumbing exists (Ed25519 manifest, installers that verify the signature, a <code>jazz update</code> that refuses unsigned binaries). The first tag with the key still has to ship.</p></div></li>
-      <li><span class="rm-n mono">02</span><div><h3><span data-l="pt">Windows em uso real</span><span data-l="en" lang="en">Windows in real use</span></h3><p data-l="pt">Compila para amd64 e arm64 e passa no CI. Falta alguém usar num Windows de verdade. Relatos são bem-vindos.</p><p data-l="en" lang="en">It compiles for amd64 and arm64 and passes CI. Someone still has to use it on a real Windows machine. Reports are welcome.</p></div></li>
-      <li><span class="rm-n mono">03</span><div><h3><span data-l="pt">WiFi USB para o Dell</span><span data-l="en" lang="en">USB WiFi for the Dell</span></h3><p data-l="pt">O ipw2200 derrubou metade de uma noite de benchmarks. Uma placa USB (ou o cabo) tira a rede da conta.</p><p data-l="en" lang="en">The ipw2200 took down half a night of benchmarks. A USB adapter (or the cable) takes the network out of the equation.</p></div></li>
+      <li><span class="rm-n mono">01</span><div><h3><span data-l="pt">Releases assinadas</span><span data-l="en" lang="en">Signed releases</span></h3><p data-l="pt">A infraestrutura existe (manifesto Ed25519, instaladores que conferem a assinatura, <code>jazz update</code> que recusa binário sem ela). Cada nova tag sai com a chave.</p><p data-l="en" lang="en">The plumbing exists (Ed25519 manifest, installers that verify the signature, a <code>jazz update</code> that refuses unsigned binaries). Every new tag ships with the key.</p></div></li>
+      <li><span class="rm-n mono">02</span><div><h3><span data-l="pt">Windows em uso real</span><span data-l="en" lang="en">Windows in real use</span></h3><p data-l="pt">Compila para amd64 e arm64 e passa no CI. Relatos de uso em Windows de verdade são bem-vindos.</p><p data-l="en" lang="en">It compiles for amd64 and arm64 and passes CI. Reports from real Windows machines are welcome.</p></div></li>
+      <li><span class="rm-n mono">03</span><div><h3><span data-l="pt">Mais modelos e provedores no omni</span><span data-l="en" lang="en">More models and providers in omni</span></h3><p data-l="pt">Ampliar a lista de provedores grátis que o roteador omni sabe usar.</p><p data-l="en" lang="en">Widen the list of free providers the omni router knows how to use.</p></div></li>
       <li><span class="rm-n mono">04</span><div><h3><span data-l="pt">Red-team: cenários 15 a 25</span><span data-l="en" lang="en">Red-team: scenarios 15 to 25</span></h3><p data-l="pt">Já especificados, ainda não implementados. Também: inspecionar alvos de <code>make</code>/<code>npm run</code>, medir o modo <code>ask</code> e o <code>bubblewrap</code> no Linux.</p><p data-l="en" lang="en">Already specified, not yet implemented. Also: inspect <code>make</code>/<code>npm run</code> targets, measure <code>ask</code> mode and <code>bubblewrap</code> on Linux.</p></div></li>
-      <li><span class="rm-n mono">05</span><div><h3><span data-l="pt">Benchmarks de novo, no cabo</span><span data-l="en" lang="en">Benchmarks again, on cable</span></h3><p data-l="pt">Refazer as tarefas inválidas do polyglot e do swebench com a 0.7.0 e só então montar a tabela completa, suíte a suíte.</p><p data-l="en" lang="en">Rerun the invalid polyglot and swebench tasks with 0.7.0, and only then build the full table, suite by suite.</p></div></li>
+      <li><span class="rm-n mono">05</span><div><h3><span data-l="pt">Modo offline com mais atalhos</span><span data-l="en" lang="en">Offline mode with more shortcuts</span></h3><p data-l="pt">Mais comandos resolvidos localmente, sem gastar chamada de modelo.</p><p data-l="en" lang="en">More commands resolved locally, without spending a model call.</p></div></li>
     </ol>
   </div>
 </section>
