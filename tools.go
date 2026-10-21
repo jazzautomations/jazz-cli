@@ -521,6 +521,7 @@ func (t *Toolbox) rel(p string) string {
 }
 
 func (t *Toolbox) stampData(p string, data []byte) {
+	niTouch(p) // session context for the name resolver (nameindex.go)
 	if fi, err := os.Stat(p); err == nil {
 		t.mu.Lock()
 		t.readState[p] = fileStamp{fi.ModTime(), fi.Size(), sha256.Sum256(data)}
@@ -861,6 +862,9 @@ func (t *Toolbox) read(ctx context.Context, m map[string]any, raw string) ToolOu
 		hint := ""
 		if os.IsNotExist(err) {
 			hint = " Use bash (fd/find/ls) to locate it."
+			if sim := niSimilarPaths(t.Root, ps, 1<<20); len(sim) > 0 {
+				hint = " não existe; parecido: " + strings.Join(sim, ", ") + "."
+			}
 		}
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("Cannot read %s: %v.%s", ps, errText(err), hint), Display: Display{Summary: "não encontrado", Path: t.rel(p)}}
 	}
@@ -977,6 +981,12 @@ func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 	p := t.abs(ps)
 	mode := os.FileMode(0o644)
 	existing := ""
+	simNote := ""
+	if _, serr := os.Stat(p); serr != nil && os.IsNotExist(serr) { // a new file next to a near-twin is often a typo
+		if sim := niSimilarPaths(t.Root, ps, fzSlip); len(sim) > 0 {
+			simNote = " Novo arquivo; já existe parecido: " + strings.Join(sim, ", ") + " (confira se não era esse)."
+		}
+	}
 	if fi, err := os.Stat(p); err == nil {
 		if fi.IsDir() {
 			return ToolOutput{IsErr: true, Text: ps + " is a directory."}
@@ -1016,7 +1026,7 @@ func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 	if len(prev) > 4 {
 		prev = prev[:4]
 	}
-	return ToolOutput{Text: fmt.Sprintf("Wrote %d lines (%s) to %s.", n, humanBytes(int64(len(content))), ps) + t.instrNote(p),
+	return ToolOutput{Text: fmt.Sprintf("Wrote %d lines (%s) to %s.", n, humanBytes(int64(len(content))), ps) + simNote + t.instrNote(p),
 		Display: Display{Summary: fmt.Sprintf("%d linhas escritas", n), Preview: prev, Path: t.rel(p), Lines: n}}
 }
 
@@ -1033,7 +1043,11 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 	fi, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ToolOutput{IsErr: true, Text: fmt.Sprintf("%s does not exist. Use write to create it.", ps), Display: Display{Summary: "arquivo não existe", Path: t.rel(p)}}
+			msg := fmt.Sprintf("%s does not exist. Use write to create it.", ps)
+			if sim := niSimilarPaths(t.Root, ps, 1<<20); len(sim) > 0 {
+				msg = fmt.Sprintf("%s não existe; parecido: %s. Edit the right one, or use write to create it.", ps, strings.Join(sim, ", "))
+			}
+			return ToolOutput{IsErr: true, Text: msg, Display: Display{Summary: "arquivo não existe", Path: t.rel(p)}}
 		}
 		return ToolOutput{IsErr: true, Text: "Cannot edit: " + errText(err)}
 	}

@@ -446,6 +446,10 @@ func (a *App) olFastPath(ctx context.Context, m fpMatch, offline bool) (done boo
 	a.ui.Notice(fmt.Sprintf("exit %d %s %s %s atalho %s", r.ExitCode, a.ui.T.G().dot, time.Since(t0).Round(100*time.Millisecond), a.ui.T.G().dot, m.Intent))
 	dbg("fastpath", map[string]any{"intent": m.Intent, "cmd": m.Cmd, "exit": r.ExitCode, "offline": offline})
 	clip := truncateHeadTail(out, 8000)
+	if h := niEmptySearchHint(a.root, m.Intent, m.Cmd, out, r.ExitCode); h != "" { // typo in the identifier (nameindex.go)
+		a.ui.Notice(h)
+		clip += "\n" + h
+	}
 	if r.ExitCode == 0 && !r.Reset {
 		a.agent.Note(fmt.Sprintf("<system-reminder>The harness ran `%s` for the user's request %q (fast path, exit 0). Output:\n%s</system-reminder>", m.Cmd, m.Intent, clip))
 		return true, ""

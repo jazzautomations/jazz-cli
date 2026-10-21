@@ -531,3 +531,38 @@ func TestPTYApproveKeys(t *testing.T) {
 		t.Fatal("jazz did not exit on Ctrl+D")
 	}
 }
+
+// A typo in a slash command runs the intended one, and so does a typo in a
+// closed-set argument (fuzzy_cmd.go). The numbered menu for an ambiguous
+// typo is covered by TestFuzzyMenu.
+func TestPTYTypoCommand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("pty session")
+	}
+	s := ptyStart(t, "xterm-256color")
+	s.waitFor("the trust prompt", 15*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || ptyPrompt(sc) })
+	if strings.Contains(s.screen(), "[s/N]") {
+		s.write("s\r")
+	}
+	s.waitFor("the input box", 15*time.Second, ptyPrompt)
+	s.typeSlow("/modle")
+	s.write("\r")
+	s.waitFor("/modle read as /model", 10*time.Second, func(sc string) bool {
+		all := strings.Join(s.all(), "\n")
+		return strings.Contains(all, "interpretei /modle como /model") && strings.Contains(all, "modelo atual: fake/m1") && ptyPrompt(sc)
+	})
+	// closed-set argument: /mode atuo -> /mode auto (a prefix like /mod opens the editor's own picker)
+	s.waitFor("the input box again", 10*time.Second, ptyPrompt)
+	s.typeSlow("/mode atuo")
+	s.write("\r")
+	s.waitFor("atuo read as auto", 10*time.Second, func(sc string) bool {
+		all := strings.Join(s.all(), "\n")
+		return strings.Contains(all, "interpretei atuo como auto") && strings.Contains(all, "modo: auto") && ptyPrompt(sc)
+	})
+	s.write("\x04")
+	select {
+	case <-s.done:
+	case <-time.After(10 * time.Second):
+		t.Error("jazz did not exit")
+	}
+}

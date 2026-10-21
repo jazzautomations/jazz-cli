@@ -424,7 +424,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
-	a.append(Message{Role: "user", Content: input + a.pcInject(lt), Images: a.attach})
+	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input), Images: a.attach})
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
