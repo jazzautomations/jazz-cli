@@ -118,8 +118,9 @@ func wtRepo(dir string) (string, error) {
 		if err2 != nil {
 			return "", errors.New("não é um repositório git (o --worktree precisa de git)")
 		}
-		return top, nil
+		return filepath.FromSlash(top), nil // git prints C:/x on Windows
 	}
+	common = filepath.FromSlash(common)
 	if filepath.Base(common) == ".git" {
 		return filepath.Dir(common), nil
 	}
@@ -127,7 +128,7 @@ func wtRepo(dir string) (string, error) {
 	if err != nil {
 		return "", errors.New("não é um repositório git (o --worktree precisa de git)")
 	}
-	return top, nil
+	return filepath.FromSlash(top), nil
 }
 
 func wtMetaPath(repo, name string) string { return filepath.Join(repo, wtDir, name+".json") }
@@ -154,7 +155,7 @@ func wtExclude(repo string) error {
 	if err != nil {
 		return err
 	}
-	p := filepath.Join(gd, "info", "exclude")
+	p := filepath.Join(filepath.FromSlash(gd), "info", "exclude")
 	b, _ := os.ReadFile(p)
 	line := "/" + wtDir + "/"
 	for _, l := range strings.Split(string(b), "\n") {

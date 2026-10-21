@@ -1223,7 +1223,8 @@ func TestAgentSessionHonoursCompactEntries(t *testing.T) {
 	// appending after reload keeps working
 	s.Append(Message{Role: "user", Content: "after reload"})
 	s.Close()
-	_, msgs2, _, _, _ := LoadSession(h.ag.sess.Path)
+	s2, msgs2, _, _, _ := LoadSession(h.ag.sess.Path)
+	s2.Close()
 	if lastMsg(msgs2).Content != "after reload" {
 		t.Errorf("append after LoadSession lost: %+v", lastMsg(msgs2))
 	}

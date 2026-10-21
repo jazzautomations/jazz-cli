@@ -67,7 +67,8 @@ func TestSessionTreeRewindBranches(t *testing.T) {
 	}
 	s2.Append(Message{Role: "user", Content: "d"})
 	s2.Close()
-	_, msgs3, _, _, _ := LoadSession(s.Path)
+	s3, msgs3, _, _, _ := LoadSession(s.Path)
+	s3.Close()
 	if got := strings.Join(sessContents(msgs3), ","); got != "user:a,assistant:A,user:b,assistant:B,user:d" {
 		t.Fatalf("after branch = %s", got)
 	}
@@ -113,7 +114,8 @@ func TestSessionTreeMigratesV1(t *testing.T) {
 	if !bytes.Contains(b, []byte(`"parentId":"L7"`)) {
 		t.Errorf("new entry must chain onto the migrated id L7:\n%s", b)
 	}
-	_, msgs, _, _, _ = LoadSession(p)
+	s2, msgs, _, _, _ := LoadSession(p)
+	s2.Close() // Windows cannot delete the TempDir with the file open
 	if len(msgs) != 2 || msgs[1].Content != "next" {
 		t.Fatalf("after append: %v (the torn line must not swallow it)", sessContents(msgs))
 	}

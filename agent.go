@@ -2018,6 +2018,7 @@ func (a *Agent) Attach(imgs ...ImagePart) { a.attach = append(a.attach, imgs...)
 func (a *Agent) Close() {
 	a.sess.Close()
 	if !a.sub {
+		obCloseCur()
 		otlpShutdown() // flush the OTLP exporter (otlp.go); no-op when off
 	}
 }

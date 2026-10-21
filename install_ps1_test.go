@@ -64,6 +64,10 @@ func runInstallPs1(t *testing.T, pwsh, pub, base string, extraEnv ...string) (st
 	src = re.ReplaceAll(src, []byte("$$JazzPubKey = '"+pub+"'"))
 	dir := t.TempDir()
 	script := filepath.Join(dir, "install.ps1")
+	// Windows PowerShell 5.1 reads a BOM-less file as the ANSI code page and
+	// mangles the UTF-8 accents (breaking the parse); a BOM, as Save-As and
+	// most Windows downloads add, makes it read UTF-8. pwsh 7 accepts both.
+	src = append([]byte{0xEF, 0xBB, 0xBF}, src...)
 	if err := os.WriteFile(script, src, 0o644); err != nil {
 		t.Fatal(err)
 	}
