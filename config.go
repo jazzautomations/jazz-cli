@@ -93,7 +93,7 @@ type OmniConf struct {
 type Config struct {
 	Model         string                   `json:"model"`    // "provider/model-id"
 	Fallback      []string                 `json:"fallback"` // tried in order on retryable errors
-	Mode          string                   `json:"mode"`     // auto | smart | ask | yolo (persisted; plan is never saved)
+	Mode          string                   `json:"mode"`     // auto | turbo | smart | ask | yolo (persisted; plan is never saved)
 	ModeOverride  string                   `json:"-"`        // session-only mode (flags, Shift+Tab, plan); wins over Mode
 	MaxSteps      int                      `json:"max_steps"`
 	ContextWindow int                      `json:"context_window"`
@@ -367,8 +367,9 @@ func (c *Config) applyDefaults() {
 	if c.MaxTokens <= 0 {
 		c.MaxTokens = 16000
 	}
+	c.Mode = tbModeName(c.Mode) // "full-auto" is turbo
 	switch c.Mode {
-	case "auto", "smart", "ask", "yolo":
+	case "auto", "smart", "ask", "yolo", "turbo":
 	default:
 		c.Mode = "auto" // includes "plan": never persisted, never loaded
 	}

@@ -169,13 +169,39 @@ jazz key openrouter       # salva uma chave (lida escondida); vale pra qualquer 
 | Modo | Comportamento |
 |---|---|
 | `auto` (padrão) | roda sem perguntar o que não parece perigoso; comando perigoso e arquivo sensível perguntam |
+| `turbo` (`--turbo`, alias `full-auto`) | com sandbox do sistema: nada que fica no projeto pergunta; só pergunta o realmente necessário (lista abaixo) |
 | `ask` | tudo que não é só leitura pergunta (o modo certo pra repositório desconhecido) |
 | `smart` | edição no projeto e comando só-leitura rodam direto; o resto passa por um modelo rápido, que responde SAFE ou ASK; pacote, git que altera, `rm`/`sudo`, `.env`/chaves e a config do jazz sempre perguntam |
 | `yolo` | nada pergunta; só dentro de container ou VM |
 | `plan` | só investiga e propõe um plano |
 
-`/mode <modo>` troca; Shift+Tab ou Ctrl+T alterna auto → smart → plan → ask. Flags `--ask`,
-`--smart`, `--yolo`. Numa pasta que você ainda não confiou (`jazz trust`), a sessão roda em `ask`.
+`/mode <modo>` troca; Shift+Tab ou Ctrl+T alterna auto → turbo → smart → plan → ask. Flags `--ask`,
+`--smart`, `--turbo`, `--yolo`; config `"mode": "turbo"`. Numa pasta que você ainda não confiou
+(`jazz trust`), a sessão roda em `ask`; com `--turbo` explícito o modo fica, mas bash que muda algo
+ainda pergunta até você confiar (no `-p`: `jazz trust --yes` antes).
+
+**Confirmação com uma tecla:** `enter` ou `s` = sim, `a` = sempre, `n`/`esc` = não, `v` = ver o
+comando inteiro ou o diff, `e` = não, e dizer o que fazer. Não precisa digitar `sim`. O "sempre" de
+uma pergunta com motivo de risco (host novo, pasta fora do projeto, git destrutivo, `curl|sh` de um
+host) fica em `.jazz/approvals.json` e não é perguntado de novo no projeto; `/approvals` lista e
+`/approvals clear` apaga. Ler segredo e comando catastrófico perguntam sempre.
+
+**Turbo em 5 linhas.** (1) Só existe de verdade com o sandbox do sistema (`sandbox-exec` no macOS,
+`bwrap` no Linux); sem ele vira `auto` e avisa uma vez. (2) Roda sem perguntar teste, build,
+formatação, `git add/commit`, edição, leitura, script e pacote limpo, numa pasta que você confiou.
+(3) Pergunta só: escrita/remoção fora do projeto; envio de dados a host novo (a primeira vez);
+leitura de segredo; git destrutivo (`push --force`, `branch -D`, `filter-repo`, `clean -f`,
+`reset --hard` em branch compartilhada); pacote que o guardrail de supply chain marca; comando
+catastrófico (`rm -rf` da home, disco, `chmod -R 777 /`, `sudo`, `curl|sh`); regra `ask`, hook,
+injeção suspeita no turno; e, em pasta não confiada, bash que muda algo. (4) `git checkout -- .`/`restore .`/`reset --hard` em branch local não
+pergunta porque o checkpoint shadow-git desfaz (`/undo`). (5) Decide sem chamar modelo; cada
+aprovação automática vai pro log de auditoria com a regra que liberou.
+
+**O custo de segurança, dito sem rodeio:** no turbo o que protege você dentro do projeto é o sandbox,
+não uma pergunta. Um comando ruim pode apagar ou estragar arquivos do projeto (o checkpoint cobre
+arquivos versionáveis de até 1 MB, não `.gitignore`d) e pode mandar o conteúdo do projeto pra um
+host que você já aprovou. O sandbox impede ler sua home e segredos e escrever fora do projeto, mas a
+rede continua aberta (use `--sandbox strict` pra cortar). Repositório desconhecido: `ask`.
 
 ## Headless (`-p`)
 
@@ -430,7 +456,8 @@ com `-p`), `--output-format text|json|stream-json`, `--max-steps N`, `--timeout 
 | `/model [ref]` · `/models [provedor]` | mostra/troca o modelo · lista modelos |
 | `/omni [on\|off\|strategy …]` | roteamento entre provedores |
 | `/key` · `/login` · `/logout` | credenciais |
-| `/mode auto\|smart\|ask\|yolo\|plan` | modo de permissão (Shift+Tab ou Ctrl+T alterna auto → smart → plan → ask) |
+| `/mode auto\|turbo\|smart\|ask\|yolo\|plan` | modo de permissão (Shift+Tab ou Ctrl+T alterna auto → turbo → smart → plan → ask) |
+| `/approvals [clear]` | aprovações "sempre" deste projeto (host de egress, pasta fora, git destrutivo) |
 | `/permissions [list\|remove\|add]` | regras persistentes |
 | `/effort low\|medium\|high\|off` · `/think` | raciocínio |
 | `/compact [foco]` · `/context` | contexto |

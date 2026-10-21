@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var version = "0.7.0"
+var version = "0.7.1"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -66,7 +66,8 @@ opções:
   -C <pasta>             pasta do projeto (padrão: atual)
   --worktree[=nome]      roda a sessão num worktree git novo (.jazz/worktrees/<nome>, branch jazz/<nome>);
                          o checkout principal fica intocado; depois: jazz worktree merge <nome>
-  --yolo | --ask | --smart  modo de permissão só nesta sessão (padrão: auto — pede confirmação em comando perigoso)
+  --turbo | --yolo | --ask | --smart  modo de permissão só nesta sessão (padrão: auto — pede confirmação em comando perigoso;
+                         turbo/--full-auto: com sandbox do sistema, só pergunta o realmente necessário)
   -v                     (com -p) mostra o progresso no stderr
   --output-format F      (com -p) text (padrão) · json (só o resultado final) · stream-json (um evento por linha)
   --max-steps N          limite de passos do modelo por turno
@@ -195,6 +196,8 @@ func main() {
 	yolo := fs.Bool("yolo", false, "")
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
+	turbo := fs.Bool("turbo", false, "")
+	fullAuto := fs.Bool("full-auto", false, "")
 	verbose := fs.Bool("v", false, "")
 	showVer := fs.Bool("version", false, "")
 	format := fs.String("output-format", "text", "")
@@ -464,6 +467,8 @@ func main() {
 		cfg.ModeOverride = "ask"
 	} else if *smart {
 		cfg.ModeOverride = "smart"
+	} else if *turbo || *fullAuto {
+		cfg.ModeOverride = "turbo"
 	}
 	ref := *model
 	if ref == "" {
@@ -533,7 +538,7 @@ var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, 
 	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
-var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
+var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
 
 // reorderFlags lets flags appear after positional words: jazz "fix it" -m x.
 // After a subcommand (jazz trust --yes, jazz provider add x --model m) only a
@@ -712,7 +717,7 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		source = "resume"
 	}
 	pfStartSession(ctx, ag, o, source)
-	for _, w := range []string{AuthWarning(), ChatGPTWarning(), cfg.ModelWarning(ref)} {
+	for _, w := range []string{AuthWarning(), ChatGPTWarning(), cfg.ModelWarning(ref), turboStartNote(cfg.EffMode())} {
 		if w != "" {
 			fmt.Fprintln(os.Stderr, "jazz:", w)
 		}
@@ -999,6 +1004,9 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	if untrustedAsk {
 		ui.Notice("pasta não confiável: modo ask até você confiar (/trust)")
 	}
+	if n := turboStartNote(cfg.EffMode()); n != "" {
+		ui.Warn(n)
+	}
 	if cfg.Omni.Enabled || isOmniRef(app.agent.Model) {
 		if !cfg.Omni.PrivacyAck && !cfg.PrivacyAck {
 			ui.Warn(OmniPrivacyNotice)
@@ -1063,7 +1071,7 @@ func (a *App) bannerInfo() []string {
 		t.fg(cGold, 33) + b + "jazz-cli" + r + dim + " v" + version + r,
 		dim + "modelo " + r + a.agent.Model,
 		dim + "pasta  " + r + dir,
-		dim + "modo   " + r + a.cfg.EffMode() + dim + "  " + t.G().dot + "  /help" + r,
+		dim + "modo   " + r + a.cfg.EffMode() + dim + "  " + t.G().dot + "  /help" + pfHintSuffix(dim, t.G().dot, turboWelcomeHint(a.cfg.EffMode())) + r,
 	}
 }
 
@@ -1079,7 +1087,7 @@ func (a *App) welcome() string {
 	if home != "" && strings.HasPrefix(dir, home) {
 		dir = "~" + strings.TrimPrefix(dir, home)
 	}
-	return Welcome(a.ui.T, w, WelcomeInfo{Version: version, Model: a.agent.Model, Dir: dir, Mode: a.cfg.EffMode()})
+	return Welcome(a.ui.T, w, WelcomeInfo{Version: version, Model: a.agent.Model, Dir: dir, Mode: a.cfg.EffMode(), Hint: turboWelcomeHint(a.cfg.EffMode())})
 }
 
 // footer is the line under the input box.
@@ -1229,10 +1237,10 @@ func (a *App) setSessionMode(m string) {
 	a.ui.SetMode(a.cfg.EffMode())
 }
 
-// cycleMode is bound to Shift+Tab / Ctrl+T: auto → smart → plan → ask → auto.
+// cycleMode is bound to Shift+Tab / Ctrl+T: auto → turbo → smart → plan → ask → auto.
 // The choice lasts for this session only (ModeOverride is never saved).
 func (a *App) cycleMode() {
-	next := map[string]string{"auto": "smart", "smart": "plan", "plan": "ask", "ask": "auto", "yolo": "auto"}[a.cfg.EffMode()]
+	next := map[string]string{"auto": "turbo", "turbo": "smart", "smart": "plan", "plan": "ask", "ask": "auto", "yolo": "auto"}[a.cfg.EffMode()]
 	if next == "" {
 		next = "auto"
 	}
@@ -1329,7 +1337,8 @@ var slashCommands = []struct{ name, help string }{
 	{"/key", "salva uma chave de API (escondida): /key openrouter"},
 	{"/login", "login com a conta do ChatGPT (--browser pra fluxo no navegador)"},
 	{"/logout", "remove credencial: /logout openai"},
-	{"/mode", "permissões: auto (padrão) · smart (modelo rápido decide) · ask · yolo · plan (só investiga) — shift+tab alterna"},
+	{"/mode", "permissões: auto (padrão) · turbo (sandbox; só pergunta o necessário) · smart (modelo rápido decide) · ask · yolo · plan (só investiga) — shift+tab alterna"},
+	{"/approvals", "aprovações \"sempre\" deste projeto (saída de dados, fora do projeto, git destrutivo): lista · clear"},
 	{"/permissions", "regras de permissão: lista · /permissions remove <n|regra> · add allow|deny|ask <regra>"},
 	{"/effort", "esforço de raciocínio: low · medium · high · off"},
 	{"/think", "mostra/esconde o raciocínio do modelo"},
@@ -1528,17 +1537,21 @@ func (a *App) command(line string) {
 		ui.Notice("credencial de " + args[0] + " removida")
 	case "/mode":
 		if len(args) == 0 {
-			ui.Notice("modo: " + a.cfg.EffMode() + "  (auto · smart · ask · yolo · plan)")
+			ui.Notice("modo: " + a.cfg.EffMode() + "  (auto · turbo · smart · ask · yolo · plan)")
 			return
 		}
+		args[0] = tbModeName(args[0])
 		switch args[0] {
-		case "auto", "smart", "ask", "yolo":
+		case "auto", "smart", "ask", "yolo", "turbo":
 			a.cfg.SetMode(args[0])
 			_ = a.cfg.Save()
 			ui.SetMode(args[0])
-			if args[0] == "smart" {
+			switch args[0] {
+			case "smart":
 				ui.Notice(smModeNotice)
-			} else {
+			case "turbo":
+				ui.Notice(turboModeNotice())
+			default:
 				ui.Notice("modo: " + args[0])
 			}
 		case "plan":
@@ -1547,10 +1560,12 @@ func (a *App) command(line string) {
 			ui.SetMode("plan")
 			ui.Notice("modo plan: o agente só investiga e propõe um plano (/mode auto pra executar)")
 		default:
-			ui.Error("modos: auto · smart · ask · yolo · plan")
+			ui.Error("modos: auto · turbo · smart · ask · yolo · plan")
 		}
 	case "/permissions", "/perms":
 		a.permissionsCmd(args)
+	case "/approvals", "/aprovacoes", "/aprovações":
+		a.approvalsCmd(args)
 	case "/trust":
 		a.trustCmd(args)
 	case "/effort":
@@ -1674,7 +1689,7 @@ func (a *App) command(line string) {
 			ui.Notice("esta conversa ainda não foi salva")
 			return
 		}
-		if a.ui.Ask("apagar do disco a sessão "+id+"? [s/n]", "sn") != 's' {
+		if a.ui.Ask("apagar do disco a sessão "+id+"? [enter/s] sim · [n] não", "sn") != 's' {
 			ui.Notice("cancelado")
 			return
 		}

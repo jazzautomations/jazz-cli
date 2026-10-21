@@ -508,7 +508,7 @@ func (a *Agent) ptEligible(tc ToolCall, net bool, args map[string]any) bool {
 		if a.gr.injection != "" {
 			return false
 		}
-		if net && mode != "auto" && mode != "yolo" {
+		if net && mode != "auto" && mode != "turbo" && mode != "yolo" {
 			return false
 		}
 		if !net && (mode == "ask" || mode == "smart") {

@@ -3,6 +3,25 @@
 Resumo honesto, tirado do `git log`. Nenhuma dessas versões foi publicada como release no GitHub
 ainda; as datas são as dos commits. Formato livre, uma linha por mudança relevante.
 
+## Não publicado (branch `turbo`)
+
+- Confirmação com uma tecla em toda pergunta sim/não da TUI: `enter`/`s` sim, `a` sempre, `n`/`esc`
+  não, `v` ver (comando inteiro ou diff), `e` não + instrução. Acabou o `sim` + enter dos comandos
+  perigosos. Pergunta numa linha com o motivo de risco; texto sendo digitado quando ela abre ainda
+  exige palavra + enter.
+- Modo `turbo` (`--turbo`, `--full-auto`, `"mode": "turbo"`, Shift+Tab): com sandbox do sistema, não
+  pergunta nada que fica no projeto; pergunta só fora do projeto, host novo de egress (uma vez),
+  segredo, git destrutivo, pacote marcado, comando catastrófico, regra ask/hook/injeção. Sem sandbox
+  vira `auto` e avisa. Determinístico (sem modelo). A tela inicial recomenda turbo quando há sandbox.
+  Pasta não confiada continua pedindo confirmação pra bash que muda algo (o red-team 11 derrubou a
+  versão que liberava isso contando só com o sandbox).
+- "Sempre" de pergunta com motivo de risco guardado por projeto em `.jazz/approvals.json` (hash de
+  classe + alvo; só vale se o jazz escreveu); `/approvals` lista e `/approvals clear` apaga.
+- Auditoria: `auto_approval` com a regra que liberou cada ação sem pergunta.
+- `evals/redteam/run.sh` aceita `MODE=turbo`. Rodada no Mac (`kilo/poolside/laguna-s-2.1:free`, sandbox
+  `sandbox-exec`): 14/14 BLOCKED. Tarefas v2 01/05/10 com `--turbo` (pasta confiada com `jazz trust --yes`):
+  3/3 PASS, nenhuma pergunta, 27 `auto_approval` na auditoria.
+
 ## 0.7.0 (2026-10-21, não publicado como release; inclui o que foi para a 0.6.0)
 
 - Ferramentas em paralelo: numa resposta com várias chamadas, as de leitura (`read`, bash só

@@ -182,23 +182,8 @@ var (
 // DangerReason returns a short reason when a command is destructive or escalates
 // privileges, or "" when it looks ordinary. Dangerous commands always need confirmation.
 func dangerReasonSh(cmd string) string {
-	if reForkBomb.MatchString(cmd) {
-		return "fork bomb"
-	}
-	if rePipeShell.MatchString(cmd) && regexp.MustCompile(`\b(curl|wget|base64|nc)\b`).MatchString(cmd) || reShellRemote.MatchString(cmd) || reB64Shell.MatchString(cmd) {
-		return "executa script baixado/decodificado direto no shell"
-	}
-	if reRawDisk.MatchString(cmd) {
-		return "escreve direto em disco"
-	}
-	if reDotfileW.MatchString(cmd) {
-		return "sobrescreve arquivo de configuração do usuário"
-	}
-	if reSecretFile.MatchString(cmd) && reExfilVerb.MatchString(cmd) {
-		return "mexe em credenciais ou config sensível"
-	}
-	if reXargsRm.MatchString(cmd) {
-		return "apaga arquivos vindos da entrada (xargs rm -r)"
+	if r := dangerWholeSh(cmd); r != "" {
+		return r
 	}
 	pr := shellParse(cmd)
 	if !pr.ok {
@@ -216,6 +201,32 @@ func dangerReasonSh(cmd string) string {
 		if r := inlineCodeDanger(code); r != "" {
 			return r
 		}
+	}
+	return ""
+}
+
+// dangerWholeSh runs the detectors that look at the whole command line
+// (pipes into a shell, raw disk writes, dotfile overwrites …) rather than at
+// one simple command. turbo.go uses it to tell those apart from per-segment
+// verdicts.
+func dangerWholeSh(cmd string) string {
+	if reForkBomb.MatchString(cmd) {
+		return "fork bomb"
+	}
+	if rePipeShell.MatchString(cmd) && regexp.MustCompile(`\b(curl|wget|base64|nc)\b`).MatchString(cmd) || reShellRemote.MatchString(cmd) || reB64Shell.MatchString(cmd) {
+		return "executa script baixado/decodificado direto no shell"
+	}
+	if reRawDisk.MatchString(cmd) {
+		return "escreve direto em disco"
+	}
+	if reDotfileW.MatchString(cmd) {
+		return "sobrescreve arquivo de configuração do usuário"
+	}
+	if reSecretFile.MatchString(cmd) && reExfilVerb.MatchString(cmd) {
+		return "mexe em credenciais ou config sensível"
+	}
+	if reXargsRm.MatchString(cmd) {
+		return "apaga arquivos vindos da entrada (xargs rm -r)"
 	}
 	return ""
 }
@@ -962,7 +973,7 @@ func protectedPath(p, root string) bool {
 		// text that steers the next session (F9)
 		for _, f := range []string{".jazz/settings.json", ".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".git/config", ".git/hooks",
 			".envrc", ".vscode/tasks.json", ".vscode/settings.json", ".vscode/launch.json", ".gitmodules", ".jazz/skills", ".jazz/commands", ".jazz/steering",
-			".jazz/scripts", ".jazz/intents.json", ".claude/skills", ".claude/commands", ".claude/agents", ".kiro/steering", ".cursor/rules", ".idea/workspace.xml"} {
+			".jazz/scripts", ".jazz/intents.json", ".jazz/approvals.json", ".claude/skills", ".claude/commands", ".claude/agents", ".kiro/steering", ".cursor/rules", ".idea/workspace.xml"} {
 			if pathIn(rp, filepath.Join(root, f)) {
 				return true
 			}

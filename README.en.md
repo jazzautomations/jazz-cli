@@ -151,13 +151,39 @@ jazz key openrouter       # store a key (hidden input); works for any provider
 | Mode | Behaviour |
 |---|---|
 | `auto` (default) | runs whatever does not look dangerous; dangerous commands and sensitive files ask |
+| `turbo` (`--turbo`, alias `full-auto`) | with an OS sandbox: nothing that stays inside the project asks; it only asks when really necessary (list below) |
 | `ask` | everything that is not read-only asks (the right mode for an unknown repository) |
 | `smart` | project edits and read-only commands run; the rest goes to a fast model that answers SAFE or ASK; packages, mutating git, `rm`/`sudo`, `.env`/keys and jazz's own config always ask |
 | `yolo` | nothing asks; only inside a container or VM |
 | `plan` | investigates and proposes a plan only |
 
-`/mode <mode>` switches; Shift+Tab or Ctrl+T cycles auto → smart → plan → ask. Flags: `--ask`,
-`--smart`, `--yolo`. In a folder you have not trusted yet (`jazz trust`), the session runs in `ask`.
+`/mode <mode>` switches; Shift+Tab or Ctrl+T cycles auto → turbo → smart → plan → ask. Flags: `--ask`,
+`--smart`, `--turbo`, `--yolo`; config `"mode": "turbo"`. In a folder you have not trusted yet
+(`jazz trust`), the session runs in `ask`; with an explicit `--turbo` the mode stays, but bash that
+changes something still asks until you trust the folder (with `-p`: `jazz trust --yes` first).
+
+**One-key confirmations:** `enter` or `s` = yes, `a` = always, `n`/`esc` = no, `v` = see the whole
+command or diff, `e` = no, and say what to do instead. No typing `sim`. "Always" on a prompt with a
+risk reason (new host, folder outside the project, destructive git, `curl|sh` from a host) is kept in
+`.jazz/approvals.json` and never asked again in that project; `/approvals` lists, `/approvals clear`
+wipes. Secret reads and catastrophic commands ask every time.
+
+**Turbo in 5 lines.** (1) It only exists with an OS sandbox (`sandbox-exec` on macOS, `bwrap` on
+Linux); without one it is `auto` and says so once. (2) Tests, builds, formatting, `git add/commit`,
+edits, reads, scripts and clean package installs run without asking in a folder you trusted.
+(3) It asks only for: writes/deletes outside the project; sending data to a new host (first time);
+reading secrets; destructive git (`push --force`, `branch -D`, `filter-repo`, `clean -f`,
+`reset --hard` on a shared branch); packages the supply-chain guard flags; catastrophic commands
+(`rm -rf` of home, disk ops, `chmod -R 777 /`, `sudo`, `curl|sh`); `ask` rules, hooks, a suspected
+injection in the turn; and, in a folder not trusted yet, bash that changes something. (4) `git checkout -- .`/`restore .`/`reset --hard` on a local branch do not ask
+because the shadow-git checkpoint undoes them (`/undo`). (5) It decides without calling a model; every
+auto-approval goes to the audit log with the rule that allowed it.
+
+**The security trade-off, plainly:** in turbo what protects you inside the project is the sandbox,
+not a prompt. A bad command can delete or damage project files (the checkpoint covers versionable
+files up to 1 MB, not `.gitignore`d ones) and can send project content to a host you already approved.
+The sandbox stops reads of your home and secrets and writes outside the project, but the network stays
+open (use `--sandbox strict` to cut it). Unknown repository: `ask`.
 
 ## Headless (`-p`)
 
