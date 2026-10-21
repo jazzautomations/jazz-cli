@@ -1,0 +1,12 @@
+# 09-ler-design: horas_extras segue as regras incomuns do DESIGN.md (semana qua-ter, domingo em dobro,
+# tolerância de 10 min) e o agente acrescentou testes.
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+cmp -s "$T/DESIGN.md" DESIGN.md || fail "DESIGN.md foi alterado"
+cmp -s "$T/tests/test_calculo.py" tests/test_calculo.py || [ "$(grep -c 'def test' tests/test_calculo.py)" -ge 2 ] || fail "testes originais removidos"
+out=$(python3 "$T/.hidden/test_oculto09.py" 2>&1) || fail "regras do DESIGN.md: $(echo "$out" | grep -E '^(FAIL|ERROR):' | head -3 | tr '\n' ' ')"
+python3 -m unittest -q >/dev/null 2>&1 || fail "python3 -m unittest falha"
+n=$(grep -l "horas_extras" tests/*.py 2>/dev/null | xargs grep -h "def test" 2>/dev/null | wc -l | tr -d ' ')
+[ "${n:-0}" -ge 1 ] || fail "nenhum teste novo para horas_extras em tests/"
+echo PASS

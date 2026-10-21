@@ -1,0 +1,40 @@
+PASS src/utils/format.test.js
+PASS src/utils/date.test.js (5.123 s)
+FAIL src/api/client.test.js
+  ● ApiClient › retries on 503
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 1
+
+      42 |     await client.get("/x");
+      43 |     expect(fetchMock).toHaveBeenCalled();
+    > 44 |     expect(fetchMock.mock.calls.length).toBe(3);
+         |                                         ^
+      45 |   });
+      46 | });
+
+      at Object.toBe (src/api/client.test.js:44:41)
+
+  ● ApiClient › parses error body
+
+    TypeError: Cannot read properties of undefined (reading 'message')
+
+      12 |   if (!res.ok) {
+      13 |     const body = await res.json();
+    > 14 |     throw new Error(body.error.message);
+         |                                ^
+      15 |   }
+
+      at ApiClient.message [as get] (src/api/client.js:14:32)
+      at Object.<anonymous> (src/api/client.test.js:51:5)
+
+PASS src/components/Button.test.jsx
+PASS src/components/Modal.test.jsx
+
+Test Suites: 1 failed, 4 passed, 5 total
+Tests:       2 failed, 1 skipped, 38 passed, 41 total
+Snapshots:   0 total
+Time:        7.812 s
+Ran all test suites.

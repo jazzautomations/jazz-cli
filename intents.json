@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "_doc": "Deterministic fast paths (intents.go). Patterns are full-match, case-insensitive, run on the request with accents, trailing punctuation and polite words removed. {{test}} {{build}} {{lint}} {{fmt}} come from project detection, {{git}} is 'git' inside a repository, {{search}} is rg or grep; an empty variable means the intent does not apply. {{slot}} is a named group, checked against slots[slot] and shell-quoted. Override in ~/.config/jazz-cli/intents.json or .jazz/intents.json (same name replaces, \"disabled\": true removes).",
+  "intents": [
+    {
+      "name": "test",
+      "cmd": "{{test}}",
+      "patterns": [
+        "(?:rode|roda|rodar|rode ai|roda ai|execute|executa|executar|run|rerun|re-run)(?: (?:os|todos os|the|all|all the))? (?:testes|teste|tests|test|test suite|suite de testes|a suite de testes)(?: (?:de novo|novamente|again|agora|now))?",
+        "(?:testa|testar|testa ai|testa tudo|testar tudo|test everything|test it)"
+      ]
+    },
+    {
+      "name": "build",
+      "cmd": "{{build}}",
+      "patterns": [
+        "(?:rode|roda|rodar|execute|executa|run|faz|faca|fazer|faz ai)(?: o| a| the)? (?:build|compilacao)",
+        "(?:compile|compila|compilar|compila ai|builda|buildar|build)(?: (?:o projeto|tudo|the project|it|everything))?"
+      ]
+    },
+    {
+      "name": "lint",
+      "cmd": "{{lint}}",
+      "patterns": [
+        "(?:rode|roda|rodar|run|execute|executa)(?: o| os| the)? (?:lint|linter|linters|vet)",
+        "(?:lint|linta|lintar)(?: (?:o projeto|tudo|the project|it|everything))?"
+      ]
+    },
+    {
+      "name": "fmt",
+      "cmd": "{{fmt}}",
+      "patterns": [
+        "(?:checa|checar|verifica|verificar|check)(?: a| o| the)? (?:formatacao|formatting|format|fmt)"
+      ]
+    },
+    {
+      "name": "git_status",
+      "cmd": "{{git}} status --short --branch",
+      "patterns": [
+        "git status|git st|status|status do git|status do repo|status do repositorio",
+        "(?:mostra|mostre|me mostra|ver|show|show me)(?: o| the)? (?:git )?status(?: do git| do repo| do repositorio)?",
+        "qual (?:o|e o) status(?: do git| do repo| do repositorio)?"
+      ]
+    },
+    {
+      "name": "diff",
+      "cmd": "{{git}} status --short && {{git}} diff --stat && {{git}} diff",
+      "patterns": [
+        "o que (?:mudou|eu mudei|foi alterado|foi modificado|mudou ate agora|esta diferente|ta diferente)|oque mudou|que mudou|o que mudou no repo|o que mudou no projeto",
+        "what changed|what did i change|what(?:'s| has) changed(?: so far)?",
+        "(?:mostra|mostre|me mostra|show|show me)(?: o| the| me o)? diff|git diff|diff",
+        "(?:mostra|mostre|me mostra|show|show me)(?: as| the)? (?:mudancas|alteracoes|changes)"
+      ]
+    },
+    {
+      "name": "log",
+      "cmd": "{{git}} log --oneline -n 15",
+      "patterns": [
+        "(?:os )?ultimos commits|git log|recent commits|(?:the )?last commits|historico(?: de commits| do git)?",
+        "(?:mostra|mostre|me mostra|show|show me)(?: os| the)? (?:ultimos |last |recent )?commits"
+      ]
+    },
+    {
+      "name": "where",
+      "cmd": "{{search}} -w -- {{sym}} . | head -n 80",
+      "patterns": [
+        "(?:onde (?:esta|fica|ta|e definid[oa]|foi definid[oa]|esta definid[oa])|where is|where's|where are|where is defined) (?:o |a |os |as |the )?(?:funcao |function |func |metodo |method |classe |class |tipo |type |struct |interface |simbolo |symbol |variavel |variable |constante |constant )?(?P<sym>[A-Za-z_$][\\w$.]*)(?:\\(\\))?(?: (?:definid[oa]|defined))?"
+      ],
+      "slots": {"sym": "^[A-Za-z_$][\\w$.]{2,79}$"},
+      "reject": ["erro", "error", "errors", "bug", "bugs", "problema", "problem", "falha", "issue", "arquivo", "file", "codigo", "code", "isso", "this", "that", "ele", "ela", "config", "configuracao", "teste", "test", "tests", "testes", "projeto", "project", "log", "logs", "readme"]
+    },
+    {
+      "name": "search",
+      "cmd": "{{search}} -- {{sym}} . | head -n 80",
+      "patterns": [
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|the))? (?P<sym>[A-Za-z_$][\\w$.]*)"
+      ],
+      "slots": {"sym": "^(?:[A-Z_$][\\w$.]{2,79}|[\\w$]+[A-Z_$0-9.][\\w$.]*)$"}
+    },
+    {
+      "name": "search_code",
+      "cmd": "{{search}} -- {{sym}} . | head -n 80",
+      "patterns": [
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$.]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)"
+      ],
+      "slots": {"sym": "^[\\w$.]{3,79}$"},
+      "reject": ["erro", "error", "bug", "isso", "this", "that", "coisa", "algo", "something"]
+    }
+  ]
+}

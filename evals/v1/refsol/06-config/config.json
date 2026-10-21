@@ -1,0 +1,1 @@
+{"nome":"loja","versao":"1.5.0","porta":9090,"debug":false,"bancos":{"principal":{"host":"localhost","porta":5432}}}

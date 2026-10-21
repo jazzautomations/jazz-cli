@@ -1,0 +1,21 @@
+E........................................sF
+======================================================================
+ERROR: test_error (tests.test_calc.TestAdd.test_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/u/proj/py/tests/test_calc.py", line 131, in test_error
+    raise ValueError("boom")
+ValueError: boom
+
+======================================================================
+FAIL: test_wrong (tests.test_calc.TestAdd.test_wrong)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/u/proj/py/tests/test_calc.py", line 128, in test_wrong
+    self.assertEqual(add(2, 2), 5)
+AssertionError: 4 != 5
+
+----------------------------------------------------------------------
+Ran 43 tests in 0.001s
+
+FAILED (failures=1, errors=1, skipped=1)

@@ -1,0 +1,7 @@
+{"name": "yaml_get", "version": 1, "run": "python3", "effect": "read",
+ "description": "Read a value from a YAML file by path (simple subset; anchors/multi-doc go to unparsed)",
+ "args": {"type": "object", "additionalProperties": false, "required": ["file"],
+   "properties": {
+     "file": {"type": "string", "description": "YAML file"},
+     "path": {"type": "string", "description": "dotted path like services.web.ports[0]; empty = whole document"}}},
+ "output": {"data": {"value": "any", "type": "str"}}}

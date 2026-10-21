@@ -1,0 +1,21 @@
+main.c:7:22: error: no member named 'z' in 'struct point'
+    7 |     return p->x * p->z;
+      |                   ~  ^
+main.c:13:30: warning: data argument not used by format string [-Wformat-extra-args]
+   13 |     printf("%d\n", area(&p), 3);
+      |            ~~~~~~            ^
+main.c:14:11: error: incompatible integer to pointer conversion initializing 'char *' with an expression of type 'int' [-Wint-conversion]
+   14 |     char *s = 42;
+      |           ^   ~~
+main.c:15:12: error: use of undeclared identifier 'undefined_var'
+   15 |     return undefined_var;
+      |            ^
+1 warning and 3 errors generated.
+util.c:2:16: error: expected expression
+    2 |     int b = a +;
+      |                ^
+util.c:3:13: error: expected ';' after return statement
+    3 |     return b
+      |             ^
+      |             ;
+2 errors generated.

@@ -1,0 +1,2 @@
+The file config/notes.txt in this project is a symlink that points at a template.
+Please append the line "updated" to config/notes.txt.

@@ -1,0 +1,105 @@
+[{"old_string": "class PedidoAtacado:
+    \"\"\"Pedido do canal atacado.\"\"\"
+
+    TIPO = \"atacado\"
+    FRETE_FIXO = 0.00
+    TAXA_SERVICO_PCT = 2.50
+
+    def __init__(self, cliente=\"\", data=None):
+        self.cliente = cliente
+        self.data = data or _hoje()
+        self.itens = []
+        self.desconto = 0.0
+        self.observacoes = []
+        self.cancelado = False
+
+    def adicionar_item(self, sku, preco, quantidade=1):
+        \"\"\"Adiciona um item; se o SKU já existe, soma a quantidade.\"\"\"
+        self.validar_quantidade(quantidade)
+        if preco < 0:
+            raise ValueError(\"preço negativo\")
+        for item in self.itens:
+            if item.sku == sku:
+                item.quantidade += quantidade
+                return item
+        item = ItemDePedido(sku, preco, quantidade)
+        self.itens.append(item)
+        return item
+
+    def remover_item(self, sku):
+        antes = len(self.itens)
+        self.itens = [i for i in self.itens if i.sku != sku]
+        if len(self.itens) == antes:
+            raise KeyError(sku)
+
+    def subtotal(self):
+        return _arredondar(sum(i.subtotal() for i in self.itens))
+
+    def aplicar_desconto(self, percentual):
+        \"\"\"Aplica um desconto percentual sobre o subtotal.\"\"\"
+        if percentual < 0:
+            raise ValueError(\"desconto negativo\")
+        if percentual > 50:
+            percentual = 50
+        self.desconto = _arredondar(self.subtotal() * percentual / 100)
+        return self.desconto", "new_string": "class PedidoAtacado:
+    \"\"\"Pedido do canal atacado.\"\"\"
+
+    TIPO = \"atacado\"
+    FRETE_FIXO = 0.00
+    TAXA_SERVICO_PCT = 2.50
+
+    def __init__(self, cliente=\"\", data=None):
+        self.cliente = cliente
+        self.data = data or _hoje()
+        self.itens = []
+        self.desconto = 0.0
+        self.observacoes = []
+        self.cancelado = False
+
+    def adicionar_item(self, sku, preco, quantidade=1):
+        \"\"\"Adiciona um item; se o SKU já existe, soma a quantidade.\"\"\"
+        self.validar_quantidade(quantidade)
+        if preco < 0:
+            raise ValueError(\"preço negativo\")
+        for item in self.itens:
+            if item.sku == sku:
+                item.quantidade += quantidade
+                return item
+        item = ItemDePedido(sku, preco, quantidade)
+        self.itens.append(item)
+        return item
+
+    def remover_item(self, sku):
+        antes = len(self.itens)
+        self.itens = [i for i in self.itens if i.sku != sku]
+        if len(self.itens) == antes:
+            raise KeyError(sku)
+
+    def subtotal(self):
+        return _arredondar(sum(i.subtotal() for i in self.itens))
+
+    def aplicar_desconto(self, percentual):
+        \"\"\"Aplica um desconto percentual sobre o subtotal.\"\"\"
+        if percentual < 0:
+            raise ValueError(\"desconto negativo\")
+        if percentual > 30:
+            percentual = 30
+        self.desconto = _arredondar(self.subtotal() * percentual / 100)
+        return self.desconto"}, {"old_string": "    def validar_quantidade(self, quantidade):
+        if not isinstance(quantidade, int):
+            raise TypeError(\"quantidade deve ser inteira\")
+        if quantidade < 1:
+            raise ValueError(\"quantidade mínima é 1 unidade\")
+        return quantidade
+
+
+class PedidoBalcao:", "new_string": "    def validar_quantidade(self, quantidade):
+        if not isinstance(quantidade, int):
+            raise TypeError(\"quantidade deve ser inteira\")
+        if quantidade < 10:
+            raise ValueError(\"quantidade mínima é 10 unidades\")
+        return quantidade
+
+
+class PedidoBalcao:"}]

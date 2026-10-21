@@ -1,0 +1,5 @@
+# 07-servidor-fundo: arquivo produzido a partir da resposta real e nenhum servidor vivo.
+set -u
+T="${TASK:?TASK não definido}"
+cmp -s "$T/servidor.py" servidor.py || { echo "FAIL: servidor.py foi alterado"; exit 1; }
+python3 "$T/.hidden/check07.py"

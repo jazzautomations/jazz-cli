@@ -1,0 +1,60 @@
+# jazz-cli — implementation contract (v1)
+
+Four implementers work **in parallel**, each in its own git worktree, on one Go
+package (`package main`, module `jazzcli`). This file is the only coordination
+point. If you code against exactly what is written here, the four branches merge
+without conflicts and still compile.
+
+Baseline: the commit that added this file. At that commit `go build`, `go vet ./...`,
+`go test ./...` and the `linux/386` cross-build all pass. Every feature that is not
+done yet is a stub marked `TODO(<area>, <finding id>)`.
+
+Read `DESIGN.md` (decisions and things we reject) and `FINDINGS.md` (bugs 1–71,
+gaps G1–G24) before writing code.
+
+---
+
+## 0. Ground rules (all areas)
+
+- Toolchain: `/opt/homebrew/bin/go` and `/opt/homebrew/bin/gofmt` (they are not on PATH).
+  Before each commit, run `gofmt -l .` (it must print nothing), then `go vet ./...` and `go test ./...`,
+  then `CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -o /tmp/jazz-386 .`.
+- No new third-party dependencies (only `golang.org/x/{sys,text}` are allowed). The binary must stay around 10–12 MB.
+- Strings the user sees are in **Brazilian Portuguese**. Prompts to the model and code comments are in **English**.
+- **Prompt cache:** within a session the system prompt and the tool specs must stay byte-identical.
+  Spec order is: `Toolbox.Specs()` (read, write, edit, bash, todo, [fetch]), then `task` (only for the
+  parent agent), then `MCPManager.Specs()`. New MCP tools are only appended at the end, never reordered.
+  Anything that changes per turn goes into a message (`<system-reminder>`), never into `System`.
+- **Frozen files** (nobody edits them on a feature branch): `contract.go`, `CONTRACT.md`.
+  If you need a contract change, write it under "Contract change requests" in your final report and
+  do not merge it yourself.
+- **Edit only files you own** (§1). The only exceptions are the call-site edits listed in §1.2.
+- **Package-level names:** you may add unexported identifiers only in files you own. A generic helper
+  name (`clamp`, `trunc`, `parseX`, `cache`, …) must carry your area's prefix so that two branches
+  cannot declare the same name: agent-core `ac`, ui `ui`, providers `pv`, platform `pf`
+  (for example `pvJitter`, `pfMatchGlob`). Exported names listed in this contract are exempt.
+  Before you add a name, grep for it.
+- **Do not add methods to a type another area owns**, except where §2–§8 say so.
+  Ownership: `Agent`/`Session`/`Message` → A; `TermUI`/`Editor`/`HeadlessUI`/`JSONUI` → B;
+  `Config`/providers → C; `Toolbox`/`Shell`/`MCP*`/`PermSet`/`HookSet` → D.
+- **Tests:** edit the `*_test.go` files of your area and add new ones named `<file>_<topic>_test.go`.
+  `mcp_ui_test.go` is shared, and each test function in it belongs to the area of the code it tests:
+  MCP, flags, friendlyErr and customCommands → D; theme, markdown, clip and commonPrefix → B;
+  instructions, skills and hardwareNote → A. Prefix new test helpers with your area prefix.
+  A test that asserts behaviour FINDINGS.md calls a bug is skipped with `t.Skip("pending: <id>")`.
+  When you fix that item, un-skip the test and fix its expectation.
+- Commit messages are in Portuguese and end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Target machine: `ssh oldbox` (linux/386, Pentium M, 2 GB RAM, antiX, bash 5, `fdfind` but no `fd`).
+  It uses key auth only: never use passwords or sshpass, and never print secrets.
+
+## 1. File ownership
+
+| Area | Owner id | Files (existing + NEW) | Findings (bugs) | Gaps |
+|---|---|---|---|---|
+| A | **agent-core** | agent.go, session.go, types.go, prompt.go, NEW subagent.go, NEW textcalls.go | 3, 25, 26, 27, 31, 36, 37, 61, 69 (+15 agent side) | G1, G7, G12 (agent side), G13 (agent side), G15, G21 (/context data), G23; call sites of G4, G9, G10, G11 |
+| B | **ui** | ui.go, term.go, editor.go, headless.go, NEW jsonui.go (stub exists) | 4, 10, 11, 13, 32, 38, 39, 41, 53, 54, 55, 56, 57, 70 | G5 (JSONUI), G11 (approve `[e]`), G12 (Shift+Tab, status colour), G13 (Prefill), G17, G21 (Bell, $ in TurnEnd) |
+| C | **providers** | httpx.go, provider_openai.go, provider_anthropic.go, provider_codex.go, NEW provider_gemini.go, oauth.go, config.go, models.go, NEW omni.go (stub), NEW ratelimit.go (stub) | 16, 17, 18, 19, 34, 35, 42 (Limits side), 58, 60 (SSE), 65, 66 | G1 (Stop mapping), G2, G3 (presets/probe), G4, G9 (serialization), G15 (TextTools, 400 detection), G21 (cost), G22, omni |
+| D | **platform** | main.go, mcp.go, safety.go, tools.go, shell.go, web.go, edit.go, truncate.go, NEW hooks.go (stub), NEW perms.go (stub), NEW debug.go (stub), NEW update.go, NEW trust.go (stub), scripts/*, DESIGN.md | 1, 2, 5–9, 12, 14, 15, 20–24, 28–30, 33, 40, 42 (main side), 43–52, 59, 60 (MCP), 62–64, 67, 68, 71 | G3 (`jazz provider add` CLI), G5 (flags/exit codes), G6, G8, G9 (read/MCP image), G10, G11 (rules), G12/G13/G21 slash commands, G14, G16, G18, G19, G20, G24 |
+
+Shared, frozen: `contract.go`, `CONTRACT.md`. Nobody else edits `go.mod` or `.gitignore`.
+

@@ -1,0 +1,80 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "log",
+    "format": "log",
+    "traces": [
+      {
+        "lang": "python",
+        "exception": "TimeoutError",
+        "frames": [
+          {
+            "file": "/srv/app/worker.py",
+            "line": 88,
+            "func": "run",
+            "in_project": true
+          }
+        ]
+      }
+    ],
+    "log": {
+      "entries": 11,
+      "levels": {
+        "error": 3,
+        "fatal": 1,
+        "info": 5,
+        "warn": 2
+      },
+      "first": "2026-10-19 10:00:01,120",
+      "last": "2026-10-19 10:00:21,900",
+      "top": [
+        {
+          "level": "fatal",
+          "count": 1,
+          "msg": "FATAL db: connection lost, giving up after 5 retries"
+        },
+        {
+          "level": "error",
+          "count": 3,
+          "msg": "ERROR worker: job 4411 failed: timeout after 30s"
+        },
+        {
+          "level": "warn",
+          "count": 2,
+          "msg": "WARN  cache: redis latency 812ms"
+        },
+        {
+          "level": "info",
+          "count": 2,
+          "msg": "INFO  http: GET /health 200 2ms"
+        },
+        {
+          "level": "info",
+          "count": 1,
+          "msg": "INFO  server: listening on :8080"
+        },
+        {
+          "level": "info",
+          "count": 1,
+          "msg": "INFO  db: connected to postgres (pool=10)"
+        },
+        {
+          "level": "info",
+          "count": 1,
+          "msg": "INFO  http: GET /users 200 15ms"
+        }
+      ],
+      "samples": [
+        "2026-10-19 10:00:05,002 WARN  cache: redis latency 812ms",
+        "2026-10-19 10:00:09,540 ERROR worker: job 4411 failed: timeout after 30s",
+        "2026-10-19 10:00:09,541 ERROR worker: job 4412 failed: timeout after 30s",
+        "2026-10-19 10:00:12,777 ERROR worker: job 4413 failed: timeout after 30s",
+        "2026-10-19 10:00:18,212 WARN  cache: redis latency 1020ms",
+        "2026-10-19 10:00:21,900 FATAL db: connection lost, giving up after 5 retries"
+      ]
+    }
+  },
+  "unparsed": [],
+  "warnings": []
+}

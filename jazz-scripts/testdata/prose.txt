@@ -1,0 +1,4 @@
+The quick brown fox jumps over the lazy dog.
+Nothing in this file looks like test output, a compiler message,
+a stack trace or a log line; every parser must fail closed on it.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.

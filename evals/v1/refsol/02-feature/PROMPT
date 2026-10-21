@@ -1,0 +1,1 @@
+Adicione em texto.py uma função slugify(s) que converte para minúsculas, remove acentos (á→a, ç→c etc.), troca qualquer sequência de caracteres não alfanuméricos por um único hífen e remove hífens das pontas. Ex.: slugify('Olá, Mundo!  Ação') == 'ola-mundo-acao'. Crie test_texto.py com pelo menos 3 asserts e rode.

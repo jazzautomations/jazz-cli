@@ -1,0 +1,82 @@
+{
+  "ok": true,
+  "confidence": 0.882,
+  "data": {
+    "kind": "trace",
+    "format": "node",
+    "traces": [
+      {
+        "lang": "node",
+        "exception": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'port')",
+        "frames": [
+          {
+            "file": "/home/u/proj/js/lib/parse.js",
+            "line": 2,
+            "func": "parse",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/js/index.js",
+            "line": 3,
+            "func": "start",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/js/index.js",
+            "line": 4,
+            "func": "Object.\u003canonymous\u003e",
+            "in_project": true
+          },
+          {
+            "file": "node:internal/modules/cjs/loader",
+            "line": 1761,
+            "func": "Module._compile",
+            "in_project": false
+          },
+          {
+            "file": "node:internal/modules/cjs/loader",
+            "line": 1893,
+            "func": "Object..js",
+            "in_project": false
+          },
+          {
+            "file": "node:internal/modules/cjs/loader",
+            "line": 1481,
+            "func": "Module.load",
+            "in_project": false
+          },
+          {
+            "file": "node:internal/modules/cjs/loader",
+            "line": 1300,
+            "func": "Module._load",
+            "in_project": false
+          },
+          {
+            "file": "node:diagnostics_channel",
+            "line": 328,
+            "func": "TracingChannel.traceSync",
+            "in_project": false
+          },
+          {
+            "file": "node:internal/modules/cjs/loader",
+            "line": 245,
+            "func": "wrapModuleLoad",
+            "in_project": false
+          },
+          {
+            "file": "node:internal/modules/run_main",
+            "line": 154,
+            "func": "Module.executeUserEntryPoint [as runMain]",
+            "in_project": false
+          }
+        ]
+      }
+    ]
+  },
+  "unparsed": [
+    "boot step 0",
+    "boot step 1"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "cargo",
+    "passed": 3,
+    "failed": 2,
+    "skipped": 1,
+    "failures": [
+      {
+        "test": "parser::tests::rejects_garbage",
+        "file": "src/parser.rs",
+        "line": 88,
+        "message": "assertion `left == right` failed / left: Ok(0) / right: Err(Garbage)"
+      },
+      {
+        "test": "eval::tests::divides_by_zero",
+        "file": "src/eval.rs",
+        "line": 41,
+        "message": "attempt to divide by zero"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

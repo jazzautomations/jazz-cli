@@ -1,0 +1,17 @@
+codigo;nome;categoria;preco
+# exportado do ERP em 01/03
+SKU-AB12;Abraçadeira nylon (100 un);Ferragens;19,90
+P10;Parafuso 4x40 (caixa);Ferragens;12,90
+SUP10;Suporte articulado TV 32-55;Suportes;189,90
+SKU-SUP22;Suporte de parede p/ micro-ondas;Suportes;74,50
+CB2;Cabo HDMI 2 m;Cabos;29,90
+CB5;Cabo HDMI 5 m;Cabos;49,90
+SKU-CR1;Cabo de rede Cat6 (metro);Cabos;3,20
+L01;Manual do eletricista;Livros;89,00
+L02;Instalações residenciais;Livros;64,00
+FT3;Fita isolante 20 m;Ferragens;8,50
+BR8;Broca de vídeo 8 mm;Ferramentas;14,90
+TRN;Trena 5 m;Ferramentas;32,00
+# atualização de preço 15/03
+CB5;Cabo HDMI 5 m;Cabos;44,90
+sku-ft3;Fita isolante 20 m;Ferragens;7,90

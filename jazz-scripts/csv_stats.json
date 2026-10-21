@@ -1,0 +1,10 @@
+{"name": "csv_stats", "version": 1, "run": "python3", "effect": "read",
+ "description": "CSV profile: rows, per-column type/min/max/nulls/distinct/top values",
+ "args": {"type": "object", "additionalProperties": false, "required": ["file"],
+   "properties": {
+     "file": {"type": "string", "description": "CSV/TSV file"},
+     "cols": {"type": "string", "description": "comma-separated column names or indexes (default all)"},
+     "delimiter": {"type": "string", "description": "field separator (default: sniffed)"},
+     "header": {"type": "boolean", "description": "first row is a header (default: sniffed)"}}},
+ "output": {"data": {"rows": "int", "columns": [{"name": "str", "type": "str", "min": "num|str", "max": "num|str",
+   "nulls": "int", "distinct": "int", "top": [{"value": "str", "count": "int"}]}]}}}

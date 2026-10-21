@@ -1,0 +1,10 @@
+{"name": "extract_versions", "version": 1, "run": "python3", "effect": "read",
+ "description": "Find semver versions, URLs and emails in a file or text, with line:col positions",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string"},
+     "text": {"type": "string"},
+     "kinds": {"type": "string", "description": "comma list of semver,url,email (default all)"}},
+   "anyOf": [{"required": ["file"]}, {"required": ["text"]}]},
+ "output": {"data": {"semver": [{"value": "str", "line": "int", "col": "int"}], "url": ["..."], "email": ["..."],
+   "counts": "obj"}}}

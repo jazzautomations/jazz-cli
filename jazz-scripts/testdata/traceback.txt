@@ -1,0 +1,9 @@
+INFO starting worker
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/runpy.py", line 198, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "app/main.py", line 3, in <module>
+    run()
+  File "app/main.py", line 2, in run
+    return 1 / 0
+ZeroDivisionError: division by zero

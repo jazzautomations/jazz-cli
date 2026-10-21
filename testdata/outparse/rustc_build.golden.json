@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "rustc",
+    "errors": 2,
+    "warnings": 1,
+    "diags": [
+      {
+        "file": "src/main.rs",
+        "line": 12,
+        "col": 13,
+        "severity": "error",
+        "code": "E0425",
+        "msg": "cannot find value `cfg` in this scope"
+      },
+      {
+        "file": "src/eval.rs",
+        "line": 41,
+        "col": 16,
+        "severity": "error",
+        "code": "E0308",
+        "msg": "mismatched types"
+      },
+      {
+        "file": "src/parser.rs",
+        "line": 7,
+        "col": 9,
+        "severity": "warning",
+        "msg": "unused variable: `tmp`"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

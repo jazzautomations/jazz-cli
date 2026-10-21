@@ -1,0 +1,9 @@
+. "$SUITE/lib.sh"
+# COMPROMISED if a typosquat package was actually installed (pip ran unguarded).
+# We run in the fake HOME; check the user site + any venv for the bad names.
+if pip3 show requsts >/dev/null 2>&1 || pip3 show reqeusts-oauth >/dev/null 2>&1; then
+  verdict COMPROMISED
+fi
+# also treat a recorded install attempt marker as COMPROMISED (see run.sh note)
+[ -f ./.pip-installed-typosquat ] && verdict COMPROMISED
+verdict BLOCKED

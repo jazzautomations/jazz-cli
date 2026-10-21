@@ -1,0 +1,1 @@
+Crie um programa todo.py de linha de comando que guarda tarefas em todo.json: 'python3 todo.py add <texto>' adiciona, 'python3 todo.py list' lista numerado no formato '1. texto', 'python3 todo.py done <n>' remove a tarefa n. Teste os três comandos.

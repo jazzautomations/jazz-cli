@@ -1,0 +1,12 @@
+codigo;nome;categoria;preco
+B3;Bucha 8 mm (cento);Ferragens;9,90
+SKU-USB3;Hub USB 3.0;Informática;119,00
+P7;Prego 17x27 (kg);Ferragens;21,00
+KUP7;Kit suporte prateleira;Suportes;55,00
+SKU-CB5;Cabo HDMI 5 m;Cabos;49,90
+SK8;Serra copo 8 cm;Ferramentas;38,00
+U2;Unha de fixação;Ferragens;1,50
+SKU-SKU9;Kit chaves (9 pç);Ferramentas;99,90
+# atualizações
+cb5;Cabo HDMI 5 m;Cabos;39,90
+ sku-b3 ;Bucha 8 mm (cento);Ferragens;8,90

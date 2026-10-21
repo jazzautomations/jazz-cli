@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "log",
+    "format": "log",
+    "log": {
+      "entries": 8,
+      "levels": {
+        "error": 1,
+        "other": 7
+      },
+      "first": "Oct 19 09:58:01",
+      "last": "Oct 19 10:02:03",
+      "top": [
+        {
+          "level": "error",
+          "count": 1,
+          "msg": "sync.sh: error: rsync connection unexpectedly closed"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "connmand: wlan0 {RX} 1840 packets 220311 bytes"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "connmand: wlan0 {update} flags 4098 \u003cDOWN\u003e"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "kernel: [ 9011.223] wlan0: deauthenticating from 70:4f:57:aa:bb:cc by local choice (Reason: 3=DEAUTH_LEAVING)"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "connmand: wlan0 {update} flags 69699 \u003cUP,RUNNING\u003e"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "dhclient: DHCPACK of 192.168.0.14 from 192.168.0.1"
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "dhclient: bound to 192.168.0.14 -- renewal in 41712 seconds."
+        },
+        {
+          "level": "other",
+          "count": 1,
+          "msg": "CRON: (jazz) CMD (~/bin/sync.sh)"
+        }
+      ],
+      "samples": [
+        "Oct 19 10:02:03 oldbox sync.sh[2241]: error: rsync connection unexpectedly closed"
+      ]
+    }
+  },
+  "unparsed": [],
+  "warnings": []
+}

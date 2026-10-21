@@ -1,0 +1,7 @@
+# 03-arquivo-grande: AST igual ao original em tudo, menos os dois métodos de PedidoAtacado.
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+cmp -s "$T/test_pedidos.py" test_pedidos.py || fail "test_pedidos.py foi alterado"
+python3 -m unittest -q test_pedidos >/dev/null 2>&1 || fail "test_pedidos.py falha"
+python3 "$T/.hidden/check03.py" "$T/pedidos.py"

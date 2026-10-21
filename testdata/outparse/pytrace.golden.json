@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "confidence": 0.9,
+  "data": {
+    "kind": "trace",
+    "format": "python",
+    "traces": [
+      {
+        "lang": "python",
+        "exception": "AttributeError",
+        "message": "'User' object has no attribute 'nmae'",
+        "frames": [
+          {
+            "file": "/home/u/proj/py/app/service.py",
+            "line": 11,
+            "func": "run",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/py/app/service.py",
+            "line": 6,
+            "func": "handle",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/py/app/models.py",
+            "line": 6,
+            "func": "greet",
+            "in_project": true
+          }
+        ]
+      },
+      {
+        "lang": "python",
+        "exception": "RuntimeError",
+        "message": "service failed",
+        "frames": [
+          {
+            "file": "/home/u/proj/py/main.py",
+            "line": 5,
+            "func": "\u003cmodule\u003e",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/py/app/service.py",
+            "line": 13,
+            "func": "run",
+            "in_project": true
+          }
+        ]
+      }
+    ]
+  },
+  "unparsed": [
+    "loading module 0",
+    "loading module 1"
+  ],
+  "warnings": []
+}

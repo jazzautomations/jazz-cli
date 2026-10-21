@@ -1,0 +1,7 @@
+categoria    itens          bruto     desconto      imposto        liquido
+Cabos            2       R$ 79,80      R$ 0,00     R$ 14,36       R$ 94,16
+Ferragens       16       R$ 92,60      R$ 0,00     R$ 17,74      R$ 110,34
+Ferramentas      4      R$ 213,90     R$ 21,11     R$ 37,02      R$ 229,81
+Informática      1      R$ 119,00      R$ 0,00     R$ 21,42      R$ 140,42
+Suportes         3      R$ 165,00     R$ 19,80     R$ 29,04      R$ 174,24
+TOTAL           26      R$ 670,30     R$ 40,91    R$ 119,58      R$ 748,97

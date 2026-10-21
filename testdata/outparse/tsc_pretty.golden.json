@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "confidence": 0.941,
+  "data": {
+    "kind": "build",
+    "format": "tsc",
+    "errors": 3,
+    "diags": [
+      {
+        "file": "src/api/client.ts",
+        "line": 14,
+        "col": 7,
+        "severity": "error",
+        "code": "TS2322",
+        "msg": "Type 'string' is not assignable to type 'number'."
+      },
+      {
+        "file": "src/api/client.ts",
+        "line": 31,
+        "col": 18,
+        "severity": "error",
+        "code": "TS2339",
+        "msg": "Property 'mesage' does not exist on type 'ApiError'."
+      },
+      {
+        "file": "src/components/Cart.tsx",
+        "line": 9,
+        "col": 3,
+        "severity": "error",
+        "code": "TS2741",
+        "msg": "Property 'total' is missing in type '{ items: Item[]; }' but required in type 'CartProps'."
+      }
+    ]
+  },
+  "unparsed": [
+    "    'total' is declared here."
+  ],
+  "warnings": []
+}

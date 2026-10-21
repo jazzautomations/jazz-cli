@@ -1,0 +1,62 @@
+name: release
+# Push a tag vX.Y.Z (equal to `var version` in main.go) to publish a release.
+#
+# Assets (names are what scripts/install.sh, scripts/install.ps1 and
+# `jazz update` download):
+#   jazz-linux-386  jazz-linux-amd64  jazz-linux-arm64
+#   jazz-darwin-amd64  jazz-darwin-arm64
+#   jazz-windows-amd64.exe  jazz-windows-arm64.exe
+#   checksums.txt  manifest.txt  VERSION  install.sh  install.ps1
+#   manifest.txt.sig/.minisig  checksums.txt.sig/.minisig   (signed releases only)
+#
+# Signing: store the private key file made by `go run ./scripts/sign -gen <file>`
+# (one base64 line) in the secret JAZZ_SIGN_KEY. Optionally pin the expected
+# public key in the repository variable JAZZ_UPDATE_PUBKEY so a wrong secret
+# fails the build. Without the secret the release is built UNSIGNED, published
+# as a pre-release, and its installers only check sha256 (with a warning).
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27' }
+      - run: go vet ./... && go test -count=1 ./...
+      - run: sh -n scripts/install.sh
+      - name: build (signed when JAZZ_SIGN_KEY is set)
+        id: build
+        env:
+          SIGN_KEY: ${{ secrets.JAZZ_SIGN_KEY }}
+          JAZZ_UPDATE_PUBKEY: ${{ vars.JAZZ_UPDATE_PUBKEY }}
+          JAZZ_EXPECT_VERSION: ${{ github.ref_name }}
+          GO: go
+        run: |
+          set -eu
+          if [ -n "$SIGN_KEY" ]; then
+            umask 077
+            key="$RUNNER_TEMP/jazz-release.key"
+            printf '%s\n' "$SIGN_KEY" > "$key"
+            JAZZ_SIGN_KEY="$key" bash scripts/release.sh
+            rm -f "$key"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::JAZZ_SIGN_KEY not set: building an UNSIGNED pre-release"
+            JAZZ_UNSIGNED=1 bash scripts/release.sh
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+          # what the installers expect must be there
+          for f in jazz-linux-386 jazz-linux-amd64 jazz-linux-arm64 jazz-darwin-amd64 jazz-darwin-arm64 \
+                   jazz-windows-amd64.exe jazz-windows-arm64.exe manifest.txt checksums.txt VERSION install.sh install.ps1; do
+            test -s "dist/release/$f" || { echo "missing dist/release/$f"; exit 1; }
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ steps.build.outputs.prerelease }}
+          fail_on_unmatched_files: true
+          files: dist/release/*

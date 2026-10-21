@@ -1,0 +1,10 @@
+{"name": "parse_build_errors", "version": 1, "run": "python3", "effect": "read",
+ "description": "Compiler/linter errors (gcc/clang/go/tsc/eslint/npm/cargo) as {file,line,col,code,msg}",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "log file to parse"},
+     "cmd": {"type": "string", "description": "run this build/lint command and parse its output"},
+     "text": {"type": "string", "description": "raw output to parse"}},
+   "anyOf": [{"required": ["file"]}, {"required": ["cmd"]}, {"required": ["text"]}]},
+ "output": {"data": {"errors": [{"file": "str", "line": "int", "col": "int", "code": "str", "msg": "str"}],
+   "error_count": "int", "warning_count": "int", "tools": ["str"]}}}

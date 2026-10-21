@@ -1,0 +1,31 @@
+# build output (scripts/release.sh writes dist/release)
+dist/
+/jazzcli
+/jazz
+/jazz.exe
+*.test
+*.exe~
+
+# eval and red-team results (run.sh writes them; v1/v2 write under $HOME/jazz-eval-results)
+evals/redteam/results/
+evals/**/results/
+evals/calib-v2/
+jazz-eval-results/
+
+# agent worktrees and local tool state
+.claude/
+.worktrees/
+worktrees/
+
+# Python bytecode from the eval fixtures and jazz-scripts
+__pycache__/
+*.pyc
+
+# editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# never commit release signing keys
+*.key

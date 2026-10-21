@@ -1,0 +1,1 @@
+mkdir -p .chk && cp todo.py .chk/ && cd .chk && python3 todo.py add "comprar pao" >/dev/null && python3 todo.py add "estudar go" >/dev/null && python3 todo.py list | grep -q "^1\. comprar pao" && python3 todo.py done 1 >/dev/null && python3 todo.py list | grep -q "^1\. estudar go" && ! python3 todo.py list | grep -q comprar

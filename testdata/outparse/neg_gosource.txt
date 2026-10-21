@@ -1,0 +1,90 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// ---------------------------------------------------------------------------
+// Fake OpenAI-compatible server
+// ---------------------------------------------------------------------------
+
+type fakeCall struct {
+	ID   string
+	Name string
+	Args string
+}
+
+// fakeResp is one scripted reply. Status != 0 && != 200 => HTTP error with Body.
+type fakeResp struct {
+	Status    int
+	Body      string
+	Text      string
+	Reasoning string
+	Calls     []fakeCall
+	HangAfter bool // stream Text, then block until the client goes away
+	Stall     bool // send only keep-alive comments until the client goes away
+	UsageIn   int
+	UsageOut  int
+	Finish    string // overrides finish_reason (e.g. "length")
+}
+
+type recReq struct {
+	Model    string
+	Messages []map[string]any
+	Tools    []any
+	HasTools bool
+	Raw      map[string]any
+}
+
+func (r recReq) system() string {
+	if len(r.Messages) > 0 && r.Messages[0]["role"] == "system" {
+		s, _ := r.Messages[0]["content"].(string)
+		return s
+	}
+	return ""
+}
+
+func (r recReq) last() map[string]any {
+	if len(r.Messages) == 0 {
+		return nil
+	}
+	return r.Messages[len(r.Messages)-1]
+}
+
+func (r recReq) isCompact() bool {
+	l := r.last()
+	if l == nil {
+		return false
+	}
+	c, _ := l["content"].(string)
+	return l["role"] == "user" && strings.Contains(c, "handoff summary")
+}
+
+// toolResults returns tool messages (by tool_call_id) in the request.
+func (r recReq) toolResults() map[string]string {
+	out := map[string]string{}
+	for _, m := range r.Messages {
+		if m["role"] == "tool" {
+			id, _ := m["tool_call_id"].(string)
+			c, _ := m["content"].(string)
+			out[id] = c
+		}
+	}
+	return out
+}
+
+func (r recReq) contains(role, substr string) bool {
+	for _, m := range r.Messages {
+		if m["role"] != role {

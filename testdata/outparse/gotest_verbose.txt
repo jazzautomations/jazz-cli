@@ -1,0 +1,89 @@
+=== RUN   TestAdd
+=== RUN   TestAdd/casea
+=== RUN   TestAdd/caseb
+=== RUN   TestAdd/casec
+=== RUN   TestAdd/cased
+=== RUN   TestAdd/casee
+=== RUN   TestAdd/casef
+=== RUN   TestAdd/caseg
+=== RUN   TestAdd/caseh
+=== RUN   TestAdd/casei
+=== RUN   TestAdd/casej
+=== RUN   TestAdd/casek
+=== RUN   TestAdd/casel
+=== RUN   TestAdd/casem
+=== RUN   TestAdd/casen
+=== RUN   TestAdd/caseo
+=== RUN   TestAdd/casep
+=== RUN   TestAdd/caseq
+=== RUN   TestAdd/caser
+=== RUN   TestAdd/cases
+=== RUN   TestAdd/caset
+=== RUN   TestAdd/caseu
+=== RUN   TestAdd/casev
+=== RUN   TestAdd/casew
+=== RUN   TestAdd/casex
+=== RUN   TestAdd/casey
+=== RUN   TestAdd/casez
+=== RUN   TestAdd/casea#01
+=== RUN   TestAdd/caseb#01
+=== RUN   TestAdd/casec#01
+=== RUN   TestAdd/cased#01
+--- PASS: TestAdd (0.00s)
+    --- PASS: TestAdd/casea (0.00s)
+    --- PASS: TestAdd/caseb (0.00s)
+    --- PASS: TestAdd/casec (0.00s)
+    --- PASS: TestAdd/cased (0.00s)
+    --- PASS: TestAdd/casee (0.00s)
+    --- PASS: TestAdd/casef (0.00s)
+    --- PASS: TestAdd/caseg (0.00s)
+    --- PASS: TestAdd/caseh (0.00s)
+    --- PASS: TestAdd/casei (0.00s)
+    --- PASS: TestAdd/casej (0.00s)
+    --- PASS: TestAdd/casek (0.00s)
+    --- PASS: TestAdd/casel (0.00s)
+    --- PASS: TestAdd/casem (0.00s)
+    --- PASS: TestAdd/casen (0.00s)
+    --- PASS: TestAdd/caseo (0.00s)
+    --- PASS: TestAdd/casep (0.00s)
+    --- PASS: TestAdd/caseq (0.00s)
+    --- PASS: TestAdd/caser (0.00s)
+    --- PASS: TestAdd/cases (0.00s)
+    --- PASS: TestAdd/caset (0.00s)
+    --- PASS: TestAdd/caseu (0.00s)
+    --- PASS: TestAdd/casev (0.00s)
+    --- PASS: TestAdd/casew (0.00s)
+    --- PASS: TestAdd/casex (0.00s)
+    --- PASS: TestAdd/casey (0.00s)
+    --- PASS: TestAdd/casez (0.00s)
+    --- PASS: TestAdd/casea#01 (0.00s)
+    --- PASS: TestAdd/caseb#01 (0.00s)
+    --- PASS: TestAdd/casec#01 (0.00s)
+    --- PASS: TestAdd/cased#01 (0.00s)
+=== RUN   TestAddWrong
+    calc_test.go:17: Add(2, 2) = 4, want 5
+--- FAIL: TestAddWrong (0.00s)
+=== RUN   TestTable
+=== RUN   TestTable/sum
+=== RUN   TestTable/sum#01
+    calc_test.go:26: Add(2, 3) = 5
+        	want 6
+=== RUN   TestTable/sum#02
+--- FAIL: TestTable (0.00s)
+    --- PASS: TestTable/sum (0.00s)
+    --- FAIL: TestTable/sum#01 (0.00s)
+    --- PASS: TestTable/sum#02 (0.00s)
+=== RUN   TestSkip
+    calc_test.go:32: not ready
+--- SKIP: TestSkip (0.00s)
+FAIL
+FAIL	example.com/gt/calc	0.235s
+?   	example.com/gt/notests	[no test files]
+=== RUN   TestUp
+--- PASS: TestUp (0.00s)
+=== RUN   TestUp2
+    u_test.go:12: logging line
+--- PASS: TestUp2 (0.00s)
+PASS
+ok  	example.com/gt/util	0.137s
+FAIL

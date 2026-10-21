@@ -1,0 +1,69 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "go",
+    "errors": 8,
+    "diags": [
+      {
+        "file": "./a.go",
+        "line": 5,
+        "col": 2,
+        "severity": "error",
+        "msg": "\"os\" imported and not used"
+      },
+      {
+        "file": "./a.go",
+        "line": 6,
+        "col": 2,
+        "severity": "error",
+        "msg": "\"strings\" imported and not used"
+      },
+      {
+        "file": "./a.go",
+        "line": 9,
+        "col": 31,
+        "severity": "error",
+        "msg": "cannot use x (variable of type int) as string value in return statement"
+      },
+      {
+        "file": "./a.go",
+        "line": 12,
+        "col": 14,
+        "severity": "error",
+        "msg": "cannot use \"s\" (untyped string constant) as int value in variable declaration"
+      },
+      {
+        "file": "./a.go",
+        "line": 13,
+        "col": 14,
+        "severity": "error",
+        "msg": "undefined: undefinedThing"
+      },
+      {
+        "file": "./a.go",
+        "line": 14,
+        "col": 7,
+        "severity": "error",
+        "msg": "too many arguments in call to g"
+      },
+      {
+        "file": "./b.go",
+        "line": 6,
+        "col": 9,
+        "severity": "error",
+        "msg": "cannot use \"nope\" (untyped string constant) as int value in return statement"
+      },
+      {
+        "file": "./b.go",
+        "line": 9,
+        "col": 12,
+        "severity": "error",
+        "msg": "declared and not used: z"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

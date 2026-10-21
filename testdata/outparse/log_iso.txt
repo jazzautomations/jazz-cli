@@ -1,0 +1,15 @@
+2026-10-19 10:00:01,120 INFO  server: listening on :8080
+2026-10-19 10:00:02,431 INFO  db: connected to postgres (pool=10)
+2026-10-19 10:00:05,002 WARN  cache: redis latency 812ms
+2026-10-19 10:00:07,118 INFO  http: GET /health 200 2ms
+2026-10-19 10:00:09,540 ERROR worker: job 4411 failed: timeout after 30s
+2026-10-19 10:00:09,541 ERROR worker: job 4412 failed: timeout after 30s
+Traceback (most recent call last):
+  File "/srv/app/worker.py", line 88, in run
+    result = fut.result(timeout=30)
+TimeoutError
+2026-10-19 10:00:11,003 INFO  http: GET /health 200 1ms
+2026-10-19 10:00:12,777 ERROR worker: job 4413 failed: timeout after 30s
+2026-10-19 10:00:15,000 INFO  http: GET /users 200 15ms
+2026-10-19 10:00:18,212 WARN  cache: redis latency 1020ms
+2026-10-19 10:00:21,900 FATAL db: connection lost, giving up after 5 retries

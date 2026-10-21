@@ -1,0 +1,22 @@
+loading module 0
+loading module 1
+Traceback (most recent call last):
+  File "/home/u/proj/py/app/service.py", line 11, in run
+    return handle(["a", "b"])
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/u/proj/py/app/service.py", line 6, in handle
+    out.append(User(n).greet())
+               ^^^^^^^^^^^^^^^
+  File "/home/u/proj/py/app/models.py", line 6, in greet
+    return "hi " + self.nmae
+                   ^^^^^^^^^
+AttributeError: 'User' object has no attribute 'nmae'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/u/proj/py/main.py", line 5, in <module>
+    run()
+  File "/home/u/proj/py/app/service.py", line 13, in run
+    raise RuntimeError("service failed") from e
+RuntimeError: service failed

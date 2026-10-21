@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "jest",
+    "passed": 38,
+    "failed": 2,
+    "skipped": 1,
+    "total": 41,
+    "suites": [
+      {
+        "name": "src/utils/format.test.js",
+        "status": "ok"
+      },
+      {
+        "name": "src/utils/date.test.js",
+        "status": "ok"
+      },
+      {
+        "name": "src/api/client.test.js",
+        "status": "FAIL"
+      },
+      {
+        "name": "src/components/Button.test.jsx",
+        "status": "ok"
+      },
+      {
+        "name": "src/components/Modal.test.jsx",
+        "status": "ok"
+      }
+    ],
+    "failures": [
+      {
+        "test": "ApiClient › retries on 503",
+        "file": "src/api/client.test.js",
+        "line": 44,
+        "message": "expect(received).toBe(expected) // Object.is equality / Expected: 3 / Received: 1"
+      },
+      {
+        "test": "ApiClient › parses error body",
+        "file": "src/api/client.js",
+        "line": 14,
+        "message": "TypeError: Cannot read properties of undefined (reading 'message')"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

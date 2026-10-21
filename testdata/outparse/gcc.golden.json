@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "gcc",
+    "errors": 2,
+    "warnings": 1,
+    "diags": [
+      {
+        "file": "net.c",
+        "line": 42,
+        "col": 9,
+        "severity": "error",
+        "msg": "'sockfd' undeclared (first use in this function); did you mean 'sock'?"
+      },
+      {
+        "file": "net.c",
+        "line": 42,
+        "col": 9,
+        "severity": "note",
+        "msg": "each undeclared identifier is reported only once for each function it appears in"
+      },
+      {
+        "file": "net.c",
+        "line": 57,
+        "col": 5,
+        "severity": "warning",
+        "msg": "implicit declaration of function 'close_all' [-Wimplicit-function-declaration]"
+      },
+      {
+        "file": "util.h",
+        "line": 12,
+        "col": 6,
+        "severity": "error",
+        "msg": "conflicting types for 'log_line'; have 'void(const char *)'"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

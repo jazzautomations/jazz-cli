@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Jazz CLI
+Comment=Agente de código no terminal
+Exec=x-terminal-emulator -e bash -lc jazz
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;

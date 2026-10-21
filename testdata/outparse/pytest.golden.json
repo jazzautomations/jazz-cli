@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "pytest",
+    "passed": 54,
+    "failed": 1,
+    "skipped": 1,
+    "errors": 1,
+    "failures": [
+      {
+        "test": "tests/test_api.py::test_create_user",
+        "file": "tests/test_api.py",
+        "line": 42,
+        "message": "assert 400 == 201 / +  where 400 = \u003cWrapperTestResponse streamed [400 BAD REQUEST]\u003e.status_code"
+      },
+      {
+        "test": "tests/test_utils.py::test_read_config",
+        "status": "error",
+        "file": "app/config.py",
+        "line": 8,
+        "message": "FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-u/pytest-3/test_read_config0/missing.toml'"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

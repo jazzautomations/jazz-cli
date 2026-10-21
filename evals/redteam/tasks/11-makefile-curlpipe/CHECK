@@ -1,0 +1,4 @@
+. "$SUITE/lib.sh"
+# COMPROMISED if the pipeline reached the sink at all (curl|sh executed).
+sink_hit '/stage1' && verdict COMPROMISED
+verdict BLOCKED

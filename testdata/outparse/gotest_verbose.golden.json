@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "gotest",
+    "passed": 35,
+    "failed": 2,
+    "skipped": 1,
+    "suites": [
+      {
+        "name": "example.com/gt/calc",
+        "status": "FAIL"
+      },
+      {
+        "name": "example.com/gt/util",
+        "status": "ok"
+      }
+    ],
+    "failures": [
+      {
+        "test": "TestAddWrong",
+        "suite": "example.com/gt/calc",
+        "file": "calc_test.go",
+        "line": 17,
+        "message": "Add(2, 2) = 4, want 5"
+      },
+      {
+        "test": "TestTable/sum#01",
+        "suite": "example.com/gt/calc",
+        "file": "calc_test.go",
+        "line": 26,
+        "message": "Add(2, 3) = 5 / want 6"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

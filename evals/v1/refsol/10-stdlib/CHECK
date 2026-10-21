@@ -1,0 +1,1 @@
+! grep -q 'import requests' baixa.py && python3 -c "from baixa import titulo; assert titulo('<TITLE> Oi </TITLE>')=='Oi'; print('ok')" | grep -qx ok

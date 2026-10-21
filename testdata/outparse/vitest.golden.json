@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "vitest",
+    "passed": 24,
+    "failed": 1,
+    "total": 25,
+    "suites": [
+      {
+        "name": "src/math.test.ts",
+        "status": "ok"
+      },
+      {
+        "name": "src/strings.test.ts",
+        "status": "ok"
+      },
+      {
+        "name": "src/cart.test.ts",
+        "status": "FAIL"
+      }
+    ],
+    "failures": [
+      {
+        "test": "Cart \u003e applies discount",
+        "suite": "src/cart.test.ts",
+        "file": "src/cart.test.ts",
+        "line": 23,
+        "message": "AssertionError: expected 90 to be 81 // Object.is equality"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

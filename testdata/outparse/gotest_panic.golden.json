@@ -1,0 +1,83 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "gotest",
+    "failed": 1,
+    "suites": [
+      {
+        "name": "example.com/gt/pan",
+        "status": "FAIL"
+      }
+    ],
+    "failures": [
+      {
+        "test": "TestSum",
+        "suite": "example.com/gt/pan",
+        "file": "/home/u/proj/gt/pan/pan_test.go",
+        "line": 15,
+        "message": "panic: runtime error: invalid memory address or nil pointer dereference [recovered, repanicked]"
+      }
+    ],
+    "traces": [
+      {
+        "lang": "go",
+        "exception": "panic",
+        "message": "runtime error: invalid memory address or nil pointer dereference [recovered, repanicked]",
+        "frames": [
+          {
+            "file": "/usr/local/go/src/testing/testing.go",
+            "line": 2125,
+            "func": "testing.tRunner.func1.2",
+            "in_project": false
+          },
+          {
+            "file": "/usr/local/go/src/testing/testing.go",
+            "line": 2128,
+            "func": "testing.tRunner.func1",
+            "in_project": false
+          },
+          {
+            "file": "/usr/local/go/src/runtime/panic.go",
+            "line": 859,
+            "func": "panic",
+            "in_project": false
+          },
+          {
+            "file": "/home/u/proj/gt/pan/pan_test.go",
+            "line": 10,
+            "func": "example.com/gt/pan.sum",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/gt/pan/pan_test.go",
+            "line": 10,
+            "func": "example.com/gt/pan.sum",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/gt/pan/pan_test.go",
+            "line": 15,
+            "func": "example.com/gt/pan.TestSum",
+            "in_project": true
+          },
+          {
+            "file": "/usr/local/go/src/testing/testing.go",
+            "line": 2195,
+            "func": "testing.tRunner",
+            "in_project": false
+          },
+          {
+            "file": "/usr/local/go/src/testing/testing.go",
+            "line": 2260,
+            "func": "testing.(*T).Run",
+            "in_project": false
+          }
+        ]
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

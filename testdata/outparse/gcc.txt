@@ -1,0 +1,15 @@
+gcc -Wall -O2 -c -o net.o net.c
+net.c: In function 'open_socket':
+net.c:42:9: error: 'sockfd' undeclared (first use in this function); did you mean 'sock'?
+   42 |     if (sockfd < 0)
+      |         ^~~~~~
+      |         sock
+net.c:42:9: note: each undeclared identifier is reported only once for each function it appears in
+net.c:57:5: warning: implicit declaration of function 'close_all' [-Wimplicit-function-declaration]
+   57 |     close_all(fds, n);
+      |     ^~~~~~~~~
+In file included from main.c:3:
+util.h:12:6: error: conflicting types for 'log_line'; have 'void(const char *)'
+   12 | void log_line(const char *msg);
+      |      ^~~~~~~~
+make: *** [Makefile:14: net.o] Error 1

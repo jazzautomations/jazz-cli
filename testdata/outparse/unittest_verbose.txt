@@ -1,0 +1,64 @@
+test_error (tests.test_calc.TestAdd.test_error) ... ERROR
+test_ok_0 (tests.test_calc.TestAdd.test_ok_0) ... ok
+test_ok_1 (tests.test_calc.TestAdd.test_ok_1) ... ok
+test_ok_10 (tests.test_calc.TestAdd.test_ok_10) ... ok
+test_ok_11 (tests.test_calc.TestAdd.test_ok_11) ... ok
+test_ok_12 (tests.test_calc.TestAdd.test_ok_12) ... ok
+test_ok_13 (tests.test_calc.TestAdd.test_ok_13) ... ok
+test_ok_14 (tests.test_calc.TestAdd.test_ok_14) ... ok
+test_ok_15 (tests.test_calc.TestAdd.test_ok_15) ... ok
+test_ok_16 (tests.test_calc.TestAdd.test_ok_16) ... ok
+test_ok_17 (tests.test_calc.TestAdd.test_ok_17) ... ok
+test_ok_18 (tests.test_calc.TestAdd.test_ok_18) ... ok
+test_ok_19 (tests.test_calc.TestAdd.test_ok_19) ... ok
+test_ok_2 (tests.test_calc.TestAdd.test_ok_2) ... ok
+test_ok_20 (tests.test_calc.TestAdd.test_ok_20) ... ok
+test_ok_21 (tests.test_calc.TestAdd.test_ok_21) ... ok
+test_ok_22 (tests.test_calc.TestAdd.test_ok_22) ... ok
+test_ok_23 (tests.test_calc.TestAdd.test_ok_23) ... ok
+test_ok_24 (tests.test_calc.TestAdd.test_ok_24) ... ok
+test_ok_25 (tests.test_calc.TestAdd.test_ok_25) ... ok
+test_ok_26 (tests.test_calc.TestAdd.test_ok_26) ... ok
+test_ok_27 (tests.test_calc.TestAdd.test_ok_27) ... ok
+test_ok_28 (tests.test_calc.TestAdd.test_ok_28) ... ok
+test_ok_29 (tests.test_calc.TestAdd.test_ok_29) ... ok
+test_ok_3 (tests.test_calc.TestAdd.test_ok_3) ... ok
+test_ok_30 (tests.test_calc.TestAdd.test_ok_30) ... ok
+test_ok_31 (tests.test_calc.TestAdd.test_ok_31) ... ok
+test_ok_32 (tests.test_calc.TestAdd.test_ok_32) ... ok
+test_ok_33 (tests.test_calc.TestAdd.test_ok_33) ... ok
+test_ok_34 (tests.test_calc.TestAdd.test_ok_34) ... ok
+test_ok_35 (tests.test_calc.TestAdd.test_ok_35) ... ok
+test_ok_36 (tests.test_calc.TestAdd.test_ok_36) ... ok
+test_ok_37 (tests.test_calc.TestAdd.test_ok_37) ... ok
+test_ok_38 (tests.test_calc.TestAdd.test_ok_38) ... ok
+test_ok_39 (tests.test_calc.TestAdd.test_ok_39) ... ok
+test_ok_4 (tests.test_calc.TestAdd.test_ok_4) ... ok
+test_ok_5 (tests.test_calc.TestAdd.test_ok_5) ... ok
+test_ok_6 (tests.test_calc.TestAdd.test_ok_6) ... ok
+test_ok_7 (tests.test_calc.TestAdd.test_ok_7) ... ok
+test_ok_8 (tests.test_calc.TestAdd.test_ok_8) ... ok
+test_ok_9 (tests.test_calc.TestAdd.test_ok_9) ... ok
+test_skip (tests.test_calc.TestAdd.test_skip) ... skipped 'later'
+test_wrong (tests.test_calc.TestAdd.test_wrong) ... FAIL
+
+======================================================================
+ERROR: test_error (tests.test_calc.TestAdd.test_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/u/proj/py/tests/test_calc.py", line 131, in test_error
+    raise ValueError("boom")
+ValueError: boom
+
+======================================================================
+FAIL: test_wrong (tests.test_calc.TestAdd.test_wrong)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/u/proj/py/tests/test_calc.py", line 128, in test_wrong
+    self.assertEqual(add(2, 2), 5)
+AssertionError: 4 != 5
+
+----------------------------------------------------------------------
+Ran 43 tests in 0.001s
+
+FAILED (failures=1, errors=1, skipped=1)

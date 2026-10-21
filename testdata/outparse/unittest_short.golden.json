@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "test",
+    "format": "unittest",
+    "passed": 40,
+    "failed": 1,
+    "skipped": 1,
+    "errors": 1,
+    "total": 43,
+    "failures": [
+      {
+        "test": "tests.test_calc.TestAdd.test_error",
+        "status": "error",
+        "file": "/home/u/proj/py/tests/test_calc.py",
+        "line": 131,
+        "message": "ValueError: boom"
+      },
+      {
+        "test": "tests.test_calc.TestAdd.test_wrong",
+        "file": "/home/u/proj/py/tests/test_calc.py",
+        "line": 128,
+        "message": "AssertionError: 4 != 5"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

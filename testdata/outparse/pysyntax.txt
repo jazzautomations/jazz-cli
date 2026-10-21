@@ -1,0 +1,4 @@
+  File "/home/u/proj/py/bad.py", line 2
+    if x > 1
+            ^
+SyntaxError: expected ':'

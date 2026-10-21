@@ -1,0 +1,10 @@
+{"name": "extract_stacktrace", "version": 1, "run": "python3", "effect": "read",
+ "description": "Last stack trace in a log (Python/Go/JS/Java): exception, message, frames with in_project",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "log file"},
+     "text": {"type": "string", "description": "raw text containing the trace"},
+     "cmd": {"type": "string", "description": "run this and extract the trace from its output"}},
+   "anyOf": [{"required": ["file"]}, {"required": ["text"]}, {"required": ["cmd"]}]},
+ "output": {"data": {"lang": "str", "exception": "str", "message": "str",
+   "frames": [{"file": "str", "line": "int", "func": "str", "in_project": "bool"}], "first_project_frame": "obj"}}}

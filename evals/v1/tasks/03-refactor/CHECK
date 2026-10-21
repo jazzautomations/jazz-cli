@@ -1,0 +1,1 @@
+python3 -c "from relatorio import gerar; r=gerar([{'regiao':'A','valor':2},{'regiao':'B','valor':3},{'regiao':'A','valor':5},{'regiao':'Z','valor':1}]); assert r=={'A':7,'B':3,'Z':1},r; import inspect,relatorio; assert inspect.getsource(relatorio).count('for ')<=1; print('ok')" | grep -qx ok

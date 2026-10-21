@@ -1,0 +1,1 @@
+Em config.json: mude a porta do servidor para 9090, desligue o debug, e aumente a versão para 1.5.0. Não mexa na porta do banco.

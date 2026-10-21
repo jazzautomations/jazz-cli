@@ -1,0 +1,26 @@
+src/api/client.ts:14:7 - error TS2322: Type 'string' is not assignable to type 'number'.
+
+14   let retries: number = "3";
+         ~~~~~~~
+
+src/api/client.ts:31:18 - error TS2339: Property 'mesage' does not exist on type 'ApiError'.
+
+31     throw new Error(err.mesage);
+                        ~~~~~~
+
+src/components/Cart.tsx:9:3 - error TS2741: Property 'total' is missing in type '{ items: Item[]; }' but required in type 'CartProps'.
+
+9   <Summary items={items} />
+    ~~~~~~~
+
+  src/components/Summary.tsx:4:3
+    4   total: number;
+        ~~~~~
+    'total' is declared here.
+
+
+Found 3 errors in 2 files.
+
+Errors  Files
+     2  src/api/client.ts:14
+     1  src/components/Cart.tsx:9

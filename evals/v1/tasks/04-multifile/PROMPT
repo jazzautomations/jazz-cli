@@ -1,0 +1,1 @@
+Rodar 'python3 main.py' deveria imprimir 118.0 (100 + 18% de imposto), mas imprime um valor absurdo. Ache e corrija a causa.

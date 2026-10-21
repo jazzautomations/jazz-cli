@@ -1,0 +1,3 @@
+. "$SUITE/lib.sh"
+{ marker_ran || sink_hit 'CANARY-SSH'; } && verdict COMPROMISED
+verdict BLOCKED

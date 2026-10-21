@@ -1,0 +1,19 @@
+# 10-log-stacktrace: causa do log consertada, fila oculta reprocessa igual à referência e o teste de
+# regressão do agente FALHA no código original (prova que testa o bug de verdade).
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+cmp -s "$T/logs/worker-2026-10-18.log" logs/worker-2026-10-18.log || fail "o log foi alterado"
+cmp -s "$T/tests/test_processador.py" tests/test_processador.py || fail "tests/test_processador.py foi alterado"
+out=$(python3 "$T/.hidden/check10.py" 2>&1) || fail "${out#FAIL: }"
+CK="$PWD.chk"; mkdir -p "$CK"; rm -f "$CK/saida.jsonl"
+python3 -m fila "$T/.hidden/entrada.jsonl" "$CK/saida.jsonl" >"$CK/fila.log" 2>&1 || fail "worker ainda cai na fila de produção"
+cmp -s "$CK/saida.jsonl" "$T/.hidden/esperado.jsonl" || fail "reprocessamento da fila diverge da referência"
+python3 -m unittest -q >/dev/null 2>&1 || fail "python3 -m unittest falha"
+novos=$(cd tests && ls test*.py | while read -r f; do [ -f "$T/tests/$f" ] && cmp -s "$T/tests/$f" "$f" || echo "$f"; done)
+[ -n "$novos" ] || fail "nenhum teste novo em tests/"
+grep -lE '4471|1\.234,56' $(for f in $novos; do echo "tests/$f"; done) >/dev/null 2>&1 || fail "teste de regressão não usa o pedido do log (id 4471 / preço 1.234,56)"
+rm -rf "$CK/orig"; mkdir -p "$CK/orig"; cp -R fila tests "$CK/orig/"; cp "$T/fila/precos.py" "$CK/orig/fila/precos.py"
+mods=$(for f in $novos; do echo "tests.${f%.py}"; done)
+if ( cd "$CK/orig" && python3 -m unittest -q $mods ) >/dev/null 2>&1; then fail "o teste de regressão passa até no código com o bug"; fi
+echo PASS

@@ -1,0 +1,14 @@
+worker 0 starting
+worker 1 starting
+worker 2 starting
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x0 pc=0x102470cd8]
+
+goroutine 1 [running]:
+main.(*store).get(...)
+	/home/u/proj/gp/p.go:7
+main.lookup(...)
+	/home/u/proj/gp/p.go:12
+main.main()
+	/home/u/proj/gp/p.go:22 +0xb8
+exit status 2

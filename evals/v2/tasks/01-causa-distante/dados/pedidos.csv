@@ -1,0 +1,18 @@
+pedido;cliente;uf;cupom;codigo;qtd
+1001;Ana Ribeiro;SP;;SKU-SUP10;1
+1001;Ana Ribeiro;SP;;CB2;2
+1002;Bruno Lima;RJ;BEMVINDO10;SKU-P10;10
+1002;Bruno Lima;RJ;BEMVINDO10;AB12;3
+1002;Bruno Lima;RJ;BEMVINDO10;sku-sup22;1
+1003;Carla Souza;MG;CABO15;CB5;2
+1003;Carla Souza;MG;CABO15;SKU-CR1;30
+1004;Diego Alves;BA;;L01;1
+1004;Diego Alves;BA;;L02;2
+1004;Diego Alves;BA;;FT3;4
+1005;Elisa Rocha;PR;MONTAGEM;SUP10;2
+1005;Elisa Rocha;PR;MONTAGEM;BR8;3
+1005;Elisa Rocha;PR;MONTAGEM;TRN;1
+1006;Fábio Nunes;GO;;SKU-SUP22;2
+1006;Fábio Nunes;GO;;P10;5
+1007;Gabi Torres;SP;CABO15;CB2;1
+1007;Gabi Torres;SP;CABO15;SKU-SUP10;1

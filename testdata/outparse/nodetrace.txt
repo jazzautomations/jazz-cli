@@ -1,0 +1,19 @@
+boot step 0
+boot step 1
+/home/u/proj/js/lib/parse.js:2
+  return cfg.server.port;
+                    ^
+
+TypeError: Cannot read properties of undefined (reading 'port')
+    at parse (/home/u/proj/js/lib/parse.js:2:21)
+    at start (/home/u/proj/js/index.js:3:27)
+    at Object.<anonymous> (/home/u/proj/js/index.js:4:1)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+
+Node.js v24.13.0

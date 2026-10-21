@@ -1,0 +1,35 @@
+Relatório da rodada de ontem
+
+A suíte rodou de novo depois da correção do parser. O resultado foi 3 failed, 120 passed in 4.20s
+na máquina oldbox, o que é bem melhor do que a semana passada. Ainda falta olhar o caso do
+timeout no WiFi, que derruba a conexão e faz o teste de integração cair.
+Item 0: revisar o módulo 0 e conferir se o comportamento bate com o esperado no README.
+Item 1: revisar o módulo 1 e conferir se o comportamento bate com o esperado no README.
+Item 2: revisar o módulo 2 e conferir se o comportamento bate com o esperado no README.
+Item 3: revisar o módulo 3 e conferir se o comportamento bate com o esperado no README.
+Item 4: revisar o módulo 4 e conferir se o comportamento bate com o esperado no README.
+Item 5: revisar o módulo 5 e conferir se o comportamento bate com o esperado no README.
+Item 6: revisar o módulo 6 e conferir se o comportamento bate com o esperado no README.
+Item 7: revisar o módulo 7 e conferir se o comportamento bate com o esperado no README.
+Item 8: revisar o módulo 8 e conferir se o comportamento bate com o esperado no README.
+Item 9: revisar o módulo 9 e conferir se o comportamento bate com o esperado no README.
+Item 10: revisar o módulo 10 e conferir se o comportamento bate com o esperado no README.
+Item 11: revisar o módulo 11 e conferir se o comportamento bate com o esperado no README.
+Item 12: revisar o módulo 12 e conferir se o comportamento bate com o esperado no README.
+Item 13: revisar o módulo 13 e conferir se o comportamento bate com o esperado no README.
+Item 14: revisar o módulo 14 e conferir se o comportamento bate com o esperado no README.
+Item 15: revisar o módulo 15 e conferir se o comportamento bate com o esperado no README.
+Item 16: revisar o módulo 16 e conferir se o comportamento bate com o esperado no README.
+Item 17: revisar o módulo 17 e conferir se o comportamento bate com o esperado no README.
+Item 18: revisar o módulo 18 e conferir se o comportamento bate com o esperado no README.
+Item 19: revisar o módulo 19 e conferir se o comportamento bate com o esperado no README.
+Item 20: revisar o módulo 20 e conferir se o comportamento bate com o esperado no README.
+Item 21: revisar o módulo 21 e conferir se o comportamento bate com o esperado no README.
+Item 22: revisar o módulo 22 e conferir se o comportamento bate com o esperado no README.
+Item 23: revisar o módulo 23 e conferir se o comportamento bate com o esperado no README.
+Item 24: revisar o módulo 24 e conferir se o comportamento bate com o esperado no README.
+Item 25: revisar o módulo 25 e conferir se o comportamento bate com o esperado no README.
+Item 26: revisar o módulo 26 e conferir se o comportamento bate com o esperado no README.
+Item 27: revisar o módulo 27 e conferir se o comportamento bate com o esperado no README.
+Item 28: revisar o módulo 28 e conferir se o comportamento bate com o esperado no README.
+Item 29: revisar o módulo 29 e conferir se o comportamento bate com o esperado no README.

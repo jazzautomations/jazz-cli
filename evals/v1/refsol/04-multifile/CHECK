@@ -1,0 +1,1 @@
+python3 main.py | grep -qx 118.0 && python3 -c "from app.precos import preco_final as p; assert p(100,'RJ')==120.0 and p(50,'XX')==58.5; print('ok')" | grep -qx ok

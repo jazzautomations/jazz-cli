@@ -1,0 +1,76 @@
+[
+  {"name": "debug-loop", "priority": 80,
+   "kw": ["\\b(errors?|exceptions?|traceback|stack ?traces?|panics?|crash(es|ed|ing)?|segfault|broken|bugs?|flaky|failing|fails|failed|doesn'?t work|not working|regression|debug(ging)?|slow)\\b",
+          "\\b(erros?|exce[çc][õoã]\\w*|quebr\\w*|falh\\w*|trava\\w*|n[ãa]o funciona\\w*|lent[oa]s?|depur\\w*)"],
+   "neg": ["\\berror[- ](handling|messages?)\\b", "tratamento de erros?", "mensage(m|ns) de erro", "\\b(add|write|create)\\b[^.\\n]{0,20}\\btests?\\b"],
+   "signals": ["stacktrace", "test_fail", "exit_nonzero"],
+   "phase": ["explore", "edit", "verify"]},
+
+  {"name": "old-coder-gauntlet", "priority": 90,
+   "kw": ["\\b(prove it|production[- ](ready|grade)|high[- ]assurance|bullet[- ]?proof|i (won'?t|will not|don'?t) (read|review)|mission[- ]critical|must be reliable|rock[- ]solid)\\b",
+          "(prove que funciona|pronto (pra|para) produ[çc][ãa]o|n[íi]vel de produ[çc][ãa]o|n[ãa]o vou (ler|revisar)|[àa] prova de (falhas|bala)|tem que ser confi[áa]vel|alta confiabilidade|blindad\\w*)"]},
+
+  {"name": "tdd-lite", "priority": 70,
+   "kw": ["\\b(tdd|test[- ]first|tests? first|red[- /]green|test[- ]driven)\\b",
+          "(testes? primeiro|testes? antes|orientad[oa] a testes?|vermelho[- /]verde)"]},
+
+  {"name": "shell-safety", "priority": 65,
+   "kw": ["\\b(delete|remove|wipe|purge|clean) (all|every|the|these|those|old)\\b[^.\\n]{0,30}\\b(files?|folders?|dirs?|directories|logs?)\\b",
+          "\\b(rm -rf|sed -i|find .*-exec|xargs rm|chmod -R|chown -R|killall|bulk rename|mass rename|background jobs?|cron ?jobs?)\\b",
+          "\\b(apag\\w*|remov\\w*|exclu\\w*|delet\\w*) (todos|todas|os|as|esses|essas|v[áa]rios|v[áa]rias)\\b[^.\\n]{0,30}\\b(arquivos|pastas|diret[óo]rios|logs)",
+          "(renome\\w* (v[áa]rios|todos|em massa)|em segundo plano|matar o processo)"],
+   "cmd": ["\\brm\\s+(-[a-zA-Z]*\\s+)*-[a-zA-Z]*[rR]", "\\bsed\\s+(-[a-zA-Z]+\\s+)*-[a-zA-Z]*i", "\\bfind\\b.*\\s-(exec|delete)\\b", "\\bxargs\\b.*\\brm\\b",
+           "\\b(chmod|chown)\\s+-R\\b", "\\b(kill|pkill|killall)\\s", "\\b(curl|wget)\\b[^|]*\\|\\s*(sudo\\s+)?(ba|z)?sh\\b"]},
+
+  {"name": "write-tests", "priority": 60,
+   "kw": ["\\b(add|write|create|improve|more|missing|new)\\b[^.\\n]{0,30}\\b(unit |integration )?tests?\\b",
+          "\\b(test coverage|code coverage|unit tests?)\\b",
+          "\\b(escrev|cri|adicion|acrescent|melhor|faz|fa[çc])\\w*[^.\\n]{0,30}\\btestes?\\b",
+          "(cobertura de (testes|c[óo]digo)|testes? unit[áa]rios?)"],
+   "neg": ["\\btests? (pass|passes|passing)\\b", "\\b(failing|broken|flaky) tests?\\b", "\\btestes? (passa\\w*|falha\\w*|quebr\\w*)"],
+   "files": ["*_test.go", "test_*.py", "*_test.py", "*.spec.*", "*.test.*"],
+   "phase": ["edit"]},
+
+  {"name": "refactor-safely", "priority": 60,
+   "kw": ["\\b(refactor\\w*|clean ?up the code|clean up (this|the) (code|function|module|file)|rename|extract (a |the |this )?(function|method|class|helper|module)|split (this|the|it)\\b[^.\\n]{0,20}\\b(files?|modules?|functions?)|dedupe|de-?duplicate|simplify (this|the) (code|function|module))\\b",
+          "(refator\\w*|limp\\w* (o|do|esse|este) c[óo]digo|renome\\w*|extra(ia|ir|i) (uma |a |essa )?(fun[çc][ãa]o|m[ée]todo|classe)|divid\\w* (o|esse|este) arquivo|duplica[çc][ãa]o|simplifi\\w* (o|esse|este) c[óo]digo)"]},
+
+  {"name": "git-hygiene", "priority": 55,
+   "kw": ["\\b(commit(s|ted|ting)?|rebase|cherry[- ]pick|pull request|stash|merge conflicts?|conflict markers|force[- ]push)\\b",
+          "\\b(comit\\w*|commitar|commite|conflitos? de merge|fa[çc]a (o |um )?push)"],
+   "kw_weak": ["\\b(git|origin|upstream)\\b", "\\b(push|pull)\\b", "\\bmerge\\b|\\bmescl\\w*", "\\bbranch(es)?\\b", "\\b(revert|tag)\\b"],
+   "cmd": ["\\bgit\\s+(-C\\s+\\S+\\s+)?(commit|merge|rebase|push|stash|revert|cherry-pick|reset)\\b"],
+   "signals": ["git_conflict"]},
+
+  {"name": "verify-done", "priority": 50,
+   "kw": ["\\b(make sure|verify( it| that)?|double[- ]check|test it|confirm (it|that)|ensure (it|that))\\b",
+          "(garant\\w*|verifiq\\w*|verifica (se|que)|confirm\\w* (se|que)|certifi\\w*|test[ae] (isso|se))"]},
+
+  {"name": "review-diff", "priority": 57,
+   "kw": ["\\b(review|code review|check my (diff|pr|changes|code))\\b",
+          "(revis(e|ar|a|ão|ao)\\b[^.\\n]{0,20}(c[óo]digo|diff|pr|mudan[çc]as|altera[çc][õo]es|commit)|revisão de código)"]},
+
+  {"name": "frontend-craft", "priority": 45,
+   "kw": ["\\b(ui|ux|ui/ux|user interface|front-?end|landing ?pages?|dashboards?|css|scss|tailwind|stylesheets?|web ?pages?|homepage|website|redesign)\\b",
+          "(\\bdesign\\b|\\binterface (do usu[áa]rio|gr[áa]fica)|\\bsite\\b|\\bpainel\\b|\\bresponsiv\\w*)"],
+   "kw_weak": ["\\b(layout|interface|telas?|p[áa]ginas?|componentes?|estilos?|html|bot[ãa]o|bot[õo]es|buttons?|formul[áa]rios?)\\b"],
+   "neg": ["\\b(api|system|database|schema|class|software|protocol|data|module) design\\b", "\\bdesign (the |an? |our )?(rest |graphql |grpc |http )?(api|endpoints?|schema|database|system|protocol|data model|architecture)\\b", "\\bdesign (patterns?|docs?|document)\\b", "design de (api|sistemas?|banco|software)", "padr(ão|ões) de projeto"],
+   "files": ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss", "*.html", "tailwind.config.*", "*.astro"],
+   "phase": ["edit"]},
+
+  {"name": "surgical-change", "priority": 40,
+   "kw": ["\\b(fix|change|tweak|adjust|add an? (flag|option|param\\w*)|simplest|minimal( change)?|yagni|small change)\\b",
+          "(corrij\\w*|corrig\\w*|\\bmud[ae]\\w*|\\balter[ae]\\w*|ajust\\w*|\\btroc[ae]\\w*|o mais simples|m[íi]nim[oa])"],
+   "signals": ["diff_large"]},
+
+  {"name": "explore-codebase", "priority": 30,
+   "kw": ["\\bhow (does|do|is|are)\\b[^?\\n]{0,60}\\b(work|works|implemented|handled|wired|structured)\\b",
+          "\\bwhere (is|are|do|does)\\b",
+          "\\b(explain|walk me through|overview of|give me a tour)\\b",
+          "(como funciona\\w*|onde (fica|ficam|est[áa]|est[ãa]o|[ée])\\b|expli(que|ca|car)\\b|vis[ãa]o geral|me mostr\\w* como)"]},
+
+  {"name": "plan-small", "priority": 20, "min": 4,
+   "kw": ["\\b(implement|build|create|add support|new feature|scaffold|from scratch|set up)\\b",
+          "(\\bimplement[aeo]\\w*|\\bconstru[aií]\\w*|\\bcri(e|ar|a) (um|uma)\\b|nova funcionalidade|suporte (a|para|pra)\\b|do zero)"],
+   "signals": ["long_ask"]}
+]

@@ -1,0 +1,10 @@
+{"name": "git_safe", "version": 1, "run": "sh", "effect": "git",
+ "description": "Recoverable git changes only: stash, new branch, revert-file (backed up in a stash), commit-paths",
+ "args": {"type": "object", "additionalProperties": false, "required": ["op"],
+   "properties": {
+     "op": {"enum": ["stash", "branch", "revert-file", "commit-paths"]},
+     "message": {"type": "string", "description": "stash or commit message"},
+     "paths": {"type": "string", "description": "space- or newline-separated paths"},
+     "name": {"type": "string", "description": "new branch name (op branch)"},
+     "untracked": {"type": "boolean", "description": "stash: include untracked files"}}},
+ "output": {"data": {"op": "str", "ref|branch|commit": "str"}}}

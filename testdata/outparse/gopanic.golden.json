@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "confidence": 0.769,
+  "data": {
+    "kind": "trace",
+    "format": "go",
+    "traces": [
+      {
+        "lang": "go",
+        "exception": "panic",
+        "message": "runtime error: invalid memory address or nil pointer dereference",
+        "frames": [
+          {
+            "file": "/home/u/proj/gp/p.go",
+            "line": 7,
+            "func": "main.(*store).get",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/gp/p.go",
+            "line": 12,
+            "func": "main.lookup",
+            "in_project": true
+          },
+          {
+            "file": "/home/u/proj/gp/p.go",
+            "line": 22,
+            "func": "main.main",
+            "in_project": true
+          }
+        ]
+      }
+    ]
+  },
+  "unparsed": [
+    "worker 0 starting",
+    "worker 1 starting",
+    "worker 2 starting"
+  ],
+  "warnings": []
+}

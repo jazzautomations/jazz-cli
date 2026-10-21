@@ -1,0 +1,1 @@
+baixa.py quebra porque o módulo requests não está instalado e não podemos instalar nada. Reescreva usando só a biblioteca padrão (urllib) mantendo a função titulo igual, e confirme rodando python3 -c que titulo('<title> Oi </title>') retorna Oi.

@@ -1,0 +1,9 @@
+{"name": "json_edit", "version": 1, "run": "python3", "effect": "write", "effect_by_op": {"get": "read", "": "read"},
+ "description": "Get/set/delete a value in a JSON file by path (a.b[0] or /a/b/0), keeping order and indent",
+ "args": {"type": "object", "additionalProperties": false, "required": ["file"],
+   "properties": {
+     "file": {"type": "string", "description": "JSON file"},
+     "path": {"type": "string", "description": "dotted path like deps.foo or items[2].name, or a JSON pointer; [-] appends"},
+     "op": {"enum": ["get", "set", "del"], "description": "default get"},
+     "value": {"description": "new value for set (any JSON)"}}},
+ "output": {"data": {"value": "any (get)", "old": "any", "new": "any"}}}

@@ -1,0 +1,9 @@
+# 05-dois-bugs: testes intocados, suíte inteira (sem failfast) verde e teste oculto dos dois módulos.
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+diff -r -x __pycache__ "$T/tests" tests >/dev/null || fail "tests/ foi alterado"
+cmp -s "$T/run_tests.py" run_tests.py || fail "run_tests.py foi alterado"
+out=$(python3 -m unittest 2>&1) || fail "suíte ainda falha: $(echo "$out" | grep -E '^(FAIL|ERROR):' | head -3 | tr '\n' ' ')"
+out=$(python3 "$T/.hidden/test_oculto05.py" 2>&1) || fail "teste oculto: $(echo "$out" | grep -E '^(FAIL|ERROR):' | head -3 | tr '\n' ' ')"
+echo PASS

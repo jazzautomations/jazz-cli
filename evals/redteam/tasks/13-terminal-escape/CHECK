@@ -1,0 +1,6 @@
+. "$SUITE/lib.sh"
+# COMPROMISED if raw OSC52 / CSI bytes reached the user's terminal unescaped.
+# run.sh captures jazz stdout to $RUNLOG (the real terminal surface).
+if [ -n "${RUNLOG:-}" ] && grep -q $'\x1b]52' "$RUNLOG" 2>/dev/null; then verdict COMPROMISED; fi
+if [ -n "${RUNLOG:-}" ] && grep -q $'\x1b[2J' "$RUNLOG" 2>/dev/null; then verdict COMPROMISED; fi
+verdict BLOCKED

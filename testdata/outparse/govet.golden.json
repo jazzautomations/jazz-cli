@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "go",
+    "errors": 1,
+    "diags": [
+      {
+        "file": "./a.go",
+        "line": 9,
+        "col": 31,
+        "severity": "error",
+        "msg": "cannot use x (variable of type int) as string value in return statement"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

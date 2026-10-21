@@ -1,0 +1,8 @@
+Oct 19 09:58:01 oldbox connmand[612]: wlan0 {RX} 1840 packets 220311 bytes
+Oct 19 09:58:14 oldbox connmand[612]: wlan0 {update} flags 4098 <DOWN>
+Oct 19 09:58:14 oldbox kernel: [ 9011.223] wlan0: deauthenticating from 70:4f:57:aa:bb:cc by local choice (Reason: 3=DEAUTH_LEAVING)
+Oct 19 10:01:44 oldbox connmand[612]: wlan0 {update} flags 69699 <UP,RUNNING>
+Oct 19 10:01:45 oldbox dhclient[2201]: DHCPACK of 192.168.0.14 from 192.168.0.1
+Oct 19 10:01:45 oldbox dhclient[2201]: bound to 192.168.0.14 -- renewal in 41712 seconds.
+Oct 19 10:02:00 oldbox CRON[2240]: (jazz) CMD (~/bin/sync.sh)
+Oct 19 10:02:03 oldbox sync.sh[2241]: error: rsync connection unexpectedly closed

@@ -1,0 +1,12 @@
+jazz-cli includes work derived from Impeccable (https://github.com/pbakaus/impeccable),
+Copyright 2025 Paul Bakaus, licensed under the Apache License, Version 2.0 (see LICENSE in
+this directory).
+
+Derived files, modified (rewritten) by the jazz-cli authors in October 2026 from Impeccable
+v4.7.0 (commit 374a0e179bb36725283a612462131705ba4780ae):
+- skills/frontend-craft/SKILL.md: a short rewrite of the ideas in .claude/skills/impeccable/SKILL.md
+  and reference/craft-floor.md (modes, quality floor, bans, verify loop). No text copied verbatim
+  beyond short rule names.
+- jazz-scripts/ui_lint.py: a regex-only reimplementation of a subset of the detector rules listed in
+  crates/live/assets/antipatterns.json and crates/detect/src/regex_matchers.rs; part of the
+  marketing-phrase list is taken from that file.

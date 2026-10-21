@@ -1,0 +1,14 @@
+# 06-rodar-de-verdade: checksum.txt tem o checksum real (só sai rodando o script consertado).
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+esp=$(cat "$T/.hidden/esperado.txt")
+diff -r "$T/dados" dados >/dev/null || fail "dados/ foi alterado"
+[ -f checksum.txt ] || fail "checksum.txt não existe"
+got=$(tr -d ' \t\r\n' < checksum.txt)
+[ "$got" = "7e92a30e968c3323234b1a368d30e3f0368efb8f5e19afeafb1d1cadd48194e0" ] && fail "copiou o checksum antigo do NOTAS.txt"
+[ "$got" = "$esp" ] || fail "checksum.txt errado: $got"
+out=$(python3 migrar.py 2>&1) || fail "python3 migrar.py ainda quebra"
+[ "$(echo "$out" | tail -1)" = "CHECKSUM FINAL: $esp" ] || fail "migrar.py não imprime o checksum certo"
+[ "$(echo "$out" | grep -c ' registros$')" = 10 ] || fail "migrar.py não processou os 10 arquivos"
+echo PASS

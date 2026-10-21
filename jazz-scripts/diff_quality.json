@@ -1,0 +1,9 @@
+{"name": "diff_quality", "version": 1, "run": "python3", "effect": "read",
+ "description": "Old-coder checklist on the git diff: debug prints, TODOs, commented-out code, long funcs, tests touched",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "base": {"type": "string", "description": "commit/ref to diff against (default HEAD; untracked files count as added)"},
+     "max_func_lines": {"type": "integer", "minimum": 20, "maximum": 1000, "description": "long-function threshold (default 80)"}}},
+ "output": {"data": {"files": ["str"], "added": "int", "removed": "int",
+   "issues": [{"kind": "debug_print|todo|commented_code|long_func|no_test", "file": "str", "line": "int", "text": "str"}],
+   "counts": "obj", "tests_touched": "bool", "code_touched": "bool"}}}

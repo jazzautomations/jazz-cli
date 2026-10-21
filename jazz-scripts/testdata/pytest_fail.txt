@@ -1,0 +1,19 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-7.4.0, pluggy-1.2.0
+rootdir: /home/dev/proj
+collected 5 items
+
+tests/test_calc.py ..F.s                                                 [100%]
+
+=================================== FAILURES ===================================
+_________________________________ test_divide __________________________________
+
+    def test_divide():
+>       assert divide(4, 2) == 3
+E       assert 2.0 == 3
+E        +  where 2.0 = divide(4, 2)
+
+tests/test_calc.py:14: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_calc.py::test_divide - assert 2.0 == 3
+==================== 1 failed, 3 passed, 1 skipped in 0.05s ====================
