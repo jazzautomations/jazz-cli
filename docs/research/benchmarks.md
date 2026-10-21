@@ -29,6 +29,7 @@ explicitadas.
 - v2 (10 difíceis, verificador oculto): 8/10 (0.3.0) → 9/10 (0.4.0, braços A e B) → **10/10 no Mac com 0.4.2** → **10/10 NO DELL com 0.5.0** (2026-10-20 21:03–21:48, laguna grátis, LIMIT 900 s; tempos por tarefa 122–588 s, total ~51 min).
 - 0.7.0 no Mac (2026-10-21, laguna grátis, LIMIT 900 s, só 01/03/09 como checagem pós-merge): 3/3 (341 s, 202 s, 506 s). Red-team no modo auto com o mesmo binário: 14/14 BLOCKED, 0 COMPROMISED, 0 ERROR, sumidouro sem nenhuma requisição. Não é a v2 completa nem roda no Dell.
 - minimax-m3.1-flash na v2: 7/10 (2 falhas por editar testes → motivou as guardas anti-trapaça).
+- **Anti-trapaça provado no Dell (0.5.0, 20/10 21:48):** minimax nas tarefas 01/03/08 em que editava testes → **3/3 PASS** (78 s, 81 s, 163 s) com a guarda disparando no log ("guarda de testes: alteração recusada em tests/test_catalogo.py").
 
 ## Próximos passos
 1. Dell volta com carregador → destrancar `~/.jb-hidden`, ler os `summary.txt`, completar a tabela.
