@@ -86,6 +86,11 @@ func ptyModel(t *testing.T) *httptest.Server {
 			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c1", "type": "function",
 				"function": map[string]any{"name": "bash", "arguments": string(args)}}}}, "tool_calls")
 			fmt.Fprint(w, "data: [DONE]\n\n")
+		case strings.Contains(content, "rode perigoso"):
+			args, _ := json.Marshal(map[string]any{"command": "git branch -D jazz-pty-nada"})
+			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c2", "type": "function",
+				"function": map[string]any{"name": "bash", "arguments": string(args)}}}}, "tool_calls")
+			fmt.Fprint(w, "data: [DONE]\n\n")
 		case strings.Contains(content, "demora"):
 			for i := 0; i < 300; i++ { // a slow stream, cut by Ctrl+C
 				if !send(map[string]any{"content": fmt.Sprintf("palavra%d ", i)}, "") {
@@ -459,5 +464,70 @@ func (s *ptySession) boxAligned(when string) {
 	}
 	if boxes != 1 {
 		s.t.Errorf("%s: %d input boxes on screen\n%s", when, boxes, s.vt.Dump())
+	}
+}
+
+// TestPTYApproveKeys: a confirmation is one line answered by one key, no
+// typing + Enter: n denies, Enter runs, a (sempre) runs and is never asked
+// again in this project.
+func TestPTYApproveKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("pty session")
+	}
+	s := ptyStart(t, "xterm-256color")
+	s.waitFor("the trust prompt", 15*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || ptyPrompt(sc) })
+	if strings.Contains(s.screen(), "[s/N]") {
+		s.write("s\r")
+	}
+	s.waitFor("the input box", 15*time.Second, ptyPrompt)
+	count := func(sub string) int { return strings.Count(strings.Join(s.all(), "\n"), sub) }
+	prompts := func() int { return count("│ Bash  git branch -D jazz-pty-nada") } // the answer replaces the question line
+	results := func() int { return count("pronto: 300 linhas.") }
+	ask := func(key string, wantPrompt bool) {
+		t.Helper()
+		p0, r0 := prompts(), results()
+		s.typeSlow("rode perigoso")
+		s.write("\r")
+		if wantPrompt {
+			s.waitFor("the one-line prompt", 10*time.Second, func(sc string) bool { return prompts() > p0 && strings.Contains(sc, "? Rodar este comando?") })
+			var line string
+			for _, l := range strings.Split(s.screen(), "\n") {
+				if strings.Contains(l, "? Rodar este comando?") {
+					line = l
+				}
+			}
+			for _, want := range []string{"perigo: apaga branch do git", "enter sim", "a sempre", "n não"} {
+				if !strings.Contains(line, want) {
+					t.Errorf("prompt line lacks %q: %q", want, line)
+				}
+			}
+			time.Sleep(uiApproveIdle + 100*time.Millisecond) // a key typed at once is not an answer (bug 11)
+			s.write(key)
+		}
+		s.waitFor("the turn to end", 15*time.Second, func(sc string) bool { return results() > r0 && ptyPrompt(sc) })
+		if got := prompts() - p0; wantPrompt && got != 1 || !wantPrompt && got != 0 {
+			s.mu.Lock()
+			t.Errorf("key %q: %d prompts (want prompt=%v)\n%s", key, got, wantPrompt, s.vt.Dump())
+			s.mu.Unlock()
+		}
+	}
+	ask("n", true)
+	if count("● não") < 1 && count("* não") < 1 {
+		t.Error("n did not deny")
+	}
+	ask("\r", true)
+	ask("a", true)
+	if count("não pergunto de novo neste projeto") != 1 {
+		t.Error("a (sempre) did not remember")
+	}
+	ask("", false) // remembered: runs without a prompt
+	if strings.Contains(strings.Join(s.all(), "\n"), "confirmar?") || strings.Contains(strings.Join(s.all(), "\n"), "digite sim") {
+		t.Error("old typed confirmation still shown")
+	}
+	s.write("\x04")
+	select {
+	case <-s.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("jazz did not exit on Ctrl+D")
 	}
 }

@@ -105,14 +105,15 @@ func (t *Toolbox) lockDir() string {
 }
 
 // pfUntrustedMode returns the session mode for a folder that is not trusted:
-// auto and smart become ask (F1); an explicit flag (--yolo, --ask, --smart)
-// or a persisted yolo/ask/plan choice is kept. "" = keep the current mode.
+// auto, turbo and smart become ask (F1); an explicit flag (--yolo, --ask,
+// --smart, --turbo) or a persisted yolo/ask/plan choice is kept. "" = keep
+// the current mode.
 func pfUntrustedMode(cfg *Config) string {
 	if cfg.ModeOverride != "" {
 		return ""
 	}
 	switch cfg.EffMode() {
-	case "auto", "smart":
+	case "auto", "smart", "turbo":
 		return "ask"
 	}
 	return ""

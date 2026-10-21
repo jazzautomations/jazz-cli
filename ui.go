@@ -139,7 +139,7 @@ type glyphs struct {
 	star, ptr            string // brand mark, menu pointer
 	modeAuto, modeAsk    string
 	modeYolo, modePlan   string
-	modeSmart            string
+	modeSmart, modeTurbo string
 	up, down             string
 }
 
@@ -160,12 +160,12 @@ var (
 		todoOpen: "[ ]", todoDoing: "[~]", todoDone: "[x]", arrow: "->", bar: "|", sep: "-",
 		bullet: "*", ell: "...", nl: "~", block: "#", shade: ".",
 		tl: "+", tr: "+", bl: "+", br: "+", h: "-", v: "|", star: "*", ptr: ">",
-		modeAuto: ">>", modeAsk: ">", modeYolo: ">>>", modePlan: "||", modeSmart: "?>", up: "^", down: "v"}
+		modeAuto: ">>", modeAsk: ">", modeYolo: ">>>", modePlan: "||", modeSmart: "?>", modeTurbo: ">>+", up: "^", down: "v"}
 	uiGlyphsUni = glyphs{spin: []string{"·", "✢", "✶", "✻", "✽", "✻", "✶", "✢"}, bot: "●", tool: "●", res: "⎿", prompt: "›", ok: "✓", fail: "✗", warn: "⚠", dot: "·",
 		todoOpen: "☐", todoDoing: "◐", todoDone: "☒", arrow: "↳", bar: "│", sep: "─",
 		bullet: "•", ell: "…", nl: "↵", block: "█", shade: "░",
 		tl: "╭", tr: "╮", bl: "╰", br: "╯", h: "─", v: "│", star: "✻", ptr: "▸",
-		modeAuto: "▸▸", modeAsk: "▸", modeYolo: "▸▸▸", modePlan: "‖", modeSmart: "◆", up: "↑", down: "↓"}
+		modeAuto: "▸▸", modeAsk: "▸", modeYolo: "▸▸▸", modePlan: "‖", modeSmart: "◆", modeTurbo: "»", up: "↑", down: "↓"}
 )
 
 // ---------- banner and welcome ----------
@@ -230,6 +230,7 @@ func Banner(t Theme, info []string) string {
 // WelcomeInfo is what the welcome box shows.
 type WelcomeInfo struct {
 	Version, Model, Dir, Mode string
+	Hint                      string // shown after the mode (turbo recommendation)
 }
 
 // Welcome renders the compact start screen: a rounded box with the brand,
@@ -255,7 +256,11 @@ func Welcome(t Theme, w int, in WelcomeInfo) string {
 	b.WriteString(row(""))
 	b.WriteString(row("  " + dim + "modelo " + reset + " " + in.Model))
 	b.WriteString(row("  " + dim + "pasta  " + reset + " " + in.Dir))
-	b.WriteString(row("  " + dim + "modo   " + reset + " " + uiModeTag(t, in.Mode)))
+	modeRow := "  " + dim + "modo   " + reset + " " + uiModeTag(t, in.Mode)
+	if in.Hint != "" {
+		modeRow += dim + "  " + g.dot + " " + in.Hint + reset
+	}
+	b.WriteString(row(modeRow))
 	b.WriteString(row(""))
 	tip := func(k, d string) string { return bold + k + reset + dim + " " + d + reset }
 	sep := dim + "  " + g.dot + "  " + reset
@@ -277,6 +282,8 @@ func uiModeTag(t Theme, mode string) string {
 		return t.fg(cGold, 33) + g.modeAsk + " ask" + t.sgr("0")
 	case "smart":
 		return t.fg(cMagenta, 35) + g.modeSmart + " smart" + t.sgr("0")
+	case "turbo":
+		return t.fg(cAccent, 36) + t.sgr("1") + g.modeTurbo + " turbo" + t.sgr("0")
 	case "auto", "":
 		return t.fg(cGreen, 32) + g.modeAuto + " auto" + t.sgr("0")
 	}
@@ -678,8 +685,10 @@ type TermUI struct {
 
 	lastTool string // id of the last ToolStart (parallel calls)
 
-	lastKey    time.Time // when the watcher last saw a key (typing in progress)
-	alwaysRule string    // rule [t] would save for the next Approve (ApproveHint)
+	lastKey      time.Time // when the watcher last saw a key (typing in progress)
+	alwaysRule   string    // rule [t] would save for the next Approve (ApproveHint)
+	alwaysOffer  string    // what "a" remembers on the next prompt with a reason (ApproveAlways)
+	approveExtra string    // what "v" shows beyond the detail: an edit's diff (ApproveExtra)
 
 	mode string // effective permission mode (SetMode)
 	jobs int    // running background jobs (Jobs)
@@ -1155,6 +1164,8 @@ func (u *TermUI) modeLabel(mode string) string {
 		return t.fg(cGold, 33) + "ask" + t.sgr("0")
 	case "smart":
 		return t.fg(cMagenta, 35) + "smart" + t.sgr("0")
+	case "turbo":
+		return t.sgr("1") + t.fg(cAccent, 36) + "turbo" + t.sgr("0")
 	case "auto":
 		return t.fg(cGreen, 32) + "auto" + t.sgr("0")
 	}
@@ -1392,19 +1403,23 @@ func uiWrap(s string, w int) []string {
 }
 
 // Approve asks the user to confirm a tool call (see contract.go for the rules).
-// The whole detail is shown in a box with control characters made visible
-// (bug 10). Normal prompts are a numbered menu (↑↓ + enter, digits, or the
-// letters s/t/e/n). A dangerous action (reason != "") needs "sim" plus Enter
-// and never offers "always". Option 3 / [e] denies and returns what the user
-// typed as feedback (G11).
+// One key answers (apKeyChoice): enter or s = sim, a = sempre, n or esc =
+// não, v = ver detalhes, e = não, e dizer o que fazer (G11). The detail is
+// shown whole with control characters made visible (bug 10): a short one on
+// a single line, a long one in a box. The question and the risk reason share
+// one Nord-styled line. "a" is offered on a prompt with a risk reason only
+// when the agent said what it would remember (ApproveAlways); otherwise it
+// saves a permission rule (ApproveHint). While the user was typing steering
+// text when the prompt opened, a stray letter must not answer: then the
+// answer is a typed word plus Enter (apTypedChoice), as on a terminal
+// without single-key input.
 func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Approval, string) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	u.mu.Lock()
-	rule := u.alwaysRule
-	u.alwaysRule = ""
-	// text being typed when the prompt opens: answers need a whole word + Enter
+	rule, offer, extra := u.alwaysRule, u.alwaysOffer, u.approveExtra
+	u.alwaysRule, u.alwaysOffer, u.approveExtra = "", "", ""
 	typing := u.typed != ""
 	lastKey := u.lastKey
 	u.mu.Unlock()
@@ -1414,10 +1429,12 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	w := termWidth() - 1
 	bw := max(min(w, 100), 24)
 	reset, dim := t.sgr("0"), t.fg(cGray, 90)
+	accent := t.fg(cAccent, 36)
 	border := t.fg(cGold, 33)
 	if reason != "" {
 		border = t.fg(cRed, 31)
 	}
+	canAlways := reason == "" || offer != ""
 	question := map[string]string{"bash": "Rodar este comando?", "write": "Escrever este arquivo?", "edit": "Aplicar esta edição?"}[tool]
 	if question == "" {
 		question = "Usar " + uiToolLabel(tool) + "?"
@@ -1427,59 +1444,51 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	if len(full) > uiApproveMax {
 		shown, more = full[:uiApproveMax], len(full)-uiApproveMax
 	}
-	row := func(s string) string {
-		pad := max(bw-4-uiVisLen(s), 0)
-		return border + g.v + reset + " " + s + reset + strings.Repeat(" ", pad) + " " + border + g.v + reset + "\n"
-	}
-	cmdLines := func(rs []rune) string {
-		var b strings.Builder
-		for _, l := range uiWrap(string(rs), bw-4) {
+	var b strings.Builder
+	label := t.sgr("1") + uiToolLabel(tool) + reset
+	if inline := len(full) > 0 && uiVisLen(string(full)) <= w-6-uiVisLen(uiToolLabel(tool)); inline || len(full) == 0 {
+		// short detail: one line, nothing hidden
+		b.WriteString("  " + border + g.bar + reset + " " + label + dim + "  " + reset + string(full) + "\n")
+	} else {
+		row := func(s string) string {
+			pad := max(bw-4-uiVisLen(s), 0)
+			return border + g.v + reset + " " + s + reset + strings.Repeat(" ", pad) + " " + border + g.v + reset + "\n"
+		}
+		title := " " + label + border + " "
+		b.WriteString(border + g.tl + g.h + title + strings.Repeat(g.h, max(bw-4-uiVisLen(title), 0)) + g.h + g.tr + reset + "\n")
+		for _, l := range uiWrap(string(shown), bw-4) {
 			b.WriteString(row(l))
 		}
-		return b.String()
-	}
-	var b strings.Builder
-	title := " " + t.sgr("1") + uiToolLabel(tool) + reset + border + " "
-	if reason != "" {
-		title = " " + t.sgr("1") + uiToolLabel(tool) + " " + g.dot + " perigoso" + reset + border + " "
-	}
-	b.WriteString(border + g.tl + g.h + title + strings.Repeat(g.h, max(bw-4-uiVisLen(title), 0)) + g.h + g.tr + reset + "\n")
-	if len(full) > 0 {
-		b.WriteString(cmdLines(shown))
-	}
-	if more > 0 {
-		b.WriteString(row(t.fg(cGold, 33) + fmt.Sprintf("%s +%d caracteres %s v ver tudo", g.ell, more, g.dot)))
-	}
-	if reason != "" {
-		b.WriteString(row(""))
-		for i, l := range uiWrapWords(oneLine(sanitizeTerm(reason), 300), bw-4-8) {
-			lead := "        "
-			if i == 0 {
-				lead = "perigo: "
-			}
-			b.WriteString(row(t.fg(cRed, 31) + t.sgr("1") + lead + l))
+		if more > 0 {
+			b.WriteString(row(t.fg(cGold, 33) + fmt.Sprintf("%s +%d caracteres %s v ver tudo", g.ell, more, g.dot)))
 		}
+		b.WriteString(border + g.bl + strings.Repeat(g.h, bw-2) + g.br + reset + "\n")
 	}
-	b.WriteString(border + g.bl + strings.Repeat(g.h, bw-2) + g.br + reset + "\n")
-	b.WriteString("  " + t.sgr("1") + question + reset + "\n")
-
-	always := "Sim, e não perguntar de novo"
-	switch tool {
-	case "bash":
-		always += " pra comandos que começam igual"
-	case "write", "edit":
-		always += " nesta pasta"
+	alwaysWhat := "sempre"
+	switch {
+	case reason != "" && offer != "":
+		alwaysWhat = "sempre neste projeto (" + oneLine(visibleDetail(offer), 60) + ")"
+	case rule != "":
+		alwaysWhat = "sempre (" + oneLine(visibleDetail(rule), 60) + ")"
 	}
-	if rule != "" {
-		always = "Sim, e não perguntar de novo pra " + oneLine(visibleDetail(rule), 120)
-	}
-	opts := []string{"Sim", always, "Não, e dizer o que fazer"}
-	if reason != "" {
-		b.WriteString("  " + dim + "digite " + reset + t.sgr("1") + "sim" + reset + dim + " + enter pra confirmar " + g.dot + " e + enter: não, e dizer o que fazer " + g.dot + " outra coisa nega" + reset + "\n")
-	} else if typing || u.keys == nil {
-		for i, o := range opts {
-			b.WriteString(clipVisible(fmt.Sprintf("    %d. %s", i+1, o), w) + "\n")
+	prompt := apPromptLine(t, w, question, reason, canAlways, more > 0 || extra != "")
+	if typing {
+		ans := "s sim"
+		if canAlways {
+			ans += " " + g.dot + " a " + alwaysWhat
 		}
+		ans += " " + g.dot + " n não " + g.dot + " e dizer o que fazer"
+		rs := ""
+		if reason != "" {
+			rs = " " + t.fg(cRed, 31) + g.warn + " perigo: " + oneLine(sanitizeTerm(reason), 120) + reset
+		}
+		b.WriteString("  " + accent + t.sgr("1") + "?" + reset + " " + t.sgr("1") + question + reset + rs + "\n")
+		b.WriteString(clipVisible("  "+dim+"você estava digitando: responda com uma palavra e enter ("+ans+")"+reset, w) + "\n")
+	} else {
+		if canAlways && (offer != "" || rule != "") {
+			b.WriteString(clipVisible("  "+dim+"a = "+alwaysWhat+reset, w) + "\n")
+		}
+		b.WriteString(prompt)
 	}
 	u.mu.Lock()
 	u.endText()
@@ -1487,21 +1496,34 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	u.rawWrite(b.String())
 	u.mu.Unlock()
 	if u.keys == nil {
-		u.print("  " + dim + "não (sem terminal interativo)" + reset + "\n")
+		u.print("\n  " + dim + "não (sem terminal interativo)" + reset + "\n")
 		return Deny, ""
 	}
 	keys, release := u.grabKeys(ctx)
 	defer release()
 	since := time.Now()
 	showAll := func() {
+		var b strings.Builder
 		if more > 0 {
-			var b strings.Builder
 			for _, l := range uiWrap(string(full[uiApproveMax:]), w-6) {
 				b.WriteString("    " + dim + g.bar + reset + " " + l + "\n")
 			}
-			u.print("\r\x1b[K" + b.String())
 			more = 0
 		}
+		if extra != "" {
+			for _, l := range strings.Split(sanitizeTerm(extra), "\n") {
+				c := dim
+				switch {
+				case strings.HasPrefix(l, "+ "):
+					c = t.fg(cGreen, 32)
+				case strings.HasPrefix(l, "- "):
+					c = t.fg(cRed, 31)
+				}
+				b.WriteString(clipVisible("    "+dim+g.bar+reset+" "+c+l+reset, w) + "\n")
+			}
+			extra = ""
+		}
+		u.print("\r\x1b[K" + b.String())
 	}
 	feedback := func() (Approval, string) {
 		fb, ok := u.readLine(ctx, keys, "  "+t.fg(cGold, 33)+"o que fazer em vez disso?"+reset+" "+g.prompt+" ", time.Time{})
@@ -1510,162 +1532,221 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 		}
 		return Deny, strings.TrimSpace(fb)
 	}
-	denied := func() { u.print("  " + t.fg(cRed, 31) + g.tool + reset + " não\n") }
-	if reason != "" {
-		ask := "  " + t.fg(cRed, 31) + "confirmar?" + reset + " " + g.prompt + " "
-		for {
-			line, ok := u.readLine(ctx, keys, ask, since)
-			if !ok {
-				return Deny, ""
-			}
-			switch strings.ToLower(strings.TrimSpace(line)) {
-			case "s", "sim", "y", "yes":
-				return Allow, ""
-			case "e":
-				return feedback()
-			case "v":
-				showAll()
-				continue
-			}
-			denied()
-			return Deny, ""
+	// done replaces the prompt line with the answer.
+	done := func(c apChoice) {
+		col, txt := t.fg(cGreen, 32), "sim"
+		switch c {
+		case apAlways:
+			txt = alwaysWhat
+		case apNo, apFeedback:
+			col, txt = t.fg(cRed, 31), "não"
 		}
+		u.print("\r\x1b[K  " + col + g.tool + reset + " " + clipVisible(txt, w-4) + "\n")
 	}
 	if typing {
-		// steering text was being typed: a stray letter must not answer
-		ask := "  " + t.fg(cGold, 33) + "você estava digitando: responda (1-3) e tecle enter" + reset + " " + g.prompt + " "
+		ask := "  " + accent + "resposta" + reset + " " + g.prompt + " "
 		for {
 			line, ok := u.readLine(ctx, keys, ask, since)
 			if !ok {
 				return Deny, ""
 			}
-			switch l := strings.ToLower(strings.TrimSpace(line)); l {
-			case "1", "s", "sim", "y", "yes":
+			c, rest := apTypedChoice(line, canAlways)
+			switch c {
+			case apYes:
 				return Allow, ""
-			case "2", "t", "sempre":
+			case apAlways:
 				return AllowAlways, ""
-			case "3", "e":
+			case apFeedback:
 				return feedback()
-			case "v":
+			case apView:
 				showAll()
 				continue
-			case "", "n", "não", "nao", "no":
-			default:
-				// the user kept typing an instruction: deny and pass it on
-				denied()
-				return Deny, strings.TrimSpace(line)
 			}
-			denied()
-			return Deny, ""
+			u.print("  " + t.fg(cRed, 31) + g.tool + reset + " não\n")
+			return Deny, rest // the user kept typing an instruction: pass it on
 		}
 	}
-	sel := 0
-	menu := func(redraw bool) {
-		var b strings.Builder
-		if redraw {
-			fmt.Fprintf(&b, "\x1b[%dA", len(opts)+1)
-		}
-		for i, o := range opts {
-			l := fmt.Sprintf("    %d. %s", i+1, o)
-			if i == sel {
-				l = "  " + t.fg(cAccent, 36) + t.sgr("1") + g.ptr + " " + fmt.Sprintf("%d. %s", i+1, o) + reset
-			}
-			b.WriteString("\r" + clipVisible(l, w) + "\x1b[K\n")
-		}
-		b.WriteString("\r" + clipVisible("  "+dim+g.up+g.down+" escolhe "+g.dot+" enter confirma "+g.dot+" 1-3 atalho "+g.dot+" esc nega"+reset, w) + "\x1b[K\n")
-		u.print(b.String())
-	}
-	// done collapses the menu into the chosen answer.
-	done := func(i int) {
-		c := t.fg(cGreen, 32)
-		if i == 2 || i < 0 {
-			c = t.fg(cRed, 31)
-		}
-		label := "não"
-		if i >= 0 {
-			label = opts[i]
-		}
-		u.print(fmt.Sprintf("\x1b[%dA\r\x1b[J  %s%s%s %s\n", len(opts)+1, c, g.tool, reset, clipVisible(label, w-4)))
-	}
-	menu(false)
 	prev := lastKey
 	for {
 		k, ok := uiReadKey(ctx, keys)
 		if !ok {
-			done(-1)
+			done(apNo)
 			return Deny, ""
 		}
 		now := time.Now()
-		gap := now.Sub(prev) // since the last typed character, not the last arrow
+		gap := now.Sub(prev) // since the last typed character
 		if k.Code == KRune || k.Code == KPaste {
 			prev = now
 		}
 		if now.Sub(since) < uiApproveGrace {
 			continue // typed before the prompt could be read (bug 11)
 		}
-		switch k.Code {
-		case KEsc, KCtrlC:
-			done(-1)
-			return Deny, ""
-		case KUp, KDown:
-			if k.Code == KUp {
-				sel = (sel + len(opts) - 1) % len(opts)
-			} else {
-				sel = (sel + 1) % len(opts)
-			}
-			menu(true)
-			continue
-		}
-		if gap < uiApproveIdle {
+		if k.Code != KEsc && k.Code != KCtrlC && gap < uiApproveIdle {
 			continue // still typing: not an answer
 		}
-		choice := -2
-		switch k.Code {
-		case KEnter:
-			choice = sel
-		case KRune:
-			switch unicode.ToLower(k.R) {
-			case '1', 's', 'y':
-				choice = 0
-			case '2', 't': // not 'a': the most common letter in Portuguese text
-				choice = 1
-			case '3', 'e':
-				choice = 2
-			case 'n':
-				choice = -1
-			case 'v':
-				if more > 0 {
-					showAll()
-					menu(false)
-				}
-			}
-		}
-		switch choice {
-		case 0:
-			done(0)
+		switch apKeyChoice(k, canAlways) {
+		case apYes:
+			done(apYes)
 			return Allow, ""
-		case 1:
-			done(1)
+		case apAlways:
+			done(apAlways)
 			return AllowAlways, ""
-		case 2:
-			done(2)
-			return feedback()
-		case -1:
-			done(-1)
+		case apNo:
+			done(apNo)
 			return Deny, ""
+		case apFeedback:
+			done(apFeedback)
+			return feedback()
+		case apView:
+			if more > 0 || extra != "" {
+				u.print("\r\x1b[K")
+				showAll()
+				u.print("\r\x1b[K" + apPromptLine(t, w, question, reason, canAlways, false))
+			}
 		}
 	}
 }
 
-// ApproveHint sets the rule that [t] "always" would save, shown by the next Approve.
+// apChoice is one answer to an approval prompt.
+type apChoice int
+
+const (
+	apNone     apChoice = iota // not an answer (ignored key)
+	apYes                      // sim, this time
+	apAlways                   // sempre (rule or approvals store)
+	apNo                       // não
+	apFeedback                 // não, e dizer o que fazer
+	apView                     // ver detalhes
+)
+
+// apKeyChoice maps one key to an answer: enter/s/y/1 sim, a/t/2 sempre (only
+// when offered), n/esc/ctrl+c não, e/3 dizer o que fazer, v ver detalhes.
+func apKeyChoice(k Key, canAlways bool) apChoice {
+	switch k.Code {
+	case KEnter:
+		return apYes
+	case KEsc, KCtrlC:
+		return apNo
+	case KRune:
+		switch unicode.ToLower(k.R) {
+		case 's', 'y', '1':
+			return apYes
+		case 'a', 't', '2':
+			if canAlways {
+				return apAlways
+			}
+		case 'n', '3':
+			return apNo
+		case 'e':
+			return apFeedback
+		case 'v':
+			return apView
+		}
+	}
+	return apNone
+}
+
+// apTypedChoice maps a typed answer (word + Enter) to an answer; any other
+// text is a denial that carries the text on as the user's instruction.
+func apTypedChoice(line string, canAlways bool) (apChoice, string) {
+	switch l := strings.ToLower(strings.TrimSpace(line)); l {
+	case "s", "sim", "y", "yes", "1":
+		return apYes, ""
+	case "a", "t", "sempre", "always", "2":
+		if canAlways {
+			return apAlways, ""
+		}
+		return apNo, ""
+	case "e", "3":
+		return apFeedback, ""
+	case "v", "ver":
+		return apView, ""
+	case "", "n", "não", "nao", "no":
+		return apNo, ""
+	}
+	return apNo, strings.TrimSpace(line)
+}
+
+// apPromptLine is the one-line question: the risk reason in red, then the
+// keys. On a narrow line the optional keys (v, e) go first, then the reason
+// is shortened, then the keys become bare letters; it is always one line.
+func apPromptLine(t Theme, w int, question, reason string, canAlways, canView bool) string {
+	g := t.G()
+	reset, dim := t.sgr("0"), t.fg(cGray, 90)
+	key := func(k, d string) string { return t.fg(cAccent, 36) + t.sgr("1") + k + reset + dim + " " + d + reset }
+	core := []string{key("enter", "sim")}
+	if canAlways {
+		core = append(core, key("a", "sempre"))
+	}
+	core = append(core, key("n", "não"))
+	full := append([]string(nil), core...)
+	if canView {
+		full = append(full, key("v", "ver"))
+	}
+	full = append(full, key("e", "instruir"))
+	join := func(ks []string) string { return strings.Join(ks, dim+" "+g.dot+" "+reset) }
+	head := "  " + t.fg(cAccent, 36) + t.sgr("1") + "?" + reset + " " + t.sgr("1") + question + reset
+	r := ""
+	if reason != "" {
+		r = oneLine(sanitizeTerm(reason), 300)
+	}
+	withReason := func(r string) string {
+		if r == "" {
+			return head
+		}
+		return head + " " + t.fg(cRed, 31) + g.warn + " perigo: " + r + reset
+	}
+	for _, hint := range []string{join(full), join(core)} {
+		if l := withReason(r) + "  " + hint; uiVisLen(l) <= w {
+			return l + " "
+		}
+	}
+	hint := join(core)
+	if r != "" {
+		room := w - uiVisLen(withReason("")) - uiVisLen(hint) - 12
+		if rr := []rune(r); room >= 12 && len(rr) > room {
+			if l := withReason(string(rr[:room-1])+g.ell) + "  " + hint; uiVisLen(l) <= w {
+				return l + " "
+			}
+		}
+	}
+	// very narrow: bare letters
+	short := "enter/s"
+	if canAlways {
+		short += " a"
+	}
+	short += " n"
+	if canView {
+		short += " v"
+	}
+	short += " e"
+	return clipVisible(withReason(r), max(w-uiVisLen(short)-3, 10)) + "  " + dim + short + reset + " "
+}
+
+// ApproveHint sets the rule that "a" (sempre) would save, shown by the next Approve.
 func (u *TermUI) ApproveHint(rule string) {
 	u.mu.Lock()
 	u.alwaysRule = rule
 	u.mu.Unlock()
 }
 
+// ApproveAlways offers "a" (sempre) on the next prompt with a risk reason.
+func (u *TermUI) ApproveAlways(label string) {
+	u.mu.Lock()
+	u.alwaysOffer = label
+	u.mu.Unlock()
+}
+
+// ApproveExtra sets what "v" shows on the next prompt besides the detail.
+func (u *TermUI) ApproveExtra(text string) {
+	u.mu.Lock()
+	u.approveExtra = text
+	u.mu.Unlock()
+}
+
 // Ask shows a question and waits for one of the runes in keys (case-insensitive).
 // It returns the lower-case rune pressed, or 0 on Esc/Ctrl+C/EOF/no terminal.
+// Enter answers 's' (sim) when keys has it and not "\r".
 func (u *TermUI) Ask(question, keys string) rune {
 	u.StopThinking()
 	u.mu.Lock()
@@ -1695,10 +1776,14 @@ func (u *TermUI) Ask(question, keys string) rune {
 		case KEsc, KCtrlC:
 			u.print("\n")
 			return 0
-		case KEnter: // only when the caller lists "\r" among the keys (fast paths)
+		case KEnter: // "\r" when the caller lists it (fast paths); else Enter is "s" (sim)
 			if strings.ContainsRune(valid, '\r') {
 				u.print("\n")
 				return '\r'
+			}
+			if strings.ContainsRune(valid, 's') {
+				u.print("s\n")
+				return 's'
 			}
 		case KRune:
 			if r := unicode.ToLower(k.R); strings.ContainsRune(valid, r) {

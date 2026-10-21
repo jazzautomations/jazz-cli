@@ -328,8 +328,10 @@ func TestUiApproveMenuKeys(t *testing.T) {
 		want Approval
 	}{
 		{"enter is yes", []Key{{Code: KEnter}}, Allow},
-		{"down enter is always", []Key{{Code: KDown}, {Code: KEnter}}, AllowAlways},
-		{"up wraps to no+feedback", []Key{{Code: KUp}, {Code: KEnter}, {Code: KRune, R: 'x'}, {Code: KEnter}}, Deny},
+		{"s is yes", []Key{{Code: KRune, R: 's'}}, Allow},
+		{"a is always", []Key{{Code: KRune, R: 'a'}}, AllowAlways},
+		{"arrows are ignored", []Key{{Code: KDown}, {Code: KUp}, {Code: KRune, R: 'n'}}, Deny},
+		{"e is no+feedback", []Key{{Code: KRune, R: 'e'}, {Code: KRune, R: 'x'}, {Code: KEnter}}, Deny},
 		{"digit 2", []Key{{Code: KRune, R: '2'}}, AllowAlways},
 		{"esc", []Key{{Code: KEsc}}, Deny},
 	}
@@ -348,7 +350,7 @@ func TestUiApproveMenuKeys(t *testing.T) {
 				t.Fatalf("approve = %v want %v", r.ap, c.want)
 			}
 			out := read()
-			for _, want := range []string{"╭─ Bash ─", "│ npm test", "Rodar este comando?", "▸ 1. Sim", "2. Sim, e não perguntar de novo", "3. Não, e dizer o que fazer"} {
+			for _, want := range []string{"│ Bash  npm test", "? Rodar este comando?", "enter sim", "a sempre", "n não", "e instruir"} {
 				if !strings.Contains(out, want) {
 					t.Errorf("approval lacks %q: %q", want, out)
 				}

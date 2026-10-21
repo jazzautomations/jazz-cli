@@ -384,11 +384,11 @@ func TestSmartModeLabelsAndConfig(t *testing.T) {
 	}
 	a := &App{cfg: &Config{Mode: "auto"}, ui: u}
 	var seen []string
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		a.cycleMode()
 		seen = append(seen, a.cfg.EffMode())
 	}
-	if strings.Join(seen, ",") != "smart,plan,ask,auto" {
-		t.Errorf("Shift+Tab cycle = %v; want smart,plan,ask,auto", seen)
+	if strings.Join(seen, ",") != "turbo,smart,plan,ask,auto" {
+		t.Errorf("Shift+Tab cycle = %v; want turbo,smart,plan,ask,auto", seen)
 	}
 }

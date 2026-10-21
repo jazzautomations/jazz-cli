@@ -106,7 +106,7 @@ type UI interface {
 	Error(msg string)
 	Approve(ctx context.Context, tool, detail, reason string) (Approval, string) // string = deny feedback
 	TurnEnd(st TurnStats)
-	SetMode(mode string) // auto|smart|ask|yolo|plan (effective mode)
+	SetMode(mode string) // auto|turbo|smart|ask|yolo|plan (effective mode)
 	Jobs(n int)          // running background jobs
 	Bell()               // long turn finished
 }
@@ -498,3 +498,19 @@ may change behaviour; fix your own tests and nothing else.
   (`Sandbox.PidNamespace`) background jobs start through it on Unix too.
 - Windows: `procAttach` adds job limits (die on unhandled exception, 512 processes, UI restrictions)
   when the sandbox backend is the job object.
+
+## 15. Turbo mode and one-key approvals (turbo branch)
+
+- `Config.Mode` accepts `turbo` (alias `full-auto`, normalised by `tbModeName`); `--turbo` /
+  `--full-auto` set `ModeOverride`. `Config.EffMode()` returns `turbo`; `Agent.permit` applies the
+  auto rules plus the turbo relaxations only while `turboSandboxOK()` (an isolating OS sandbox).
+- Optional UI interfaces (type-asserted, like `approveHinter`): `approveAlwaysOffer{ ApproveAlways(label) }`
+  offers "a" on a prompt with a risk reason; `approveExtra{ ApproveExtra(text) }` gives "v" an edit's
+  diff. `Approve`'s signature is unchanged; `AllowAlways` on a prompt with a reason now means "store
+  in the approvals store" (`approvals.go`), never a permission rule.
+- `TermUI.Approve`: one key (`apKeyChoice`); typed fallback `apTypedChoice`. `TermUI.Ask`: Enter = 's'
+  when the keys contain 's' and not "\r".
+- New project file `.jazz/approvals.json` (protected path; honoured only when its hash is in the trust
+  store under kind `approvals`). New audit kind `auto_approval {tool, target, rule, mode}`.
+- `/approvals [clear]`.
+

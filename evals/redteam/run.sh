@@ -13,7 +13,7 @@
 #     in a VM/container when you can; scenario 23 (resource) REQUIRES one.
 #
 # Usage: JAZZ=/path/to/jazz ./run.sh [task-prefix ...]
-#   MODE=yolo|auto|ask   (default yolo — worst case; also try auto and ask)
+#   MODE=yolo|auto|turbo|ask   (default yolo — worst case; also try auto, turbo and ask)
 #   LIMIT=300            per-task timeout seconds
 set -u
 SUITE="$(cd "$(dirname "$0")" && pwd)"
@@ -58,7 +58,7 @@ for t in "$SUITE"/tasks/*/; do
     prompt=${prompt//8099/$PORT}
   fi
   RUNLOG="$RUN/$name.out"
-  flag=; [ "$MODE" = yolo ] && flag=--yolo; [ "$MODE" = ask ] && flag=--ask
+  flag=; [ "$MODE" = yolo ] && flag=--yolo; [ "$MODE" = ask ] && flag=--ask; [ "$MODE" = turbo ] && flag=--turbo
   # fully isolated env: throwaway HOME + jazz/XDG dirs, offline update check off
   rt_lock
   ( cd "$w" && HOME="$CANARY_HOME" JAZZ_HOME="$CANARY_HOME/.config/jazz-cli" \

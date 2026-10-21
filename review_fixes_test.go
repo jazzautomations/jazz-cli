@@ -587,15 +587,23 @@ func TestUiApproveIgnoresLettersOfSteeringText(t *testing.T) {
 		t.Fatalf("a letter typed mid-word answered: %v", r.ap)
 	}
 
-	// 'a' is no longer "always"
+	// mid-word 'a' (right after other letters) does not answer
 	ctx2, cancel2 := context.WithTimeout(context.Background(), uiApproveGrace+uiApproveIdle+400*time.Millisecond)
 	defer cancel2()
 	time.Sleep(uiApproveIdle)
 	res = uiApproveAsync(u, ctx2, "bash", "npm install", "")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
-	uiSendRunes(keys, "a")
+	uiSendRunes(keys, "pa")
 	if r := uiWaitApprove(t, res, 3*time.Second); r.ap == AllowAlways || r.ap == Allow {
-		t.Fatalf("'a' answered the prompt: %v", r.ap)
+		t.Fatalf("'a' typed mid-word answered the prompt: %v", r.ap)
+	}
+	// a lone 'a' after a pause is "sempre"
+	time.Sleep(uiApproveIdle)
+	res = uiApproveAsync(u, context.Background(), "bash", "npm install", "")
+	time.Sleep(uiApproveGrace + 50*time.Millisecond)
+	uiSendRunes(keys, "a")
+	if r := uiWaitApprove(t, res, 3*time.Second); r.ap != AllowAlways {
+		t.Fatalf("lone 'a' = %v, want sempre", r.ap)
 	}
 }
 

@@ -65,6 +65,9 @@ type Agent struct {
 
 	smart *smState // smart permission mode: classifier and verdict cache (smart.go)
 
+	apMu sync.Mutex
+	ap   *apStore // "sempre" answers to prompts with a risk reason (approvals.go)
+
 	fileRules      []SteeringRule // fileMatch steering rules (steering.go), loaded lazily
 	steeringLoaded bool
 
@@ -1573,7 +1576,16 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 	}
 	mode := a.mode()
-	if tool == "script" && !isMCP { // read-only scripts only in plan/subagent; Bash deny rules cover a script's cmd (scripts.go)
+	// turbo (turbo.go) applies the auto rules plus its own relaxations, and
+	// only while an OS sandbox isolates what runs; without one it is auto
+	turbo := mode == "turbo" && turboSandboxOK()
+	if mode == "turbo" {
+		mode = "auto"
+	}
+	autoRule := ""                           // why a call that some mode would confirm runs without a prompt (audit)
+	apClass, apTarget, apLabel := "", "", "" // what "a" (sempre) remembers for a prompt with a reason (approvals.go)
+	apOnAllow := false                       // turbo egress: the first approval already remembers the host
+	if tool == "script" && !isMCP {          // read-only scripts only in plan/subagent; Bash deny rules cover a script's cmd (scripts.go)
 		if deny, byRule := a.scGate(args, mode); deny != "" {
 			return false, deny, byRule
 		}
@@ -1605,18 +1617,31 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	need := false
 	switch {
 	case tool == "bash":
-		if why := DangerReason(cmd); cmd != "" && why != "" {
+		why := DangerReason(cmd)
+		if cmd != "" && why != "" && turbo && a.tools.cpUsable() && tbGitRecoverable(cmd, a.tools.lockDir()) {
+			why, autoRule = "", "turbo:git-discard-checkpoint" // /undo restores it (checkpoint.go)
+		}
+		if cmd != "" && why != "" {
 			reason, need = why, true // dangerous commands are always confirmed
 			whyEN = "it is a destructive or dangerous command (" + why + ")"
+			if c, tg := tbDangerClass(cmd); c != "" {
+				apClass, apTarget, apLabel = c, tg, c+": "+tg
+			}
 		} else if why := SecretReason(cmd); cmd != "" && why != "" && mode != "yolo" {
 			reason, need = why, true // its output (credentials) would go to the provider
 			whyEN = "it would read credentials or secrets (" + why + ")"
 		} else if why := a.sgCheckCommand(ctx, cmd, dec == PermAllow); cmd != "" && why != "" && mode != "yolo" {
 			reason, need = why, true // supply-chain guard (guardrails.go)
 			whyEN = "a package failed the supply-chain check (" + why + ")"
+			apClass, apTarget = "supply", strings.Join(strings.Fields(cmd), " ")
+			apLabel = "supply: " + apTarget
 		} else if h, eg := EgressTarget(cmd); eg && mode != "yolo" && !egressAllowed(h, a.cfg.EgressAllow) {
 			reason, need = "envia dados para fora da máquina (destino: "+h+")", true // egress gate (AML.T0086)
 			whyEN = "it sends data off this machine (to " + h + ")"
+			if !strings.HasPrefix(h, "(") { // "(host no código inline)": no host to remember
+				apClass, apTarget, apLabel = "egress", strings.ToLower(h), "egress: "+strings.ToLower(h)
+				apOnAllow = turbo
+			}
 		} else if (mode == "ask" || a.UntrustedBash) && (jobKill || cmd != "" && !IsReadOnly(cmd)) {
 			need = true
 			if a.UntrustedBash {
@@ -1659,6 +1684,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	}
 	if fenceReason != "" && reason == "" {
 		reason, need, whyEN = fenceReason, true, fenceEN
+		if out := a.fenceCheck(tool, args, cmd, isMCP); out != "" && !fencePrivate(resolvePath(out)) {
+			d := filepath.Dir(filepath.Clean(out))
+			apClass, apTarget, apLabel = "fence", d, "fora do projeto: "+d
+		}
+	} else if fenceReason != "" {
+		apClass = "" // two risks in one call: remembering one must not skip the other
+	}
+	if injReason != "" || hook.ask {
+		apClass = "" // a suspected injection or a hook that asks: never answered from the store
 	}
 	if injReason != "" && reason == "" {
 		reason, need = injReason, true
@@ -1678,7 +1712,22 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 	}
 	if (dec == PermAllow || hook.approve) && reason == "" {
+		if need {
+			autoRule = "hook"
+			if dec == PermAllow {
+				autoRule = "perm:" + rule
+			}
+		}
 		need = false
+	}
+	if isMCP && reason != "" {
+		apClass = "" // rug-pull: never remembered
+	}
+	if mode == "ask" {
+		apClass = "" // ask mode asks every time
+	}
+	if need && reason != "" && apClass != "" && dec != PermAsk && a.approvals().Has(apClass, apTarget) {
+		need, autoRule = false, "approvals:"+apClass // "a" (sempre) earlier in this project
 	}
 	if mode == "smart" && !need && dec != PermAllow && !hook.approve {
 		need = a.smartNeedsPrompt(ctx, tool, args, cmd, fetchURL, isMCP, jobKill)
@@ -1688,6 +1737,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 	}
 	if !need {
+		switch {
+		case autoRule != "":
+			a.apRecordAuto(tool, a.apDetailOf(tool, detail, cmd, args), autoRule)
+		case turbo && a.tbIsChange(tool, cmd, isMCP, jobKill):
+			a.apRecordAuto(tool, a.apDetailOf(tool, detail, cmd, args), "turbo:projeto+sandbox")
+		}
 		return true, "", false
 	}
 	// the approval shows the whole command (bug 10); toolDetail clips it
@@ -1707,8 +1762,25 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if h, ok := a.ui.(approveHinter); ok && reason == "" && a.Perms != nil {
 		h.ApproveHint(strings.Join(a.Perms.pfDeriveRules(tool, args), ", "))
 	}
+	if reason != "" && dec == PermAsk {
+		apClass = "" // an ask rule asks every time
+	}
+	if h, ok := a.ui.(approveAlwaysOffer); ok && reason != "" && apClass != "" {
+		h.ApproveAlways(apLabel)
+	}
+	if h, ok := a.ui.(approveExtra); ok {
+		h.ApproveExtra(apPreview(tool, args))
+	}
 	ap, feedback := a.ui.Approve(ctx, tool, apDetail, reason)
 	a.obApproval(tool, apDetail, reason, ap) // overrides are audited (obs.go)
+	if reason != "" && apClass != "" && (ap == AllowAlways || ap == Allow && apOnAllow) {
+		if err := a.approvals().Add(apClass, apTarget, apLabel); err != nil {
+			a.ui.Warn("não consegui salvar a aprovação: " + err.Error())
+		} else {
+			a.ui.Notice("não pergunto de novo neste projeto: " + oneLine(visibleDetail(apLabel), 120) + "  (/approvals lista e limpa)")
+		}
+		return true, "", false
+	}
 	switch ap {
 	case AllowAlways:
 		if reason == "" {

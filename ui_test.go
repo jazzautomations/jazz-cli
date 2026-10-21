@@ -233,36 +233,38 @@ func TestUiApproveEOFAndCancel(t *testing.T) {
 	}
 }
 
-func TestUiApproveDangerousNeedsEnter(t *testing.T) {
+func TestUiApproveDangerousSingleKey(t *testing.T) {
 	for _, c := range []struct {
 		in   string
 		want Approval
 	}{
-		{"sim\n", Allow},
-		{"s\n", Allow},
-		{"S\n", Allow},
-		{"x\n", Deny},
-		{"\n", Deny},
+		{"s", Allow},
+		{"S", Allow},
+		{"\n", Allow}, // enter = sim
+		{"n", Deny},
+		{"x\n", Deny}, // x is ignored, then enter
+		{"a", Deny},   // no "sempre" offered: ignored; the timeout denies
 	} {
 		u, keys := uiTestUI(t)
 		stop := u.WatchTurn(func() {}, func(string) {})
-		res := uiApproveAsync(u, context.Background(), "bash", "git push --force", "reescreve o remoto")
+		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		res := uiApproveAsync(u, ctx, "bash", "git push --force", "reescreve o remoto")
 		time.Sleep(uiApproveGrace + 50*time.Millisecond)
 		uiSendRunes(keys, c.in)
-		if r := uiWaitApprove(t, res, 2*time.Second); r.ap != c.want {
+		if r := uiWaitApprove(t, res, 3*time.Second); r.ap != c.want {
 			t.Errorf("%q: approve = %v want %v", c.in, r.ap, c.want)
 		}
+		cancel()
 		stop()
 	}
-	// a single 's' without Enter is not enough
+	// with "sempre" offered (ApproveAlways), 'a' answers it
 	u, keys := uiTestUI(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
-	defer cancel()
-	res := uiApproveAsync(u, ctx, "bash", "rm -rf /", "apaga tudo")
+	u.ApproveAlways("git: git push --force")
+	res := uiApproveAsync(u, context.Background(), "bash", "git push --force", "git push forçado")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
-	uiSendRunes(keys, "s")
-	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Deny {
-		t.Errorf("single key approved a dangerous command: %v", r.ap)
+	uiSendRunes(keys, "a")
+	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != AllowAlways {
+		t.Errorf("offered 'a' = %v want sempre", r.ap)
 	}
 }
 
@@ -285,7 +287,9 @@ func TestUiApproveFeedbackAndAlways(t *testing.T) {
 	// dangerous: [e] works too
 	res = uiApproveAsync(u, context.Background(), "bash", "rm -rf build", "apaga")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
-	uiSendRunes(keys, "e\nnão apague\n")
+	uiSendRunes(keys, "e")
+	time.Sleep(50 * time.Millisecond)
+	uiSendRunes(keys, "não apague\n")
 	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Deny || r.fb != "não apague" {
 		t.Fatalf("dangerous feedback = %+v", r)
 	}
