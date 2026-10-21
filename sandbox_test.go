@@ -45,6 +45,9 @@ func sbTestPolicy(t *testing.T, mode, backend string, net bool) (sb *Sandbox, ho
 	t.Helper()
 	// not t.TempDir(): the macOS per-user temp dir (where it lives) is
 	// writable inside the sandbox, and the "outside" probes must not be
+	if runtime.GOOS == "windows" {
+		t.Skip("sandbox-exec/bwrap policy: Unix-only (needs /tmp, /usr/bin)")
+	}
 	base, err := os.MkdirTemp("/tmp", "jzsbx-test-")
 	if err != nil {
 		t.Fatal(err)

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -14,6 +15,9 @@ import (
 // relative to it.
 func sbDellHome(t *testing.T) (home string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("sandbox-exec/bwrap policy: Unix-only (needs /tmp, /usr/bin)")
+	}
 	base, err := os.MkdirTemp("/tmp", "jzsbx-dell-")
 	if err != nil {
 		t.Fatal(err)

@@ -189,6 +189,14 @@ func (l *obLog) close() {
 	}
 }
 
+// obCloseCur detaches and closes the process event stream. Releasing the
+// handle matters on Windows, where an open file cannot be deleted.
+func obCloseCur() {
+	if l := obCur.Swap(nil); l != nil {
+		l.close()
+	}
+}
+
 // obEmit writes to the process's current stream (no-op without one).
 func obEmit(kind string, f map[string]any) { obCur.Load().emit(kind, f, false) }
 

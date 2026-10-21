@@ -15,19 +15,6 @@ import (
 	"time"
 )
 
-func pfResetDebug(t *testing.T) {
-	t.Helper()
-	t.Cleanup(func() {
-		pfDbg.mu.Lock()
-		if pfDbg.f != nil {
-			pfDbg.f.Close()
-		}
-		pfDbg.f, pfDbg.path, pfDbg.size, pfDbg.ring, pfDbg.sysSeen = nil, "", 0, nil, nil
-		pfDbg.mu.Unlock()
-		debugOn = false
-	})
-}
-
 func TestDebugLogRedactsAndHashesSystem(t *testing.T) {
 	pfTestHome(t)
 	pfResetDebug(t)

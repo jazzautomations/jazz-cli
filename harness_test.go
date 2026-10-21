@@ -463,6 +463,7 @@ func newHarness(t *testing.T, h func(int, recReq) fakeResp, mod func(*Config)) *
 	t.Cleanup(func() {
 		assertPairedMsgs(t, ag.Msgs)
 		ag.sess.Close()
+		obCloseCur() // Windows cannot delete the TempDir while the events file is open
 	})
 	return hs
 }

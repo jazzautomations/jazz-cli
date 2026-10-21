@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -16,12 +17,8 @@ import (
 	"time"
 )
 
-func ojResetDebug(t *testing.T) string {
+func pfResetDebug(t *testing.T) {
 	t.Helper()
-	path, err := pfDebugStart()
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Cleanup(func() {
 		pfDbg.mu.Lock()
 		if pfDbg.f != nil {
@@ -30,7 +27,19 @@ func ojResetDebug(t *testing.T) string {
 		pfDbg.f, pfDbg.path, pfDbg.size, pfDbg.ring, pfDbg.sysSeen = nil, "", 0, nil, nil
 		pfDbg.mu.Unlock()
 		debugOn = false
+		// pfDebugStart hands a .fatal.txt handle to the runtime; Windows cannot
+		// delete the TempDir while it is open
+		_ = debug.SetCrashOutput(nil, debug.CrashOptions{})
 	})
+}
+
+func ojResetDebug(t *testing.T) string {
+	t.Helper()
+	pfResetDebug(t) // cleanup also releases the crash-output handle
+	path, err := pfDebugStart()
+	if err != nil {
+		t.Fatal(err)
+	}
 	return path
 }
 
@@ -606,7 +615,7 @@ func TestOjFusionSidekickEditsExisting(t *testing.T) {
 			toolOut = m.Content
 		}
 	}
-	if !strings.Contains(toolOut, "a.py, c.py, tests/test_a.py") {
+	if !strings.Contains(filepath.ToSlash(toolOut), "a.py, c.py, tests/test_a.py") {
 		for _, m := range h.ag.Msgs {
 			t.Logf("%s %s %q %v", m.Role, m.ToolName, oneLine(m.Content, 200), m.ToolCalls)
 		}

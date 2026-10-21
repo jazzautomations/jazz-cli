@@ -11,6 +11,7 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -105,7 +106,12 @@ func sessNewID(seen func(string) bool) string {
 }
 
 func projectSlug(root string) string {
-	s := strings.Trim(strings.ReplaceAll(root, string(filepath.Separator), "-"), "-")
+	s := root
+	if runtime.GOOS == "windows" {
+		// "C:\\x" -> "C-x": ':' is not valid inside a Windows path element
+		s = strings.ReplaceAll(strings.ReplaceAll(s, ":", ""), "/", "-")
+	}
+	s = strings.Trim(strings.ReplaceAll(s, string(filepath.Separator), "-"), "-")
 	if s == "" {
 		s = "root"
 	}
