@@ -294,6 +294,8 @@ only on a disposable dev machine or a VM**, never where real credentials live. v
 
 ## Research
 
+Architecture with diagrams (components, one turn, security layers, omni and judge, sessions, evals): [`docs/ARCHITECTURE.en.md`](docs/ARCHITECTURE.en.md).
+
 Reports behind jazz's design decisions, in [`docs/research/`](docs/research) (English unless noted):
 
 | Document | What it covers |

@@ -253,6 +253,8 @@ canário e sumidouro local; detalhes e ressalvas em
 
 ## Como o harness trabalha
 
+Mapa visual da arquitetura (componentes, um turno, camadas de segurança, omni e juiz, sessões, evals): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 Saída longa do bash, sem LLM: com mais de 2 KB, se um parser em Go (go test, pytest, unittest,
 jest/vitest, cargo test; erros de go/gcc/clang/tsc/rustc/SyntaxError do Python; stack trace de
 Python, pânico do Go e Node; log com data/nível) explica pelo menos 80% das linhas, o modelo
