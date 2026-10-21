@@ -225,6 +225,7 @@ type fpIntent struct {
 type fpSet struct {
 	intents []*fpIntent
 	warns   []string
+	vocab   map[string]bool // literal words of the patterns, for typo repair (fuzzy.go)
 }
 
 var (
@@ -307,6 +308,14 @@ func fpBuild(root string) *fpSet {
 			set.intents = append(set.intents, it)
 		}
 	}
+	set.vocab = map[string]bool{}
+	for _, it := range set.intents {
+		for _, p := range it.Patterns {
+			for _, w := range fpWordRE.FindAllString(strings.ToLower(p), -1) {
+				set.vocab[w] = true
+			}
+		}
+	}
 	if len(set.warns) > 0 {
 		dbg("intents", map[string]any{"warnings": set.warns})
 	}
@@ -320,11 +329,12 @@ type fpMatch struct {
 }
 
 var (
-	fpLead  = regexp.MustCompile(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now)[,:]?\s+)+`)
-	fpTrail = regexp.MustCompile(`(?i)(?:[,\s]+(?:por favor|pfv|pf|please|pls|pra mim|for me|agora|now))+$`)
-	fpPunct = regexp.MustCompile(`[\s?!.…;:]+$`)
-	fpVar   = regexp.MustCompile(`\{\{(\w+)\}\}`)
-	fpSlotV = regexp.MustCompile(`^[\w$.:/-]{1,80}$`)
+	fpLead   = regexp.MustCompile(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now)[,:]?\s+)+`)
+	fpTrail  = regexp.MustCompile(`(?i)(?:[,\s]+(?:por favor|pfv|pf|please|pls|pra mim|for me|agora|now))+$`)
+	fpPunct  = regexp.MustCompile(`[\s?!.…;:]+$`)
+	fpWordRE = regexp.MustCompile(`[a-z]{4,}`)
+	fpVar    = regexp.MustCompile(`\{\{(\w+)\}\}`)
+	fpSlotV  = regexp.MustCompile(`^[\w$.:/-]{1,80}$`)
 )
 
 // fpNormalize strips accents, trailing punctuation and polite filler, and
@@ -362,6 +372,41 @@ func (set *fpSet) Match(input string, p fpProject, hasRg bool) (fpMatch, bool) {
 	if n == "" || set == nil {
 		return fpMatch{}, false
 	}
+	if m, ok := set.matchNorm(n, p, hasRg, nil); ok {
+		return m, true
+	}
+	// typos: "git stauts", "procra X no codgio", "roda os tesets" (fuzzy.go).
+	// Words of the request that are not in the pattern vocabulary are moved to
+	// the nearest vocabulary word; a captured symbol must stay as typed.
+	n = fpSynonymLead(n, set.vocab)
+	if fixed, changed := fzRepairLine(n, set.vocab); changed || n != fpNormalize(input) {
+		orig := map[string]bool{}
+		for _, w := range strings.Fields(n) {
+			orig[w] = true
+		}
+		return set.matchNorm(fixed, p, hasRg, orig)
+	}
+	return fpMatch{}, false
+}
+
+// fpSynonymLead maps a leading verb the patterns do not list ("toca", "rola",
+// "dispara") to the pattern spelling of its meaning.
+func fpSynonymLead(n string, vocab map[string]bool) string {
+	f := strings.Fields(n)
+	if len(f) == 0 || vocab[strings.ToLower(f[0])] {
+		return n
+	}
+	canon := map[string]string{"run": "roda", "search": "procura"}[fzIntent(f[0])]
+	if canon == "" || !vocab[canon] {
+		return n
+	}
+	f[0] = canon
+	return strings.Join(f, " ")
+}
+
+// matchNorm matches one normalized request; orig (typo repair) lists the
+// words the user really typed: a slot value outside it is a repaired word.
+func (set *fpSet) matchNorm(n string, p fpProject, hasRg bool, orig map[string]bool) (fpMatch, bool) {
 	vars := map[string]string{"test": p.Test, "build": p.Build, "lint": p.Lint, "fmt": p.Fmt}
 	if p.Git {
 		vars["git"] = "git"
@@ -388,6 +433,10 @@ func (set *fpSet) Match(input string, p fpProject, hasRg bool) (fpMatch, bool) {
 				chk := fpSlotV
 				if c, ok := it.slots[name]; ok {
 					chk = c
+				}
+				if orig != nil && !orig[v] {
+					good = false
+					break
 				}
 				if !chk.MatchString(v) || !fpSlotV.MatchString(v) || it.reject[strings.ToLower(v)] {
 					good = false

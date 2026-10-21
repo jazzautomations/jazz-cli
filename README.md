@@ -494,6 +494,22 @@ aprovações num menu numerado (↑↓ + Enter, ou 1-3). Paleta Nord; em 16 core
 esquema do terminal, e com `TERM=linux` (ou `JAZZ_ASCII=1`) tudo vira ASCII. Comandos próprios: arquivos `.md` em `~/.config/jazz-cli/commands`,
 `.jazz/commands` ou `.claude/commands` viram `/nome`.
 
+### Erros de digitação
+
+Quem digita rápido não deveria ser tratado ao pé da letra. Comandos: `/modle` roda `/model`, `/mode trubo`
+roda `/mode turbo`; se for ambíguo (`/ofline`: offline ou online) aparece um menu numerado. Nomes no
+pedido: antes de o modelo rodar, o jazz confere o que parece caminho, arquivo, função ou teste contra um
+índice barato do repositório (nomes de arquivo + símbolos de topo, no máximo 20 mil arquivos, em cache) e
+anexa à mensagem uma nota de uma linha com o raciocínio, por exemplo ``` `parsr.go` → `parser.go` (arquivo
+mencionado junto de 'conserta'; único .go com esse radical) ```, para o modelo poder discordar. A escolha
+usa o contexto, não só a distância de edição: teste/função/arquivo citados na frase, verbo, extensões do
+repositório, arquivos mexidos nesta sessão ou hoje, e tecla vizinha pesa menos que letra qualquer. Palavra
+comum nunca vira nome (só formato de nome, ou depois de "arquivo", "teste", "função"...); sem candidato
+bom não se acrescenta nada. O texto do usuário nunca é reescrito e o system prompt não muda (cache). Se um
+`read`/`edit` aponta um caminho que não existe, o erro lista os parecidos (`não existe; parecido: ...`);
+os atalhos offline e o classificador de tarefa também entendem `roda os teste`, `git stauts`,
+`procra X no codgio`, `arruma`/`concerta` = conserta. (`testes` sozinho continua sem disparar atalho.)
+
 ## Scripts, atalhos e modo offline
 
 **Ferramenta `script`** (`"scripts": "on"` no `config.json`, padrão; `--scripts off` desliga pra

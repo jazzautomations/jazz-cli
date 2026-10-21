@@ -3,6 +3,16 @@
 Resumo honesto, tirado do `git log`. Nenhuma dessas versões foi publicada como release no GitHub
 ainda; as datas são as dos commits. Formato livre, uma linha por mudança relevante.
 
+## Não publicado (branch `typos`)
+
+- Tolerância a erros de digitação, determinística: `/modle`→`/model`, `/mode trubo`→`/mode turbo`,
+  ambíguo vira menu numerado (`fuzzy_cmd.go`); nomes do pedido (arquivo, caminho, função, teste)
+  resolvidos contra um índice do repositório com contexto da frase, sessão e idade dos arquivos, e uma
+  nota com o raciocínio na mensagem do usuário (`nameindex.go`); `read`/`edit` de caminho inexistente
+  sugerem os parecidos, `write` avisa de gêmeo próximo, busca de símbolo vazia nos atalhos sugere
+  símbolos próximos; atalhos offline e classificador de tarefa reparam typos e sinônimos
+  (`roda os teste`, `git stauts`, `concerta`); uma regra estática de 1 linha no system prompt.
+
 ## Não publicado (branch `turbo`)
 
 - Confirmação com uma tecla em toda pergunta sim/não da TUI: `enter`/`s` sim, `a` sempre, `n`/`esc`

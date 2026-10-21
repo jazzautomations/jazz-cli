@@ -33,7 +33,7 @@ import (
 type olAction struct {
 	Key    string // short label for the one-line menu ("testes", "git")
 	Label  string // menu text
-	Kind   string // shell | test | script | summary | online | wait | sudo
+	Kind   string // shell | test | script | summary | online | wait | sudo | slash
 	Cmd    string // shell command (shell, test, sudo)
 	Script string // script name (script)
 	Args   string // script args (JSON)
@@ -350,6 +350,9 @@ func (a *App) olTakePick(reply string) (olAction, bool) {
 // model path (call line, result line, then the output as an answer block).
 func (a *App) olRun(ctx context.Context, act olAction) bool {
 	switch act.Kind {
+	case "slash":
+		a.command(act.Cmd)
+		return true
 	case "wait":
 		a.ui.Notice("ok, esperando o modelo")
 		return true
@@ -397,6 +400,10 @@ func (a *App) olRun(ctx context.Context, act olAction) bool {
 			sum = fmt.Sprintf("exit %d · %s", code, firstLine(s))
 			body = s + "\n\n" + truncateHeadTail(out, 3000)
 		}
+	}
+	if h := niEmptySearchHint(a.root, act.Intent, act.Cmd, out, code); h != "" { // typo in the identifier (nameindex.go)
+		out += "\n" + h
+		body += "\n" + h
 	}
 	a.ui.ToolEnd("offer", "bash", ToolOutput{Text: out, IsErr: code != 0, Display: Display{Summary: sum}}, time.Since(t0))
 	a.ui.ActionBody(body)

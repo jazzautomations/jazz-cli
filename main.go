@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var version = "0.7.1"
+var version = "0.7.2"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -1417,6 +1417,13 @@ func (a *App) listTurns() []TurnRef {
 }
 
 func (a *App) command(line string) {
+	if fixed, menu, note := fzFixCommand(line, a.customNames()); len(menu) > 0 { // typos (fuzzy_cmd.go)
+		a.fzOffer(line, menu)
+		return
+	} else if fixed != "" {
+		a.ui.Notice(note)
+		line = fixed
+	}
 	f := strings.Fields(line)
 	cmd, args := f[0], f[1:]
 	argStr := strings.TrimSpace(strings.TrimPrefix(line, cmd))

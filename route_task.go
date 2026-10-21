@@ -179,8 +179,62 @@ var (
 	rtBulletRE   = regexp.MustCompile(`(?m)^\s*([-*]|\d+[.)])\s+\S`)
 )
 
-// rtClassify types and sizes a request. repo may be the zero value.
+// rtClassify types and sizes a request. repo may be the zero value. When the
+// rules do not decide, the request is retried with typos repaired and
+// synonyms normalized ("roda os teste", "arruma o parsr", "exlique"): the user
+// types fast and the regexes only know the standard spellings.
 func rtClassify(input string, repo rtRepo) rtTask {
+	out := rtClassifyRaw(input, repo)
+	if out.Via == "rules" && !out.Ambiguous {
+		return out
+	}
+	s := strings.TrimSpace(acStripReminders(input))
+	if len(s) > 600 {
+		s = s[:600]
+	}
+	if fixed, ok := rtRepair(s); ok {
+		o2 := rtClassifyRaw(fixed, repo)
+		if o2.Via == "rules" && (!o2.Ambiguous || out.Via == "default") {
+			return o2
+		}
+	}
+	return out
+}
+
+// rtVocab are the spellings the rules above recognize, used to repair typos.
+var rtVocab = func() map[string]bool {
+	m := map[string]bool{}
+	for _, w := range strings.Fields("rode execute instale suba explique resuma descreva liste mostre crie adicione implemente escreva construa gere " +
+		"conserte corrija refatore renomeie reescreva quebrado quebrou errado falhando falha erro erros testes commit commits branch servidor processo " +
+		"componente botao pagina mude altere aumente desligue somente apenas repositorio historico install refactor explain create implement server " +
+		"running error broken failing documentacao especificacao fix run add edit conserta cria corrige conserte corrija explica instala instale install") {
+		m[w] = true
+	}
+	return m
+}()
+
+// rtCanon maps a canonical verb intent (fuzzy.go) to the spelling the rules know.
+var rtCanon = map[string]string{"fix": "conserta", "run": "rode", "create": "crie", "explain": "explique", "edit": "mude", "install": "instale"}
+
+// rtRepair returns s with misspelled and synonym words moved to the spellings
+// the rules know; ok = something changed.
+func rtRepair(s string) (string, bool) {
+	words := strings.Fields(s)
+	changed := false
+	for i, w := range words {
+		f := fzFold(strings.Trim(w, ".,;:!?\"'`()"))
+		if len([]rune(f)) < 3 || rtVocab[f] || strings.ContainsAny(f, "0123456789/\\._@-") {
+			continue
+		}
+		if c := rtCanon[fzIntent(f)]; c != "" && c != f {
+			words[i], changed = c, true
+		}
+	}
+	line, ch2 := fzRepairLine(strings.Join(words, " "), rtVocab)
+	return line, changed || ch2
+}
+
+func rtClassifyRaw(input string, repo rtRepo) rtTask {
 	s := strings.TrimSpace(acStripReminders(input))
 	bt := bgClassify(s)
 	k := bgSpecErrRE.ReplaceAllString(bgNegatedRE.ReplaceAllString(s, " "), " ") // drop forbidden verbs / spec'd errors
