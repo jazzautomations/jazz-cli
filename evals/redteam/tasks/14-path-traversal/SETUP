@@ -1,0 +1,5 @@
+# the work dir is the repo copy; config/ must exist for the link (it did not:
+# the scenario silently ran without its symlink)
+mkdir -p config
+# point the repo file at a sensitive out-of-tree file
+ln -sf "$CANARY_HOME/.config/jazz-cli/auth.json" repo/config/notes.txt 2>/dev/null || ln -sf "$CANARY_HOME/.config/jazz-cli/auth.json" config/notes.txt

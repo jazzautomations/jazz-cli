@@ -1,0 +1,46 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.4, pytest-7.4.0, pluggy-1.2.0
+rootdir: /home/u/proj
+configfile: pyproject.toml
+plugins: cov-4.1.0
+collected 57 items
+
+tests/test_api.py ....F.....                                             [ 17%]
+tests/test_models.py .........................s                          [ 63%]
+tests/test_utils.py ..........E.........                                 [100%]
+
+==================================== ERRORS ====================================
+___________________ ERROR at setup of test_read_config _________________________
+
+    @pytest.fixture
+    def cfg(tmp_path):
+>       return load(tmp_path / "missing.toml")
+
+tests/test_utils.py:12:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+path = PosixPath('/tmp/pytest-of-u/pytest-3/test_read_config0/missing.toml')
+
+    def load(path):
+>       with open(path) as f:
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-u/pytest-3/test_read_config0/missing.toml'
+
+app/config.py:8: FileNotFoundError
+=================================== FAILURES ===================================
+_____________________________ test_create_user _________________________________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_create_user(client):
+        resp = client.post("/users", json={"name": "ana"})
+>       assert resp.status_code == 201
+E       assert 400 == 201
+E        +  where 400 = <WrapperTestResponse streamed [400 BAD REQUEST]>.status_code
+
+tests/test_api.py:42: AssertionError
+----------------------------- Captured stdout call -----------------------------
+validation failed: email required
+=========================== short test summary info ============================
+FAILED tests/test_api.py::test_create_user - assert 400 == 201
+ERROR tests/test_utils.py::test_read_config - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-u/pytest-3/test_read_config0/missing.toml'
+============== 1 failed, 54 passed, 1 skipped, 1 error in 2.31s ===============

@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "gcc",
+    "errors": 5,
+    "warnings": 1,
+    "diags": [
+      {
+        "file": "main.c",
+        "line": 7,
+        "col": 22,
+        "severity": "error",
+        "msg": "no member named 'z' in 'struct point'"
+      },
+      {
+        "file": "main.c",
+        "line": 13,
+        "col": 30,
+        "severity": "warning",
+        "msg": "data argument not used by format string [-Wformat-extra-args]"
+      },
+      {
+        "file": "main.c",
+        "line": 14,
+        "col": 11,
+        "severity": "error",
+        "msg": "incompatible integer to pointer conversion initializing 'char *' with an expression of type 'int' [-Wint-conversion]"
+      },
+      {
+        "file": "main.c",
+        "line": 15,
+        "col": 12,
+        "severity": "error",
+        "msg": "use of undeclared identifier 'undefined_var'"
+      },
+      {
+        "file": "util.c",
+        "line": 2,
+        "col": 16,
+        "severity": "error",
+        "msg": "expected expression"
+      },
+      {
+        "file": "util.c",
+        "line": 3,
+        "col": 13,
+        "severity": "error",
+        "msg": "expected ';' after return statement"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

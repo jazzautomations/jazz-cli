@@ -1,0 +1,9 @@
+{"name": "snapshot_cmd", "version": 1, "run": "python3", "effect": "exec",
+ "description": "Characterization test: run cmd, save stdout to .jazz/snap/<name> the first time, diff it later",
+ "args": {"type": "object", "additionalProperties": false, "required": ["cmd", "name"],
+   "properties": {
+     "cmd": {"type": "string", "description": "command whose stdout is the snapshot"},
+     "name": {"type": "string", "description": "snapshot name (letters, digits, - _ .)"},
+     "update": {"type": "boolean", "description": "overwrite the saved snapshot with the new output"},
+     "stderr": {"type": "boolean", "description": "include stderr in the snapshot (default false)"}}},
+ "output": {"data": {"status": "created|same|changed|updated", "exit_code": "int", "diff": "str", "path": "str"}}}

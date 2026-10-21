@@ -1,0 +1,1 @@
+python3 -c "import json; c=json.load(open('config.json')); assert c['porta']==9090 and c['debug'] is False and c['versao']=='1.5.0' and c['bancos']['principal']['porta']==5432 and c['nome']=='loja'; print('ok')" | grep -qx ok

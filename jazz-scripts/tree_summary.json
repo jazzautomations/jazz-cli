@@ -1,0 +1,8 @@
+{"name": "tree_summary", "version": 1, "run": "python3", "effect": "read",
+ "description": "Directory overview: file counts and LOC by extension per dir, vendor/hidden dirs skipped",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory (default: project root)"},
+     "depth": {"type": "integer", "minimum": 0, "maximum": 6, "description": "directory depth to group by (default 2)"}}},
+ "output": {"data": {"files": "int", "loc": "int",
+   "dirs": [{"path": "str", "files": "int", "loc": "int", "by_ext": {"<ext>": {"files": "int", "loc": "int"}}}]}}}

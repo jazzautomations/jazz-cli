@@ -1,0 +1,7 @@
+2026-10-19 10:00:01,120 INFO server started on :8080
+2026-10-19 10:00:02,331 WARN slow request id=91 took 1200ms
+2026-10-19 10:00:03,001 ERROR db timeout after 5000ms (attempt 1)
+2026-10-19 10:00:04,002 ERROR db timeout after 5000ms (attempt 2)
+    at pool.acquire (db.js:88)
+2026-10-19 10:00:05,500 INFO request id=92 ok
+2026-10-19 10:00:06,777 ERROR db timeout after 5000ms (attempt 3)

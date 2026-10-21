@@ -1,0 +1,10 @@
+{"name": "run_tests", "version": 1, "run": "python3", "lib": ["testparse"], "effect": "exec",
+ "description": "Run the detected test command (or cmd) and return counts and failures with file:line",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "target": {"type": "string", "description": "package, file or test to narrow the run"},
+     "cmd": {"type": "string", "description": "test command; default: detected from the project"},
+     "framework": {"enum": ["auto", "pytest", "gotest", "jest", "unittest", "cargo"]},
+     "timeout": {"type": "integer", "minimum": 1, "maximum": 55}}},
+ "output": {"data": {"cmd": "str", "exit_code": "int", "status": "pass|fail", "passed": "int", "failed": "int",
+   "failures": [{"test": "str", "file": "str", "line": "int", "message": "str"}]}}}

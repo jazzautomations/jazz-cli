@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "log",
+    "format": "log",
+    "log": {
+      "entries": 8,
+      "levels": {
+        "error": 3,
+        "info": 4,
+        "warn": 1
+      },
+      "first": "2026-10-19T10:00:01Z",
+      "last": "2026-10-19T10:00:11Z",
+      "top": [
+        {
+          "level": "error",
+          "count": 3,
+          "msg": "upstream refused"
+        },
+        {
+          "level": "warn",
+          "count": 1,
+          "msg": "slow query"
+        },
+        {
+          "level": "info",
+          "count": 2,
+          "msg": "request"
+        },
+        {
+          "level": "info",
+          "count": 1,
+          "msg": "starting"
+        },
+        {
+          "level": "info",
+          "count": 1,
+          "msg": "listening"
+        }
+      ],
+      "samples": [
+        "{\"time\":\"2026-10-19T10:00:04Z\",\"level\":\"warn\",\"msg\":\"slow query\",\"ms\":1200}",
+        "{\"time\":\"2026-10-19T10:00:05Z\",\"level\":\"error\",\"msg\":\"upstream refused\",\"host\":\"10.0.0.7\"}",
+        "{\"time\":\"2026-10-19T10:00:06Z\",\"level\":\"error\",\"msg\":\"upstream refused\",\"host\":\"10.0.0.8\"}",
+        "time=2026-10-19T10:00:11Z level=error msg=\"upstream refused\" host=10.0.0.9"
+      ]
+    }
+  },
+  "unparsed": [],
+  "warnings": []
+}

@@ -1,0 +1,1 @@
+[ "$(tr -dc 0-9 < resposta.txt)" = "1" ] && cmp -s misterio.py .orig_misterio.py

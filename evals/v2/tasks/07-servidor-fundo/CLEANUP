@@ -1,0 +1,2 @@
+# Encerra (só pelos PIDs registrados na auditoria) servidores que o agente deixou vivos.
+python3 "${TASK:?}/.hidden/check07.py" cleanup

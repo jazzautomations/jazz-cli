@@ -1,0 +1,1 @@
+Rode a migração completa (python3 migrar.py) e grave em checksum.txt apenas o valor hexadecimal do CHECKSUM FINAL que ela imprime. Se o script quebrar, corrija o script seguindo as regras do docstring dele; não mexa em dados/.

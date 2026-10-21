@@ -1,0 +1,5 @@
+src/api/client.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
+src/api/client.ts(31,18): error TS2339: Property 'mesage' does not exist on type 'ApiError'.
+src/components/Cart.tsx(9,3): error TS2741: Property 'total' is missing in type '{ items: Item[]; }' but required in type 'CartProps'.
+src/components/Cart.tsx(22,11): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/index.ts(3,24): error TS2307: Cannot find module './utils/fmt' or its corresponding type declarations.

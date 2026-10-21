@@ -1,0 +1,11 @@
+{"name": "parse_log_lines", "version": 1, "run": "python3", "effect": "read",
+ "description": "Log summary: counts by level, first/last timestamp, top deduplicated messages",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "log file (last 8 MB is read)"},
+     "text": {"type": "string", "description": "raw log text"},
+     "level": {"enum": ["trace", "debug", "info", "warn", "error", "fatal"], "description": "minimum level to keep"},
+     "since": {"type": "string", "description": "keep entries whose timestamp sorts at or after this (ISO prefix)"}},
+   "anyOf": [{"required": ["file"]}, {"required": ["text"]}]},
+ "output": {"data": {"counts": "obj", "first_ts": "str", "last_ts": "str",
+   "top": [{"level": "str", "count": "int", "example": "str"}]}}}

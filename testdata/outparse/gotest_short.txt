@@ -1,0 +1,11 @@
+--- FAIL: TestAddWrong (0.00s)
+    calc_test.go:17: Add(2, 2) = 4, want 5
+--- FAIL: TestTable (0.00s)
+    --- FAIL: TestTable/sum#01 (0.00s)
+        calc_test.go:26: Add(2, 3) = 5
+            	want 6
+FAIL
+FAIL	example.com/gt/calc	0.116s
+?   	example.com/gt/notests	[no test files]
+ok  	example.com/gt/util	0.211s
+FAIL

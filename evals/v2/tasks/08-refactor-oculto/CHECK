@@ -1,0 +1,10 @@
+# 08-refactor-oculto: estrutura nova (comum.py, sem cópias) + bateria oculta de comportamento
+# (ouro gravado do código original, fora da pasta de trabalho).
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+diff -r -x __pycache__ "$T/tests" tests >/dev/null || fail "tests/ foi alterado"
+python3 -m unittest -q >/dev/null 2>&1 || fail "python3 -m unittest falha"
+out=$(python3 "$T/.hidden/estrutura08.py") || fail "${out#FAIL: }"
+out=$(python3 "$T/.hidden/bateria08.py" conferir "$T/.hidden/ouro.json" 2>&1) || fail "${out#FAIL: }"
+echo PASS

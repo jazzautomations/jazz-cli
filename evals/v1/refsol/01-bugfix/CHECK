@@ -1,0 +1,1 @@
+python3 test_calc.py 2>/dev/null | grep -qx ok && cmp -s test_calc.py .orig_test_calc.py

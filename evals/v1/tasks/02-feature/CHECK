@@ -1,0 +1,1 @@
+python3 -c "from texto import slugify as s; assert s('Olá, Mundo!  Ação')=='ola-mundo-acao'; assert s('  --Já é__tarde!! ')=='ja-e-tarde'; assert s('ÇÃO 123')=='cao-123'; print('ok')" | grep -qx ok && test -f test_texto.py

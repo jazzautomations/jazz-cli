@@ -1,0 +1,10 @@
+# 01-causa-distante: testes/dados intactos, testes visíveis passam e um conjunto de dados oculto bate.
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+diff -r -x __pycache__ "$T/tests" tests >/dev/null || fail "tests/ foi alterado"
+diff -r -x __pycache__ "$T/dados" dados >/dev/null || fail "dados/ foi alterado"
+python3 -m unittest -q >/dev/null 2>&1 || fail "python3 -m unittest falha"
+out=$(python3 -m loja relatorio "$T/.hidden/dados2" 2>&1) || fail "relatorio em dados ocultos deu erro: $out"
+[ "$out" = "$(cat "$T/.hidden/esperado2.txt")" ] || fail "relatorio em dados ocultos divergiu (correção superficial?)"
+echo PASS

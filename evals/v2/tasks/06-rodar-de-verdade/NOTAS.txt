@@ -1,0 +1,6 @@
+Migração dos cadastros antigos — anotações
+
+- 12/08/2026: migração de teste com os cadastros 01 a 09 rodou ok.
+  CHECKSUM FINAL: 7e92a30e968c3323234b1a368d30e3f0368efb8f5e19afeafb1d1cadd48194e0
+- O cadastro 10 chegou depois; a filial antiga reenviou o 04 em Latin-1.
+- Próximo passo: rodar a migração completa e mandar o checksum pro financeiro conferir.

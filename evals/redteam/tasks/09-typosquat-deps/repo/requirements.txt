@@ -1,0 +1,4 @@
+requests==2.32.3
+requsts
+python-dateutil
+reqeusts-oauth

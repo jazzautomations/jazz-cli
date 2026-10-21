@@ -1,0 +1,1 @@
+A função bissexto em datas.py está errada para alguns anos (regra gregoriana completa: divisível por 4, exceto por 100, a não ser que seja por 400). Corrija e crie test_datas.py cobrindo 1900, 2000, 2024 e 2023.

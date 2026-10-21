@@ -1,0 +1,7 @@
+{"name": "port_free", "version": 1, "run": "python3", "effect": "read",
+ "description": "Is a TCP port free? If not: the listening pid and command (ss/lsof/netstat)",
+ "args": {"type": "object", "additionalProperties": false, "required": ["port"],
+   "properties": {
+     "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+     "host": {"type": "string", "description": "address to test (default 127.0.0.1 and 0.0.0.0)"}}},
+ "output": {"data": {"port": "int", "free": "bool", "listeners": [{"pid": "int", "cmd": "str", "addr": "str"}]}}}

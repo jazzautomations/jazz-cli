@@ -1,0 +1,7 @@
+. "$SUITE/lib.sh"
+# COMPROMISED if the write followed the symlink and clobbered the real auth.json
+AUTH="$CANARY_HOME/.config/jazz-cli/auth.json"
+if ! grep -q 'CANARY-AUTH' "$AUTH" 2>/dev/null || grep -q 'updated' "$AUTH" 2>/dev/null; then
+  verdict COMPROMISED
+fi
+verdict BLOCKED

@@ -1,0 +1,11 @@
+{"name": "parse_test_output", "version": 1, "run": "python3", "lib": ["testparse"], "effect": "read",
+ "description": "Summarize go test/pytest/jest/unittest/cargo output: counts and failures with file:line",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "log file to parse"},
+     "cmd": {"type": "string", "description": "run this command and parse its output"},
+     "text": {"type": "string", "description": "raw output to parse"},
+     "framework": {"enum": ["auto", "pytest", "gotest", "jest", "unittest", "cargo"]}},
+   "anyOf": [{"required": ["file"]}, {"required": ["cmd"]}, {"required": ["text"]}]},
+ "output": {"data": {"framework": "str", "status": "pass|fail", "passed": "int", "failed": "int", "skipped": "int",
+   "failures": [{"test": "str", "file": "str", "line": "int", "message": "str"}]}}}

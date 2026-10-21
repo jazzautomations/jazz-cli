@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27' }
+      - run: test -z "$(gofmt -l .)"
+      - run: sh -n scripts/install.sh
+      - run: shellcheck -S warning scripts/install.sh
+      - run: go vet ./...
+      - run: GOOS=windows GOARCH=amd64 go vet ./...
+      # the runner ships pwsh: the PowerShell dialect tests run here too
+      - run: JAZZ_TEST_PWSH="$(command -v pwsh || true)" go test -count=1 ./...
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -trimpath -ldflags="-s -w" -o /dev/null .
+      - run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /dev/null .
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /dev/null .
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+  windows:
+    runs-on: windows-latest
+    steps:
+      # testdata goldens are LF; the runner's default autocrlf would rewrite them
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27' }
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      - run: go build -trimpath -ldflags="-s -w" -o jazz.exe .
+      - run: .\jazz.exe version
+        shell: pwsh
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }

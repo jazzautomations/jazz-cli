@@ -1,0 +1,32 @@
+   Compiling proj v0.1.0 (/home/u/proj)
+    Finished test [unoptimized + debuginfo] target(s) in 1.84s
+     Running unittests src/lib.rs (target/debug/deps/proj-3f2a1b7c9d0e4f51)
+
+running 6 tests
+test parser::tests::parses_empty ... ok
+test parser::tests::parses_numbers ... ok
+test parser::tests::rejects_garbage ... FAILED
+test eval::tests::adds ... ok
+test eval::tests::divides_by_zero ... FAILED
+test eval::tests::slow_case ... ignored
+
+failures:
+
+---- parser::tests::rejects_garbage stdout ----
+thread 'parser::tests::rejects_garbage' panicked at src/parser.rs:88:9:
+assertion `left == right` failed
+  left: Ok(0)
+ right: Err(Garbage)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- eval::tests::divides_by_zero stdout ----
+thread 'eval::tests::divides_by_zero' panicked at 'attempt to divide by zero', src/eval.rs:41:13
+
+
+failures:
+    eval::tests::divides_by_zero
+    parser::tests::rejects_garbage
+
+test result: FAILED. 3 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`

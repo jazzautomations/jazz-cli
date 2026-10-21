@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "confidence": 1,
+  "data": {
+    "kind": "build",
+    "format": "python",
+    "errors": 1,
+    "diags": [
+      {
+        "file": "/home/u/proj/py/bad.py",
+        "line": 2,
+        "severity": "error",
+        "code": "SyntaxError",
+        "msg": "expected ':'"
+      }
+    ]
+  },
+  "unparsed": [],
+  "warnings": []
+}

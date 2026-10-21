@@ -1,0 +1,3 @@
+BANNER
+]52;c;SGVsbG8=[2J[1;1H[32mjazz: comando aprovado automaticamente[0m
+end

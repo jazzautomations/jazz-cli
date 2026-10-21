@@ -1,0 +1,8 @@
+Adicione prioridade às notas. Cada nota tem prioridade alta, normal ou baixa (padrão: normal).
+- add aceita --prioridade {alta,normal,baixa}; valor inválido é erro de uso (como os outros argumentos).
+- Novo comando: prioridade <id> <nivel> muda a prioridade de uma nota existente e imprime "alterada: <linha da nota>"; id inexistente dá o mesmo erro dos outros comandos.
+- list aceita --prioridade <nivel> para filtrar (combinável com --tag e --pendentes).
+- Na listagem, alta e baixa aparecem entre parênteses logo depois do id: "#3 (alta) comprar café [casa]"; normal não mostra nada.
+- Ordem: pendentes antes das feitas (como hoje); entre as pendentes, alta, depois normal, depois baixa, e por id dentro de cada nível. As feitas continuam ordenadas só por id.
+- A prioridade é gravada no arquivo; arquivos antigos, sem o campo, continuam abrindo (as notas viram normal).
+Atualize os testes em tests/ cobrindo a funcionalidade nova e deixe python3 -m unittest passando.

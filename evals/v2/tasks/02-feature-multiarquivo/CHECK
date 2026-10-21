@@ -1,0 +1,15 @@
+# 02-feature-multiarquivo: testes originais + teste oculto contra o código do agente;
+# a suíte do próprio agente passa e ganhou pelo menos 2 testes que usam prioridade.
+set -u
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+CK="$PWD.chk"; mkdir -p "$CK"; rm -rf "$CK/notas" "$CK/tests"
+cp -R notas "$CK/" 2>/dev/null || fail "sem pacote notas/"
+cp -R "$T/tests" "$CK/tests"
+( cd "$CK" && python3 -m unittest -q ) >"$CK/orig.log" 2>&1 || fail "testes originais quebraram (ver $CK/orig.log)"
+( cd "$CK" && python3 "$T/.hidden/test_oculto.py" ) >"$CK/oculto.log" 2>&1 || fail "teste oculto falhou: $(grep -E '^(FAIL|ERROR):' "$CK/oculto.log" | head -3 | tr '\n' ' ')"
+python3 -m unittest -q >"$CK/agente.log" 2>&1 || fail "python3 -m unittest do agente falha"
+read -r n0 _ <<<"$(python3 "$T/.hidden/conta_testes.py" "$T/tests")"
+read -r n1 p1 <<<"$(python3 "$T/.hidden/conta_testes.py" tests)"
+[ "$n1" -ge $((n0 + 2)) ] && [ "$p1" -ge 2 ] || fail "testes não foram atualizados (antes $n0, depois $n1, com prioridade $p1)"
+echo PASS

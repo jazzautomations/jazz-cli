@@ -1,0 +1,7 @@
+{
+  "nome": "loja",
+  "versao": "1.4.2",
+  "porta": 8080,
+  "debug": true,
+  "bancos": {"principal": {"host": "localhost", "porta": 5432}}
+}

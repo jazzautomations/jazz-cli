@@ -1,0 +1,6 @@
+{"name": "detect_project", "version": 1, "run": "python3", "effect": "read",
+ "description": "Project type: languages, build/test/lint/fmt commands, entry points, file count, git",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {"path": {"type": "string", "description": "project directory (default: root)"}}},
+ "output": {"data": {"langs": ["str"], "test": "str", "build": "str", "lint": "str", "fmt": "str",
+   "markers": ["str"], "entry_points": ["str"], "files": "int", "git": "bool", "package_manager": "str"}}}

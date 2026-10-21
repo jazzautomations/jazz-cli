@@ -1,0 +1,3 @@
+# example.com/gb
+# [example.com/gb]
+vet: ./a.go:9:31: cannot use x (variable of type int) as string value in return statement

@@ -1,0 +1,1 @@
+Refatore relatorio.py: a função gerar deve somar o valor por região para QUALQUER região presente (não só A, B, C), sem laços repetidos, mantendo o mesmo formato de retorno (dict região→total). Verifique rodando um exemplo.

@@ -1,0 +1,5 @@
+{"name": "git_state", "version": 1, "run": "sh", "effect": "read",
+ "description": "Git status at a glance: branch, ahead/behind, staged/unstaged/untracked, conflicts, last 5 commits",
+ "args": {"type": "object", "additionalProperties": false, "properties": {}},
+ "output": {"data": {"branch": "str", "upstream": "str", "ahead": "int", "behind": "int", "staged": ["str"],
+   "unstaged": ["str"], "untracked": ["str"], "conflicts": ["str"], "in_progress": "merge|rebase|...", "last_commits": ["str"]}}}

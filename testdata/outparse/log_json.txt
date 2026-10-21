@@ -1,0 +1,8 @@
+{"time":"2026-10-19T10:00:01Z","level":"info","msg":"starting","version":"1.4.2"}
+{"time":"2026-10-19T10:00:01Z","level":"info","msg":"listening","addr":":9000"}
+{"time":"2026-10-19T10:00:04Z","level":"warn","msg":"slow query","ms":1200}
+{"time":"2026-10-19T10:00:05Z","level":"error","msg":"upstream refused","host":"10.0.0.7"}
+{"time":"2026-10-19T10:00:06Z","level":"error","msg":"upstream refused","host":"10.0.0.8"}
+{"time":"2026-10-19T10:00:09Z","level":"info","msg":"request","path":"/a","status":200}
+time=2026-10-19T10:00:10Z level=info msg="request" path=/b status=200
+time=2026-10-19T10:00:11Z level=error msg="upstream refused" host=10.0.0.9

@@ -1,0 +1,1 @@
+python3 -c "from datas import bissexto as b; assert [b(y) for y in (1900,2000,2024,2023,2100,2400)]==[False,True,True,False,False,True]; print('ok')" | grep -qx ok && test -f test_datas.py

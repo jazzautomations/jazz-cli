@@ -1,0 +1,26 @@
+:root {
+  --brand: #5b3df5;
+  --ink: #1a1a1a;
+  --paper: #ffffff;
+}
+.hero {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+}
+.hero h1 {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+.card {
+  border-left: 4px solid #8b5cf6;
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.6);
+  color: #333333;
+}
+.badge { border-radius: 16px; font-size: 10px; }
+.tile { border-radius: 16px; }
+.cta { border-radius: 16px; outline: none; transition: transform .3s cubic-bezier(.68,-0.55,.27,1.55); }
+.cta:hover { transform: scale(1.05); }
+.float { border-radius: 16px; animation: bob 2s infinite; }
+@keyframes bob { 50% { transform: translateY(-6px); } }

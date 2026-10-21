@@ -1,0 +1,35 @@
+
+ RUN  v1.6.0 /home/u/proj
+
+ ✓ src/math.test.ts (12 tests) 4ms
+ ✓ src/strings.test.ts (8 tests) 3ms
+ ❯ src/cart.test.ts (5 tests | 1 failed) 9ms
+   ❯ src/cart.test.ts > Cart > applies discount
+     → expected 90 to be 81 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cart.test.ts > Cart > applies discount
+AssertionError: expected 90 to be 81 // Object.is equality
+
+- Expected
++ Received
+
+- 81
++ 90
+
+ ❯ src/cart.test.ts:23:30
+     21|     const cart = new Cart([{ price: 100 }]);
+     22|     cart.discount(0.1);
+     23|     expect(cart.total()).toBe(81);
+       |                              ^
+     24|   });
+     25| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 24 passed (25)
+   Start at  10:42:13
+   Duration  612ms (transform 120ms, setup 0ms, collect 210ms, tests 16ms, environment 0ms, prepare 180ms)
+

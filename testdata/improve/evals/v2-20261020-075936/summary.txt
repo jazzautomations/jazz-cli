@@ -1,0 +1,5 @@
+jazz: jazz-cli 0.4.2  modelo: kilo/poolside/laguna-s-2.1:free  prazo: 900s
+01-causa-distante        PASS    223s  tools=21  rc=0   PASS
+03-arquivo-grande        PASS    246s  tools=10  rc=0   PASS
+09-ler-design            PASS    693s  tools=22  rc=0   PASS
+TOTAL: 3/3

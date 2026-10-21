@@ -1,0 +1,1 @@
+Implemente a função horas_extras de ponto/calculo.py (hoje ela levanta NotImplementedError) e adicione testes para ela em tests/.

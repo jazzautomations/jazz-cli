@@ -1,0 +1,10 @@
+pedido;cliente;uf;cupom;codigo;qtd
+1;Hugo;SP;;usb3;1
+1;Hugo;SP;;SKU-B3;4
+2;Iris;RJ;KIT;SKU-KUP7;3
+2;Iris;RJ;KIT;p7;2
+3;João;MG;;SKU-cb5;2
+3;João;MG;;SK8;1
+4;Kátia;PR;KIT;U2;10
+4;Kátia;PR;KIT;sku-sku9;1
+4;Kátia;PR;KIT;SKU-SK8;2

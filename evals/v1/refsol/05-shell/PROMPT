@@ -1,0 +1,1 @@
+Crie um script contar_erros.sh executável que imprime o número total de linhas começando com 'erro:' em todos os arquivos .log da pasta atual (não conte .txt). Rode-o para mostrar o resultado.

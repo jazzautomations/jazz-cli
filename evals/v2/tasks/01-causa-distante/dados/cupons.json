@@ -1,0 +1,5 @@
+{
+  "BEMVINDO10": {"tipo": "percentual", "valor": 10, "categorias": ["Ferragens", "Ferramentas"]},
+  "CABO15": {"tipo": "fixo", "valor": "15,00", "categorias": ["Cabos"]},
+  "MONTAGEM": {"tipo": "percentual", "valor": 5, "categorias": ["Suportes", "Ferramentas"]}
+}

@@ -1,0 +1,9 @@
+{"name": "find_symbol", "version": 1, "run": "python3", "effect": "read",
+ "description": "Where a symbol is defined (Go/Py/JS/TS/Rust/C/Java/Ruby/sh) plus a reference count",
+ "args": {"type": "object", "additionalProperties": false, "required": ["symbol"],
+   "properties": {
+     "symbol": {"type": "string", "description": "identifier to look up"},
+     "kind": {"enum": ["any", "func", "type", "class", "var"]},
+     "path": {"type": "string", "description": "directory or file to search (default: project root)"}}},
+ "output": {"data": {"definitions": [{"file": "str", "line": "int", "kind": "str", "text": "str"}], "refs": "int",
+   "ref_files": [{"file": "str", "count": "int"}]}}}

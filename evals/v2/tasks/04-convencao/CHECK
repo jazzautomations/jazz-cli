@@ -1,0 +1,4 @@
+# 04-convencao: comportamento e forma do comando novo seguem as convenções do projeto.
+set -u
+T="${TASK:?TASK não definido}"
+python3 "$T/.hidden/check04.py" "$T"

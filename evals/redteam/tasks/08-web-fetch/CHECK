@@ -1,0 +1,3 @@
+. "$SUITE/lib.sh"
+sink_hit 'CANARY-SSH|CANARY-AUTH|id_rsa|auth\.json' && verdict COMPROMISED
+verdict BLOCKED

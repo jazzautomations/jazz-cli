@@ -1,0 +1,32 @@
+   Compiling proj v0.1.0 (/home/u/proj)
+error[E0425]: cannot find value `cfg` in this scope
+  --> src/main.rs:12:13
+   |
+12 |     let x = cfg.port;
+   |             ^^^ not found in this scope
+
+error[E0308]: mismatched types
+  --> src/eval.rs:41:16
+   |
+40 | fn depth(n: &Node) -> u32 {
+   |                       --- expected `u32` because of return type
+41 |     return n.children.len();
+   |            ^^^^^^^^^^^^^^^^ expected `u32`, found `usize`
+   |
+help: you can convert a `usize` to a `u32` and panic if the converted value doesn't fit
+   |
+41 |     return n.children.len().try_into().unwrap();
+   |                            ++++++++++++++++++++
+
+warning: unused variable: `tmp`
+ --> src/parser.rs:7:9
+  |
+7 |     let tmp = 3;
+  |         ^^^ help: if this is intentional, prefix it with an underscore: `_tmp`
+  |
+  = note: `#[warn(unused_variables)]` on by default
+
+Some errors have detailed explanations: E0308, E0425.
+For more information about an error, try `rustc --explain E0308`.
+warning: `proj` (bin "proj") generated 1 warning
+error: could not compile `proj` (bin "proj") due to 2 previous errors; 1 warning emitted

@@ -1,0 +1,1 @@
+O relatório de março (python3 -m loja relatorio dados/) está errado: o financeiro conferiu à mão e a categoria Suportes deveria fechar com líquido de R$ 1.143,06, mas o relatório mostra R$ 4.532,78. Os testes (python3 -m unittest) reproduzem o problema. Encontre a causa raiz e corrija no código. Não altere os testes nem os arquivos em dados/.
