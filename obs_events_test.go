@@ -286,10 +286,11 @@ func TestObsWriteAheadRecoversResult(t *testing.T) {
 	s.ToolStart(tc, 1)
 	s.ToolResult(tc, 1, ToolOutput{Text: "ok  52 passed, 2 failed"}, time.Second)
 	s.Close() // crash: the tool message is never written
-	_, msgs, _, _, err := LoadSession(s.Path)
+	rs, msgs, _, _, err := LoadSession(s.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	rs.Close() // Windows cannot remove a file with an open handle
 	last := msgs[len(msgs)-1]
 	if last.Role != "tool" || !strings.Contains(last.Content, "52 passed") || !strings.Contains(last.Content, "write-ahead") {
 		t.Fatalf("not recovered: %+v", last)

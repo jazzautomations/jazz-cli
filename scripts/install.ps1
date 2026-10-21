@@ -26,6 +26,13 @@ $JazzPubKey = ''
     try { Add-Type -AssemblyName System.Numerics } catch {}
 
     function Fail([string]$msg) { throw "jazz: $msg" }
+    # Get-FileHash sits in a module that Windows PowerShell 5.1 cannot autoload when PSModulePath was inherited from pwsh 7; use .NET directly
+    function Get-Sha256Hex([string]$path) {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $fs = [System.IO.File]::OpenRead($path)
+        try { return ([System.BitConverter]::ToString($sha.ComputeHash($fs)) -replace '-', '').ToLower() }
+        finally { $fs.Dispose(); $sha.Dispose() }
+    }
 
     # ---- Ed25519 verification (RFC 8032, section 5.1.7) ----
     function Test-JazzEd25519([byte[]]$PublicKey, [byte[]]$Message, [byte[]]$Signature) {
@@ -163,7 +170,7 @@ $JazzPubKey = ''
             if ($f.Count -ge 2 -and ($f[1] -eq $asset -or $f[1] -eq "*$asset")) { $want = $f[0].ToLower() }
         }
         if (-not $want) { Fail "o manifesto não lista $asset" }
-        $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $exeTmp).Hash.ToLower()
+        $got = Get-Sha256Hex $exeTmp
         if ($got -ne $want) { Fail "sha256 não confere (esperado $want, recebido $got)" }
 
         New-Item -ItemType Directory -Force -Path $binDir | Out-Null

@@ -50,10 +50,11 @@ func TestSessionTreeRewindBranches(t *testing.T) {
 	if rw.T != "rewind" || rw.ParentID != ents[2].ID {
 		t.Fatalf("rewind parent = %q, want %q", rw.ParentID, ents[2].ID)
 	}
-	_, msgs, _, _, err := LoadSession(s.Path)
+	s1, msgs, _, _, err := LoadSession(s.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	s1.Close() // Windows cannot remove a file with an open handle
 	if got := strings.Join(sessContents(msgs), ","); got != "user:a,assistant:A,user:c" {
 		t.Fatalf("tree walk = %s", got)
 	}
