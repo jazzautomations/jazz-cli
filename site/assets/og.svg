@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <title>jazz-cli: um agente de código no terminal</title>
+  <rect width="1200" height="630" fill="#242933"/>
+  <rect x="64" y="64" width="1072" height="502" rx="18" fill="#2E3440" stroke="#434C5E" stroke-width="2"/>
+  <path d="M64 112h1072" stroke="#434C5E" stroke-width="2"/>
+  <circle cx="94" cy="88" r="7" fill="#BF616A"/><circle cx="120" cy="88" r="7" fill="#EBCB8B"/><circle cx="146" cy="88" r="7" fill="#A3BE8C"/>
+  <text x="184" y="95" font-size="20" fill="#A7B1C2" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace">jazz — ~/projeto</text>
+  <g>
+    <text x="210" y="150" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="246" y="150" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="282" y="150" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="90" lengthAdjust="spacingAndGlyphs">█████</text>
+    <text x="372" y="150" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="408" y="150" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="126" lengthAdjust="spacingAndGlyphs">███████</text>
+    <text x="534" y="150" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="552" y="150" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="126" lengthAdjust="spacingAndGlyphs">███████</text>
+    <text x="678" y="150" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="210" y="180" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="246" y="180" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="264" y="180" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="300" y="180" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">╔══</text>
+    <text x="354" y="180" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="390" y="180" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="72" lengthAdjust="spacingAndGlyphs">╗╚══</text>
+    <text x="462" y="180" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="516" y="180" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="90" lengthAdjust="spacingAndGlyphs">╔╝╚══</text>
+    <text x="606" y="180" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="660" y="180" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="210" y="210" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="246" y="210" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="264" y="210" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="126" lengthAdjust="spacingAndGlyphs">███████</text>
+    <text x="390" y="210" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="444" y="210" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="498" y="210" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="588" y="210" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="642" y="210" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="120" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="210" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="246" y="240" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="264" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="300" y="240" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">╔══</text>
+    <text x="354" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="390" y="240" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="426" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="480" y="240" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="570" y="240" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">███</text>
+    <text x="624" y="240" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="120" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╚</text>
+    <text x="138" y="270" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="90" lengthAdjust="spacingAndGlyphs">█████</text>
+    <text x="228" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">╔╝</text>
+    <text x="264" y="270" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="300" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="354" y="270" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="36" lengthAdjust="spacingAndGlyphs">██</text>
+    <text x="390" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">║</text>
+    <text x="408" y="270" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="126" lengthAdjust="spacingAndGlyphs">███████</text>
+    <text x="534" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="552" y="270" fill="#88C0D0" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="126" lengthAdjust="spacingAndGlyphs">███████</text>
+    <text x="678" y="270" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="18" lengthAdjust="spacingAndGlyphs">╗</text>
+    <text x="138" y="300" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="108" lengthAdjust="spacingAndGlyphs">╚════╝</text>
+    <text x="264" y="300" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="54" lengthAdjust="spacingAndGlyphs">╚═╝</text>
+    <text x="354" y="300" fill="#5E81AC" font-size="30" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace" textLength="342" lengthAdjust="spacingAndGlyphs">╚═╝╚══════╝╚══════╝</text>
+  </g>
+  <text x="120" y="400" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-weight="700" font-size="44" fill="#ECEFF4">Um agente de código no terminal</text>
+  <text x="120" y="446" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="28" fill="#A7B1C2">que roda em qualquer máquina — até num Pentium M de 2005.</text>
+  <text x="120" y="506" font-size="22" fill="#ECEFF4" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace"><tspan fill="#EBCB8B">›</tspan> Go · binário estático · i386 a arm64 · MIT</text>
+  <text x="120" y="548" font-size="22" fill="#88C0D0" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, Consolas, monospace">jazz-cli.jazzautomations.com.br</text>
+</svg>
