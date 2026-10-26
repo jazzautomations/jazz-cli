@@ -1,0 +1,3 @@
+# a real repo with one commit, so the agent's commit is the only trigger
+chmod +x .githooks/pre-commit
+git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init

@@ -51,6 +51,8 @@ type Agent struct {
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
 	pendingNote []string
 
+	mq *MsgQueue // messages typed during the turn: steer / follow-up (queue.go); guarded by steerMu
+
 	textRefs   map[string]bool // refs that rejected native tools in this session (G15)
 	textSys    string          // cached System + text-tools block
 	textSysFor string          // the System textSys was built from
@@ -67,6 +69,7 @@ type Agent struct {
 
 	apMu sync.Mutex
 	ap   *apStore // "sempre" answers to prompts with a risk reason (approvals.go)
+	dgAl *apStore // "sempre" answers of the diff review (diffguard.go)
 
 	fileRules      []SteeringRule // fileMatch steering rules (steering.go), loaded lazily
 	steeringLoaded bool
@@ -366,13 +369,17 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 
 	defer func() {
 		a.ptEnd() // early calls still running are cancelled and discarded (partools.go)
+		if s := a.dgReview(ctx); s != "" {
+			stop = s // risky diff refused at the end of the turn (diffguard.go)
+		}
 		a.turnModel = turnModel
 		a.parkSteer()
+		a.qTurnEnd(stop, err) // follow-ups start only after a turn that ended well (queue.go)
 		a.bgEndTurn(stop, steps)
 		a.acTurnDone(ctx, lt, stop, steps)                 // plan cache (plancache.go)
 		a.obAfterStep(steps)                               // traced checkpoint of pending writes (obs.go)
 		a.obTurnEnd(stop, steps, toolsRun, time.Since(t0)) // obs.go
-		a.ui.TurnEnd(TurnStats{Dur: time.Since(t0), Tools: toolsRun, Usage: a.turnUsage, Model: turnModel, Ctx: a.estTokens(), Win: a.window(), Cost: a.turnUsage.Cost, Stop: string(stop), Steps: steps})
+		a.ui.TurnEnd(TurnStats{Dur: time.Since(t0), Tools: toolsRun, Usage: a.turnUsage, Model: turnModel, Ctx: a.estTokens(), Win: a.window(), Cost: a.turnUsage.Cost, Stop: string(stop), Steps: steps, Redacted: a.rdTurnCount()})
 		if time.Since(t0) > 20*time.Second {
 			a.ui.Bell()
 		}
@@ -386,7 +393,8 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 		input = a.grSanitizeInput(input) // pasted text can smuggle invisible instructions (sanitize.go)
 	}
 	lt = a.acBeginTurnLoop(ctx, input)
-	a.obTurnStart(lt.input) // obs.go
+	a.obTurnStart(lt.input)       // obs.go
+	a.sessAutoTitleTurn(lt.input) // first turn of a new session: its title (sessions_ui.go)
 	if !a.sub && a.Hooks.Has(HookUserPromptSubmit) {
 		hr := a.Hooks.Run(ctx, HookUserPromptSubmit, "", map[string]any{"session_id": a.SessionID, "prompt": input})
 		a.hookWarnings(hr)
@@ -424,7 +432,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
-	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input), Images: a.attach})
+	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input), Images: a.attach})
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
@@ -691,6 +699,9 @@ turnLoop:
 				a.append(Message{Role: "user", Content: strings.Join(steer, "\n\n")})
 				continue
 			}
+			if a.qInject("final") { // queued steer messages (queue.go)
+				continue
+			}
 			if !a.sub && stopHooks < 3 && a.Hooks.Has(HookStop) {
 				hr := a.Hooks.Run(ctx, HookStop, "", map[string]any{"session_id": a.SessionID, "stop_hook_active": stopHooks > 0})
 				a.hookWarnings(hr)
@@ -723,8 +734,9 @@ turnLoop:
 			}
 			imgMsgs = nil
 		}
-		ps := a.ptBegin(ctx, calls) // read-class neighbours run in parallel (partools.go)
-		var fan saResults           // results of task calls run in parallel in this batch
+		calls = rdRestoreCalls(calls) // placeholders the model echoed get their real value locally (redact.go)
+		ps := a.ptBegin(ctx, calls)   // read-class neighbours run in parallel (partools.go)
+		var fan saResults             // results of task calls run in parallel in this batch
 		for i, tc := range calls {
 			if ctx.Err() != nil {
 				a.saRefuse(fan, calls[i:], "TOOL_NOT_STARTED: cancelled by the user before this tool ran.")
@@ -818,6 +830,7 @@ turnLoop:
 				out.Text += fmt.Sprintf("\n\n<system-reminder>You have made this exact call %d times with the same result. Stop repeating it: change your approach, or give the final answer.</system-reminder>", rep)
 			}
 			out.Text += a.acSteeringNote(tc, out)  // fileMatch steering, once per rule
+			out.Text += a.dcHintNote(tc, out)      // API error on a pinned library: point to the docs tool (docs.go)
 			out.Text += a.skToolNote(tc, out)      // built-in skill triggered by this result (skills.go)
 			out.Text += a.uiLintNote(ctx, tc, out) // ui_lint findings after a UI edit (uilint.go)
 			out.Text += a.bgAfterTool(tc, out)     // exploration counter, reread index (budget.go)
@@ -841,6 +854,7 @@ turnLoop:
 		if steer := a.takeSteer(); len(steer) > 0 {
 			a.append(Message{Role: "user", Content: "<system-reminder>The user sent this while you were working:</system-reminder>\n" + strings.Join(steer, "\n\n")})
 		}
+		a.qInject("tool") // queued steer messages, at the tool boundary (queue.go)
 	}
 }
 
@@ -1167,11 +1181,22 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 			a.obReqStart(ref, ci, attempt) // obs.go
 			resp, err := prov.Chat(cctx, req, fn)
 			a.obReqEnd(ref, ci, attempt, resp, err)
+			a.rdNotice() // first redacted secret: one-time notice (redact.go)
 			a.ui.StopThinking()
 			if err == nil {
 				bgScoreOK(ref, time.Since(tReq))
 				if resp == nil {
 					resp = &ChatResponse{}
+				}
+				if resp.Refused() {
+					// a policy decline is an answer, not an outage: another
+					// fallback model would silently change who answers
+					why := resp.Refusal
+					if why == "" {
+						why = firstSentence(strings.TrimSpace(resp.Text))
+					}
+					dbg("refusal", map[string]any{"model": ref, "stop": resp.Stop, "why": oneLine(why, 200)})
+					return nil, ref, &RefusalError{Ref: ref, Reason: why}
 				}
 				a.priceUsage(ref, &resp.Usage)
 				if ci > 0 && !o.quiet {
@@ -1552,6 +1577,16 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if tool == "bash" && cmd != "" {
 		what = blockWhat(tool, cmd)
 	}
+	if !isMCP {
+		if p := a.jazzPrivateToolAccess(tool, args, cmd); p != "" {
+			why := "model tool access to Jazz private configuration, credentials, trust data, or sessions is blocked (" + p + ")"
+			if a.blockUX() {
+				a.blockWhy = why
+				return false, blockMsg(what, why), true
+			}
+			return false, "Blocked: " + why + ". Use Jazz's built-in configuration or session features instead.", true
+		}
+	}
 	dec, rule := a.Perms.Check(tool, args)
 	if dec == PermDeny {
 		if a.blockUX() {
@@ -1575,7 +1610,25 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			fenceEN = "it reaches outside the project root (" + out + "); tools stay inside the project unless the user runs jazz with --allow-outside"
 		}
 	}
+	// build targets, repo scripts and archives the command would run are read and
+	// classified like direct commands (buildtarget.go): CRITICAL blocks in every
+	// mode, HIGH asks in every mode, a clean target never prompts
+	btHigh := ""
+	if tool == "bash" && !isMCP && cmd != "" {
+		var btCrit string
+		if btCrit, btHigh = btCheckWithSupply(a.tools.lockDir(), cmd, a.cfg.EgressAllow, func(nested, nestedCwd string) string {
+			why, _ := a.sgCheckCommandIn(ctx, nested, dec == PermAllow, nestedCwd)
+			return why
+		}); btCrit != "" {
+			if a.blockUX() {
+				a.blockWhy = btCrit
+				return false, blockMsg(what, "the build target or script it runs is hostile: "+btCrit), true
+			}
+			return false, "Blocked: the build target or script it runs is hostile (" + btCrit + "). Do not retry it; choose another approach or ask the user.", true
+		}
+	}
 	mode := a.mode()
+	sensitiveEgress := tool == "bash" && !isMCP && jazzSensitiveEgress(cmd, a.tools.Root, a.fenceCwd())
 	// turbo (turbo.go) applies the auto rules plus its own relaxations, and
 	// only while an OS sandbox isolates what runs; without one it is auto
 	turbo := mode == "turbo" && turboSandboxOK()
@@ -1585,7 +1638,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	autoRule := ""                           // why a call that some mode would confirm runs without a prompt (audit)
 	apClass, apTarget, apLabel := "", "", "" // what "a" (sempre) remembers for a prompt with a reason (approvals.go)
 	apOnAllow := false                       // turbo egress: the first approval already remembers the host
-	if tool == "script" && !isMCP {          // read-only scripts only in plan/subagent; Bash deny rules cover a script's cmd (scripts.go)
+	// Approval memory is scoped to a risk class. A target-level HIGH finding
+	// must not inherit an earlier egress or supply-chain "always" approval.
+	if btHigh != "" {
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+	}
+	if tool == "script" && !isMCP { // read-only scripts only in plan/subagent; Bash deny rules cover a script's cmd (scripts.go)
 		if deny, byRule := a.scGate(args, mode); deny != "" {
 			return false, deny, byRule
 		}
@@ -1598,7 +1656,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			injReason = "possível prompt injection neste turno (" + inj + ")"
 		}
 	}
-	if mode == "yolo" && injReason == "" && fenceReason == "" {
+	if mode == "yolo" && injReason == "" && fenceReason == "" && btHigh == "" && !sensitiveEgress {
 		return true, "", false
 	}
 	if mode == "plan" {
@@ -1630,12 +1688,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		} else if why := SecretReason(cmd); cmd != "" && why != "" && mode != "yolo" {
 			reason, need = why, true // its output (credentials) would go to the provider
 			whyEN = "it would read credentials or secrets (" + why + ")"
-		} else if why := a.sgCheckCommand(ctx, cmd, dec == PermAllow); cmd != "" && why != "" && mode != "yolo" {
+		} else if why := a.sgGuard(ctx, cmd, dec == PermAllow); cmd != "" && why != "" && mode != "yolo" {
 			reason, need = why, true // supply-chain guard (guardrails.go)
 			whyEN = "a package failed the supply-chain check (" + why + ")"
 			apClass, apTarget = "supply", strings.Join(strings.Fields(cmd), " ")
 			apLabel = "supply: " + apTarget
-		} else if h, eg := EgressTarget(cmd); eg && mode != "yolo" && !egressAllowed(h, a.cfg.EgressAllow) {
+		} else if h, eg := EgressTarget(cmd); eg && (sensitiveEgress || mode != "yolo" && !egressAllowed(h, a.cfg.EgressAllow)) {
 			reason, need = "envia dados para fora da máquina (destino: "+h+")", true // egress gate (AML.T0086)
 			whyEN = "it sends data off this machine (to " + h + ")"
 			if !strings.HasPrefix(h, "(") { // "(host no código inline)": no host to remember
@@ -1650,6 +1708,10 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 				whyEN = "ask mode needs the user's approval for commands that change things"
 			}
 		}
+		if btHigh != "" && reason == "" {
+			reason, need = "alvo de build ou script do projeto: "+btHigh, true
+			whyEN = "the build target or script it runs does something risky (" + btHigh + ")"
+		}
 		if ctx.Err() != nil {
 			return false, "TOOL_NOT_STARTED: cancelled by the user before this tool ran.", false
 		}
@@ -1662,11 +1724,14 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		if p, _ := argStr(args, "path"); p != "" && protectedPath(a.tools.abs(p), a.tools.Root) {
 			reason, need = "arquivo sensível (credenciais ou configuração)", true
 			whyEN = "it is a sensitive file (credentials, hooks or agent configuration)"
+		} else if why := h2WriteDanger(args); why != "" { // hardening2.go
+			reason, need = why, true
+			whyEN = "it writes a compose file that gives a container host access (" + why + ")"
 		} else if mode == "ask" {
 			need = true
 			whyEN = "ask mode needs the user's approval for file changes"
 		}
-	case tool == "fetch" && !isMCP:
+	case (tool == "fetch" || tool == "docs") && !isMCP:
 		need = mode == "ask"
 		whyEN = "ask mode needs the user's approval"
 	case tool == "script" && !isMCP:
@@ -1675,6 +1740,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	default:
 		need = isMCP && mode == "ask"
 		whyEN = "ask mode needs the user's approval"
+	}
+	if sensitiveEgress {
+		// Sensitive input egress always gets a fresh, scoped confirmation. Never
+		// inherit yolo, a permission rule, or an earlier remembered approval.
+		if h, eg := EgressTarget(cmd); eg {
+			reason, need = "envia arquivo/configuração sensível para fora da máquina (destino: "+h+")", true
+			whyEN = "it sends a protected or secret local file off this machine (to " + h + ")"
+			apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+		}
 	}
 	if isMCP && mode != "yolo" {
 		if changed, _ := a.mcp.Poisoned(tool); changed {
@@ -1685,8 +1759,10 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if fenceReason != "" && reason == "" {
 		reason, need, whyEN = fenceReason, true, fenceEN
 		if out := a.fenceCheck(tool, args, cmd, isMCP); out != "" && !fencePrivate(resolvePath(out)) {
-			d := filepath.Dir(filepath.Clean(out))
-			apClass, apTarget, apLabel = "fence", d, "fora do projeto: "+d
+			// Remember the exact fenced target. Saving its parent (especially
+			// $HOME) made one approval silently cover unrelated siblings.
+			target := filepath.Clean(out)
+			apClass, apTarget, apLabel = "fence", target, "alvo exato fora do projeto: "+target
 		}
 	} else if fenceReason != "" {
 		apClass = "" // two risks in one call: remembering one must not skip the other
@@ -1726,6 +1802,9 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if mode == "ask" {
 		apClass = "" // ask mode asks every time
 	}
+	if btHigh != "" {
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+	}
 	if need && reason != "" && apClass != "" && dec != PermAsk && a.approvals().Has(apClass, apTarget) {
 		need, autoRule = false, "approvals:"+apClass // "a" (sempre) earlier in this project
 	}
@@ -1760,7 +1839,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		return true, "", false
 	}
 	if h, ok := a.ui.(approveHinter); ok && reason == "" && a.Perms != nil {
-		h.ApproveHint(strings.Join(a.Perms.pfDeriveRules(tool, args), ", "))
+		scope := "neste projeto"
+		if a.alwaysSession(tool) {
+			scope = "nesta sessão"
+		}
+		if r := strings.Join(a.Perms.pfDeriveRules(tool, args), ", "); r != "" {
+			h.ApproveHint(scope + " para " + r)
+		} else {
+			h.ApproveHint(scope)
+		}
 	}
 	if reason != "" && dec == PermAsk {
 		apClass = "" // an ask rule asks every time
@@ -1783,12 +1870,18 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	}
 	switch ap {
 	case AllowAlways:
-		if reason == "" {
+		if reason == "" && a.alwaysSession(tool) {
+			if r := a.Perms.RememberSession(tool, args); r != "" {
+				a.ui.Notice("não pergunto de novo nesta sessão: " + r)
+			}
+		} else if reason == "" {
 			if r, err := a.Perms.Remember(tool, args); err != nil {
 				a.ui.Warn("não consegui salvar a regra: " + err.Error())
 			} else if r != "" {
-				a.ui.Notice("regra salva: " + r)
+				a.ui.Notice("regra salva neste projeto: " + r + "  (/permissions lista e remove)")
 			}
+		}
+		if reason == "" {
 			if a.allow == nil {
 				a.allow = map[string]bool{}
 			}
@@ -1832,6 +1925,24 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		msg += " (" + reason + ")"
 	}
 	return false, msg + ". Do not retry it; ask the user or choose another approach.", true
+}
+
+// alwaysSession reports whether "Sim, e não perguntar de novo" lasts only
+// for this session (config always_scope): "auto" (default) does what Claude
+// Code does, edits and writes for the session, commands, domains and tools
+// saved as a project rule (.jazz/settings.json).
+func (a *Agent) alwaysSession(tool string) bool {
+	scope := ""
+	if a.cfg != nil {
+		scope = strings.ToLower(a.cfg.AlwaysScope)
+	}
+	switch scope {
+	case "session", "sessao", "sessão":
+		return true
+	case "project", "projeto":
+		return false
+	}
+	return tool == "edit" || tool == "write"
 }
 
 // approveHinter is implemented by UIs that can show which rule [t] "always" saves.
@@ -2106,7 +2217,11 @@ func (a *Agent) LoadSessionAt(si SessionInfo, at string) error {
 		return err
 	}
 	a.sess.Close()
+	if system == "" && sess.Tampered > 0 {
+		system = a.System // a tampered meta line must not blank the system prompt (hardening2.go)
+	}
 	a.sess, a.Msgs, a.System, a.SessionID = sess, msgs, system, sess.ID
+	a.h2ResumeNotice(sess)
 	a.obAttach("resume") // obs.go
 	a.loop.goal = acLoadGoal(si.Path)
 	if model != "" && a.cfg.HasCreds(mustProvider(model)) {

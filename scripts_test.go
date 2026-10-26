@@ -19,8 +19,9 @@ import (
 )
 
 // scShipped are the 18 scripts docs/research/skills-personas-scripts.md §D ships,
-// plus ui_lint (the frontend-craft detector, uilint.go).
-var scShipped = []string{"csv_stats", "detect_project", "diff_quality", "extract_stacktrace", "extract_versions", "find_symbol",
+// plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
+// project API map, apimap.go).
+var scShipped = []string{"api_map", "csv_stats", "detect_project", "diff_quality", "extract_stacktrace", "extract_versions", "find_symbol",
 	"git_safe", "git_state", "http_check", "json_edit", "parse_build_errors", "parse_log_lines", "parse_test_output",
 	"port_free", "run_tests", "snapshot_cmd", "tree_summary", "ui_lint", "yaml_get"}
 
@@ -402,6 +403,31 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		}
 		if c := scDataOf(v)["counts"]; c != nil && len(c.(map[string]any)) > 0 {
 			t.Errorf("prose words must not count as levels: %v", c)
+		}
+	})
+
+	run("api_map", func(t *testing.T) {
+		scWrite(t, root, "am/calc.py", "def soma(a: int, b: int) -> int:\n    \"\"\"Soma dois inteiros.\"\"\"\n    return a + b\n\n\ndef _interna():\n    pass\n\n\nclass Conta:\n    def depositar(self, valor,\n                  moeda='BRL'):\n        '''Credita valor.'''\n")
+		scWrite(t, root, "am/srv.go", "package am\n\n// Serve starts the HTTP server.\nfunc Serve(addr string) (int, error) { return 0, nil }\n\nfunc hidden() {}\n\n// Box holds things.\ntype Box struct{}\n\n// Put stores v.\nfunc (b *Box) Put(v any) error {\n\treturn nil\n}\n")
+		scWrite(t, root, "am/lib.ts", "/** Formats a date. */\nexport function fmtDate(d: Date, iso = true): string {\n  return ''\n}\nexport class Cache {}\nexport const add = (a: number, b: number) => a + b\n")
+		scWrite(t, root, "am/lib.rs", "/// Parses the input.\npub fn parse(s: &str) -> Result<u8, ()> { Ok(0) }\nfn private() {}\n")
+		v, _ := scCall(t, tb, "api_map", map[string]any{"path": "am"})
+		d := scDataOf(v)
+		text, _ := d["text"].(string)
+		for _, want := range []string{"soma(a: int, b: int) -> int — Soma dois inteiros.", "Conta.depositar(self, valor, moeda='BRL') — Credita valor.",
+			"func Serve(addr string) (int, error) — Serve starts the HTTP server.", "func (b *Box) Put(v any) error — Put stores v.", "type Box struct",
+			"export function fmtDate(d: Date, iso = true): string — Formats a date.", "export class Cache", "pub fn parse(s: &str) -> Result<u8, ()> — Parses the input."} {
+			if !strings.Contains(text, want) {
+				t.Errorf("api_map text lacks %q:\n%s", want, text)
+			}
+		}
+		if strings.Contains(text, "_interna") || strings.Contains(text, "hidden") || strings.Contains(text, "private") {
+			t.Errorf("api_map lists private symbols:\n%s", text)
+		}
+		v, _ = scCall(t, tb, "api_map", map[string]any{"path": "am", "query": "depositar valor na conta", "limit": 2})
+		m := scDataOf(v)["matches"].([]any)
+		if len(m) == 0 || m[0].(map[string]any)["name"] != "Conta.depositar" {
+			t.Errorf("api_map query ranking: %v", m)
 		}
 	})
 

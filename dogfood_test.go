@@ -29,7 +29,7 @@ func TestDogfoodOffline(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 	ln.Close() // nothing listens: every connection is refused
-	s := ptyStartWith(t, "xterm-256color", nil, "HTTPS_PROXY=http://"+addr, "https_proxy=http://"+addr, "NO_PROXY=", "no_proxy=")
+	s := ptyStartWith(t, "xterm-256color", nil, "HTTPS_PROXY=http://"+addr, "https_proxy=http://"+addr, "NO_PROXY=", "no_proxy=", "JAZZ_TEST_SANDBOX=0")
 	t0 := time.Now()
 	logs := []string{}
 	var lmu sync.Mutex
@@ -41,10 +41,7 @@ func TestDogfoodOffline(t *testing.T) {
 	prompt := func(sc string) bool {
 		return strings.Contains(sc, "? atalhos") && strings.Contains(sc, "▸▸ auto ·")
 	}
-	s.waitFor("trust prompt or box", 20*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || prompt(sc) })
-	if strings.Contains(s.screen(), "[s/N]") {
-		s.write("s\r")
-	}
+	s.trust()
 	s.waitFor("the input box", 20*time.Second, prompt)
 	note("tela inicial:\n%s", s.screen())
 	s.typeSlow("oi")

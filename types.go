@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -86,7 +87,40 @@ type ChatResponse struct {
 	// Partial: the stream failed or was cancelled; this is what arrived
 	// before (tool call arguments may be cut). Returned with the error.
 	Partial bool
+	// Refusal: the provider's own reason when it declined the request
+	// (Anthropic stop_details, OpenAI delta.refusal); may be empty.
+	Refusal string
 }
+
+// Refused reports a policy decline: Anthropic stop_reason "refusal", OpenAI
+// finish_reason "content_filter" or a structured refusal message.
+func (r *ChatResponse) Refused() bool {
+	if r == nil || len(r.ToolCalls) > 0 {
+		return false
+	}
+	return r.Stop == "refusal" || r.Stop == "content_filter" || r.Refusal != ""
+}
+
+// RefusalError ends a turn the provider declined (HTTP 200 with a refusal stop
+// reason). It is not retried on another model automatically: the user decides
+// whether to rephrase or switch (/model).
+type RefusalError struct {
+	Ref    string // provider/model that declined
+	Reason string // short provider reason, or the model's own text
+}
+
+func (e *RefusalError) Error() string {
+	r := strings.TrimSpace(e.Reason)
+	if r == "" {
+		r = "sem motivo informado"
+	}
+	if len([]rune(r)) > 200 {
+		r = string([]rune(r)[:200]) + "…"
+	}
+	return "o provedor recusou: " + oneLineRefusal(r)
+}
+
+func oneLineRefusal(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // StreamFn receives incremental output. kind is "text" or "reasoning".
 type StreamFn func(kind, text string)

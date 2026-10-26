@@ -3,7 +3,7 @@ name: release
 #
 # Assets (names are what scripts/install.sh, scripts/install.ps1 and
 # `jazz update` download):
-#   jazz-linux-386  jazz-linux-amd64  jazz-linux-arm64
+#   jazz-linux-386  jazz-linux-amd64  jazz-linux-arm64  jazz-linux-armv7  jazz-android-arm64
 #   jazz-darwin-amd64  jazz-darwin-arm64
 #   jazz-windows-amd64.exe  jazz-windows-arm64.exe
 #   checksums.txt  manifest.txt  VERSION  install.sh  install.ps1
@@ -51,7 +51,7 @@ jobs:
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
           # what the installers expect must be there
-          for f in jazz-linux-386 jazz-linux-amd64 jazz-linux-arm64 jazz-darwin-amd64 jazz-darwin-arm64 \
+          for f in jazz-linux-386 jazz-linux-amd64 jazz-linux-arm64 jazz-linux-armv7 jazz-android-arm64 jazz-darwin-amd64 jazz-darwin-arm64 \
                    jazz-windows-amd64.exe jazz-windows-arm64.exe manifest.txt checksums.txt VERSION install.sh install.ps1; do
             test -s "dist/release/$f" || { echo "missing dist/release/$f"; exit 1; }
           done

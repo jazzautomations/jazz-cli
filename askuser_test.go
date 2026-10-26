@@ -47,7 +47,7 @@ func TestAskUserInteractivePick(t *testing.T) {
 	if !ok || ans != "Postgres" {
 		t.Fatalf("pick = %q %v", ans, ok)
 	}
-	for _, w := range []string{"? Qual banco usar?", "1  SQLite  arquivo local", "2  Postgres", "3  manter o atual", "digite o número ou escreva a resposta; esc pula"} {
+	for _, w := range []string{"─ pergunta ─", "│ Qual banco usar?", "1. SQLite  arquivo local", "2. Postgres", "3. manter o atual", "4. Outra resposta (escrever)", "comece a digitar a resposta", "esc pula"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("menu misses %q:\n%s", w, out)
 		}

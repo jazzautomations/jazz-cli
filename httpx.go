@@ -509,3 +509,38 @@ func pvPostJSON(ctx context.Context, url string, headers map[string]string, body
 	}
 	return nil
 }
+
+// pvErrMessage pulls the human message out of a provider error body:
+// Anthropic {"type":"error","error":{"type":…,"message":…}}, OpenAI-style
+// {"error":{"message":…}} or {"error":"…"}, or {"message":…}. Anything else
+// comes back trimmed.
+func pvErrMessage(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" || body[0] != '{' {
+		return body
+	}
+	var e struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if json.Unmarshal([]byte(body), &e) != nil {
+		return body
+	}
+	var inner struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	var s string
+	switch {
+	case len(e.Error) > 0 && json.Unmarshal(e.Error, &inner) == nil && inner.Message != "":
+		if inner.Type != "" {
+			return inner.Type + ": " + inner.Message
+		}
+		return inner.Message
+	case len(e.Error) > 0 && json.Unmarshal(e.Error, &s) == nil && s != "":
+		return s
+	case e.Message != "":
+		return e.Message
+	}
+	return body
+}

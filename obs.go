@@ -331,7 +331,7 @@ func (a *Agent) obTurnStart(input string) {
 	if !a.sub {
 		a.tools.obSetTrace(a.SessionID, a.Model, sha)
 	}
-	a.obEv("turn.start", map[string]any{"prompt_sha": sha, "input_bytes": len(input), "model": a.Model, "msgs": len(a.Msgs)})
+	a.obEv("turn.start", map[string]any{"prompt_sha": sha, "input_bytes": len(input), "model": a.Model, "msgs": len(a.Msgs), "mode": a.mode()})
 }
 
 func (a *Agent) obStep(step int, model string) {
@@ -898,6 +898,7 @@ type obSummary struct {
 	SessionID   string         `json:"session_id"`
 	Status      string         `json:"status"`
 	Outcome     string         `json:"outcome"`
+	Mode        string         `json:"mode,omitempty"` // permission mode of the last turn
 	Exit        int            `json:"exit_code"`
 	Start       string         `json:"start,omitempty"`
 	End         string         `json:"end,omitempty"`
@@ -945,6 +946,9 @@ func obSummarize(evs []obEvent) obSummary {
 		switch e.str("kind") {
 		case "turn.start":
 			s.Turns++
+			if m := e.str("mode"); m != "" {
+				s.Mode = m
+			}
 		case "turn.end":
 			s.ActiveMS += int64(e.num("dur_ms"))
 			s.Status = e.str("stop")
@@ -1105,6 +1109,8 @@ func obTraceText(w io.Writer, evs []obEvent) {
 			if h := e.str("handoff"); h != "" {
 				line += " · nota " + h
 			}
+		case "queue.add", "queue.edit", "queue.consume", "queue.drop":
+			line = qTraceLine(e) // queue.go
 		default:
 			line = e.str("kind") + " " + obCompact(e, "src")
 		}

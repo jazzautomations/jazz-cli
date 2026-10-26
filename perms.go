@@ -641,6 +641,34 @@ func (p *PermSet) Remember(tool string, args map[string]any) (rule string, err e
 	return strings.Join(rules, ", "), err
 }
 
+// RememberSession is Remember for this session only: the rule lives in
+// memory (source "sessão") and nothing is written ("Sim, e não perguntar de
+// novo nesta sessão", as Claude Code's "allow all edits during this session").
+func (p *PermSet) RememberSession(tool string, args map[string]any) string {
+	if p == nil {
+		return ""
+	}
+	rules := p.pfDeriveRules(tool, args)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, r := range rules {
+		dup := false
+		for _, x := range p.rules {
+			if x.Kind == "allow" && x.Rule == r {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			p.rules = append(p.rules, PermRule{Kind: "allow", Rule: r, Source: pfSessionSource})
+		}
+	}
+	return strings.Join(rules, ", ")
+}
+
+// pfSessionSource marks rules that live only in this session.
+const pfSessionSource = "sessão"
+
 // Rules lists every rule, for /permissions.
 func (p *PermSet) Rules() []PermRule {
 	if p == nil {
@@ -677,7 +705,7 @@ func (p *PermSet) Remove(rule string) error {
 	for _, r := range removed {
 		var err error
 		switch r.Source {
-		case "flag":
+		case "flag", pfSessionSource:
 		case "config":
 			if p.cfg != nil {
 				p.cfg.Permissions.Allow = pfRemoveStr(p.cfg.Permissions.Allow, rule)

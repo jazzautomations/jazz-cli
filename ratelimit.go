@@ -669,7 +669,8 @@ func pvClassify(err error) string {
 		return "toobig"
 	case ae.Status == 429:
 		return "rate"
-	case ae.Status == 402:
+	case ae.Status == 402 || (ae.Status == 400 && strings.Contains(strings.ToLower(b), "credit balance")):
+		// Anthropic reports an empty balance as HTTP 400 invalid_request_error
 		return "credit"
 	case ae.Status == 401 || ae.Status == 403:
 		return "auth"

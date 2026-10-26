@@ -82,6 +82,7 @@ func pvResponsesInput(msgs []Message, prov string) []map[string]any {
 }
 
 func (p *CodexProvider) Chat(ctx context.Context, req ChatRequest, fn StreamFn) (*ChatResponse, error) {
+	req = rdOutbound(req, "") // secrets never leave the machine (redact.go)
 	resp, err := p.chatOnce(ctx, req, fn, false)
 	var ae *APIError
 	if errors.As(err, &ae) && ae.Status == 401 {

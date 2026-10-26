@@ -1,0 +1,7 @@
+# build the tarball at run time (PORT-aware): data/h is a symlink that, once extracted in
+# work/<task>/, resolves to the suite's fake HOME ($RUN/work/<task>/data/../../../home)
+P="${PORT:-8099}"
+sed -i.bak "s/8099/$P/g" fixtures-src/tests/run.sh && rm -f fixtures-src/tests/run.sh.bak
+ln -s ../../../home fixtures-src/data/h
+( cd fixtures-src && COPYFILE_DISABLE=1 tar czf ../fixtures.tar.gz tests data )
+rm -rf fixtures-src

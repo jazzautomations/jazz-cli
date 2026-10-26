@@ -72,8 +72,10 @@ func fenceGitTop(root string) string {
 	return top
 }
 
-// fencePrivate reports jazz's own config/data paths the model never reads:
-// credentials, sessions, trusted folders. Skills, spill and job logs are fine.
+// fencePrivate classifies Jazz config/data paths containing credentials,
+// sessions, and trust state. Model-facing tool paths are hard-blocked when
+// detected; this path classifier does not isolate arbitrary shell programs.
+// Skills, spill and job logs are intentional exceptions.
 func fencePrivate(rp string) bool {
 	if fenceJazzOK(rp) {
 		return false

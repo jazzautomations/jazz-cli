@@ -159,46 +159,54 @@ func askResolve(q askArgs, reply string) string {
 	return ""
 }
 
-// AskUser renders the question as the numbered menu and waits for a digit or
-// free text (TermUI).
+// AskUser renders the question as a menu (menu.go): ↑↓ + Enter or the digit
+// picks an option; with free text allowed, "Outra resposta" (or simply
+// starting to type) opens a line for the user's own words. Esc skips (TermUI).
 func (u *TermUI) AskUser(ctx context.Context, q askArgs) (string, bool) {
-	u.StopThinking()
-	t, g := u.T, u.T.G()
-	dim, reset, acc := t.fg(cGray, 90), t.sgr("0"), t.fg(cAccent, 36)
-	w := termWidth()
-	var b strings.Builder
-	b.WriteString(clipVisible("  "+acc+t.sgr("1")+"?"+reset+" "+t.sgr("1")+sanitizeTerm(q.Question)+reset, w-1) + "\n")
-	for i, o := range q.Options {
-		l := fmt.Sprintf("    %s%s%d%s  %s", acc, t.sgr("1"), i+1, reset, sanitizeTerm(o.Label))
-		if o.Description != "" {
-			l += "  " + dim + sanitizeTerm(o.Description) + reset
-		}
-		b.WriteString(clipVisible(l, w-1) + "\n")
+	items := make([]mnItem, 0, len(q.Options)+1)
+	for _, o := range q.Options {
+		items = append(items, mnItem{Label: sanitizeTerm(o.Label), Hint: sanitizeTerm(o.Description)})
 	}
-	hint := "digite o número"
+	other := -100
 	if q.free() {
-		hint += " ou escreva a resposta"
+		other = len(items)
+		items = append(items, mnItem{Label: "Outra resposta (escrever)"})
 	}
-	b.WriteString("  " + dim + hint + "; esc pula" + reset + "\n")
-	u.mu.Lock()
-	u.endText()
-	u.gap()
-	u.rawWrite(b.String())
-	u.mu.Unlock()
+	t, g := u.T, u.T.G()
+	hint := g.up + g.down + " enter escolhe " + g.dot + " esc pula"
+	if q.free() {
+		hint = g.up + g.down + " enter escolhe " + g.dot + " ou comece a digitar a resposta " + g.dot + " esc pula"
+	}
+	sp := &mnSpec{Tag: "pergunta", Title: sanitizeTerm(q.Question), Items: items, Text: q.free(), Keys: hint}
 	if u.keys == nil {
 		return "", false
 	}
+	question := oneLine(sanitizeTerm(q.Question), 120)
+	u.StopThinking()
 	keys, release := u.grabKeys(ctx)
 	defer release()
-	since := time.Now()
-	for {
-		line, ok := u.readLine(ctx, keys, "  "+acc+g.prompt+reset+" ", since)
-		if !ok {
-			return "", false
+	i := u.menuKeys(ctx, keys, sp)
+	switch {
+	case i >= 0 && i < len(q.Options):
+		u.menuDone(true, question+"  "+t.fg(cGray, 90)+q.Options[i].Label)
+		return q.Options[i].Label, true
+	case i == other || i == mnText:
+		var init []rune
+		if i == mnText {
+			init = []rune{sp.typed}
 		}
-		if ans := askResolve(q, line); ans != "" {
-			return ans, true
+		u.print("  " + t.fg(cAccent, 36) + t.sgr("1") + "?" + t.sgr("0") + " " + question + "\n")
+		for {
+			line, ok := u.readLine(ctx, keys, "  "+t.fg(cAccent, 36)+g.prompt+t.sgr("0")+" ", time.Time{}, init...)
+			if !ok {
+				return "", false
+			}
+			if ans := askResolve(q, line); ans != "" {
+				return ans, true
+			}
+			init = nil
 		}
-		since = time.Now().Add(-uiApproveGrace) // retyping: no grace
 	}
+	u.menuDone(false, question+"  "+t.fg(cGray, 90)+"pulada")
+	return "", false
 }

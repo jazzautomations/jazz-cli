@@ -1426,6 +1426,54 @@ func TestProviderCodexStream(t *testing.T) {
 	}
 }
 
+func TestProviderSecretRedactionAllRemoteRoutes(t *testing.T) {
+	rdReset(t, rdOn)
+	tok := "ghp_" + rdT(96, 36, rdAlnum)
+	request := ChatRequest{Model: "m", System: "system " + tok, Tools: []ToolSpec{{Name: "write", Description: "description " + tok, Params: map[string]any{
+		"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string", "description": tok}},
+	}}}, Messages: []Message{{Role: "user", Content: "input " + tok}}}
+	assertNoSecret := func(t *testing.T, c *provCapture) {
+		t.Helper()
+		if strings.Contains(string(c.raw), tok) {
+			t.Fatalf("remote provider received a secret: %s", c.raw)
+		}
+		if !strings.Contains(string(c.raw), "secreto:") {
+			t.Fatalf("remote request did not carry placeholders: %s", c.raw)
+		}
+	}
+	t.Run("openai-compatible", func(t *testing.T) {
+		srv, cap := provSSEServer(t, `{"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`, "[DONE]")
+		p := &OpenAIProvider{Name: "fake", BaseURL: srv.URL + "/v1", Key: "k"}
+		if _, err := p.Chat(context.Background(), request, nil); err != nil {
+			t.Fatal(err)
+		}
+		assertNoSecret(t, cap)
+	})
+	t.Run("anthropic", func(t *testing.T) {
+		srv, cap := provSSEServer(t,
+			provAnthEv("message_start", `{"type":"message_start","message":{"id":"m1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
+			provAnthEv("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"ok"}}`),
+			provAnthEv("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`),
+			provAnthEv("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`),
+		)
+		p := &AnthropicProvider{BaseURL: srv.URL, Key: "k"}
+		if _, err := p.Chat(context.Background(), request, nil); err != nil {
+			t.Fatal(err)
+		}
+		assertNoSecret(t, cap)
+	})
+	t.Run("codex", func(t *testing.T) {
+		access := provJWT(map[string]any{"exp": time.Now().Add(time.Hour).Unix()})
+		provCodexSetup(t, access, time.Now().Add(time.Hour).UnixMilli())
+		srv, cap := provSSEServer(t, provCodexStream...)
+		p := &CodexProvider{BaseURL: srv.URL + "/backend-api/codex/", SessionID: "sess-redact"}
+		if _, err := p.Chat(context.Background(), request, nil); err != nil {
+			t.Fatal(err)
+		}
+		assertNoSecret(t, cap)
+	})
+}
+
 func TestProviderCodexToResponsesInputNoExtra(t *testing.T) {
 	items := toResponsesInput([]Message{
 		{Role: "user", Content: "q"},

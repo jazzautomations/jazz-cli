@@ -129,6 +129,34 @@ func pvThinkingBudget(effort string, maxTok int) int {
 	return b
 }
 
+// pvAnthLegacyRE: Claude models from before adaptive thinking (3.x, 4.0, 4.1,
+// 4.5), which still take thinking.budget_tokens and temperature.
+var pvAnthLegacyRE = regexp.MustCompile(`^claude-(?:instant|2|3)|^claude-(?:opus|sonnet|haiku)-4(?:-[0-5])?(?:$|[-@]\d{8}|-latest$)`)
+
+// pvAnthModern reports whether model is a current Claude model (4.6 and later):
+// adaptive thinking with output_config.effort, no budget_tokens, no temperature.
+// Platform prefixes (us.anthropic., anthropic.) are ignored; ids that do not
+// name a claude- model keep the legacy request shape.
+func pvAnthModern(model string) bool {
+	m := strings.ToLower(model)
+	i := strings.Index(m, "claude-")
+	if i < 0 {
+		return false
+	}
+	return !pvAnthLegacyRE.MatchString(m[i:])
+}
+
+// pvAnthEffort maps jazz's effort hint to an output_config.effort level.
+func pvAnthEffort(effort string) string {
+	switch effort {
+	case "minimal", "low":
+		return "low"
+	case "medium", "high", "xhigh", "max":
+		return effort
+	}
+	return ""
+}
+
 // pvThinkingReplayable: with thinking on, the assistant message that opened the
 // current tool loop must start with its own thinking block. When it came from
 // another provider (fallback mid-turn) thinking has to stay off for this request.
@@ -152,24 +180,41 @@ func pvThinkingReplayable(msgs []Message, prov string) bool {
 }
 
 func (p *AnthropicProvider) Chat(ctx context.Context, req ChatRequest, fn StreamFn) (*ChatResponse, error) {
+	req = rdOutbound(req, p.BaseURL) // secrets never leave the machine (redact.go)
 	maxTok := req.MaxTokens
 	if maxTok <= 0 {
 		maxTok = 16000
 	}
+	modern := pvAnthModern(req.Model)
 	budget := 0
+	adaptive := ""
 	if req.Effort != "" && pvThinkingReplayable(req.Messages, p.Name) {
-		budget = pvThinkingBudget(req.Effort, maxTok)
+		if modern {
+			adaptive = pvAnthEffort(req.Effort)
+		} else {
+			budget = pvThinkingBudget(req.Effort, maxTok)
+		}
 	}
 	body := map[string]any{
 		"model":      req.Model,
 		"max_tokens": maxTok,
 		"stream":     true,
-		"messages":   pvAnthMessages(req.Messages, p.Name, budget > 0),
+		// Current models think by default (Opus/Sonnet 5.5 cannot turn it off), so
+		// their signed thinking blocks are always replayed for this provider.
+		"messages": pvAnthMessages(req.Messages, p.Name, budget > 0 || modern),
 	}
-	if budget > 0 {
+	switch {
+	case adaptive != "":
+		// Claude 4.6+ rejects budget_tokens (HTTP 400 on 4.7+ and 5.x): adaptive
+		// thinking with the effort level is the supported form.
+		body["thinking"] = map[string]any{"type": "adaptive"}
+		body["output_config"] = map[string]any{"effort": adaptive}
+	case budget > 0:
 		body["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget}
-	} else if req.Temperature != nil {
-		body["temperature"] = *req.Temperature // thinking requires the default temperature
+	case req.Temperature != nil && !modern:
+		// thinking requires the default temperature; current models reject
+		// non-default sampling parameters altogether
+		body["temperature"] = *req.Temperature
 	}
 	if req.System != "" {
 		body["system"] = []map[string]any{{"type": "text", "text": req.System, "cache_control": map[string]any{"type": "ephemeral"}}}
@@ -249,7 +294,15 @@ func (p *AnthropicProvider) stream(ctx context.Context, h map[string]string, bod
 				Signature   string `json:"signature"`
 				PartialJSON string `json:"partial_json"`
 				StopReason  string `json:"stop_reason"`
+				StopDetails *struct {
+					Category    string `json:"category"`
+					Explanation string `json:"explanation"`
+				} `json:"stop_details"`
 			} `json:"delta"`
+			StopDetails *struct {
+				Category    string `json:"category"`
+				Explanation string `json:"explanation"`
+			} `json:"stop_details"`
 			Usage struct {
 				OutputTokens int `json:"output_tokens"`
 			} `json:"usage"`
@@ -301,6 +354,16 @@ func (p *AnthropicProvider) stream(ctx context.Context, h map[string]string, bod
 			}
 		case "message_delta":
 			out.Stop = ev.Delta.StopReason
+			// a policy decline (HTTP 200, stop_reason "refusal"): keep the
+			// provider's category/explanation for the UI (RefusalError)
+			for _, d := range []*struct {
+				Category    string `json:"category"`
+				Explanation string `json:"explanation"`
+			}{ev.Delta.StopDetails, ev.StopDetails} {
+				if d != nil && out.Refusal == "" {
+					out.Refusal = strings.Trim(d.Category+": "+d.Explanation, ": ")
+				}
+			}
 			out.Usage.Out = ev.Usage.OutputTokens
 		case "message_stop":
 			sawStop = true

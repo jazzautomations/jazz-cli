@@ -113,9 +113,9 @@ func (e *Editor) boxFrame(buf []rune, pos, w int) (lines []string, curLine, curC
 	}
 	lines = append(lines, border+g.bl+strings.Repeat(g.h, bw-2)+g.br+reset)
 	curLine, curCol = 1+crow-top, 4+ccol
-	switch {
-	case len(e.menuItems(true, buf)) > 0:
-		lines = append(lines, e.menuLines(buf, w)...)
+	switch pop := e.popup(true, buf, pos); {
+	case pop.kind != edPopNone:
+		lines = append(lines, e.menuLines(pop, w)...)
 	case e.help:
 		lines = append(lines, edHelpLines(t, w)...)
 	case e.note != "":
@@ -189,22 +189,9 @@ func (e *Editor) eraseFrame() {
 	e.frame = edFrame{}
 }
 
-// echo is how a submitted input stays in the transcript.
-func (e *Editor) echo(s string) string {
-	t := e.ui.T
-	mark := t.fg(cGray, 90) + t.G().prompt + t.sgr("0") + " "
-	if strings.HasPrefix(s, "!") {
-		mark = t.fg(cGold, 33) + "!" + t.sgr("0") + " "
-		s = strings.TrimPrefix(s, "!")
-	}
-	// wrapped to the terminal with a hanging indent, like the answers
-	w := max(termWidth()-3, 20)
-	var lines []string
-	for _, l := range strings.Split(sanitizeTerm(strings.ReplaceAll(s, "\t", " ")), "\n") {
-		lines = append(lines, uiWrapWords(l, w)...)
-	}
-	return mark + strings.Join(lines, "\n  ") + "\n"
-}
+// echo is how a submitted input stays in the transcript (the replay of a
+// resumed session prints prompts the same way: uiEchoLine, sessions_ui.go).
+func (e *Editor) echo(s string) string { return uiEchoLine(e.ui.T, s) }
 
 // menuItems are the slash commands matching the buffer ("/" + letters, no space).
 func (e *Editor) menuItems(boxed bool, buf []rune) []EdCommand {
@@ -215,10 +202,27 @@ func (e *Editor) menuItems(boxed bool, buf []rune) []EdCommand {
 	if strings.ContainsAny(s, " \n\t") {
 		return nil
 	}
+	if e.cmds == nil {
+		e.cmds = e.Commands() // once per input: custom commands live on disk
+		if e.cmds == nil {
+			e.cmds = []EdCommand{}
+		}
+	}
 	var out []EdCommand
-	for _, c := range e.Commands() {
-		if strings.HasPrefix(strings.ToLower(c.Name), strings.ToLower(s)) {
-			out = append(out, c)
+	if e.edOpt("JAZZ_PALETTE", func(c UIConf) string { return c.Palette }) {
+		out = edRankCommands(e.cmds, s)
+	} else {
+		for _, c := range e.cmds {
+			if strings.HasPrefix(strings.ToLower(c.Name), strings.ToLower(s)) {
+				out = append(out, c)
+			}
+		}
+	}
+	// the exact name goes first ("/mode" must not run "/model")
+	for i, c := range out {
+		if strings.EqualFold(c.Name, s) && i > 0 {
+			out = append([]EdCommand{c}, append(append([]EdCommand{}, out[:i]...), out[i+1:]...)...)
+			break
 		}
 	}
 	if len(out) == 1 && out[0].Name == s {
@@ -227,9 +231,12 @@ func (e *Editor) menuItems(boxed bool, buf []rune) []EdCommand {
 	return out
 }
 
-func (e *Editor) menuLines(buf []rune, w int) []string {
+// menuLines draws the pop-up: the selected row marked, one-line descriptions
+// (commands) or the path with its directory dimmed (@ picker), then the
+// "+N" line and, when it fits, the keys.
+func (e *Editor) menuLines(pop edPop, w int) []string {
 	t, g := e.ui.T, e.ui.T.G()
-	items := e.menuItems(true, buf)
+	items := pop.items
 	sel := min(e.menuSel, len(items)-1)
 	off := 0
 	if sel >= edMenuMax {
@@ -243,6 +250,21 @@ func (e *Editor) menuLines(buf []rune, w int) []string {
 	var out []string
 	for i := off; i < len(items) && i < off+edMenuMax; i++ {
 		it := items[i]
+		if pop.kind == edPopMention {
+			name := sanitizeTerm(it.Name)
+			dir, base := "", name
+			if j := strings.LastIndex(strings.TrimSuffix(name, "/"), "/"); j >= 0 {
+				dir, base = name[:j+1], name[j+1:]
+			}
+			var l string
+			if i == sel {
+				l = "  " + t.fg(cAccent, 36) + t.sgr("1") + g.ptr + " " + t.sgr("22") + dir + t.sgr("1") + base + t.sgr("0")
+			} else {
+				l = "    " + t.fg(cGray, 90) + dir + t.sgr("0") + base
+			}
+			out = append(out, clipVisible(l+t.sgr("0"), w-1))
+			continue
+		}
 		name := it.Name + strings.Repeat(" ", max(nameW-utf8.RuneCountInString(it.Name), 0))
 		var l string
 		if i == sel {
@@ -252,8 +274,21 @@ func (e *Editor) menuLines(buf []rune, w int) []string {
 		}
 		out = append(out, clipVisible(l+t.sgr("0"), w-1))
 	}
-	if rest := len(items) - (off + edMenuMax); rest > 0 {
-		out = append(out, "    "+t.fg(cGray, 90)+fmt.Sprintf("%s +%d", g.ell, rest)+t.sgr("0"))
+	keys := "↑↓ escolhe " + g.dot + " enter usa " + g.dot + " tab completa " + g.dot + " esc fecha"
+	if t.ascii {
+		keys = "setas escolhem " + g.dot + " enter usa " + g.dot + " tab completa " + g.dot + " esc fecha"
+	}
+	rest := ""
+	if n := len(items) - (off + edMenuMax); n > 0 {
+		rest = fmt.Sprintf("%s +%d", g.ell, n)
+	}
+	switch {
+	case rest != "" && uiStrW(rest)+3+uiStrW(keys)+4 <= w-1:
+		out = append(out, "    "+t.fg(cGray, 90)+rest+"   "+keys+t.sgr("0"))
+	case rest != "":
+		out = append(out, "    "+t.fg(cGray, 90)+rest+t.sgr("0"))
+	case uiStrW(keys)+4 <= w-1:
+		out = append(out, "    "+t.fg(cGray, 90)+keys+t.sgr("0"))
 	}
 	return out
 }
@@ -262,13 +297,18 @@ func (e *Editor) menuLines(buf []rune, w int) []string {
 func edHelpLines(t Theme, w int) []string {
 	items := [][2]string{
 		{"!", "roda no shell"}, {"@", "menciona arquivo"},
-		{"/", "comandos"}, {"esc", "interrompe ou limpa"},
-		{"ctrl+r", "busca no histórico"}, {"ctrl+g", "abre no editor"},
-		{"\\ + enter", "quebra linha"}, {"shift+tab", "troca o modo"},
-		{"ctrl+o", "expande a última saída"}, {"ctrl+c 2×", "sai"},
+		{"/", "comandos"}, {"esc", "limpa · 2× interrompe"},
+		{"↑ ↓", "histórico (filtra pelo início)"}, {"ctrl+r", "busca no histórico"},
+		{"shift+enter", "quebra linha (\\ enter)"}, {"shift+tab", "troca o modo"},
+		{"ctrl+o", "expande/recolhe a saída"}, {"ctrl+g", "abre no editor"},
+		{"ctrl+u ctrl+k", "apaga até início/fim"}, {"alt+← →", "pula palavra"},
+		{"ctrl+c 2×", "sai"},
 	}
 	if t.ascii {
-		items[9][0] = "ctrl+c 2x"
+		items[3][1] = "limpa / 2x interrompe"
+		items[4][0] = "cima/baixo"
+		items[11][0] = "alt+setas"
+		items[12][0] = "ctrl+c 2x"
 	}
 	cell := func(it [2]string) string {
 		return t.sgr("1") + it[0] + t.sgr("0") + " " + t.fg(cGray, 90) + it[1] + t.sgr("0")

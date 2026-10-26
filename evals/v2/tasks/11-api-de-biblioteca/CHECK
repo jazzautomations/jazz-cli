@@ -1,0 +1,10 @@
+set -eu
+T="${TASK:?TASK não definido}"
+fail() { echo "FAIL: $*"; exit 1; }
+cmp -s "$T/fastjson/docs/api.md" fastjson/docs/api.md || fail "a documentação da API foi alterada"
+cmp -s "$T/requirements.txt" requirements.txt || fail "requirements.txt foi alterado"
+cmp -s "$T/tests/test_calculo.py" tests/test_calculo.py || fail "o teste existente foi alterado"
+out=$(python3 "$T/.hidden/check11.py" 2>&1) || fail "${out#FAIL: }"
+python3 -m unittest -q >/dev/null 2>&1 || fail "python3 -m unittest falha"
+[ -f tests/test_arquivo.py ] || fail "crie testes para carregar e salvar"
+echo PASS

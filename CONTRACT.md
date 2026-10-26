@@ -508,9 +508,42 @@ may change behaviour; fix your own tests and nothing else.
   offers "a" on a prompt with a risk reason; `approveExtra{ ApproveExtra(text) }` gives "v" an edit's
   diff. `Approve`'s signature is unchanged; `AllowAlways` on a prompt with a reason now means "store
   in the approvals store" (`approvals.go`), never a permission rule.
-- `TermUI.Approve`: one key (`apKeyChoice`); typed fallback `apTypedChoice`. `TermUI.Ask`: Enter = 's'
+- (superseded by §16) `TermUI.Approve`: one key; `TermUI.Ask`: Enter = 's'
   when the keys contain 's' and not "\r".
 - New project file `.jazz/approvals.json` (protected path; honoured only when its hash is in the trust
   store under kind `approvals`). New audit kind `auto_approval {tool, target, rule, mode}`.
 - `/approvals [clear]`.
 
+## 16. Menu confirmations and default mode (confirm branch)
+
+- `TermUI.Approve` is a menu (`menu.go`: `mnSpec`, `mnRun`, `TermUI.Menu(ctx, *mnSpec) int`,
+  `menuKeys`, `Choose(question, []mnItem, def) int`, `menuDone`). `apKeyChoice`, `apTypedChoice`,
+  `apPromptLine`, `TermUI.Ask` and `App.listTurns` are gone (`App.pickNumber` survives only for `session_picker: off`). `ApproveHint(label)` now receives the
+  scoped label ("nesta sessão para Edit(**)" / "neste projeto para Bash(npm test:*)").
+- `Config.Mode` is `omitempty` and "" when unset; `Config.DefaultMode` (not saved) is set by the
+  interactive start (`pfDefaultMode`: turbo when `turboSandboxOK()`, else auto); `Config.BaseMode()`
+  = Mode › DefaultMode › auto; `EffMode()` = ModeOverride › BaseMode. New config keys:
+  `trust_default` (prompt|always), `always_scope` (auto|session|project), `mode_intro`.
+- `PermSet.RememberSession` adds in-memory allow rules (source `pfSessionSource`); `Agent.alwaysSession`.
+- Trust: `pfTrustGateUI` (interactive, after the key reader starts), `pfTrustSession` (memory only,
+  read by `IsTrusted`, cleared by `pfUntrust`); `pfTrustGateWith` keeps the line fallback via `cliChoose`.
+- `KPgUp`, `KPgDn` keys; `SessionInfo.Last`.
+
+## 17. Sessions like Claude Code (sessions branch)
+
+- New `sessEntry.T` value `title` (`Title string`): the session's name; the newest entry in the file
+  wins. `Agent.Run` writes one on the first turn of a new session (`sessAutoTitle`, deterministic, no
+  model call); `/rename` writes another. Sessions without one get the same title computed on read.
+  `Session.SetTitle` / `Session.Title`.
+- `SessionInfo` gained `Cwd`, `Usage` (summed over the replies in the file) and `Tools`;
+  `ListAllSessions()` lists every project. `sessTreeRows(path)` is the tree as data; `sessTreeLines`
+  formats it as before.
+- Event `turn.start` gained `mode`; `obSummary.Mode` (`jazz sessions --json` gains `"mode"`).
+- Keys: `KPgUp`, `KPgDn` (shared with §16; appended, existing values unchanged).
+- `/resume` and `/sessions` use `Editor.Pick` (this section); `/rewind` keeps the §16 menu (`App.pickTurn`).
+- `Editor.Pick(*pkSpec) int`: the arrow-key list (sessions_ui.go). `TermUI.Replay(msgs, errs, n, totals)`
+  renders a resumed conversation in one write. `uiEchoLine` is the prompt echo (editor and replay).
+- `-r`/`--resume` with no value (last word or followed by a flag) is rewritten to the picker request
+  (`pfResumeArgs`); `-p` with it is a usage error. Interactive `-r id@entry` now honours the entry.
+- Config: `resume_replay` (N, default 200 · `all` · `off`; `JAZZ_RESUME_REPLAY`) and `session_picker`
+  (`on` default · `off` = numbered list; `JAZZ_SESSION_PICKER`). Nothing here reaches the system prompt.

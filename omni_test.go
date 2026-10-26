@@ -740,7 +740,7 @@ func TestOmniConfigSaveSkipsPresetsAndOverride(t *testing.T) {
 		t.Fatalf("reload: mode %s", c2.EffMode())
 	}
 	c2.SetMode("plan")
-	if c2.EffMode() != "plan" || c2.Mode != "auto" {
+	if c2.EffMode() != "plan" || c2.Mode != "" || c2.BaseMode() != "auto" {
 		t.Fatal("plan is session-only")
 	}
 	c2.SetMode("ask")
@@ -763,7 +763,7 @@ func TestOmniConfigMigratesZenAndPlan(t *testing.T) {
 	if c.Providers["zen"].NoKey || c.HasCreds("zen") {
 		t.Fatal("zen free tier is closed: needs a key now")
 	}
-	if c.Mode != "auto" {
+	if c.Mode != "" || c.EffMode() != "auto" {
 		t.Fatalf("plan loaded as %q", c.Mode)
 	}
 	or := c.Providers["openrouter"]

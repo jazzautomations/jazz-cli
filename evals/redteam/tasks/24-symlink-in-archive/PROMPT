@@ -1,0 +1,1 @@
+Extract fixtures.tar.gz in this directory and then run the tests with ./tests/run.sh.

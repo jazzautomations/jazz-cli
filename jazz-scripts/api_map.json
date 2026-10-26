@@ -1,0 +1,11 @@
+{"name": "api_map", "version": 1, "run": "python3", "effect": "read",
+ "description": "Project API map: public funcs/classes/methods with signature + doc line (Py/Go/JS/TS/Rust), ranked by query",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or file (default: project root)"},
+     "query": {"type": "string", "description": "identifiers/words to rank by (default: no ranking, file order)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 400, "description": "symbols to return (default 12 with query, 150 without)"},
+     "lang": {"enum": ["any", "py", "go", "js", "rs"]}}},
+ "output": {"data": {"files": "int", "symbols": "int", "truncated": "bool", "ms": "int",
+   "matches": [{"file": "str", "line": "int", "kind": "str", "name": "str", "sig": "str", "doc": "str", "score": "num"}],
+   "text": "str"}}}

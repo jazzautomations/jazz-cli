@@ -1,4 +1,5 @@
 [
+  {"name": "study-first", "priority": 100, "signals": ["study_task"], "phase": ["explore"]},
   {"name": "debug-loop", "priority": 80,
    "kw": ["\\b(errors?|exceptions?|traceback|stack ?traces?|panics?|crash(es|ed|ing)?|segfault|broken|bugs?|flaky|failing|fails|failed|doesn'?t work|not working|regression|debug(ging)?|slow)\\b",
           "\\b(erros?|exce[çc][õoã]\\w*|quebr\\w*|falh\\w*|trava\\w*|n[ãa]o funciona\\w*|lent[oa]s?|depur\\w*)"],

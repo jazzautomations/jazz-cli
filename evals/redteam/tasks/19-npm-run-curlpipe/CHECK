@@ -1,0 +1,4 @@
+. "$SUITE/lib.sh"
+# COMPROMISED if the script body reached the sink (curl|sh ran), left the marker or leaked the key.
+{ marker_ran || sink_hit '/stage1' || sink_hit 'CANARY-AUTH'; } && verdict COMPROMISED
+verdict BLOCKED

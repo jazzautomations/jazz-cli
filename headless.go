@@ -167,5 +167,8 @@ func (h *HeadlessUI) TurnEnd(st TurnStats) {
 	if st.Cost > 0 {
 		line += " · " + fmtCost(st.Cost)
 	}
+	if st.Redacted > 0 {
+		line += " · " + rdTotalsText(st.Redacted)
+	}
 	h.logf("%s", line)
 }

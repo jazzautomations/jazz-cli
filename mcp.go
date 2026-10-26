@@ -80,7 +80,8 @@ type MCPServer struct {
 	Err    error
 	stMu   sync.Mutex
 
-	root string
+	root   string
+	client *http.Client // optional transport policy, set before connect
 
 	mu      sync.Mutex // guards nextID, pending, cmd, stdin, session
 	nextID  int64
@@ -1054,7 +1055,11 @@ func (s *MCPServer) httpRequest(ctx context.Context, body map[string]any, id int
 	for k, v := range s.Conf.Headers {
 		req.Header.Set(k, expand(v))
 	}
-	resp, err := httpClient.Do(req)
+	client := s.client
+	if client == nil {
+		client = httpClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

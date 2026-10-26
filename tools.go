@@ -138,18 +138,18 @@ func buildToolSpecs(hasRg, web bool) []ToolSpec {
 	specs := []ToolSpec{
 		{Name: "read", Description: "Read a text file. Lines are returned as `<line number>\\t<text>`. Shows up to 2000 lines by default; for big files use offset (1-based start line) and limit. On a directory, lists its entries. On an image (png/jpg/gif/webp) attaches the picture.",
 			Params: obj(map[string]any{
-				"path":   str("File path (relative to the project root, or absolute)"),
+				"path":   str("File path (relative to the project root, absolute, or ~/path; ~ resolves to this process user's HOME)"),
 				"offset": integer("1-based line number to start from"),
 				"limit":  integer("Maximum number of lines to return"),
 			}, "path")},
 		{Name: "write", Description: "Create a file, or overwrite it completely. Parent directories are created. An existing file must be read before it can be overwritten. Prefer edit for changes to existing files. Write complete content: never use placeholders like '// rest of the code unchanged'.",
 			Params: obj(map[string]any{
-				"path":    str("File path"),
+				"path":    str("File path (~/path resolves to this process user's HOME)"),
 				"content": str("Full file content"),
 			}, "path", "content")},
 		{Name: "edit", Description: "Replace exact text in a file. old_string must match the file exactly, including whitespace and indentation, and must be unique unless replace_all is true: include enough surrounding lines to make it unique. Never include the line-number prefixes from read output. For several changes to one file pass edits:[{old_string,new_string}], applied atomically. Don't re-read the file afterwards to check: the tool fails if the edit did not apply.",
 			Params: obj(map[string]any{
-				"path":        str("File path"),
+				"path":        str("File path (~/path resolves to this process user's HOME)"),
 				"old_string":  str("Exact text to find"),
 				"new_string":  str("Replacement text"),
 				"replace_all": map[string]any{"type": "boolean", "description": "Replace every occurrence (default false)"},
@@ -178,6 +178,9 @@ func buildToolSpecs(hasRg, web bool) []ToolSpec {
 	if web {
 		specs = append(specs, fetchSpec)
 	}
+	if dcToolOn() {
+		specs = append(specs, dcSpec) // docs.go
+	}
 	return specs
 }
 
@@ -200,6 +203,7 @@ var toolAliases = map[string]string{
 	"shell": "bash", "run": "bash", "exec": "bash", "execute": "bash", "run_command": "bash", "terminal": "bash", "sh": "bash", "command": "bash", "execute_command": "bash", "run_shell_command": "bash", "run_terminal_cmd": "bash", "exec_command": "bash",
 	"todowrite": "todo", "todo_write": "todo", "update_plan": "todo", "write_todos": "todo", "plan": "todo", "todos": "todo",
 	"web_fetch": "fetch", "webfetch": "fetch", "web_search": "fetch", "websearch": "fetch", "search": "fetch", "browse": "fetch", "http_get": "fetch", "curl": "fetch",
+	"get_docs": "docs", "library_docs": "docs", "lookup_docs": "docs", "docs_lookup": "docs", "get-library-docs": "docs", "query-docs": "docs", "query_docs": "docs",
 	"agent": "task", "subagent": "task", "spawn_agent": "task", "delegate": "task", "explore": "task",
 }
 
@@ -213,6 +217,7 @@ var paramAliases = map[string]map[string]string{
 	"bash":  {"cmd": "command", "script": "command", "code": "command", "shell": "command", "commands": "command", "timeout_seconds": "timeout", "timeout_sec": "timeout", "timeout_ms": "timeout", "run_in_background": "background", "is_background": "background", "detach": "background", "job_id": "job", "id": "job", "shell_id": "job", "bash_id": "job"},
 	"todo":  {"items": "todos", "tasks": "todos", "list": "todos", "plan": "todos", "steps": "todos"},
 	"fetch": {"uri": "url", "link": "url", "address": "url", "q": "query", "search": "query", "search_query": "query", "max_length": "max_chars", "limit": "max_chars", "prompt": "query"},
+	"docs":  {"lib": "library", "package": "library", "pkg": "library", "module": "library", "name": "library", "libraryName": "library", "q": "query", "topic": "query", "symbol": "query", "search": "query", "ver": "version"},
 	"task":  {"task": "prompt", "instructions": "prompt", "query": "prompt", "goal": "prompt", "desc": "description", "title": "description"},
 }
 
@@ -736,9 +741,9 @@ func (t *Toolbox) Exec(ctx context.Context, name, rawArgs string) ToolOutput {
 	out := t.exec(ctx, name, rawArgs)
 	// known keys and token shapes never reach the model, the session log or the
 	// screen (bug 12): a read of auth.json or a printed .env is redacted too
-	out.Text = redactSecrets(out.Text)
+	out.Text = rdToolOut(out.Text, "tool:"+name) // reversible placeholders, then the shapes left (redact.go)
 	for i, l := range out.Display.Preview {
-		out.Display.Preview[i] = redactSecrets(l)
+		out.Display.Preview[i] = rdToolText(l, "tool:"+name)
 	}
 	return out
 }
@@ -773,6 +778,10 @@ func (t *Toolbox) exec(ctx context.Context, name, rawArgs string) ToolOutput {
 	case "script":
 		if t.Scripts {
 			return t.script(ctx, m, rawArgs)
+		}
+	case "docs":
+		if dcToolOn() {
+			return t.docs(ctx, m, rawArgs)
 		}
 	}
 	return ToolOutput{IsErr: true, Text: fmt.Sprintf("Tool %q not found. Available tools: %s.", name, strings.Join(t.toolNames(), ", ")),
@@ -1172,7 +1181,7 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	var b strings.Builder
 	if r.Output != "" {
 		set := opSettingsNow() // --parse-output / --grep-trunc / --tool-budget (outshape.go)
-		b.WriteString(opShapeOutput(cmd, redactSecrets(r.Output), opBudget(set, window), set))
+		b.WriteString(opShapeOutput(cmd, rdToolText(r.Output, "tool:bash"), opBudget(set, window), set))
 		b.WriteString("\n")
 	}
 	if !r.Reset {

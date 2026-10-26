@@ -127,7 +127,7 @@ var (
 )
 
 // uiLowPower: fewer frames and animations. On with --low-power or
-// JAZZ_LOW_POWER=1; automatic on a single-CPU machine (JAZZ_LOW_POWER=0 turns
+// JAZZ_LOW_POWER=1; automatic on a single-CPU machine and on Termux (JAZZ_LOW_POWER=0 turns
 // the automatic choice off).
 func uiLowPower() bool {
 	switch uiLowOverride.Load() {
@@ -144,7 +144,7 @@ func uiLowPower() bool {
 		case "0", "off", "false", "no", "nao", "não":
 			uiLow = false
 		default:
-			uiLow = runtime.NumCPU() == 1
+			uiLow = runtime.NumCPU() == 1 || isTermux() // phones: many slow cores
 		}
 	})
 	return uiLow

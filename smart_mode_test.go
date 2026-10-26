@@ -238,12 +238,15 @@ func TestSmartNeverAutoApproves(t *testing.T) {
 		{"edit", map[string]any{"path": ".jazz/settings.json", "old_string": "a", "new_string": "b"}},
 		{"write", map[string]any{"path": filepath.Join(filepath.Dir(h.root), "elsewhere.txt"), "content": "x"}},
 		{"write", map[string]any{"path": filepath.Join(home, ".bashrc"), "content": "x"}},
-		{"write", map[string]any{"path": filepath.Join(configDir(), "config.json"), "content": "{}"}},
 	}
 	for _, c := range cases {
 		if smPermit(h, c.tool, c.args) || len(h.ui.approvals) != 1 {
 			t.Errorf("%s %v: must prompt even when the classifier says SAFE (approvals=%+v)", c.tool, c.args, h.ui.approvals)
 		}
+	}
+	// Private Jazz state is now denied outright, even if the classifier says SAFE.
+	if smPermit(h, "write", map[string]any{"path": filepath.Join(configDir(), "config.json"), "content": "{}"}) || len(h.ui.approvals) != 0 {
+		t.Fatal("private Jazz state must be blocked without offering approval")
 	}
 	if f.calls() != 0 {
 		t.Errorf("hard-ask actions must not reach the classifier: %+v", f.queries)
@@ -382,13 +385,28 @@ func TestSmartModeLabelsAndConfig(t *testing.T) {
 	if c.Mode != "smart" || c.EffMode() != "smart" {
 		t.Errorf("smart must survive config load: %q", c.Mode)
 	}
-	a := &App{cfg: &Config{Mode: "auto"}, ui: u}
-	var seen []string
-	for i := 0; i < 5; i++ {
-		a.cycleMode()
-		seen = append(seen, a.cfg.EffMode())
+	old := turboSandboxOK
+	t.Cleanup(func() { turboSandboxOK = old })
+	for _, c := range []struct {
+		sandbox bool
+		want    string
+	}{
+		{true, "plan,ask,turbo,auto,plan"}, // smart is not in the cycle
+		{false, "plan,ask,auto,plan,ask"},  // no sandbox: turbo = auto, skipped
+	} {
+		turboSandboxOK = func() bool { return c.sandbox }
+		a := &App{cfg: &Config{Mode: "auto"}, ui: u}
+		var seen []string
+		for i := 0; i < 5; i++ {
+			a.cycleMode()
+			seen = append(seen, a.cfg.EffMode())
+		}
+		if strings.Join(seen, ",") != c.want {
+			t.Errorf("sandbox=%v: Shift+Tab cycle = %v; want %s", c.sandbox, seen, c.want)
+		}
 	}
-	if strings.Join(seen, ",") != "turbo,smart,plan,ask,auto" {
-		t.Errorf("Shift+Tab cycle = %v; want turbo,smart,plan,ask,auto", seen)
+	// smart and yolo (reachable by /mode and flags) cycle back to the start
+	if modeCycleNext("smart", true) != "turbo" || modeCycleNext("yolo", false) != "auto" {
+		t.Error("smart/yolo must go back to the start of the cycle")
 	}
 }

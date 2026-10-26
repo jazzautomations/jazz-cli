@@ -556,16 +556,30 @@ func TestTrustSummaryHasNoEscapes(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUiApproveIgnoresLettersOfSteeringText(t *testing.T) {
-	// the prompt opens while text is being typed: single letters never answer
+	// the prompt opens while text is being typed: the letters never answer,
+	// Enter after a pause is the highlighted "Sim", and the typed text stays
+	// queued (the audit's "digitar sim" complaint)
 	u, keys := uiTestUI(t)
+	read := uiTestStdout(t)
 	stop := u.WatchTurn(func() {}, func(string) {})
 	uiSendRunes(keys, "usa")
 	time.Sleep(50 * time.Millisecond)
-	res := uiApproveAsync(u, context.Background(), "bash", "npm install", "")
+	ctx0, cancel0 := context.WithTimeout(context.Background(), uiApproveGrace+uiApproveIdle+300*time.Millisecond)
+	res := uiApproveAsync(u, ctx0, "bash", "npm install", "")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
 	uiSendRunes(keys, " a branch nova\n")
-	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Deny || r.fb != "a branch nova" {
+	if r := uiWaitApprove(t, res, 3*time.Second); r.ap != Deny || r.fb != "" {
 		t.Fatalf("typed text answered the prompt: %+v", r)
+	}
+	cancel0()
+	if out := stripANSI(read()); !strings.Contains(out, "na fila: usa") {
+		t.Errorf("queued text not shown above the approval: %q", out)
+	}
+	res = uiApproveAsync(u, context.Background(), "bash", "npm install", "")
+	time.Sleep(uiApproveGrace + 50*time.Millisecond)
+	uiSendRunes(keys, "\n")
+	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Allow {
+		t.Fatalf("enter after typing ahead = %+v, want sim", r)
 	}
 	stop()
 	if got := string(u.takeLeftover()); got != "usa" {

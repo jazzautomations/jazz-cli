@@ -12,7 +12,6 @@ package main
 // git; nothing goes into the system prompt besides the root path itself.
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -328,13 +327,7 @@ func wtList(repo string, w io.Writer) {
 
 // wtAsk reads a yes/no answer (default no).
 func wtAsk(in io.Reader, w io.Writer, q string) bool {
-	fmt.Fprint(w, q+" [s/N] ")
-	line, _ := bufio.NewReader(in).ReadString('\n')
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "s", "sim", "y", "yes":
-		return true
-	}
-	return false
+	return cliChoose(in, w, q, yesNo("Sim", "Não"), 1) == 0
 }
 
 // wtMerge brings jazz/<name> into the original branch with --no-ff.

@@ -90,11 +90,34 @@ type OmniConf struct {
 	PrivacyAck bool                `json:"privacy_ack,omitempty"` // the user saw OmniPrivacyNotice
 }
 
+// UIConf: input editor options. palette: fuzzy (default) | prefix;
+// mention_picker / history_prefix: on (default) | off.
+type UIConf struct {
+	Palette       string `json:"palette,omitempty"`
+	MentionPicker string `json:"mention_picker,omitempty"`
+	HistoryPrefix string `json:"history_prefix,omitempty"`
+}
+
+// uiOpt resolves one input option: env > config > on. Only an explicit
+// off/0/false/no (or, for the palette, "prefix") turns it off.
+func uiOpt(env, conf string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(env)))
+	if v == "" {
+		v = strings.ToLower(strings.TrimSpace(conf))
+	}
+	switch v {
+	case "0", "off", "false", "no", "nao", "não", "prefix":
+		return false
+	}
+	return true
+}
+
 type Config struct {
-	Model         string                   `json:"model"`    // "provider/model-id"
-	Fallback      []string                 `json:"fallback"` // tried in order on retryable errors
-	Mode          string                   `json:"mode"`     // auto | turbo | smart | ask | yolo (persisted; plan is never saved)
-	ModeOverride  string                   `json:"-"`        // session-only mode (flags, Shift+Tab, plan); wins over Mode
+	Model         string                   `json:"model"`          // "provider/model-id"
+	Fallback      []string                 `json:"fallback"`       // tried in order on retryable errors
+	Mode          string                   `json:"mode,omitempty"` // auto | turbo | smart | ask | yolo (persisted; plan is never saved; "" = DefaultMode)
+	ModeOverride  string                   `json:"-"`              // session-only mode (flags, Shift+Tab, plan); wins over Mode
+	DefaultMode   string                   `json:"-"`              // mode when config sets none (interactive: turbo with an isolating sandbox)
 	MaxSteps      int                      `json:"max_steps"`
 	ContextWindow int                      `json:"context_window"`
 	MaxTokens     int                      `json:"max_tokens"`
@@ -109,6 +132,15 @@ type Config struct {
 	Omni          OmniConf                 `json:"omni,omitzero"`
 	Notify        string                   `json:"notify,omitempty"`     // bell (default) | osc | off
 	UpdateURL     string                   `json:"update_url,omitempty"` // self-update source (update.go)
+	// Confirmations (confirm.go): trust_default "prompt" (default) asks once per
+	// folder, "always" trusts a folder that brings no config of its own without
+	// asking; always_scope is what "Sim, e não perguntar de novo" remembers:
+	// "auto" (default, as Claude Code: edits for this session, commands and
+	// domains for this project), "session" or "project"; mode_intro is the
+	// start mode whose one-line explanation was already shown.
+	TrustDefault string `json:"trust_default,omitempty"`
+	AlwaysScope  string `json:"always_scope,omitempty"`
+	ModeIntro    string `json:"mode_intro,omitempty"`
 	// FirstByteTimeout (seconds) bounds the wait for the first streamed data of a
 	// free model that has a fallback after it; 0 = default (25 s), negative = off.
 	FirstByteTimeout int `json:"first_byte_timeout,omitempty"`
@@ -145,10 +177,20 @@ type Config struct {
 	// Tools: tool execution settings. parallel: auto (default) | on | off | N
 	// (partools.go reads it from config.json itself; declared so Save keeps it).
 	Tools ToolsConf `json:"tools,omitzero"`
+	// ResumeReplay: how much of a resumed conversation is shown again
+	// (sessions_ui.go): N entries (default 200) | "all" | "off";
+	// JAZZ_RESUME_REPLAY wins. SessionPicker: "on" (default, arrow-key list
+	// for /resume, /sessions, /tree, jazz -r) | "off" (numbered list);
+	// JAZZ_SESSION_PICKER wins.
+	ResumeReplay  any    `json:"resume_replay,omitempty"`
+	SessionPicker string `json:"session_picker,omitempty"`
 	// Scripts toggles the script tool (scripts.go): "on" (default) | "off".
 	Scripts string `json:"scripts,omitempty"`
 	// UILint toggles the post-edit UI lint hook (uilint.go): "on" (default) | "off".
 	UILint string `json:"ui_lint,omitempty"`
+	// UI: input editor options (editor_palette.go); JAZZ_PALETTE,
+	// JAZZ_MENTION_PICKER and JAZZ_HISTORY_PREFIX win.
+	UI UIConf `json:"ui,omitzero"`
 	// FastPaths toggles deterministic intent fast paths in interactive mode
 	// (intents.go): "on" (default) | "off". Headless uses --fast-path.
 	FastPaths string `json:"fastpaths,omitempty"`
@@ -161,16 +203,21 @@ type Config struct {
 	// Security round (security.md): PrivacyAck = the user saw the notice about
 	// providers that may train on prompts (F4); MaxJobs caps background jobs
 	// (0 = 8); InjectionGuard off | warn (default: mark + confirm) | strict
-	// (also in yolo); SupplyChain on (default) | off checks package installs
+	// (also in yolo); SupplyChain on (default) | off | strict (name-only typosquat block) checks package installs
 	// against the registries (guardrails.go).
 	PrivacyAck     bool   `json:"privacy_ack,omitempty"`
 	MaxJobs        int    `json:"max_jobs,omitempty"`
 	InjectionGuard string `json:"injection_guard,omitempty"`
 	SupplyChain    string `json:"supply_chain,omitempty"`
+	// DiffGuard: on (default) | off | strict (MEDIUM findings ask too) — review of
+	// the files the turn changed (diffguard.go); --diff-guard / JAZZ_DIFF_GUARD win.
+	DiffGuard string `json:"diff_guard,omitempty"`
 	// Sanitize: off | strip (default) | strict — invisible Unicode, terminal
 	// escapes, look-alike letters and hidden HTML before content reaches the
 	// model (sanitize.go).
 	Sanitize string `json:"sanitize,omitempty"`
+	// Limits (hardening2.go): ulimit caps every shell command inherits (processes, file size, open files, CPU seconds).
+	ShellLimits *LimitsConf `json:"limits,omitempty"`
 	// EgressAllow: hosts a bash command may send data to without asking
 	// (curl -d, scp, nc …); globs like "*.mycorp.com". Loopback is always
 	// allowed. "" = ask for every external destination (safety.go egress gate).
@@ -189,6 +236,7 @@ type Config struct {
 	// --allow-outside / --block-ux for this run only (never saved).
 	AllowOutsideRun bool   `json:"-"`
 	BlockUXRun      string `json:"-"`
+	DiffGuardRun    string `json:"-"`
 	// Sandbox: auto (default: best OS backend, none = run without) | strict
 	// (refuse to run without one; children get loopback-only network) | off.
 	// SandboxNet: on | off overrides the network rule (sandbox.go).
@@ -207,6 +255,9 @@ type Config struct {
 	// jazz improve (auto = learn after every -p run; project lessons only).
 	Lessons string      `json:"lessons,omitempty"`
 	Improve ImproveConf `json:"improve,omitzero"`
+	// Docs: the docs tool, Context7 (opt-in), API-error hints and the project
+	// API map note (docs.go reads it from config.json itself).
+	Docs DocsConf `json:"docs,omitzero"`
 }
 
 // pvDefaultFirstByte is the first-byte deadline for free models with a fallback.
@@ -231,10 +282,20 @@ func (c *Config) EffMode() string {
 	if c.ModeOverride != "" {
 		return c.ModeOverride
 	}
-	if c.Mode == "" {
-		return "auto"
+	return c.BaseMode()
+}
+
+// BaseMode is the mode without the session override: config "mode", else
+// DefaultMode (set by the interactive start: turbo when an OS sandbox
+// isolates, pfDefaultMode), else auto.
+func (c *Config) BaseMode() string {
+	switch {
+	case c.Mode != "":
+		return c.Mode
+	case c.DefaultMode != "":
+		return c.DefaultMode
 	}
-	return c.Mode
+	return "auto"
 }
 
 // SetMode is the /mode setter: persists Mode and clears the session override.
@@ -315,7 +376,7 @@ func dataDir() string {
 }
 
 func LoadConfig() (*Config, error) {
-	c := &Config{Mode: "auto", MaxSteps: 80, ContextWindow: 128000, MaxTokens: 16000, Web: true}
+	c := &Config{MaxSteps: 80, ContextWindow: 128000, MaxTokens: 16000, Web: true}
 	p := filepath.Join(configDir(), "config.json")
 	b, err := os.ReadFile(p)
 	if err == nil {
@@ -369,9 +430,9 @@ func (c *Config) applyDefaults() {
 	}
 	c.Mode = tbModeName(c.Mode) // "full-auto" is turbo
 	switch c.Mode {
-	case "auto", "smart", "ask", "yolo", "turbo":
+	case "", "auto", "smart", "ask", "yolo", "turbo":
 	default:
-		c.Mode = "auto" // includes "plan": never persisted, never loaded
+		c.Mode = "" // includes "plan": never persisted, never loaded
 	}
 }
 

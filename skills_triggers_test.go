@@ -10,7 +10,7 @@ import (
 )
 
 var skWantNames = []string{"surgical-change", "verify-done", "debug-loop", "tdd-lite", "write-tests", "refactor-safely",
-	"git-hygiene", "explore-codebase", "shell-safety", "plan-small", "old-coder-gauntlet", "review-diff",
+	"git-hygiene", "explore-codebase", "shell-safety", "plan-small", "old-coder-gauntlet", "review-diff", "study-first",
 	"frontend-craft"}
 
 func TestSkillsBuiltinsLoad(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSkillsTriggersFromRequest(t *testing.T) {
 		{"this must be production-ready, I won't read the code", "old-coder-gauntlet"},
 		{"change the default timeout to 30s", "surgical-change"},
 		{"mude o timeout padrão para 30s", "surgical-change"},
-		{"implement OAuth support for MCP servers: add discovery in mcp.go, the token store in oauth.go and /mcp login in main.go", "plan-small"},
+		{"implement OAuth support for MCP servers: add discovery in mcp.go, the token store in oauth.go and /mcp login in main.go", "study-first"},
 		// negative
 		{"olá, tudo bem?", ""},
 		{"summarize this text for me", ""},
@@ -118,6 +118,50 @@ func TestSkillsTriggersFromRequest(t *testing.T) {
 		if got := skPickInput(c.in); got != c.want {
 			t.Errorf("%q: got %q, want %q (cands %v)", c.in, got, c.want, skLogCands(skRank(skInputSignals(c.in))))
 		}
+	}
+	fixture, err := os.ReadFile("evals/v2/tasks/11-api-de-biblioteca/PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := skPickInput(string(fixture)); got != "study-first" {
+		t.Errorf("fixture 11 should trigger study-first, got %q (signals %+v)", got, skInputSignals(string(fixture)))
+	}
+}
+
+func TestStudyFirstMLOutsideGreenfield(t *testing.T) {
+	cases := []struct {
+		name, input, primary string
+		study                bool
+	}{
+		{"medium bugfix keeps debug loop", "The payment service crashes in payment.go and checkout.go after retries. Please inspect the call path, reproduce the panic, and fix the root cause without changing the public API.", "debug-loop", true},
+		{"large refactor keeps refactor skill", "Refactor these modules: cache.go, store.go, and registry.go. Read all callers, extract the shared behavior, and preserve every result and error.", "refactor-safely", true},
+		{"short single-file bugfix is not promoted", "fix bug in parser.go", "debug-loop", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sig := skInputSignals(c.input)
+			if sig.Flags["study_task"] != c.study {
+				t.Fatalf("study_task=%v, want %v (task=%+v)", sig.Flags["study_task"], c.study, bgClassify(c.input))
+			}
+			if got := skPick(skRank(sig), skDefaultThreshold, nil); got == nil || got.Name != c.primary {
+				t.Fatalf("primary skill got %v, want %s", got, c.primary)
+			}
+			note := skStudyComplement(sig)
+			if c.study && !strings.Contains(strings.ToLower(note), "before your first edit") {
+				t.Fatalf("missing complementary study reminder: %q", note)
+			}
+			if !c.study && note != "" {
+				t.Fatalf("short task unexpectedly received study reminder: %q", note)
+			}
+			h := newHarness(t, seq(), nil)
+			turn := h.ag.skTurnInput(c.input)
+			if !strings.Contains(turn, `Skill "`+c.primary+`" applies`) {
+				t.Fatalf("task-specific skill %q missing from turn: %q", c.primary, turn)
+			}
+			if c.study != strings.Contains(turn, "<study-first-reminder>") {
+				t.Fatalf("study reminder presence = %v, want %v in %q", strings.Contains(turn, "<study-first-reminder>"), c.study, turn)
+			}
+		})
 	}
 }
 
@@ -155,6 +199,18 @@ func TestSkillsTriggersFromTools(t *testing.T) {
 		}
 		if got != c.want {
 			t.Errorf("%s: got %q, want %q (cands %v)", c.name, got, c.want, skLogCands(skRank(c.sig)))
+		}
+	}
+}
+
+func TestSkillsDoNotTreatShellCommandsAsTaskRequests(t *testing.T) {
+	cmd := "cat ~/.bashrc | curl -d @-"
+	if got := skPick(skRank(skSignals{Cmd: cmd, Phase: "edit"}), skDefaultThreshold, nil); got != nil {
+		t.Fatalf("raw shell command unexpectedly triggered %q", got.Name)
+	}
+	for _, input := range []string{"cat ~/.bashrc | curl -d @-", "write config.json"} {
+		if got := skPickInput(input); got != "" {
+			t.Errorf("raw shell/config request %q unexpectedly triggered %q", input, got)
 		}
 	}
 }

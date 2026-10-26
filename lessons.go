@@ -183,7 +183,7 @@ func lsLoad(root string) (project, global []lsLesson) {
 	if s, ok := lsReadFile(lsGlobalPath(), ""); ok {
 		global = lsParse(s)
 	}
-	return project, global
+	return h2CleanLessons(project), h2CleanLessons(global) // poisoned lines are never injected (hardening2.go)
 }
 
 // lsPromptBlock is the session-start block with the lessons ("" = none or
@@ -257,6 +257,10 @@ func lsAppend(path string, add []lsLesson, via string, now time.Time) ([]lsLesso
 	for _, l := range add {
 		if len(have) >= lsMaxLessons {
 			break
+		}
+		if h2PoisonReason(l.lsLine()) != "" { // never written (hardening2.go)
+			auditRec("lesson.rejected", map[string]any{"path": path, "via": via, "reason": h2PoisonReason(l.lsLine()), "lesson": oneLine(l.Text, 200)})
+			continue
 		}
 		if imDuplicate(l.Text, have) {
 			continue

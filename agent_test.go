@@ -78,6 +78,80 @@ func TestAgentReadToolThenFinalAnswer(t *testing.T) {
 	}
 }
 
+func TestStudyFirstTriggerPromptAndScriptedFakeSequence(t *testing.T) {
+	prompt, err := os.ReadFile("evals/v2/tasks/11-api-de-biblioteca/PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fake provider deliberately scripts grep/docs/read before edit. This
+	// checks prompt/trigger integration and that tool results are threaded back;
+	// it does not prove the harness enforces model compliance or blocks early edits.
+	// The search uses POSIX grep, not rg: the test must not depend on optional host tools.
+	h := newHarness(t, func(n int, r recReq) fakeResp {
+		last := r.last()
+		content := fmt.Sprint(last["content"])
+		switch n {
+		case 0:
+			if !strings.Contains(content, "# Study first") {
+				t.Errorf("first user request lacks the study-first reminder: %s", content)
+			}
+			return fakeResp{Calls: []fakeCall{{ID: "study-grep", Name: "bash", Args: `{"command":"grep -nE 'decode|encode' fastjson/docs/api.md"}`}}}
+		case 1:
+			if !strings.Contains(r.toolResults()["study-grep"], "decode") {
+				t.Errorf("grep evidence was not returned before the next action: %v", r.toolResults())
+			}
+			return fakeResp{Calls: []fakeCall{{ID: "study-docs", Name: "docs", Args: `{"library":"fastjson","query":"decode encode Decimal indent sort"}`}}}
+		case 2:
+			if !strings.Contains(r.toolResults()["study-docs"], "fastjson.decode") {
+				t.Errorf("docs evidence was not returned before read/edit: %v", r.toolResults())
+			}
+			return fakeResp{Calls: []fakeCall{{ID: "study-read", Name: "read", Args: `{"path":"carteira/arquivo.py"}`}}}
+		case 3:
+			if !strings.Contains(r.toolResults()["study-read"], "NotImplementedError") {
+				t.Errorf("file was not read before edit: %v", r.toolResults())
+			}
+			return fakeResp{Calls: []fakeCall{{ID: "study-edit", Name: "edit", Args: jsonArgs(map[string]any{
+				"path": "carteira/arquivo.py", "old_string": "    raise NotImplementedError", "new_string": "    return {}",
+			})}}}
+		default:
+			return fakeResp{Text: "Implemented after checking the package API."}
+		}
+	}, nil)
+	for f, body := range map[string]string{
+		"requirements.txt":     "fastjson==2.1.0\n",
+		"fastjson/__init__.py": "__version__ = '2.1.0'\ndef decode(data, *, decimal=False): pass\ndef encode(obj, *, indent=0, sort=False): pass\n",
+		"fastjson/docs/api.md": "# fastjson 2.x\n\n## fastjson.decode(data, *, decimal=False)\n\nReturns Decimal values when decimal=True.\n\n## fastjson.encode(obj, *, indent=0, sort=False)\n\nReturns bytes and preserves Decimal scale.\n",
+		"carteira/arquivo.py":  "def carregar(caminho):\n    raise NotImplementedError\n\ndef salvar(carteira, caminho):\n    raise NotImplementedError\n",
+	} {
+		path := filepath.Join(h.root, f)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := h.run(t, string(prompt)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var firstEdit, lastStudy int
+	for i, m := range h.ag.Msgs {
+		if m.Role == "assistant" {
+			for _, call := range m.ToolCalls {
+				if call.Name == "edit" || call.Name == "write" {
+					firstEdit = i
+				}
+			}
+		}
+		if m.Role == "tool" && (m.ToolCallID == "study-grep" || m.ToolCallID == "study-docs" || m.ToolCallID == "study-read") {
+			lastStudy = i
+		}
+	}
+	if firstEdit == 0 || lastStudy == 0 || lastStudy >= firstEdit {
+		t.Fatalf("study evidence must precede first edit (last evidence msg %d, edit msg %d)", lastStudy, firstEdit)
+	}
+}
+
 func TestAgentBashExecutesInProject(t *testing.T) {
 	h := newHarness(t, seq(
 		fakeResp{Calls: []fakeCall{{ID: "b1", Name: "bash", Args: jsonArgs(map[string]any{"command": "echo built > out.txt && cat out.txt && pwd"})}}},
@@ -783,8 +857,53 @@ func TestAgentAllowAlwaysCachesExceptDangerous(t *testing.T) {
 			t.Errorf("%s not written", f)
 		}
 	}
-	if b, err := os.ReadFile(filepath.Join(h.root, ".jazz", "settings.json")); err != nil || !strings.Contains(string(b), "Edit(") {
-		t.Errorf("'always' must persist an Edit(...) rule: %q %v", b, err)
+	// as Claude Code: "don't ask again" for edits lasts this session only
+	if b, err := os.ReadFile(filepath.Join(h.root, ".jazz", "settings.json")); err == nil && strings.Contains(string(b), "Edit(") {
+		t.Errorf("'always' on a write must not persist an Edit(...) rule: %q", b)
+	}
+	session := false
+	for _, r := range h.ag.Perms.Rules() {
+		if strings.HasPrefix(r.Rule, "Edit(") && r.Source == pfSessionSource {
+			session = true
+		}
+	}
+	if !session {
+		t.Errorf("'always' must keep an Edit(...) rule for the session: %+v", h.ag.Perms.Rules())
+	}
+}
+
+// always_scope: "project" persists the edit rule; commands persist by default
+// (Claude Code's "don't ask again for npm test:* in this project").
+func TestAgentAlwaysScope(t *testing.T) {
+	for _, c := range []struct {
+		scope, tool, args, want string
+		persisted               bool
+	}{
+		{"", "write", `{"path":"a.txt","content":"a"}`, "Edit(", false},
+		{"project", "write", `{"path":"a.txt","content":"a"}`, "Edit(", true},
+		{"", "bash", `{"command":"touch z.txt"}`, "Bash(touch:*)", true},
+		{"session", "bash", `{"command":"touch z.txt"}`, "Bash(touch:*)", false},
+	} {
+		h := newHarness(t, seq(fakeResp{Calls: []fakeCall{{ID: "x1", Name: c.tool, Args: c.args}}}, fakeResp{Text: "ok"}),
+			func(cf *Config) { cf.Mode = "ask"; cf.AlwaysScope = c.scope })
+		h.ag.Perms = &PermSet{cfg: h.cfg, root: h.root}
+		h.ui.answer = AllowAlways
+		if err := h.run(t, "go"); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(filepath.Join(h.root, ".jazz", "settings.json"))
+		if got := strings.Contains(string(b), c.want); got != c.persisted {
+			t.Errorf("scope %q %s: persisted=%v want %v (%q)", c.scope, c.tool, got, c.persisted, b)
+		}
+		found := false
+		for _, r := range h.ag.Perms.Rules() {
+			if strings.HasPrefix(r.Rule, c.want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("scope %q %s: rule %s not active", c.scope, c.tool, c.want)
+		}
 	}
 }
 
@@ -1166,7 +1285,7 @@ func TestAgentSessionJSONLWrittenAndReloaded(t *testing.T) {
 		}
 	}
 	list := ListSessions(h.root)
-	if len(list) != 1 || list[0].ID != h.ag.SessionID || list[0].Title != "turn one" || list[0].Msgs != len(h.ag.Msgs) {
+	if len(list) != 1 || list[0].ID != h.ag.SessionID || list[0].Title != "Turn one" || list[0].Msgs != len(h.ag.Msgs) {
 		t.Errorf("ListSessions = %+v", list)
 	}
 }

@@ -213,6 +213,9 @@ func dangerWholeSh(cmd string) string {
 	if reForkBomb.MatchString(cmd) {
 		return "fork bomb"
 	}
+	if r := h2WholeDanger(cmd); r != "" { // hardening2.go
+		return r
+	}
 	if rePipeShell.MatchString(cmd) && regexp.MustCompile(`\b(curl|wget|base64|nc)\b`).MatchString(cmd) || reShellRemote.MatchString(cmd) || reB64Shell.MatchString(cmd) {
 		return "executa script baixado/decodificado direto no shell"
 	}
@@ -335,6 +338,9 @@ func segmentDanger(t []string) string {
 	}
 	w := filepath.Base(t[0])
 	args := t[1:]
+	if r := h2SegmentDanger(w, args); r != "" { // hardening2.go
+		return r
+	}
 	if strings.HasPrefix(w, "mkfs") {
 		return "formata disco"
 	}
@@ -973,7 +979,7 @@ func protectedPath(p, root string) bool {
 		// text that steers the next session (F9)
 		for _, f := range []string{".jazz/settings.json", ".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".git/config", ".git/hooks",
 			".envrc", ".vscode/tasks.json", ".vscode/settings.json", ".vscode/launch.json", ".gitmodules", ".jazz/skills", ".jazz/commands", ".jazz/steering",
-			".jazz/scripts", ".jazz/intents.json", ".jazz/approvals.json", ".claude/skills", ".claude/commands", ".claude/agents", ".kiro/steering", ".cursor/rules", ".idea/workspace.xml"} {
+			".jazz/scripts", ".jazz/intents.json", ".jazz/approvals.json", ".jazz/scan-allow.json", ".jazz/diffrules.d", ".claude/skills", ".claude/commands", ".claude/agents", ".kiro/steering", ".cursor/rules", ".idea/workspace.xml"} {
 			if pathIn(rp, filepath.Join(root, f)) {
 				return true
 			}
@@ -999,7 +1005,7 @@ func protectedPath(p, root string) bool {
 // narrower than protectedPath: reading /usr/include or a skill is fine.
 func secretPath(p string) bool {
 	rp := resolvePath(p)
-	for _, f := range []string{"auth.json", "config.json", "mcp.json", "trusted.json"} {
+	for _, f := range []string{"auth.json", "config.json", "mcp.json", "trusted.json", "redact.key"} {
 		if pathIn(rp, filepath.Join(configDir(), f)) {
 			return true
 		}
@@ -1057,6 +1063,7 @@ var (
 
 // pfNoteConfig records the providers' key variables and refreshes the redaction set.
 func pfNoteConfig(cfg *Config) {
+	h2ApplyConfig(cfg) // shell resource limits (hardening2.go)
 	pfKeyEnvMu.Lock()
 	if cfg != nil {
 		for _, pc := range cfg.Providers {
@@ -1148,15 +1155,16 @@ func redactSecrets(s string) string {
 			s = strings.ReplaceAll(s, v, "[REDACTED]")
 		}
 	}
-	s = secretShapes.ReplaceAllString(s, "[REDACTED]")
+	// rdReplaceKeepPH (redact.go) leaves <secreto:…> placeholders alone
+	s = rdReplaceKeepPH(secretShapes, s, "[REDACTED]")
 	if strings.Contains(s, "PRIVATE KEY-----") {
-		s = secretPrivKey.ReplaceAllString(s, "[REDACTED PRIVATE KEY]")
+		s = rdReplaceKeepPH(secretPrivKey, s, "[REDACTED PRIVATE KEY]")
 	}
 	if strings.Contains(s, "://") {
-		s = reCredURL.ReplaceAllString(s, "${1}[REDACTED]@")
+		s = rdReplaceKeepPH(reCredURL, s, "${1}[REDACTED]@")
 	}
-	s = secretEnvKV.ReplaceAllString(s, "${1}[REDACTED]")
-	return secretKV.ReplaceAllString(s, "${1}[REDACTED]${2}")
+	s = rdReplaceKeepPH(secretEnvKV, s, "${1}[REDACTED]")
+	return rdReplaceKeepPH(secretKV, s, "${1}[REDACTED]${2}")
 }
 
 var (
@@ -1183,6 +1191,13 @@ func sanitizeTerm(s string) string {
 		if c == 0x1b {
 			i = skipEscape(s, i)
 			continue
+		}
+		if c == 0xc2 && i+1 < len(s) { // 8-bit OSC/DCS/SOS/PM/APC introducers (U+0090 U+0098 U+009D U+009E U+009F): drop the string too
+			switch s[i+1] {
+			case 0x90, 0x98, 0x9d, 0x9e, 0x9f:
+				i = h2SkipC1String(s, i+2)
+				continue
+			}
 		}
 		if c < 0x20 && c != '\n' && c != '\t' || c == 0x7f {
 			continue

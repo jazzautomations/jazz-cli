@@ -530,3 +530,11 @@ func pfTestHome(t *testing.T) string {
 	t.Setenv("HOME", t.TempDir()) // no ~/.claude/settings.json from the developer machine
 	return home
 }
+
+// permitTC runs permit on one call and returns (ok, text for the model).
+func permitTC(h *harness, name string, args map[string]any) (bool, string) {
+	h.ui.approvals = nil
+	h.ag.blockWhy = ""
+	ok, msg, _ := h.ag.permit(context.Background(), ToolCall{Name: name, Args: jsonArgs(args)}, toolDetail(name, jsonArgs(args)), false, acHookVerdict{})
+	return ok, msg
+}

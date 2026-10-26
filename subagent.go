@@ -69,7 +69,7 @@ func saStrList(d string) map[string]any {
 
 // acSubTools are the built-in tools offered to the research subagent;
 // saWorkTools are added for a worker.
-var acSubTools = map[string]bool{"read": true, "bash": true, "fetch": true, "script": true} // script: read-only ones only (scGate)
+var acSubTools = map[string]bool{"read": true, "bash": true, "fetch": true, "script": true, "docs": true} // script: read-only ones only (scGate)
 var saWorkTools = map[string]bool{"write": true, "edit": true}
 
 const subagentPrompt = `You are a research subagent of Jazz, a coding agent running in the user's terminal. You get one investigation task; explore the code base and report back. You cannot modify files: use read, read-only bash (rg, grep, ls, find, cat, head, git log/diff/show …) and fetch when available.

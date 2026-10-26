@@ -48,7 +48,10 @@ const pfUpdateRepo = "jazzautomations/jazz-cli"
 // updatePubKey is the base64 ed25519 public key release manifests are signed
 // with, set at build time (scripts/release.sh). Empty = this build cannot
 // self-update (development build).
-var updatePubKey = ""
+// Default: the jazz-cli release key (public). Builds from source can then
+// verify official releases too; release.sh still overrides it via -X and
+// refuses a key that does not match JAZZ_SIGN_KEY.
+var updatePubKey = "Ss9eo+yjN0aYhXRcF+wWRfwAQBHfsxlvLYD3SHLWlvU="
 
 // pfManifestHeader is the first line of a signed release manifest.
 const pfManifestHeader = "jazz-cli release manifest v1"
@@ -166,6 +169,9 @@ func pfAssetName() string { return pfAssetNameFor(runtime.GOOS, runtime.GOARCH) 
 // pfAssetNameFor is the release asset of a platform: jazz-<os>-<arch>, with
 // .exe on Windows (jazz-windows-amd64.exe).
 func pfAssetNameFor(goos, goarch string) string {
+	if goarch == "arm" {
+		goarch = "armv7" // linux/arm is published as an ARMv7 build (GOARM=7)
+	}
 	n := "jazz-" + goos + "-" + goarch
 	if goos == "windows" {
 		n += ".exe"
@@ -410,10 +416,19 @@ func pfDownloadVerified(ctx context.Context, rel *pfRelease, current string) (da
 	if err != nil {
 		return nil, "", err
 	}
-	m, err := pfVerifyManifest(man, sig, rel.Version, current)
+	vcur := current
+	if h2AllowDowngrade {
+		vcur = "0" // --allow-downgrade: the signature and sha256 still have to check out
+	}
+	m, err := pfVerifyManifest(man, sig, rel.Version, vcur)
 	if err != nil {
 		return nil, "", err
 	}
+	// a signed manifest older than the newest one ever seen is a replayed release (hardening2.go)
+	if _, err := h2DowngradeVerdict(m.Version, current, h2AllowDowngrade); err != nil {
+		return nil, "", err
+	}
+	h2NoteSeen(m.Version)
 	want = pfParseSums(m.Sums, rel.AssetName)
 	if want == "" {
 		return nil, "", errors.New("o manifesto assinado não lista " + rel.AssetName)
@@ -436,6 +451,9 @@ func cmdUpdate(cfg *Config, args []string) {
 		if a == "--check" || a == "-n" {
 			check = true
 		}
+		if a == "--allow-downgrade" {
+			h2AllowDowngrade = true
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -444,7 +462,17 @@ func cmdUpdate(cfg *Config, args []string) {
 		fatal("não consegui consultar atualizações: " + err.Error())
 	}
 	pfSaveUpdateCache(rel.Version)
-	if !pfVersionNewer(rel.Version, version) {
+	h2NoteSeen(version)
+	if warn, derr := h2DowngradeVerdict(rel.Version, version, h2AllowDowngrade); warn != "" {
+		fmt.Println("aviso: " + warn)
+		auditRec("update", map[string]any{"from": version, "to": rel.Version, "downgrade": true, "allowed": derr == nil, "check": check})
+		if derr != nil {
+			if check {
+				return
+			}
+			fatal(derr.Error())
+		}
+	} else if !pfVersionNewer(rel.Version, version) {
 		fmt.Printf("jazz %s já é a versão mais nova (%s disponível)\n", version, rel.Version)
 		return
 	}

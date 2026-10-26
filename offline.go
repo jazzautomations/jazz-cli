@@ -419,8 +419,8 @@ func (a *App) olFastPath(ctx context.Context, m fpMatch, offline bool) (done boo
 		a.olRun(ctx, olAction{Kind: kind, Cmd: m.Cmd, Label: "atalho " + m.Intent, Intent: m.Intent})
 		return true, ""
 	}
-	q := "⚡ atalho: " + m.Cmd + "  [Enter] rodar  [Esc] mandar pro modelo"
-	if r := a.ui.Ask(q, "\r\ns"); r == 0 {
+	q := "⚡ atalho: " + m.Cmd
+	if a.ui.Choose(q, []mnItem{{Label: "Rodar agora", Key: 's', Keys: "yr"}, {Label: "Mandar pro modelo", Key: 'm', Keys: "n"}}, 0) != 0 {
 		if offline {
 			return true, ""
 		}

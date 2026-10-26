@@ -189,9 +189,11 @@ func (u *TermUI) liveRender(force bool) {
 		return
 	}
 	w := termWidth()
-	status := ""
+	status, qRows := "", 0
 	if want {
-		status = u.spinLine(lv.frame)
+		var qs string
+		qs, qRows = u.qLive(w) // message queue under the status line (queue.go)
+		status = u.spinLine(lv.frame) + qs
 	}
 	if lv.pend.Len() == 0 && status == lv.status && (lv.rows > 0 || status == "") {
 		return // nothing changed
@@ -237,7 +239,7 @@ func (u *TermUI) liveRender(force bool) {
 			b.WriteString("\x1b[0m\r\n")
 		}
 		b.WriteString("\x1b[0m" + status + "\x1b[0m\x1b[K")
-		rows++
+		rows += 1 + qRows
 	}
 	if !lv.hidden {
 		b.WriteString("\x1b[?25l")

@@ -39,10 +39,13 @@ type Session struct {
 	// unaligned: msgIDs does not match Agent.Msgs (a load repaired missing
 	// tool results); rewinds then rely on the N of the rewind entry alone
 	unaligned bool
+	Tampered  int    // lines that failed the HMAC on load (hardening2.go)
+	Legacy    int    // unsigned lines from before signing
+	title     string // newest title entry (sessions_ui.go); "" = none yet
 }
 
 type sessEntry struct {
-	T        string   `json:"t"` // meta | msg | compact | model | rewind | goal | recover | branch | tool_start | tool_result | end
+	T        string   `json:"t"` // meta | msg | compact | model | rewind | goal | recover | branch | tool_start | tool_result | end | title
 	ID       string   `json:"id,omitempty"`
 	ParentID string   `json:"parentId,omitempty"` // "" = root
 	TS       int64    `json:"ts,omitempty"`       // unix ms when the entry was written
@@ -67,6 +70,11 @@ type sessEntry struct {
 	Target    string    `json:"target,omitempty"` // branch: the entry the leaf moved to
 	Tool      *sessTool `json:"tool,omitempty"`   // tool_start / tool_result (write-ahead)
 	End       *sessEnd  `json:"end,omitempty"`    // end of a headless run (obs.go)
+	Title     string    `json:"title,omitempty"`  // title: the session's name (auto from the first prompt, or /rename)
+	// hardening2.go: set on read only. Tampered = the line failed its HMAC (or
+	// was unsigned after signed ones); Legacy = written before signing existed.
+	Tampered bool `json:"-"`
+	Legacy   bool `json:"-"`
 }
 
 // sessTool is a write-ahead record of one tool call: tool_start is written
@@ -201,6 +209,7 @@ func (s *Session) writeLocked(e sessEntry) string {
 		e.TS = time.Now().UnixMilli()
 	}
 	b, _ := json.Marshal(e)
+	b = h2SignLine(b) // HMAC trailer (hardening2.go)
 	s.f.Write(append(b, '\n'))
 	s.leaf = e.ID
 	switch e.T {
@@ -392,12 +401,31 @@ func (s *Session) Close() {
 
 type SessionInfo struct {
 	ID, Path, Title, Model string
+	Last                   string // the last answer, one line (pickers)
 	Mod                    time.Time
 	Msgs                   int
+	Cwd                    string // project dir from the meta entry
+	Usage                  Usage  // summed over the assistant replies in the file
+	Tools                  int    // tool calls on the active messages
 }
 
-func ListSessions(root string) []SessionInfo {
-	d := sessionsDir(root)
+func ListSessions(root string) []SessionInfo { return sessListDir(sessionsDir(root)) }
+
+// ListAllSessions lists the sessions of every project, newest first.
+func ListAllSessions() []SessionInfo {
+	base := filepath.Join(dataDir(), "sessions")
+	dirs, _ := os.ReadDir(base)
+	var out []SessionInfo
+	for _, d := range dirs {
+		if d.IsDir() {
+			out = append(out, sessListDir(filepath.Join(base, d.Name()))...)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Mod.After(out[j].Mod) })
+	return out
+}
+
+func sessListDir(d string) []SessionInfo {
 	ents, _ := os.ReadDir(d)
 	var out []SessionInfo
 	for _, e := range ents {
@@ -416,6 +444,7 @@ func ListSessions(root string) []SessionInfo {
 		}
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 1<<20), 64<<20)
+		first, named := "", ""
 		for sc.Scan() {
 			var se sessEntry
 			if json.Unmarshal(sc.Bytes(), &se) != nil {
@@ -424,18 +453,35 @@ func ListSessions(root string) []SessionInfo {
 			if se.T == "meta" || se.T == "model" {
 				info.Model = se.Model
 			}
+			if se.T == "meta" && info.Cwd == "" {
+				info.Cwd = se.Cwd
+			}
+			if se.T == "title" && strings.TrimSpace(se.Title) != "" {
+				named = se.Title // the newest one wins (/rename)
+			}
 			if se.T == "rewind" {
 				info.Msgs = min(info.Msgs, se.N)
 			}
 			if se.T == "msg" && se.Msg != nil {
 				info.Msgs++
-				if info.Title == "" && se.Msg.Role == "user" && !strings.HasPrefix(se.Msg.Content, "<summary>") {
+				info.Tools += len(se.Msg.ToolCalls)
+				if se.Usage != nil {
+					info.Usage.Add(*se.Usage)
+				}
+				if first == "" && se.Msg.Role == "user" && !strings.HasPrefix(se.Msg.Content, "<summary>") {
 					// harness reminders lead the first message: the title is the user's text
-					info.Title = oneLine(acStripReminders(se.Msg.Content), 70)
+					first = se.Msg.Content
+				}
+				if se.Msg.Role == "assistant" && strings.TrimSpace(se.Msg.Content) != "" {
+					info.Last = oneLine(se.Msg.Content, 100)
 				}
 			}
 		}
 		f.Close()
+		info.Title = oneLine(sanitizeTerm(named), 70)
+		if info.Title == "" {
+			info.Title = sessAutoTitle(first) // sessions from before titles: same rule, never stored
+		}
 		if info.Msgs > 0 {
 			out = append(out, info)
 		}
@@ -457,12 +503,14 @@ func sessReadEntries(path string) ([]sessEntry, error) {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
 	line, prev := 0, ""
+	ver := newH2Verifier() // HMAC check per line (hardening2.go)
 	for sc.Scan() {
 		line++
 		var se sessEntry
 		if json.Unmarshal(sc.Bytes(), &se) != nil {
 			continue // tolerate a torn line after a crash
 		}
+		se.Tampered, se.Legacy = ver.check(sc.Bytes())
 		if se.ID == "" {
 			se.ID = fmt.Sprintf("L%d", line)
 			if se.T != "meta" {
@@ -534,7 +582,16 @@ type sessReplayed struct {
 
 func sessReplay(path []sessEntry) sessReplayed {
 	r := sessReplayed{wal: map[string]sessTool{}}
+	anyTampered := false
 	for _, se := range path {
+		if se.Tampered { // altered outside jazz: only messages survive, as untrusted data (hardening2.go)
+			anyTampered = true
+			if se.T == "msg" && se.Msg != nil {
+				r.msgs = append(r.msgs, h2UntrustedMsg(*se.Msg))
+				r.ids = append(r.ids, se.ID)
+			}
+			continue
+		}
 		switch se.T {
 		case "meta":
 			r.model, r.system, r.base = se.Model, se.System, se.ID
@@ -559,6 +616,9 @@ func sessReplay(path []sessEntry) sessReplayed {
 		case "end":
 			r.end = se.End
 		}
+	}
+	if anyTampered {
+		r.msgs, r.ids = h2DropOrphanTools(r.msgs, r.ids)
 	}
 	return r
 }
@@ -615,6 +675,12 @@ func LoadSessionAt(path, at string) (*Session, []Message, string, string, error)
 	}
 	s.msgIDs = append([]string(nil), r.ids...)
 	s.unaligned = len(msgs) != len(r.msgs)
+	s.Tampered, s.Legacy = h2TamperStats(ents)
+	for _, e := range ents {
+		if e.T == "title" && !e.Tampered && strings.TrimSpace(e.Title) != "" {
+			s.title = e.Title
+		}
+	}
 	return s, msgs, r.model, r.system, nil
 }
 
@@ -818,9 +884,43 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100ch;margin:2rem auto
 `
 }
 
+// sessTreeRow is one message of the session tree (for /tree).
+type sessTreeRow struct {
+	ID, Who, Text string
+	Depth         int
+	Active        bool // on the active path
+	Leaf          bool // the newest message of the active path
+}
+
+// line is the row as /tree prints it without the picker.
+func (r sessTreeRow) line() string {
+	mark := "○"
+	if r.Active {
+		mark = "●"
+	}
+	line := fmt.Sprintf("%s%s %-8s %-4s %s", strings.Repeat("  ", r.Depth), mark, r.ID, r.Who, r.Text)
+	if r.Leaf {
+		line += "  ← atual"
+	}
+	return line
+}
+
 // sessTreeLines renders the message entries of a session as a tree (for
 // /tree): branches indent, ● marks the active path, the leaf is flagged.
 func sessTreeLines(path string) ([]string, error) {
+	rows, err := sessTreeRows(path)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.line())
+	}
+	return out, nil
+}
+
+// sessTreeRows walks the session tree depth-first (user and assistant messages).
+func sessTreeRows(path string) ([]sessTreeRow, error) {
 	ents, err := sessReadEntries(path)
 	if err != nil {
 		return nil, err
@@ -856,16 +956,12 @@ func sessTreeLines(path string) ([]string, error) {
 	for k := len(roots) - 1; k >= 0; k-- {
 		stack = append(stack, item{roots[k], 0})
 	}
-	var out []string
+	var out []sessTreeRow
 	for len(stack) > 0 {
 		it := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		e := ents[it.i]
 		if e.T == "msg" && e.Msg != nil && (e.Msg.Role == "user" || e.Msg.Role == "assistant") {
-			mark := "○"
-			if onPath[e.ID] {
-				mark = "●"
-			}
 			text := strings.TrimSpace(acStripReminders(e.Msg.Content))
 			if e.Msg.Role == "assistant" && len(e.Msg.ToolCalls) > 0 {
 				var names []string
@@ -878,11 +974,7 @@ func sessTreeLines(path string) ([]string, error) {
 			if e.Msg.Role == "assistant" {
 				who = "jazz"
 			}
-			line := fmt.Sprintf("%s%s %-8s %-4s %s", strings.Repeat("  ", it.depth), mark, e.ID, who, oneLine(text, 70))
-			if e.ID == leafMsg {
-				line += "  ← atual"
-			}
-			out = append(out, line)
+			out = append(out, sessTreeRow{ID: e.ID, Who: who, Text: oneLine(text, 70), Depth: it.depth, Active: onPath[e.ID], Leaf: e.ID == leafMsg})
 		}
 		ch := kids[e.ID]
 		d := it.depth

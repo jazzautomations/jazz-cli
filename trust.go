@@ -95,7 +95,28 @@ func IsTrusted(root, kind string, content []byte) bool {
 	}
 	pfTrustMu.Lock()
 	defer pfTrustMu.Unlock()
-	return pfLoadTrust()[pfTrustRoot(root)][kind] == pfHash(content)
+	r, h := pfTrustRoot(root), pfHash(content)
+	if pfSessTrust[r+"\x00"+kind] == h {
+		return true
+	}
+	return pfLoadTrust()[r][kind] == h
+}
+
+// pfSessTrust is trust granted for this process only ("só nesta sessão" in
+// the startup question): root \x00 kind -> sha256. Guarded by pfTrustMu.
+var pfSessTrust = map[string]string{}
+
+// pfTrustSession trusts the snapshot st until jazz exits (nothing is written).
+func pfTrustSession(root string, st pfTrustState) {
+	pfTrustMu.Lock()
+	defer pfTrustMu.Unlock()
+	r := pfTrustRoot(root)
+	for _, k := range st.kinds {
+		if b := st.blobs[k]; len(b) > 0 {
+			pfSessTrust[r+"\x00"+k] = pfHash(b)
+		}
+	}
+	auditRec("trust", map[string]any{"action": "grant_session", "root": r, "kinds": st.kinds, "ok": true}) // audit.go
 }
 
 // Trust records the user's approval of content for root/kind.
@@ -126,6 +147,11 @@ func pfUntrust(root string) error {
 	defer pfTrustMu.Unlock()
 	all := pfLoadTrust()
 	delete(all, pfTrustRoot(root))
+	for k := range pfSessTrust {
+		if strings.HasPrefix(k, pfTrustRoot(root)+"\x00") {
+			delete(pfSessTrust, k)
+		}
+	}
 	err := pfSaveTrust(all)
 	auditRec("trust", map[string]any{"action": "revoke_all", "root": pfTrustRoot(root), "ok": err == nil}) // audit.go
 	return err
@@ -622,6 +648,9 @@ func pfTrustCollect(root string, folder bool) pfTrustState {
 			b.WriteString(pfRefSummary(refs, "    "))
 		}
 	}
+	if need(dgTrustKind, dgProjectBlob(root)) { // .jazz/diffrules.d (diffguard.go)
+		b.WriteString(dgTrustSummary(root))
+	}
 	st.summary = b.String()
 	return st
 }
@@ -658,6 +687,8 @@ func pfTrustAll(root string, kinds []string) error {
 			content = acProjectSteeringBlob(root)
 		case "scripts":
 			content = pfScriptsBlob(root)
+		case dgTrustKind:
+			content = dgProjectBlob(root)
 		case "folder":
 			content = pfFolderMark
 		case "instructions":
@@ -705,16 +736,14 @@ func pfTrustGateWith(root string, folder, interactive bool, in io.Reader, w io.W
 	if folder {
 		fmt.Fprintln(w, "Sem confiar, a sessão roda em modo ask (pede confirmação antes de mudar algo).")
 	}
-	fmt.Fprint(w, "Confiar e ativar? Só aceite se você confia neste repositório. [s/N] ")
-	ans := pfReadLine(in)
-	fmt.Fprintln(w)
-	if a := strings.ToLower(strings.TrimSpace(ans)); a == "s" || a == "sim" || a == "y" || a == "yes" {
+	fmt.Fprintln(w, "Só aceite se você confia neste repositório.")
+	if cliChoose(in, w, "Confiar e ativar?", yesNo("Sim, confiar", "Não"), 0) == 0 {
 		if err := pfTrustStore(root, st); err != nil {
 			fmt.Fprintln(w, "jazz: não consegui salvar a confiança:", err)
 		}
 		return true
 	}
-	fmt.Fprintln(w, "Ok: a configuração do projeto fica desativada nesta sessão (pergunto de novo na próxima).")
+	fmt.Fprintln(w, "Ok: a configuração do projeto fica desativada (jazz trust confia depois).")
 	return false
 }
 

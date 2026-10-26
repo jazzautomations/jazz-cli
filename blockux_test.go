@@ -14,14 +14,6 @@ import (
 	"testing"
 )
 
-// permitTC runs permit on one call and returns (ok, text for the model).
-func permitTC(h *harness, name string, args map[string]any) (bool, string) {
-	h.ui.approvals = nil
-	h.ag.blockWhy = ""
-	ok, msg, _ := h.ag.permit(context.Background(), ToolCall{Name: name, Args: jsonArgs(args)}, toolDetail(name, jsonArgs(args)), false, acHookVerdict{})
-	return ok, msg
-}
-
 func wantSteer(t *testing.T, label, msg string) {
 	t.Helper()
 	if !strings.HasPrefix(msg, "BLOCKED: ") || !strings.HasSuffix(msg, blockSteer) || strings.Contains(msg, "\n") {
@@ -325,6 +317,19 @@ func TestWorkDirFence(t *testing.T) {
 	h.ui.answer = Allow
 	if ok, _ := permitTC(h, "read", map[string]any{"path": secret}); !ok || len(h.ui.approvals) != 1 || !strings.Contains(h.ui.approvals[0].Reason, "fora da pasta do projeto") {
 		t.Errorf("interactive fence must ask: ok=%v approvals=%+v", ok, h.ui.approvals)
+	}
+	// An "always" answer is scoped to the exact file, never its parent such as
+	// the user's entire home directory.
+	h.ui.answer = AllowAlways
+	if ok, _ := permitTC(h, "read", map[string]any{"path": secret}); !ok {
+		t.Fatal("exact-target always approval should allow the requested file")
+	}
+	if h.ag.approvals().Has("fence", filepath.Dir(secret)) || !h.ag.approvals().Has("fence", secret) {
+		t.Fatalf("fence approval scope is not exact: parent=%v file=%v", h.ag.approvals().Has("fence", filepath.Dir(secret)), h.ag.approvals().Has("fence", secret))
+	}
+	entries, _ := h.ag.approvals().List()
+	if len(entries) == 0 || !strings.Contains(entries[len(entries)-1].Label, "alvo exato fora do projeto") {
+		t.Fatalf("approval label should state its exact scope: %+v", entries)
 	}
 	// --allow-outside / allow_outside_project
 	h.ag.Headless = true

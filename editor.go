@@ -56,6 +56,12 @@ type Editor struct {
 	menuFor    string // buffer the menu selection belongs to
 	help       bool   // "?" shortcut list shown under the box
 	note       string // one-shot message in place of the footer
+
+	cmds   []EdCommand // Commands() of this input (read once per ReadInput)
+	popKey string      // buffer+cursor the cached pop-up belongs to
+	popVal edPop
+	paths  edPaths // @ picker candidates (nameindex.go)
+	hist   edHist  // Up/Down walk with prefix filtering
 }
 
 // EdCommand is one entry of the slash-command menu.
@@ -188,9 +194,10 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 	}
 	pos := len(buf)
 	e.pastes = nil
-	hi := len(e.history)
-	saved := ""
+	e.hist.reset()
+	e.cmds, e.popKey = nil, ""
 	ctrlC := false
+	histPrefix := e.edOpt("JAZZ_HISTORY_PREFIX", func(c UIConf) string { return c.HistoryPrefix })
 	insert := func(rs []rune) {
 		buf = append(buf[:pos], append(append([]rune{}, rs...), buf[pos:]...)...)
 		pos += len(rs)
@@ -257,31 +264,39 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 			ctrlC = false
 		}
 		e.note = ""
-		menu := e.menuItems(boxed, buf)
-		if len(menu) > 0 {
+		before := string(buf)
+		navKey := k.Code == KUp || k.Code == KDown || k.Code == KTab || k.Code == KEsc || k.Code == KEnter
+		if pop := e.popup(boxed && navKey, buf, pos); pop.kind != edPopNone { // only keys the pop-up uses pay for it
+			n := len(pop.items)
+			picked := false
 			switch k.Code {
 			case KUp:
-				e.menuSel = (e.menuSel + len(menu) - 1) % len(menu)
+				e.menuSel = (e.menuSel + n - 1) % n
 				draw()
 				continue
 			case KDown:
-				e.menuSel = (e.menuSel + 1) % len(menu)
+				e.menuSel = (e.menuSel + 1) % n
 				draw()
 				continue
 			case KTab:
-				buf = []rune(menu[min(e.menuSel, len(menu)-1)].Name + " ")
-				pos = len(buf)
-				draw()
-				continue
+				buf, pos = pop.pick(buf, e.menuSel, true)
+				picked = true
 			case KEsc:
 				e.menuOff = true
 				draw()
 				continue
 			case KEnter:
-				if pos == len(buf) {
-					buf = []rune(menu[min(e.menuSel, len(menu)-1)].Name)
-					pos = len(buf)
+				if pop.kind == edPopMention {
+					buf, pos = pop.pick(buf, e.menuSel, false)
+					picked = true
+				} else if pos == len(buf) {
+					buf, pos = pop.pick(buf, e.menuSel, false) // and submit below
 				}
+			}
+			if picked {
+				e.menuFor, e.menuSel, e.menuOff = string(buf), 0, false
+				draw()
+				continue
 			}
 		}
 		switch k.Code {
@@ -339,9 +354,9 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 				pos++
 			}
 		case KHome, KCtrlA:
-			pos = 0
+			pos = edLineStart(buf, pos)
 		case KEnd, KCtrlE:
-			pos = len(buf)
+			pos = edLineEnd(buf, pos)
 		case KWordLeft:
 			for pos > 0 && unicode.IsSpace(buf[pos-1]) {
 				pos--
@@ -357,10 +372,9 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 				pos++
 			}
 		case KCtrlU:
-			buf = buf[pos:]
-			pos = 0
+			buf, pos = edKillBack(buf, pos)
 		case KCtrlK:
-			buf = buf[:pos]
+			buf = edKillFwd(buf, pos)
 		case KCtrlW:
 			p := pos
 			for p > 0 && unicode.IsSpace(buf[p-1]) {
@@ -372,22 +386,26 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 			buf = append(buf[:p], buf[pos:]...)
 			pos = p
 		case KUp:
-			if hi > 0 {
-				if hi == len(e.history) {
-					saved = string(buf)
-				}
-				hi--
-				buf = []rune(e.history[hi])
+			// a multi-line input: Up moves between its lines first
+			if np, ok := edVertical(buf, pos, -1); ok {
+				pos = np
+				break
+			}
+			cur := string(buf)
+			if !histPrefix && !e.hist.on {
+				e.hist = edHist{on: true, idx: len(e.history), saved: cur}
+			}
+			if h, ok := e.hist.up(e.history, cur); ok {
+				buf = []rune(h)
 				pos = len(buf)
 			}
 		case KDown:
-			if hi < len(e.history) {
-				hi++
-				if hi == len(e.history) {
-					buf = []rune(saved)
-				} else {
-					buf = []rune(e.history[hi])
-				}
+			if np, ok := edVertical(buf, pos, 1); ok {
+				pos = np
+				break
+			}
+			if h, ok := e.hist.down(e.history, string(buf)); ok {
+				buf = []rune(h)
 				pos = len(buf)
 			}
 		case KTab:
@@ -410,7 +428,7 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 			} else {
 				uiWrite("\r\x1b[K")
 			}
-			e.ui.ExpandLast()
+			e.ui.ToggleLast()
 		case KCtrlR:
 			if boxed {
 				e.eraseFrame()
@@ -425,7 +443,7 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 			}
 			s, err := e.externalEdit(e.expandPastes(string(buf)))
 			if err != nil {
-				above("  " + e.ui.T.fg(cRed, 31) + "editor: " + err.Error() + e.ui.T.sgr("0") + "\n")
+				above(uiErrorLine(e.ui.T, "editor: "+err.Error(), termWidth()-1))
 			} else {
 				e.pastes = nil
 				buf = []rune(s)
@@ -470,8 +488,12 @@ func (e *Editor) read(boxed bool, prompt string, promptW int) (string, error) {
 			buf, pos = nil, 0
 			e.help = false
 		}
-		if s := string(buf); s != e.menuFor {
+		s := string(buf)
+		if s != e.menuFor {
 			e.menuFor, e.menuSel, e.menuOff = s, 0, false
+		}
+		if k.Code != KUp && k.Code != KDown && s != before {
+			e.hist.reset() // edited: the next Up starts a new walk from this text
 		}
 		if edCoalesce && len(e.ui.keys.Keys) > 0 && k.Code != KEnter {
 			continue // more keys already queued (fast typing on a busy CPU): one redraw for all
@@ -771,9 +793,17 @@ func (e *Editor) reverseSearch(orig string) (string, bool) {
 		}
 	}
 	draw := func() {
-		m := strings.ReplaceAll(match, "\n", t.G().nl)
-		line := t.fg(cGray, 90) + "(busca) '" + t.sgr("0") + string(query) + t.fg(cGray, 90) + "': " + t.sgr("0") + sanitizeTerm(m)
-		uiWrite("\r\x1b[K" + clipVisible(line, termWidth()-1))
+		m := sanitizeTerm(strings.ReplaceAll(match, "\n", t.G().nl))
+		if match == "" && len(query) > 0 {
+			m = t.fg(cGray, 90) + "nada encontrado" + t.sgr("0")
+		}
+		line := t.fg(cGray, 90) + "(busca) '" + t.sgr("0") + sanitizeTerm(string(query)) + t.fg(cGray, 90) + "': " + t.sgr("0") + m
+		w := termWidth() - 1
+		hint := t.fg(cGray, 90) + "  ctrl+r anterior " + t.G().dot + " enter usa " + t.G().dot + " esc cancela" + t.sgr("0")
+		if uiVisLen(line)+uiVisLen(hint) <= w {
+			line += hint
+		}
+		uiWrite("\r\x1b[K" + clipVisible(line, w))
 	}
 	if len(e.history) > 0 {
 		find(len(e.history) - 1)
@@ -781,16 +811,16 @@ func (e *Editor) reverseSearch(orig string) (string, bool) {
 	draw()
 	for k := range e.ui.keys.Keys {
 		switch k.Code {
-		case KRune:
-			query = append(query, k.R)
-			find(len(e.history) - 1)
-		case KPaste:
-			query = append(query, []rune(k.Text)...)
-			find(len(e.history) - 1)
-		case KBackspace:
-			if len(query) > 0 {
+		case KRune, KPaste, KBackspace:
+			switch {
+			case k.Code == KRune:
+				query = append(query, k.R)
+			case k.Code == KPaste:
+				query = append(query, []rune(k.Text)...)
+			case len(query) > 0:
 				query = query[:len(query)-1]
 			}
+			match, idx = "", len(e.history) // a new query: no stale match
 			find(len(e.history) - 1)
 		case KCtrlR:
 			if idx > 0 {

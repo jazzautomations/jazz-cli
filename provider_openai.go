@@ -226,6 +226,7 @@ type oaChunk struct {
 	Choices []struct {
 		Delta struct {
 			Content          string           `json:"content"`
+			Refusal          string           `json:"refusal"` // structured refusal (OpenAI)
 			Reasoning        string           `json:"reasoning"`
 			ReasoningContent string           `json:"reasoning_content"`
 			ReasoningDetails []map[string]any `json:"reasoning_details"`
@@ -275,6 +276,7 @@ func pvEstTokens(req ChatRequest) int {
 }
 
 func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest, fn StreamFn) (*ChatResponse, error) {
+	req = rdOutbound(req, p.BaseURL) // secrets never leave the machine (redact.go)
 	router := p.router()
 	model := req.Model
 	if p.quirk("gemini-thought-sig") {
@@ -458,6 +460,9 @@ func (p *OpenAIProvider) chatStream(ctx context.Context, body map[string]any, fn
 					a.extra = tc.ExtraContent
 				}
 				a.args.WriteString(tc.Function.Arguments)
+			}
+			if ch.Delta.Refusal != "" && len(out.Refusal) < 2000 {
+				out.Refusal += ch.Delta.Refusal
 			}
 			if ch.FinishReason != "" {
 				out.Stop = ch.FinishReason

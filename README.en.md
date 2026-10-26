@@ -78,6 +78,17 @@ picks the native arm64 binary.
   `~/.local/bin` and adds a `.desktop` menu entry; `--sudo` installs to `/usr/local/bin`).
 - For the Linux sandbox install `bubblewrap` (`sudo apt install bubblewrap`).
 
+### Android (Termux)
+
+Community-supported: we cannot test on a device here, so please report what breaks. aarch64, no root:
+
+```sh
+pkg install curl openssl python git bash
+curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.sh | sh
+```
+
+The installer detects Termux (`TERMUX_VERSION`/`PREFIX`) and installs to `$PREFIX/bin` (no sudo, no PATH edit). Works: the agent, the `ask`/`auto`/`plan`/`yolo` modes, built-in scripts (`python3`/`sh` from PATH), the persistent `bash` shell, temp files in `$PREFIX/tmp`, and low-power rendering on by default (`JAZZ_LOW_POWER=0` turns it off). Does not work: the **OS sandbox**, since Android has no bubblewrap or user namespaces. Software protections (path fence, guardrails, approvals) stay on, the default mode is `auto`, and `turbo` falls back to the `auto` rules with a notice. `proot` is not a security boundary. `jazz doctor` lists what is missing (`pkg install …`).
+
 ### Windows (native, no WSL)
 
 > **Not runtime-tested on Windows yet.** The port builds for amd64/arm64 and the test suite passes on
@@ -148,22 +159,30 @@ jazz key openrouter       # store a key (hidden input); works for any provider
 
 ## Permission modes
 
-| Mode | Behaviour |
-|---|---|
-| `auto` (default) | runs whatever does not look dangerous; dangerous commands and sensitive files ask |
-| `turbo` (`--turbo`, alias `full-auto`) | with an OS sandbox: nothing that stays inside the project asks; it only asks when really necessary (list below) |
-| `ask` | everything that is not read-only asks (the right mode for an unknown repository) |
-| `smart` | project edits and read-only commands run; the rest goes to a fast model that answers SAFE or ASK; packages, mutating git, `rm`/`sudo`, `.env`/keys and jazz's own config always ask |
-| `yolo` | nothing asks; only inside a container or VM |
-| `plan` | investigates and proposes a plan only |
+| Mode | Behaviour | Default when |
+|---|---|---|
+| `turbo` (`--turbo`, alias `full-auto`) | with an OS sandbox: nothing that stays inside the project asks; it only asks when really necessary (list below) | interactive, no `mode` in config, and a sandbox that isolates (`sandbox-exec` on macOS, `bwrap` on Linux) |
+| `auto` | runs whatever does not look dangerous; dangerous commands, new hosts, outside the project and sensitive files ask | interactive without a sandbox; always with `-p` |
+| `plan` | investigates and proposes a plan; a menu then asks whether to run it | — |
+| `ask` | everything that is not read-only asks (the right mode for an unknown repository) | a folder you did not trust |
+| `smart` | project edits and read-only commands run; the rest goes to a fast model that answers SAFE or ASK; packages, mutating git, `rm`/`sudo`, `.env`/keys and jazz's own config always ask | — (`/mode smart`) |
+| `yolo` | nothing asks; only inside a container or VM | — (`--yolo`) |
 
-`/mode <mode>` switches; Shift+Tab or Ctrl+T cycles auto → turbo → smart → plan → ask. Flags: `--ask`,
-`--smart`, `--turbo`, `--yolo`; config `"mode": "turbo"`. In a folder you have not trusted yet
+The mode shows on the welcome screen (explained in one line the first time) and in the input box
+footer. `/mode <mode>` switches and saves; Shift+Tab or Ctrl+T cycles for this session only:
+turbo → auto → plan → ask (turbo leaves the cycle without a sandbox; `smart` stays on `/mode smart`).
+Flags: `--ask`, `--smart`, `--turbo`, `--yolo`; a config `"mode"` wins over the default (older
+versions saved `"mode": "auto"` on any save: delete it to get the new default). In a folder you have not trusted yet
 (`jazz trust`), the session runs in `ask`; with an explicit `--turbo` the mode stays, but bash that
 changes something still asks until you trust the folder (with `-p`: `jazz trust --yes` first).
 
-**One-key confirmations:** `enter` or `s` = yes, `a` = always, `n`/`esc` = no, `v` = see the whole
-command or diff, `e` = no, and say what to do instead. No typing `sim`. "Always" on a prompt with a
+**Confirmations like Claude Code:** every question is a boxed menu: the exact command or diff, the
+whole risk reason in red (one row per problem), and the options as a vertical list (1 Sim, 2 Sim, e
+não perguntar de novo…, 3 Não, e me diga o que fazer). ↑↓/j/k + Enter, the digit, or one key:
+`s` yes, `a` always, `n`/`esc` no, `e` no + instruction, `v` the whole command, diff and reason.
+Enter is the highlighted option. Text typed while the agent works stays queued and is shown above
+the box. "Always" without a risk reason lasts this session for edits and is a project rule for
+commands and domains (`always_scope`: auto|session|project). No typing `sim`. "Always" on a prompt with a
 risk reason (new host, folder outside the project, destructive git, `curl|sh` from a host) is kept in
 `.jazz/approvals.json` and never asked again in that project; `/approvals` lists, `/approvals clear`
 wipes. Secret reads and catastrophic commands ask every time.

@@ -3,7 +3,7 @@ package main
 // skills.go: built-in skills picked by the harness, not by the model
 // (docs/research/skills-personas-scripts.md B+C, bodies from skill-bodies.md).
 //
-// Thirteen short skills are embedded in the binary. The model never sees a list
+// Fourteen short skills are embedded in the binary. The model never sees a list
 // of them: a cheap scorer (keyword regexes in PT and EN over the user message,
 // file globs of edited paths, signals parsed from tool output, the phase of
 // the turn) picks at most one per turn, and its body is appended once as a
@@ -347,7 +347,13 @@ func skRank(sig skSignals) []skCand {
 		if s.Name == "debug-loop" && sig.Kind != "" && sig.Kind != "bugfix" {
 			continue
 		}
+		if s.Name == "study-first" && sig.Flags["study_task"] && (sig.Kind != "greenfield" || !sig.Flags["long_ask"]) {
+			continue // keep small-task and task-specific triggers; skStudyComplement carries the method
+		}
 		if n := skScore(s, sig); n > 0 {
+			if s.Name == "study-first" && sig.Flags["study_task"] {
+				n += 100 // long greenfield requests lead with study-first
+			}
 			out = append(out, skCand{s, n})
 		}
 	}
@@ -375,11 +381,12 @@ func skPick(cands []skCand, threshold int, skip map[string]bool) *skBuiltin {
 }
 
 var (
-	skExitRe     = regexp.MustCompile(`\[exit code [1-9][0-9]*\]`)
-	skTraceRe    = regexp.MustCompile(`(?m)Traceback \(most recent call last\)|^panic: |^goroutine \d+ \[running\]|^\s+at \S.*\(\S+:\d+(:\d+)?\)$|^Exception in thread|^\s+File ".+", line \d+|^thread '.+' panicked at`)
-	skTestFailRe = regexp.MustCompile(`(?m)^--- FAIL|^FAIL\s|\bFAILED\b|\b[1-9]\d* (failed|failing)\b|\bAssertionError\b|^\s*✕ |Tests:\s+[1-9]\d* failed|test result: FAILED`)
-	skConflictRe = regexp.MustCompile(`(?m)^CONFLICT \(|^<<<<<<< |Automatic merge failed`)
-	skPathRe     = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z]{1,5}\b`)
+	skExitRe         = regexp.MustCompile(`\[exit code [1-9][0-9]*\]`)
+	skTraceRe        = regexp.MustCompile(`(?m)Traceback \(most recent call last\)|^panic: |^goroutine \d+ \[running\]|^\s+at \S.*\(\S+:\d+(:\d+)?\)$|^Exception in thread|^\s+File ".+", line \d+|^thread '.+' panicked at`)
+	skTestFailRe     = regexp.MustCompile(`(?m)^--- FAIL|^FAIL\s|\bFAILED\b|\b[1-9]\d* (failed|failing)\b|\bAssertionError\b|^\s*✕ |Tests:\s+[1-9]\d* failed|test result: FAILED`)
+	skConflictRe     = regexp.MustCompile(`(?m)^CONFLICT \(|^<<<<<<< |Automatic merge failed`)
+	skPathRe         = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z]{1,5}\b`)
+	skStudyNonCodeRE = regexp.MustCompile(`(?i)\b(git|merge|branch|commit|rebase)\b`)
 )
 
 // skOutputFlags parses the tail of a bash result into trigger signals.
@@ -512,7 +519,8 @@ func (a *Agent) skTurnInput(input string) string {
 	if mode != "auto" || a.mode() == "plan" { // plan mode: skills that edit would fight the plan reminder
 		return input
 	}
-	return input + a.skDecide("turn", skInputSignals(acStripReminders(input)))
+	sig := skInputSignals(acStripReminders(input))
+	return input + a.skDecide("turn", sig) + skStudyComplement(sig)
 }
 
 // skInputSignals is what the scorer sees at the start of a turn: the user's
@@ -522,10 +530,27 @@ func skInputSignals(text string) skSignals {
 		text = text[:skScanBytes]
 	}
 	files := skInputPaths(text)
-	kind := bgClassify(text).Kind
-	text = bgNegatedRE.ReplaceAllString(text, " ") // "não refatore" is no refactor request
+	task := bgClassify(text)
+	kind := task.Kind
+	studyText := bgNegatedRE.ReplaceAllString(text, " ") // "não refatore" is no refactor request
+	study := kind != "question" && !skStudyNonCodeRE.MatchString(studyText) &&
+		(bgActionRE.MatchString(studyText) || kind == "greenfield") && (task.Size == 'L' || task.Size == 'M')
+	text = studyText
 	return skSignals{Input: text, Files: files, Phase: "explore", Kind: kind,
-		Flags: map[string]bool{"long_ask": len(text) >= 400 || len(files) >= 3}}
+		Flags: map[string]bool{"long_ask": len(text) >= 400 || len(files) >= 3, "study_task": study}}
+}
+
+// skStudyComplement keeps the task-specific debugging/refactoring skill as the
+// primary skill while also carrying the study-first method in the user turn.
+// This is guidance to the model, not a harness-enforced read-before-edit gate.
+func skStudyComplement(sig skSignals) string {
+	if !sig.Flags["study_task"] {
+		return ""
+	}
+	if primary := skPick(skRank(sig), skDefaultThreshold, nil); primary != nil && primary.Name == "study-first" {
+		return ""
+	}
+	return "\n\n<system-reminder><study-first-reminder>For this medium or large code task, first use rg to find and read the relevant implementation, callers, tests, and project instructions. Before your first edit, cite file:line evidence, list assumptions, and record a short plan with success checks. This complements your task-specific debugging or refactoring guidance.</study-first-reminder></system-reminder>"
 }
 
 // skDecide picks a skill for sig under the per-turn and per-session caps and

@@ -60,7 +60,7 @@ func detectShell() shellDialect {
 	}
 	bash, err := exec.LookPath("bash")
 	if err != nil {
-		return shellDialect{Kind: shSh, Path: "/bin/sh"}
+		return shellDialect{Kind: shSh, Path: fallbackShPath()}
 	}
 	return shellDialect{Kind: shBash, Path: bash}
 }
@@ -148,7 +148,7 @@ func (d shellDialect) initLine(haveFd, haveFdfind bool) string {
 			"try { [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Text.UTF8Encoding]::new($false) } catch {}; " +
 			"try { $PSStyle.OutputRendering='PlainText' } catch {}"
 	}
-	init := "set +o history 2>/dev/null; shopt -s expand_aliases 2>/dev/null; export LC_ALL=${LC_ALL:-C.UTF-8}"
+	init := h2LimitsLine(d) + "set +o history 2>/dev/null; shopt -s expand_aliases 2>/dev/null; export LC_ALL=${LC_ALL:-C.UTF-8}"
 	if !haveFd && haveFdfind {
 		init += "; fd(){ fdfind \"$@\"; }; export -f fd 2>/dev/null"
 	}

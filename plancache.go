@@ -118,7 +118,7 @@ func pcLoad(root string) []pcPlan {
 	sc.Buffer(make([]byte, 64<<10), 4<<20)
 	for sc.Scan() {
 		var p pcPlan
-		if json.Unmarshal(sc.Bytes(), &p) == nil && p.ID != "" {
+		if json.Unmarshal(sc.Bytes(), &p) == nil && p.ID != "" && h2PlanPoison(p) == "" { // poisoned plans are never reused (hardening2.go)
 			out = append(out, p)
 		}
 	}
@@ -431,6 +431,10 @@ func pcScore(root string, ids []string, win bool) error {
 // pcStore adds p, or refreshes a plan for the same task (keyword Jaccard ≥ 0.7).
 // A plan reused in this turn already got its win from pcScore.
 func pcStore(root string, p pcPlan, reused []string) error {
+	if why := h2PlanPoison(p); why != "" {
+		auditRec("plan.rejected", map[string]any{"reason": why, "task": oneLine(p.Task, 120)})
+		return nil // never written (hardening2.go)
+	}
 	plans := pcLoad(root)
 	was := smSet(reused...)
 	for i, old := range plans {

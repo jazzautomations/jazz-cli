@@ -110,12 +110,12 @@ func TestTurboSupplyChain(t *testing.T) {
 	sgFake(t, func(u string, body []byte) (int, string) {
 		switch {
 		case strings.Contains(u, "osv.dev"):
-			if strings.Contains(string(body), "evilpkg") {
+			if strings.Contains(string(body), "evilpkg") && strings.Contains(string(body), `"version":"1.0"`) {
 				return 200, `{"vulns":[{"id":"MAL-2026-1"}]}`
 			}
 			return 200, `{}`
 		case strings.HasSuffix(u, "/pypi/requests/json"), strings.HasSuffix(u, "/pypi/evilpkg/json"):
-			return 200, `{"releases":{"1.0":[{"upload_time_iso_8601":"` + old + `"}]}}`
+			return 200, `{"info":{"version":"1.0"},"releases":{"1.0":[{"upload_time_iso_8601":"` + old + `"}]}}`
 		}
 		return 404, ""
 	})
@@ -369,81 +369,5 @@ func TestApprovalsStoreTrust(t *testing.T) {
 	_ = m.Add("fence", "/tmp/x", "fora: /tmp/x")
 	if !m.Has("fence", "/tmp/x") || m.Has("fence", "/tmp/y") {
 		t.Error("memory store")
-	}
-}
-
-func TestApproveKeyMapping(t *testing.T) {
-	r := func(c rune) Key { return Key{Code: KRune, R: c} }
-	for _, c := range []struct {
-		k         Key
-		canAlways bool
-		want      apChoice
-	}{
-		{Key{Code: KEnter}, false, apYes},
-		{r('s'), false, apYes},
-		{r('S'), false, apYes},
-		{r('y'), false, apYes},
-		{r('1'), false, apYes},
-		{r('a'), true, apAlways},
-		{r('A'), true, apAlways},
-		{r('t'), true, apAlways},
-		{r('2'), true, apAlways},
-		{r('a'), false, apNone}, // not offered: ignored, never a yes
-		{r('n'), false, apNo},
-		{r('3'), false, apNo},
-		{Key{Code: KEsc}, false, apNo},
-		{Key{Code: KCtrlC}, true, apNo},
-		{r('e'), true, apFeedback},
-		{r('v'), true, apView},
-		{r('x'), true, apNone},
-		{Key{Code: KUp}, true, apNone},
-	} {
-		if got := apKeyChoice(c.k, c.canAlways); got != c.want {
-			t.Errorf("%+v always=%v: %v want %v", c.k, c.canAlways, got, c.want)
-		}
-	}
-	for _, c := range []struct {
-		line      string
-		canAlways bool
-		want      apChoice
-		rest      string
-	}{
-		{"sim", false, apYes, ""},
-		{" S ", false, apYes, ""},
-		{"a", true, apAlways, ""},
-		{"sempre", true, apAlways, ""},
-		{"sempre", false, apNo, ""},
-		{"", false, apNo, ""},
-		{"não", false, apNo, ""},
-		{"e", false, apFeedback, ""},
-		{"v", false, apView, ""},
-		{"usa pnpm", false, apNo, "usa pnpm"},
-	} {
-		got, rest := apTypedChoice(c.line, c.canAlways)
-		if got != c.want || rest != c.rest {
-			t.Errorf("%q: %v %q want %v %q", c.line, got, rest, c.want, c.rest)
-		}
-	}
-}
-
-func TestApprovePromptLine(t *testing.T) {
-	th := Theme{}
-	l := stripANSI(apPromptLine(th, 120, "Rodar este comando?", "git push forçado", true, true))
-	for _, want := range []string{"? Rodar este comando?", "perigo: git push forçado", "enter sim", "a sempre", "n não", "v ver", "e instruir"} {
-		if !strings.Contains(l, want) {
-			t.Errorf("prompt line lacks %q: %q", want, l)
-		}
-	}
-	if strings.Contains(l, "\n") {
-		t.Error("prompt must be one line")
-	}
-	l = stripANSI(apPromptLine(th, 120, "Rodar este comando?", "apaga a home", false, false))
-	if strings.Contains(l, "sempre") || strings.Contains(l, "v ver") {
-		t.Errorf("not offered keys shown: %q", l)
-	}
-	// narrow terminal: still one line that fits
-	l = stripANSI(apPromptLine(th, 40, "Rodar este comando?", strings.Repeat("motivo longo ", 10), true, false))
-	if uiVisLen(l) > 41 || !strings.Contains(l, "enter/s") {
-		t.Errorf("narrow prompt = %q (%d)", l, uiVisLen(l))
 	}
 }

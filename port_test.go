@@ -33,6 +33,8 @@ func TestWinThemeFallsBackToASCIIWithoutVT(t *testing.T) {
 func TestPfAssetNameFor(t *testing.T) {
 	cases := map[[2]string]string{
 		{"linux", "amd64"}:   "jazz-linux-amd64",
+		{"android", "arm64"}: "jazz-android-arm64",
+		{"linux", "arm"}:     "jazz-linux-armv7",
 		{"darwin", "arm64"}:  "jazz-darwin-arm64",
 		{"windows", "amd64"}: "jazz-windows-amd64.exe",
 		{"windows", "arm64"}: "jazz-windows-arm64.exe",

@@ -1,7 +1,150 @@
 # Changelog
 
-Resumo honesto, tirado do `git log`. Nenhuma dessas versões foi publicada como release no GitHub
-ainda; as datas são as dos commits. Formato livre, uma linha por mudança relevante.
+Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.
+
+## 0.8.0 — candidato em validação
+
+### Android e guardas
+
+- Asset nativo `android/arm64`, instalador e updater correspondentes; regressões de `$HOME` no Termux. Cross-build validado; teste em aparelho pendente.
+- Yolo sem sandbox exige consentimento no interativo ou `--ack-no-sandbox` no headless.
+- Acesso direto detectado ao estado privado bloqueado em todos os modos; egress de arquivos sensíveis detectado exige confirmação nova. Parsing de shell não substitui isolamento do sistema.
+- Scrollback de ferramenta colado pede confirmação para envio como citação não confiável. Aprovações de caminhos externos guardam o alvo exibido.
+
+### Provedores e diagnóstico
+
+- Recusa do provedor (Anthropic `stop_reason: "refusal"`, OpenAI `content_filter`/`refusal`) encerra o
+  turno com "o provedor recusou: <motivo>" e a sugestão de reformular ou trocar de modelo (`/model`),
+  sem tentar outro modelo por conta própria. Erros 4xx mostram a mensagem do provedor
+  ("o provedor recusou o pedido (HTTP 400: …)"); saldo zerado da Anthropic (HTTP 400 "credit balance")
+  conta como falta de crédito.
+- `jazz doctor --provider <nome>[/modelo]`: um pedido real mínimo pelo mesmo código do agente; mostra
+  de onde veio a chave (variável ou `auth.json`, só os 4 últimos caracteres), o status HTTP e o corpo
+  do erro sem segredos.
+- Anthropic: com `effort` definido, modelos Claude 4.6+ recebem `thinking: {type: "adaptive"}` +
+  `output_config.effort` em vez de `budget_tokens` (recusado com HTTP 400 nos 4.7+ e 5.x) e não
+  recebem `temperature`; os blocos de thinking assinados voltam no laço de ferramentas. Teste de
+  conformidade com servidor Anthropic falso que valida cabeçalhos, corpo e o stream SSE.
+- Binário `linux/armv7` (GOARM=7) para ARM 32 bits (Raspberry Pi 2/3 com sistema 32 bits, TV boxes);
+  instalador e `jazz update` reconhecem `armv7l`/`armhf`. Cross-build validado; sem teste em aparelho.
+
+### Próximo foco
+
+- Menos idas e voltas por tarefa com modelos fortes (relato do dono com Claude: "dá muita volta à
+  toa"). Medir com o placar do juiz (pedidos por tarefa) e `jazz trace` antes de mudar o laço.
+
+### Redação de segredos
+
+- Segredos reconhecidos são redigidos na fronteira do provedor (OpenAI-compatível/kilo/omni,
+  Anthropic, Codex; subagentes, hedge/painel/verificador e compactação passam por ela). Segredos em
+  arquivos comuns, logs, diffs e saídas de comando viram marcadores estáveis `<secreto:tipo#n>` com
+  mapa reverso só em memória; o marcador usado pelo modelo em `bash`/`write`/`edit` é trocado pelo
+  valor real antes da execução local. ~30 padrões (AWS, GCP, Azure, GitHub, GitLab, Slack, Stripe,
+  Twilio, SendGrid, OpenAI/Anthropic/kilo, JWT, PEM, Bearer/Basic, URL com senha, `password=`/
+  `senha=`, `.env` de alta entropia, credenciais locais) com entropia e lista de falsos óbvios
+  (`CANARY`, `example`, `changeme`…). `redact: on|off|strict`, `--redact`, `JAZZ_REDACT`, `/redact`,
+  `/redact allow` (HMAC por máquina em `.jazz/redact-allow.json`). Aviso único, "N segredos retidos"
+  no total do turno, eventos `redact.hit {kind, where}` e auditoria só com o tipo. ~0,4 ms por 10 KB
+  de código denso em credenciais (M-series). Provedor em `localhost` não é redigido; a saída para o
+  usuário também não.
+
+### Interface, contexto e execução
+
+Interação no nível do Claude Code. Junta confirmações em menu, turbo condicionado ao sandbox do
+sistema, sessões, editor de entrada, documentação por versão, study-first e fila de mensagens.
+Passo a passo da tela com os textos exatos em [docs/UX.md](docs/UX.md). Esta versão ainda não foi
+publicada como release.
+
+### Confirmações e modo padrão (branch `confirm`)
+
+- Toda pergunta é um menu numa caixa (↑↓/j k + Enter, número, atalhos `s` `a` `n`/Esc `e` `v`);
+  nunca é preciso digitar `sim`. A pergunta de permissão mostra o comando exato ou o diff e o motivo
+  de risco inteiro em vermelho, uma linha por problema. Respostas sim/não aceitam uma tecla; Enter
+  é sempre a opção destacada.
+- Sem `mode` na config, o interativo começa em `turbo` quando há sandbox que isola
+  (`sandbox-exec`/`bwrap`), senão `auto`; `-p` continua `auto`. A tela de boas-vindas explica o
+  modo na primeira vez (`mode_intro`). Shift+Tab: turbo → auto → plan → ask.
+- "Sim, e não perguntar de novo": edição vale na sessão; comando, domínio, MCP e script viram
+  regra do projeto em `.jazz/settings.json`; motivo de risco vai para `approvals.json`
+  (`always_scope: auto|session|project`).
+- Pasta nova: menu "Sim, confiar nesta pasta / Só nesta sessão / Não, modo ask"
+  (`trust_default: always`). Plano, jobs ao sair, `/forget`, atalho, `ask_user`, `/rewind`,
+  `jazz trust`, `jazz worktree merge` e `jazz improve` usam o mesmo menu.
+- Configs antigas com `"mode": "auto"` gravado continuam em auto: apague a linha ou `/mode turbo`.
+
+### Editor de entrada (branch `editor`)
+
+- Paleta `/` com busca aproximada (`/cmp` → `/compact`, `/modle` → `/model`; nome exato primeiro,
+  corrige `/mode` + Enter rodando `/model`); lista `@` de arquivos e pastas do projeto; ↑↓ do
+  histórico filtra pelo que já está digitado; Ctrl+R mostra "nada encontrado"; Shift+Enter nas
+  duas formas (`ESC[13;2u`, `ESC[27;2;13~`); Option+seta pula palavra; Ctrl+O expande e recolhe;
+  com texto digitado durante o trabalho, o primeiro Esc limpa e o segundo interrompe; rodapé
+  encolhe com a largura. Config `ui.palette`, `ui.mention_picker`, `ui.history_prefix`.
+
+### Sessões (branch `sessions`)
+
+- Sessões como no Claude Code: `/resume`, `/sessions` e `jazz -r` sem id abrem uma lista com ↑↓/j k,
+  Enter, Esc, filtro ao digitar (tolerante a erro), 1–9 de atalho e Tab pra todas as pastas; cada
+  linha tem título, data relativa, modo, mensagens, tokens, custo e situação. `/tree` usa a mesma
+  lista. Retomar desenha a conversa de novo (pedidos, respostas em markdown, ferramentas recolhidas,
+  totais; últimas 200 entradas, `resume_replay`), na ordem banner → conversa → aviso. Título de 5–8
+  palavras gerado do primeiro pedido sem chamar modelo; `/rename` troca.
+
+### Documentação, estudo e revisão
+
+- Ferramenta `docs`: documentação por versão detectada nos manifests/lockfiles, fonte local e cache
+  para uso offline; Context7 é opcional e sujeito a guardas explícitas de HTTP. A consulta retorna
+  trechos relevantes, não baixa nem executa código.
+- Skill study-first e orientação estática para tarefas médias e grandes: consultar instruções e
+  código existente com leituras/busca antes da primeira edição. A nota dinâmica é adicionada ao
+  contexto do usuário/ferramenta, sem alterar o prompt estável do sistema.
+- `--review`/`/review`: subagente somente leitura examina o diff do turno; achados heurísticos voltam
+  ao agente para uma tentativa de correção. Não é uma prova formal nem uma garantia de segurança.
+- Redação de saída reconhece padrões conhecidos de segredo no limite da requisição; detecção é
+  parcial e não garante reconhecer todos os segredos.
+
+### Termux (branch `termux`)
+
+- Suporte ao Termux (Android, sem root): detecção por `TERMUX_VERSION`/`PREFIX`; temp em `$TMPDIR` ou
+  `$PREFIX/tmp`; shell de fallback `sh` do PATH (sem `/bin/sh` literal); sem sandbox do sistema (o
+  `doctor` explica, o `turbo` cai no `auto`); modo de baixo consumo por padrão; `jazz doctor` confere
+  python3/git/curl/openssl com a dica `pkg install`; `install.sh` instala em `$PREFIX/bin` sem sudo.
+  Testado só com ambiente simulado, não em aparelho.
+## Não publicado (branch `backdoor-guard`)
+
+- Revisão do próprio diff: no fim de cada turno o jazz revisa só os arquivos que mudou (linhas
+  adicionadas) com um motor de regras em dados (`diffrules.json` embutido, pacotes em
+  `~/.config/jazz-cli/diffrules.d` e `.jazz/diffrules.d` com confiança, tipo `diffrules`). Regras:
+  segredo literal (CRITICAL); TLS/host desligado, dependência de URL git/tarball/registro
+  desconhecido/typosquat, scripts de ciclo de vida, mudança em CI/CD, escrita fora do projeto em
+  rc/cron/autostart (HIGH); Unicode invisível (MEDIUM). CRITICAL/HIGH perguntam com o trecho (`v`);
+  "sempre" grava hash em `.jazz/scan-allow.json` (confiança + caminho protegido); "não" restaura os
+  arquivos sinalizados; headless restaura, escreve `.jazz/scan-findings.json` e sai com 5.
+  `diff_guard: on|off|strict`, `--diff-guard`, `JAZZ_DIFF_GUARD`; auditoria `diffguard.finding`.
+  `jazz scan [--since ref] [--rules]` roda sob demanda; semgrep opcional (`jazz doctor` mostra).
+  Red-team: cenário `15-tls-off`.
+
+### Guardas de supply chain (branch `supply-fp`)
+
+- Guarda de supply chain: OSV é consultado pela versão que será instalada (a fixada
+  ou a que o registro resolve), então `axios`/`chalk`/`debug` atuais não são mais "maliciosos" (só as
+  versões comprometidas); typosquat só bloqueia nome fora da lista popular, a distância 1-2 de um nome
+  mais popular e que o registro diz ser novo (< 90 dias) ou pouco usado (checagem com limite de 2 s;
+  sem rede = aviso); pinos do lockfile/`requirements` são confiáveis; scripts de ciclo de vida só
+  avisam fora da lista popular; OSV bloqueia só HIGH/CRITICAL com correção, o resto é aviso uma vez;
+  no `turbo` avisos nunca perguntam (inline + auditoria). `supply_chain: strict` volta ao antigo.
+
+### Fila de mensagens (branch `msg-queue`)
+
+- Fila de mensagens (como no Devin CLI, semântica do pi): o que você digita durante o trabalho entra
+  numa fila visível embaixo do status (`na fila (N): …`) sem bloquear nem interromper. Itens
+  **agora** (steer: até 200 caracteres, ou `!`/`ei`/`opa`/`na verdade`/`espera`) entram no turno na
+  próxima fronteira de ferramenta como mensagem do usuário marcada; itens **depois** (follow-up:
+  mais longos, ou `depois:`/`+`) viram o próximo turno quando o atual termina bem. ↑/↓ editam,
+  Delete remove, Tab alterna o modo, `Esc Esc` limpa; turno interrompido devolve a fila ao editor.
+  Gravado na sessão antes da próxima requisição; system prompt intocado. Eventos `queue.add`,
+  `queue.edit`, `queue.consume`, `queue.drop` no `jazz trace`. Headless: `--follow-up "msg"`
+  (repetível) e `JAZZ_STEER_FILE` (linhas = mensagens agora, lidas em cada fronteira) para evals.
 
 ## Não publicado (branch `typos`)
 

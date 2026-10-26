@@ -9,12 +9,14 @@ jobs:
         with: { go-version: '1.27' }
       - run: test -z "$(gofmt -l .)"
       - run: sh -n scripts/install.sh
+      - run: sh -n scripts/install_test.sh && sh scripts/install_test.sh
       - run: shellcheck -S warning scripts/install.sh
       - run: go vet ./...
       - run: GOOS=windows GOARCH=amd64 go vet ./...
       # the runner ships pwsh: the PowerShell dialect tests run here too
       - run: JAZZ_TEST_PWSH="$(command -v pwsh || true)" go test -count=1 ./...
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -trimpath -ldflags="-s -w" -o /dev/null .
+      - run: CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /dev/null .
       - run: |
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /dev/null .
           CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /dev/null .

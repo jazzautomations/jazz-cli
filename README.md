@@ -33,7 +33,7 @@ Princípios (detalhes em [`DESIGN.md`](DESIGN.md)):
 
 ## Instalação
 
-Binários para linux (386, amd64, arm64), macOS (amd64, arm64) e Windows (amd64, arm64) saem das
+Binários para Linux (386, amd64, arm64), Android/Termux (arm64), macOS (amd64, arm64) e Windows (amd64, arm64) saem das
 [releases](https://github.com/jazzautomations/jazz-cli/releases). Cada release traz um
 `manifest.txt` com a versão e o sha256 de cada binário, assinado com Ed25519
 (`manifest.txt.sig`); os instaladores e o `jazz update` conferem os dois.
@@ -77,6 +77,18 @@ escolhe o binário arm64 nativo.
   `JAZZ_DEPLOY_HOST=<alias-ssh> scripts/deploy-ssh.sh` (compila linux/386, instala em
   `~/.local/bin` e põe um atalho `.desktop` no menu; `--sudo` instala em `/usr/local/bin`).
 - Para o sandbox no Linux instale o `bubblewrap` (`sudo apt install bubblewrap`).
+
+### Android (Termux)
+
+Suporte da comunidade: o binário Android/arm64 compila e está incluído nas releases; ainda não foi
+validado em um aparelho Termux real. Use aarch64, sem root:
+
+```sh
+pkg install curl openssl python git bash
+curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/latest/download/install.sh | sh
+```
+
+O instalador detecta `TERMUX_VERSION` ou o sufixo convencional `/com.termux/files/usr` de `PREFIX`, escolhe `jazz-android-arm64` e instala em `$PREFIX/bin` (sem sudo, sem mexer no PATH). `~/arquivo` é resolvido pelo `$HOME` do próprio Termux. Compilação cruzada e testes locais cobrem o caminho; uso no aparelho ainda não foi verificado. O sandbox do sistema não funciona no Android: não há bubblewrap nem user namespaces. As proteções de software (cerca de caminhos, guardrails, aprovações) continuam ativas, o modo padrão é `auto` e o `turbo` cai nas regras do `auto` com um aviso. `proot` não é uma fronteira de segurança. Prefira `ask` ou `plan` no Android. Entrar em `yolo` sem sandbox exige consentimento explícito; em execução headless, exige `--ack-no-sandbox`, que não cria isolamento. `jazz doctor` mostra o que falta (`pkg install …`).
 
 ### Windows (nativo, sem WSL)
 
@@ -166,25 +178,72 @@ jazz key openrouter       # salva uma chave (lida escondida); vale pra qualquer 
 
 ## Modos de permissão
 
-| Modo | Comportamento |
-|---|---|
-| `auto` (padrão) | roda sem perguntar o que não parece perigoso; comando perigoso e arquivo sensível perguntam |
-| `turbo` (`--turbo`, alias `full-auto`) | com sandbox do sistema: nada que fica no projeto pergunta; só pergunta o realmente necessário (lista abaixo) |
-| `ask` | tudo que não é só leitura pergunta (o modo certo pra repositório desconhecido) |
-| `smart` | edição no projeto e comando só-leitura rodam direto; o resto passa por um modelo rápido, que responde SAFE ou ASK; pacote, git que altera, `rm`/`sudo`, `.env`/chaves e a config do jazz sempre perguntam |
-| `yolo` | nada pergunta; só dentro de container ou VM |
-| `plan` | só investiga e propõe um plano |
+| Modo | Comportamento | Padrão quando |
+|---|---|---|
+| `turbo` (`--turbo`, alias `full-auto`) | com sandbox do sistema: nada que fica no projeto pergunta; só pergunta o realmente necessário (lista abaixo) | interativo, sem `mode` na config, com sandbox que isola (`sandbox-exec` no macOS, `bwrap` no Linux) |
+| `auto` | roda sem perguntar o que não parece perigoso; comando perigoso, rede nova, fora do projeto e arquivo sensível perguntam | interativo sem sandbox; sempre no `-p` |
+| `plan` | só investiga e propõe um plano; no fim, um menu pergunta se executa | — |
+| `ask` | tudo que não é só leitura pergunta (o modo certo pra repositório desconhecido) | pasta que você não confiou |
+| `smart` | edição no projeto e comando só-leitura rodam direto; o resto passa por um modelo rápido, que responde SAFE ou ASK; pacote, git que altera, `rm`/`sudo`, `.env`/chaves e a config do jazz sempre perguntam | — (`/mode smart`, `--smart`) |
+| `yolo` | dispensa confirmações rotineiras; guardas de dados sensíveis continuam ativas; use em container ou VM | — (`--yolo`) |
 
-`/mode <modo>` troca; Shift+Tab ou Ctrl+T alterna auto → turbo → smart → plan → ask. Flags `--ask`,
-`--smart`, `--turbo`, `--yolo`; config `"mode": "turbo"`. Numa pasta que você ainda não confiou
-(`jazz trust`), a sessão roda em `ask`; com `--turbo` explícito o modo fica, mas bash que muda algo
-ainda pergunta até você confiar (no `-p`: `jazz trust --yes` antes).
+O modo aparece na tela de boas-vindas (com uma linha explicando o que ele faz, na primeira vez) e
+no rodapé da caixa de entrada. `/mode <modo>` troca e grava na config; Shift+Tab ou Ctrl+T alterna
+só nesta sessão: turbo → auto → plan → ask → turbo (sem sandbox o turbo sai do ciclo, porque seria
+igual ao auto; `smart` fica no `/mode smart`). Flags `--ask`, `--smart`, `--turbo`, `--yolo`; config
+`"mode": "auto"` (ou qualquer outro) fixa o modo e vence o padrão. Numa pasta que você ainda não
+confiou, a sessão roda em `ask`; com `--turbo` explícito o modo fica, mas bash que muda algo ainda
+pergunta até você confiar (no `-p`: `jazz trust --yes` antes).
 
-**Confirmação com uma tecla:** `enter` ou `s` = sim, `a` = sempre, `n`/`esc` = não, `v` = ver o
-comando inteiro ou o diff, `e` = não, e dizer o que fazer. Não precisa digitar `sim`. O "sempre" de
-uma pergunta com motivo de risco (host novo, pasta fora do projeto, git destrutivo, `curl|sh` de um
-host) fica em `.jazz/approvals.json` e não é perguntado de novo no projeto; `/approvals` lista e
-`/approvals clear` apaga. Ler segredo e comando catastrófico perguntam sempre.
+> Quem já tinha `config.json` de uma versão anterior: o jazz gravava `"mode": "auto"` ao salvar
+> qualquer coisa, e isso continua valendo como escolha sua. Para o padrão novo (turbo com sandbox),
+> apague a linha `mode` ou use `/mode turbo`.
+
+**Confirmações como no Claude Code.** Toda pergunta é um menu numa caixa: a pergunta de permissão
+mostra o comando exato (ou o diff da edição), o motivo de risco em vermelho por inteiro, uma linha
+por problema, e as opções em lista vertical:
+
+```
+╭─ Bash ──────────────────────────────────────────────╮
+│ git push --force origin feature/x                   │
+│                                                     │
+│ ⚠ git push forçado                                  │
+│                                                     │
+│ Rodar este comando?                                 │
+│ ▸ 1. Sim                                            │
+│   2. Sim, e não perguntar de novo neste projeto …   │
+│   3. Não, e me diga o que fazer                     │
+╰─────────────────────────────────────────────────────╯
+```
+
+↑↓ (ou j/k) e Enter escolhem; o número escolhe direto; atalhos de uma tecla: `s` sim, `a` sempre,
+`n`/`esc` não, `e` não + instrução, `v` mostra o comando, o diff e o motivo inteiros. Enter é sempre
+a opção destacada (Sim ao abrir). Tecla nos primeiros 250 ms, ou enquanto você ainda está
+digitando (sem pausa de 600 ms), não responde. O que você digitou enquanto o agente trabalhava fica
+na fila, aparece acima da caixa (`↳ na fila: …`) e volta pra caixa de entrada; nunca muda o
+significado das teclas. Nunca é preciso digitar `sim`.
+
+O que a opção 2 lembra, como no Claude Code (`always_scope`, padrão `auto`):
+
+| Pergunta | "Sim, e não perguntar de novo" | Onde fica |
+|---|---|---|
+| edição/escrita (modo ask) | nesta sessão, para `Edit(<pasta>/**)` | memória (some ao sair) |
+| comando, domínio, ferramenta MCP, script | neste projeto, para a regra derivada (`Bash(npm test:*)`, `WebFetch(domain:x)`) | `.jazz/settings.json` (`/permissions`) |
+| motivo de risco (host novo, pasta fora do projeto, git destrutivo, `curl\|sh` de um host, pacote) | neste projeto, para aquele par (classe, alvo) | `.jazz/approvals.json` (`/approvals`, `/approvals clear`) |
+
+`always_scope: "session"` faz tudo durar só a sessão; `"project"` grava também as edições. Ler
+segredo, comando catastrófico, regra `ask`, hook e injeção suspeita perguntam sempre.
+
+**Pasta nova.** Na primeira vez numa pasta aparece um menu: `1. Sim, confiar nesta pasta` (Enter;
+lembrado nas próximas vezes), `2. Só nesta sessão`, `3. Não, modo ask` (Esc). Pasta sem
+configuração própria recebe a pergunta curta ("Primeira vez nesta pasta. Confiar?"); com AGENTS.md,
+`.mcp.json`, hooks, scripts ou steering, a caixa lista tudo que vai ser carregado (`v` mostra a
+lista inteira). `trust_default: "always"` na config confia sem perguntar em pasta sem configuração
+própria (a que traz configuração continua perguntando).
+
+**Outras perguntas, mesmo menu:** executar o plano (fim do `plan`), jobs em segundo plano ao sair
+ou no `/clear`, `/forget`, o atalho determinístico (`⚡ atalho`), `ask_user` e `/rewind` (lista com filtro:
+digite pra filtrar, ↑↓/PgUp/PgDn, Enter abre, Esc cancela; a lista é apagada depois) e, fora da sessão, `jazz trust`, `jazz worktree merge` e `jazz improve`.
 
 **Turbo em 5 linhas.** (1) Só existe de verdade com o sandbox do sistema (`sandbox-exec` no macOS,
 `bwrap` no Linux); sem ele vira `auto` e avisa uma vez. (2) Roda sem perguntar teste, build,
@@ -259,6 +318,23 @@ Leia o [`SECURITY.md`](SECURITY.md) antes de usar em repositório de terceiros. 
   mostra o estado.
 - Para repositório desconhecido: `--sandbox strict`, modo `ask`, sem chaves pagas no ambiente, de
   preferência num container.
+
+- **Revisão do próprio diff**: no fim de cada turno o jazz revisa os arquivos que ele mesmo mudou
+  (segredo escrito no código, verificação TLS desligada, dependência de URL ou com nome de typosquat,
+  script `postinstall`, mudança em CI/CD, caracteres invisíveis) e pergunta antes de aceitar o que for
+  de risco; "não" devolve os arquivos ao que eram, `-p` sai com código 5 e `.jazz/scan-findings.json`.
+  As regras são dados (`diffrules.json`, pacotes em `~/.config/jazz-cli/diffrules.d` e
+  `.jazz/diffrules.d`, esses dois só com confiança); com `semgrep` instalado ele também roda.
+  `diff_guard: on|off|strict`, `--diff-guard`, `jazz scan [--since ref] [--rules]`. Detalhes no
+  [`SECURITY.md`](SECURITY.md#revisão-do-próprio-diff).
+**Segredos detectados são redigidos antes do provedor remoto.** Um token reconhecido dentro de um
+arquivo comum, de um log ou da saída de `env` vira `<secreto:github-token#1>` antes da requisição;
+mensagens, descrições e schemas de ferramentas também passam pela redação. O mapa fica só na memória.
+Se o modelo usar o marcador num
+`bash`/`write`/`edit`, o jazz põe o valor real só na execução local. `redact: on|off|strict`
+(`--redact`, `JAZZ_REDACT`; padrão `on`), `/redact` mostra o que foi retido e `/redact allow
+<marcador>` libera um falso positivo neste projeto. Detalhes em
+[`SECURITY.md`](SECURITY.md#redação-de-segredos-antes-do-provedor-redact).
 
 **O que foi medido** (suíte [`evals/redteam`](evals/redteam), 14 cenários de ataque com HOME
 canário e sumidouro local; detalhes e ressalvas em
@@ -366,7 +442,8 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
   sistema (`--sandbox`, padrão `auto`: `sandbox-exec` no macOS, `bubblewrap` no Linux), que impede
   os comandos de ler a sua home fora do projeto e de gravar fora dele; veja `SECURITY.md`.
 - **Pasta não confiável**: na primeira vez numa pasta o jazz mostra o que vai carregar (AGENTS.md,
-  CLAUDE.md, `.jazz/*`, `.mcp.json`, skills, comandos, hooks, scripts) e pergunta se você confia.
+  CLAUDE.md, `.jazz/*`, `.mcp.json`, skills, comandos, hooks, scripts) e pergunta num menu se você
+  confia (Enter confia e lembra; "só nesta sessão" não grava nada).
   Até confiar (na pergunta, com `/trust` ou `jazz trust`), a sessão roda em `ask`; com `-p`, comando
   bash que não é só leitura é negado, a não ser que `--allow-tools` libere aquele comando ou você
   passe `--yolo`. Em CI rode `jazz trust --yes` antes, se o repositório é seu. AGENTS.md/skills que
@@ -385,7 +462,8 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
   ambiente, formatos de token: Anthropic, OpenAI, GitHub, Slack, Google, Stripe, JWT, npm, PEM, senha
   em URL do `.git/config`). Ler `.env*`, `*.pem`, `id_rsa*`, `.git/config`, `/proc/*/environ`,
   `~/.ssh`, `auth.json` pede confirmação também no `auto` (o conteúdo iria pro provedor).
-- **Caminhos protegidos** (pedem confirmação em todo modo menos yolo): config do jazz/Claude,
+- **Estado privado do Jazz:** acesso direto detectado pelas ferramentas é bloqueado em todos os modos. Envio de arquivo sensível detectado pede confirmação nova inclusive no yolo.
+- **Outros caminhos protegidos** (pedem confirmação em todo modo menos yolo): config do Claude,
   `~/.ssh`, `~/.aws`, arquivos de inicialização do shell, `~/.vimrc`, `~/.config/nvim`, `~/.tmux.conf`,
   `~/.cargo/config.toml`, `~/Library/LaunchAgents`, `/etc`, e no projeto `.git/config`, `.git/hooks`,
   `.mcp.json`, settings, `.envrc`, `.vscode/tasks.json`, `.gitmodules`, AGENTS.md/CLAUDE.md, `.jazz/skills`,
@@ -406,13 +484,13 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
 
 | Guardrail | O que faz | Config |
 |---|---|---|
-| Pacotes (supply chain) | `pip`/`uv`/`poetry add`, `npm`/`pnpm`/`yarn`/`bun add\|install <pkg>`, `go get`, `cargo add`, `gem install`, `composer require`: cada pacote é conferido no registro (PyPI, npm, proxy.golang.org, crates.io, RubyGems, Packagist) e no OSV.dev. Pede confirmação (mesmo no `auto`) quando o pacote **não existe** (nome inventado pelo modelo — slopsquatting), tem menos de 30 dias, parece typosquat de um dos ~1.700 nomes populares embutidos (Damerau-Levenshtein ≤ 2), está marcado como malicioso (MAL-) ou tem vulnerabilidade crítica na versão pedida, ou quando não há rede pra conferir. Cache de 24 h em `dataDir()/supply-cache.json` (1 h para "não existe"). Depois da instalação, as mudanças em `package-lock.json`, `poetry.lock`, `uv.lock`, `go.sum` e `Cargo.lock` aparecem no resultado. `jazz deps audit` roda o mesmo sobre os manifestos. | `supply_chain: on\|off`, `JAZZ_SUPPLY_CHAIN=off` |
+| Pacotes (supply chain) | `pip`/`uv`/`poetry add`, `npm`/`pnpm`/`yarn`/`bun add\|install <pkg>`, `go get`, `cargo add`, `gem install`, `composer require`: cada pacote é conferido no registro (PyPI, npm, proxy.golang.org, crates.io, RubyGems, Packagist) e no OSV.dev. Pede confirmação (mesmo no `auto`) só quando há motivo real: o pacote **não existe** (nome inventado pelo modelo, slopsquatting), tem menos de 30 dias, a **versão que será instalada** está marcada como maliciosa (MAL-; o jazz resolve a versão do registro e pergunta ao OSV por ela, então `axios`/`chalk` atuais passam), tem vulnerabilidade HIGH/CRITICAL com correção disponível, ou o nome está a distância 1-2 de um nome mais popular **e** o registro diz que ele é novo (< 90 dias) ou pouco usado. Nomes da lista popular nunca são sinalizados e pacotes já fixados no lockfile/`requirements` (`==`) são confiáveis. Vira só um aviso inline (uma vez, sem pergunta, também no `turbo`, registrado na auditoria): registro inalcançável ou lento (limite de 2 s na checagem de typosquat), avisos OSV de severidade menor ou sem correção, scripts de ciclo de vida de pacote fora da lista popular. Cache de 24 h em `dataDir()/supply-cache.json` (1 h para "não existe"). Depois da instalação, as mudanças em `package-lock.json`, `poetry.lock`, `uv.lock`, `go.sum` e `Cargo.lock` aparecem no resultado. `jazz deps audit` roda o mesmo sobre os manifestos. | `supply_chain: on\|off\|strict` (strict = bloqueia typosquat só pelo nome, como na 0.7.2), `JAZZ_SUPPLY_CHAIN=off\|strict` |
 | Prompt injection | Todo resultado de ferramenta (arquivo, bash, página, MCP) e as instruções do projeto são varridos atrás de texto dirigido ao agente: "ignore as instruções anteriores", "you are now", rótulos falsos `system:`/`assistant:`, tokens de chat, comentário HTML ou de código mandando o agente rodar algo, base64 com ordens, pedidos para ler `~/.ssh`/`auth.json` ou mandar segredos por `curl`. Achou: o conteúdo vai marcado `<untrusted suspected_injection="…">`, as linhas com a instrução chegam ao modelo trocadas por um marcador, você vê um aviso e toda ação que muda algo pede confirmação no resto do turno, mesmo no `auto` — menos editar arquivos comuns do projeto (o arquivo marcado continua sendo alvo legítimo da tarefa; só o que a injeção pede — mandar dados, ler segredos, rodar payload — fica travado). Uma imagem lida (read/MCP) também arma a confirmação. README comum ("rode o comando abaixo") não dispara. | `injection_guard: off\|warn\|strict` (padrão warn; strict vale até no yolo) |
 | Sanitização | Antes de chegar ao modelo: remove caracteres invisíveis (zero-width, U+FEFF), controles bidi, caracteres de tag Unicode ("ASCII smuggling", o texto escondido é decodificado e mostrado), seletores de variação usados como portadores, escapes de terminal; marca letras cirílicas/gregas parecidas misturadas em palavra latina como `\u{0441}`; tira HTML escondido (`display:none`, `visibility:hidden`, `font-size:0`, branco no branco, `hidden`) de páginas e resultados MCP. O resultado diz "N caracteres invisíveis removidos". Texto colado no prompt também passa. Acentos e emoji (inclusive 👨‍👩‍👧 e ❤️) passam intactos. | `sanitize: off\|strip\|strict` (padrão strip) |
 | Baixar e executar | `curl … \| sh`, `bash <(curl …)`, `curl -o x.sh && sh x.sh`, `base64 -d \| sh`, `python -c` com urllib + exec sempre pedem confirmação em auto/smart/ask (yolo continua yolo). | — |
 | Jobs em segundo plano | No máximo 8 ao mesmo tempo. | `max_jobs` |
 | Bloqueio que orienta | Todo bloqueio volta ao modelo em uma linha: o que foi bloqueado, por quê e "siga a tarefa sem isso, não tente contornar". 3 tentativas bloqueadas no mesmo alvo (arquivo, host, tipo de comando) ou 6 no turno encerram o turno com um relatório ("3 tentativas bloqueadas em X; parei para não gastar tempo. Motivo: …"), sem deixar o modelo dizer que deu certo. | `block_ux: on\|off`, `--block-ux` |
-| Cerca da pasta do projeto | `read`/`write`/`edit`, caminhos no bash (inclusive `cd`) e o `task` ficam dentro da pasta onde o jazz começou (mais a raiz do git, se a pasta faz parte do repositório). Fora dela, só pastas do sistema (`/usr`, `/opt`, `/etc` …), caches de toolchain, temporários e os arquivos de spill/jobs/skills do jazz. A pasta de configuração do jazz nunca. Interativo pergunta; `-p` recusa. | `allow_outside_project`, `--allow-outside` |
+| Cerca da pasta do projeto | `read`/`write`/`edit`, caminhos no bash (inclusive `cd`) e o `task` ficam dentro da pasta onde o jazz começou (mais a raiz do git, se a pasta faz parte do repositório). Fora dela, só pastas do sistema (`/usr`, `/opt`, `/etc` …), caches de toolchain, temporários e os arquivos de spill/jobs/skills do jazz. Acesso direto detectado ao estado privado do Jazz é bloqueado em todos os modos, inclusive yolo; skills e saídas de jobs/spill mantêm suas exceções. A análise de comandos é heurística e não contém programas shell arbitrários sem sandbox. Para outros caminhos externos, interativo pergunta e `-p` recusa; aprovação permanente vale para o caminho exibido. | `allow_outside_project`, `--allow-outside` |
 
 
 ## Comandos
@@ -423,7 +501,7 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
 |---|---|
 | `jazz [prompt]` | modo interativo (prompt inicial opcional) |
 | `jazz -p "prompt"` | headless: roda até o fim e imprime só a resposta |
-| `jazz -c` / `jazz -r <id>` | continua a última sessão da pasta / retoma uma sessão (também com `-p`) |
+| `jazz -c` / `jazz -r [id]` | continua a última sessão da pasta / retoma uma sessão: sem id abre a lista (↑↓, digite pra filtrar); com id também no `-p` |
 | `jazz login [chatgpt] [--browser]` | login com a conta do ChatGPT |
 | `jazz key <provedor>` | salva uma chave de API |
 | `jazz logout <provedor>` | apaga a credencial |
@@ -432,6 +510,7 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
 | `jazz omni setup` | liga o roteamento entre todos os provedores |
 | `jazz export <id> [md\|html] [arq]` | exporta uma sessão |
 | `jazz trust [--yes] [--revoke]` | confia na pasta e na configuração do projeto (AGENTS.md/CLAUDE.md, skills, comandos, `.mcp.json`, hooks, regras allow, steering, scripts); `--revoke` desfaz |
+| `jazz scan [--since ref] [--rules]` | roda a revisão do diff (regras de `diffrules.json` e pacotes) na árvore de trabalho contra `HEAD` ou `ref`; sai com 5 se houver achado CRITICAL/HIGH; `--rules` lista os pacotes carregados |
 | `jazz deps audit [pasta]` | verifica as dependências dos manifestos (existe no registro, idade, typosquat, OSV); sai com 1 se algo pede atenção |
 | `jazz sanitize <arquivo>` | mostra o que seria removido antes de ir ao modelo (texto invisível, tags Unicode, bidi, HTML escondido) e se parece prompt injection |
 | `jazz update [--check]` | atualiza o binário |
@@ -456,13 +535,15 @@ com `-p`), `--output-format text|json|stream-json`, `--max-steps N`, `--timeout 
 | `/model [ref]` · `/models [provedor]` | mostra/troca o modelo · lista modelos |
 | `/omni [on\|off\|strategy …]` | roteamento entre provedores |
 | `/key` · `/login` · `/logout` | credenciais |
-| `/mode auto\|turbo\|smart\|ask\|yolo\|plan` | modo de permissão (Shift+Tab ou Ctrl+T alterna auto → turbo → smart → plan → ask) |
+| `/mode auto\|turbo\|smart\|ask\|yolo\|plan` | modo de permissão (Shift+Tab ou Ctrl+T alterna turbo → auto → plan → ask nesta sessão) |
 | `/approvals [clear]` | aprovações "sempre" deste projeto (host de egress, pasta fora, git destrutivo) |
 | `/permissions [list\|remove\|add]` | regras persistentes |
 | `/effort low\|medium\|high\|off` · `/think` | raciocínio |
 | `/compact [foco]` · `/context` | contexto |
 | `/undo` · `/rewind` · `/fork [n]` | desfazer arquivos (inclusive o que o bash mudou) / voltar a conversa / copiar a conversa |
-| `/export [md\|html] [arq]` · `/clear` · `/resume` · `/forget` | sessões |
+| `/export [md\|html] [arq]` · `/clear` · `/forget` | sessões |
+| `/resume [id]` · `/sessions` · `/rename [título]` | lista de sessões com ↑↓ (j k), Enter abre, Esc cancela, digitar filtra, Tab mostra todas as pastas; ao retomar, a conversa aparece de novo (últimas 200 entradas, `resume_replay`; `session_picker: off` volta à lista numerada) · dá nome à sessão |
+| `/tree [id]` | árvore da sessão na mesma lista: Enter continua daquela mensagem (ramo novo) |
 | `/todo` · `/jobs [kill]` · `/mcp` · `/cost` · `/expand` | estado · saída inteira da última ferramenta |
 | `/goal [objetivo\|off]` · `/until [comando\|off]` · `/review [on\|off]` | objetivo fixo · só termina quando o comando passar · revisão do diff por subagente |
 | `/init` | cria um `AGENTS.md` analisando o projeto |
@@ -480,11 +561,66 @@ escrever. `/undo` e `/rewind` voltam só os arquivos que o turno mudou, inclusiv
 Respeita `.gitignore`, ignora arquivos acima de 1 MB e desliga sozinho (fica só o snapshot de
 write/edit) em projeto com mais de 20 mil arquivos ou sem git ≥ 2.25.
 
-Atalhos: `!comando` roda direto no shell · `Esc` interrompe o agente · o que você digita
-durante o trabalho entra na fila · `\`+Enter ou Alt+Enter quebra linha · `@arquivo` anexa ·
-Tab completa · `/` abre o menu de comandos (↑↓ escolhe, Tab completa, Enter roda) · `?` com a
-linha vazia mostra os atalhos · Ctrl+O (ou `/expand`) mostra a saída inteira da última
-ferramenta · Ctrl+R busca no histórico · Ctrl+G abre a mensagem no `$EDITOR`.
+#### Atalhos
+
+| Tecla | Na caixa de entrada | Durante o trabalho do agente |
+|---|---|---|
+| Enter | envia | põe o texto na [fila](#fila-de-mensagens) (não interrompe) |
+| Shift+Enter · Alt+Enter · `\`+Enter | quebra linha (colar com várias linhas mantém o texto) | — |
+| Esc | limpa a linha; fecha paleta/lista | com texto digitado, limpa o texto; sem texto, interrompe |
+| Ctrl+C | limpa; 2× sai | interrompe |
+| `/` | abre a [paleta de comandos](#paleta-de-comandos) | — |
+| `@` | abre a lista de arquivos e pastas do projeto (busca aproximada; Enter/Tab insere `@caminho `) | — |
+| `!comando` | roda direto no shell, sem o modelo | — |
+| ↑ ↓ | histórico, só com as entradas que começam pelo que já está digitado; em texto de várias linhas, move entre as linhas primeiro | editam a fila |
+| Ctrl+R | busca no histórico (Ctrl+R de novo: anterior; "nada encontrado" quando não acha) | — |
+| Ctrl+O | expande a saída inteira da última ferramenta; de novo, recolhe (`/expand` só expande) | — |
+| Shift+Tab · Ctrl+T | troca o modo nesta sessão: turbo → auto → plan → ask | — |
+| Ctrl+A/E · Ctrl+U/K | início/fim da linha · apaga até o início/fim da linha | — |
+| Alt+← → (Option no macOS) · Ctrl+W | pula palavra · apaga palavra | — |
+| Ctrl+G | abre a mensagem no `$EDITOR` | — |
+| `?` (linha vazia) | mostra a lista de atalhos embaixo da caixa; `?` de novo esconde | — |
+| Ctrl+D (linha vazia) | sai | — |
+
+O rodapé encolhe com a largura (some primeiro o MCP, depois o contexto, o provedor e o modelo;
+modo e `? atalhos` ficam). Opções em `config.json`: `"ui": {"palette": "fuzzy"|"prefix",
+"mention_picker": "on"|"off", "history_prefix": "on"|"off"}` (ou `JAZZ_PALETTE`,
+`JAZZ_MENTION_PICKER`, `JAZZ_HISTORY_PREFIX`). Em roxterm/VTE o Shift+Enter costuma chegar como
+Enter comum; use `\`+Enter ou Alt+Enter.
+
+#### Paleta de comandos
+
+`/` abre a lista de comandos com uma linha de descrição cada. Digitar filtra com busca aproximada:
+`/cmp` acha `/compact`, `/modle` acha `/model`, e o nome exato vem sempre primeiro (`/mode` +
+Enter roda `/mode`). ↑↓ escolhe, Tab completa na caixa com um espaço, Enter roda, Esc fecha. A
+linha de dica é `↑↓ escolhe · enter usa · tab completa · esc fecha`. Comandos próprios
+(`.jazz/commands/*.md`) aparecem na mesma lista. `"ui": {"palette": "prefix"}` volta ao filtro
+só por início do nome.
+
+#### Lista de sessões
+
+`/resume`, `/sessions` e `jazz -r` sem id abrem uma lista no lugar, mais nova primeiro:
+
+```
+  sessões em ~/projetos/app
+  ▸ 1 Banco de dados do app  há 2 h  atual
+        turbo · 8 msgs · 12.4k tokens · concluída · ~/projetos/app
+    2 Corrigir teste de login  ontem
+        auto · 14 msgs · 30.2k tokens · $0.012 · incompleta · ~/projetos/app
+  1/2  ↑↓ jk move · enter abre · esc cancela · digite filtra · tab: todas as pastas
+```
+
+↑↓, j/k e PgUp/PgDn movem; Enter abre; 1–9 abre direto; digitar filtra com tolerância a erro (`/`
+começa um filtro quando você quer procurar por j, k ou dígitos); Esc limpa o filtro ou cancela; Tab
+mostra as sessões de todas as pastas agrupadas (uma sessão de outra pasta não é carregada: o aviso
+diz `jazz -C <pasta> -r <id>`). A lista é apagada depois. Ao retomar, a conversa é desenhada de novo
+(pedidos, respostas em markdown, cada ferramenta numa linha verde ou vermelha, sem rodar nada de
+novo), seguida de `✻ conversa anterior · N mensagens · N ferramentas` e do aviso
+`sessão <id> retomada (N mensagens): <título>`. Mostra as últimas 200 entradas (`resume_replay`:
+número, `all` ou `off`; `JAZZ_RESUME_REPLAY`); o resto fica em `/expand`. O título (5–8 palavras do
+primeiro pedido, sem chamar modelo) troca com `/rename <título>` ou `/rename` sozinho para editar.
+`/tree` usa a mesma lista: Enter continua daquela mensagem como um ramo novo. `/rewind` abre um menu
+com as suas mensagens. `session_picker: off` (ou `JAZZ_SESSION_PICKER=off`) volta à lista numerada.
 
 A tela: caixa de boas-vindas (o logo grande aparece com `--banner` ou em terminal de 100+
 colunas), entrada numa caixa que cresce com o texto e rodapé com modo, modelo e uso do
@@ -493,6 +629,45 @@ contexto; respostas com `●` e markdown quebrado na largura do terminal; ferram
 aprovações num menu numerado (↑↓ + Enter, ou 1-3). Paleta Nord; em 16 cores usa as cores do
 esquema do terminal, e com `TERM=linux` (ou `JAZZ_ASCII=1`) tudo vira ASCII. Comandos próprios: arquivos `.md` em `~/.config/jazz-cli/commands`,
 `.jazz/commands` ou `.claude/commands` viram `/nome`.
+
+### Fila de mensagens
+
+Enquanto o agente trabalha você continua digitando. Enter não bloqueia nem interrompe: a mensagem
+entra numa fila que aparece embaixo da linha de status (`na fila (2): …`, um item por linha), e o
+agente a pega na hora certa. Cada item tem um modo:
+
+- **agora** (steer): entra no turno atual na próxima fronteira de ferramenta, como mensagem do
+  usuário marcada `[mensagem do usuário durante a execução]: …`, logo depois do resultado da
+  ferramenta que estava rodando. O modelo corrige o rumo sem perder o que já fez. Se ele estava
+  terminando, o turno continua com a mensagem.
+- **depois** (follow-up): vira o próximo turno, sozinho, quando o atual termina bem (cada turno
+  passa pela própria checagem de "pronto" honesto).
+
+O modo é escolhido pelo texto: até 200 caracteres, ou começando com `!`, `ei`, `opa`,
+`na verdade` ou `espera`, é **agora**; mais longo, ou com o prefixo `depois:` ou `+` (que saem do
+texto), é **depois**. Teclas durante o trabalho: ↑/↓ escolhem um item da fila e o colocam na
+linha para editar (Enter salva, ↓ no fim volta ao que você estava digitando) · Delete remove o
+item escolhido · Tab alterna agora/depois (no escolhido, ou no último) · `Esc` continua
+interrompendo o pedido · `Esc Esc` interrompe e limpa a fila. Se o turno é interrompido ou falha, o
+que sobrou na fila volta para o editor; nada se perde.
+
+As mensagens injetadas são mensagens de usuário (o system prompt não muda, o cache vale) e ficam
+gravadas na sessão antes da próxima requisição. O fluxo de eventos ganha `queue.add`,
+`queue.edit`, `queue.consume` (onde: ferramenta, fim do turno ou turno novo) e `queue.drop`
+(Delete, `Esc Esc`, editor), e o `jazz trace` mostra cada um (`fila + #1 [agora] …`).
+
+No `-p`, para scripts e evals:
+
+```sh
+jazz -p "implemente X" --follow-up "agora escreva os testes" --follow-up "atualize o CHANGELOG"
+JAZZ_STEER_FILE=/tmp/steer.txt jazz -p "refatore o parser"   # outro processo: echo "use src/" >> /tmp/steer.txt
+```
+
+`--follow-up` (repetível) roda cada mensagem como turno seguinte, em ordem, enquanto o anterior
+termina com sucesso; se um turno falha ou é interrompido, os que faltam não rodam (aviso no stderr).
+`JAZZ_STEER_FILE`: cada linha completa do arquivo (as que já existem e as acrescentadas durante a
+execução) vira uma mensagem **agora**, lida em cada fronteira de ferramenta, sem processo vigiando
+o arquivo, então o resultado é reproduzível.
 
 ### Erros de digitação
 
@@ -539,8 +714,8 @@ extraídos pra `~/.local/share/jazz-cli/scripts/<versão>/` e conferidos por sha
 Scripts seus em `~/.config/jazz-cli/scripts/` (`nome.json` + `nome.py` ou `nome.sh`); os do
 projeto, em `.jazz/scripts/`, só depois de `jazz trust` (tipo `scripts`) e nunca substituem um
 embutido. Permissões: script só-leitura roda até em plan e no subagente; os que escrevem ou
-rodam comando seguem as regras do bash (`Bash(...)` deny vale pro `cmd` do script; `[t]` salva
-`Script(nome)` ou a regra `Bash` do comando). Sem `python3`, só os de `sh` aparecem.
+rodam comando seguem as regras do bash (`Bash(...)` deny vale pro `cmd` do script; a opção 2 da
+pergunta salva `Script(nome)` ou a regra `Bash` do comando). Sem `python3`, só os de `sh` aparecem.
 
 **Atalhos** (`"fastpaths": "on"`, padrão; `"off"` desliga). Pedido claro e curto, sem mais nada
 junto, vira um comando sem chamar o modelo: "rode os testes", "compila", "rode o lint", "git
@@ -565,9 +740,9 @@ pedido que é atalho termina com 0 mesmo sem rede; o resto sai com 1 e uma mensa
 
 Quando o pedido é ambíguo de verdade e a resposta muda o trabalho (dois desenhos incompatíveis,
 qual de vários alvos), o modelo pode chamar a ferramenta `ask_user` com uma pergunta e 2 a 4
-opções. No modo interativo ela aparece como um menu numerado; o turno espera você digitar o
-número, o começo de uma opção ou uma resposta livre (Esc pula, e o modelo escolhe um padrão e
-diz qual). No `jazz -p` ela nunca trava: o modelo recebe "sem usuário, escolha o padrão mais
+opções. No modo interativo ela aparece como um menu (↑↓ e Enter, ou o número); começar a digitar,
+ou escolher "Outra resposta", abre uma linha para a resposta livre (Esc pula, e o modelo escolhe
+um padrão e diz qual). No `jazz -p` ela nunca trava: o modelo recebe "sem usuário, escolha o padrão mais
 razoável e diga a suposição". Com `jazz -p --ask-stdin` a resposta é lida de uma linha do stdin.
 Uma pergunta não conta como ação: responder "fiz X" depois de só perguntar ainda cai no guarda
 anti-fake. A ferramenta faz parte da lista fixa de ferramentas (o cache do prompt não muda).
@@ -684,7 +859,8 @@ Regras no formato do Claude Code (`Bash(npm test:*)`, `Edit(src/**)`, `Read(.env
 - `config.json` → `permissions.allow|deny|ask`
 - `~/.claude/settings.json`
 - `.claude/settings.json` e `.claude/settings.local.json` do projeto
-- `.jazz/settings.json` do projeto (onde a opção `[t]` e o `/permissions add` gravam)
+- `.jazz/settings.json` do projeto (onde a opção 2 da pergunta, "Sim, e não perguntar de novo", e o
+  `/permissions add` gravam; a opção 2 numa edição vale só para a sessão, veja `always_scope`)
 
 `deny` > `ask` > `allow`. As regras `allow` do projeto só valem com o projeto confiado;
 `deny`/`ask` sempre valem.

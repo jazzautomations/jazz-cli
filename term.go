@@ -42,6 +42,8 @@ const (
 	KCtrlR
 	KCtrlG
 	KCtrlO
+	KPgUp
+	KPgDn
 )
 
 type Key struct {
@@ -55,8 +57,7 @@ type KeyReader struct {
 	Keys  chan Key
 	bytes chan byte
 
-	pend    byte // one-byte pushback used by escape() (parser goroutine only)
-	hasPend bool
+	pend []byte // pushback used by escape()/utf8() (parser goroutine only), last = next
 
 	// gate is held by the stdin reader while it polls/reads; Pause takes it so a
 	// child process ($EDITOR) can own the terminal without us stealing bytes.
@@ -103,9 +104,10 @@ func (kr *KeyReader) Pause() (resume func()) {
 }
 
 func (kr *KeyReader) next(timeout time.Duration) (byte, bool) {
-	if kr.hasPend {
-		kr.hasPend = false
-		return kr.pend, true
+	if n := len(kr.pend); n > 0 {
+		b := kr.pend[n-1]
+		kr.pend = kr.pend[:n-1]
+		return b, true
 	}
 	if timeout <= 0 {
 		b, ok := <-kr.bytes
@@ -121,7 +123,7 @@ func (kr *KeyReader) next(timeout time.Duration) (byte, bool) {
 	}
 }
 
-func (kr *KeyReader) unread(b byte) { kr.pend, kr.hasPend = b, true }
+func (kr *KeyReader) unread(b byte) { kr.pend = append(kr.pend, b) }
 
 func (kr *KeyReader) parse() {
 	defer close(kr.Keys)
@@ -222,6 +224,29 @@ func (kr *KeyReader) escape() Key {
 	switch b {
 	case '\r', '\n':
 		return Key{Code: KAltEnter}
+	case 0x1b:
+		// ESC ESC [ C/D: Option+arrow on macOS terminals = word move. Anything
+		// else: a lone Esc, and the second ESC is parsed as its own key.
+		c, ok := kr.next(30 * time.Millisecond)
+		if !ok {
+			kr.unread(0x1b)
+			return Key{Code: KEsc}
+		}
+		if c == '[' {
+			d, ok := kr.next(30 * time.Millisecond)
+			if ok && (d == 'C' || d == 'D') {
+				if d == 'C' {
+					return Key{Code: KWordRight}
+				}
+				return Key{Code: KWordLeft}
+			}
+			if ok {
+				kr.unread(d)
+			}
+		}
+		kr.unread(c)
+		kr.unread(0x1b)
+		return Key{Code: KEsc}
 	case 'b':
 		return Key{Code: KWordLeft}
 	case 'f':
@@ -278,14 +303,24 @@ func (kr *KeyReader) escape() Key {
 					return Key{Code: KEnd}
 				case 'Z':
 					return Key{Code: KShiftTab}
+				case 'u': // CSI u (kitty/foot/ghostty/wezterm): shift/ctrl/alt+enter
+					if p == "13;2" || p == "13;3" || p == "13;5" {
+						return Key{Code: KAltEnter}
+					}
 				case '~':
 					switch p {
+					case "27;2;13", "27;3;13", "27;5;13": // xterm modifyOtherKeys: shift/alt/ctrl+enter
+						return Key{Code: KAltEnter}
 					case "1", "7":
 						return Key{Code: KHome}
 					case "4", "8":
 						return Key{Code: KEnd}
 					case "3":
 						return Key{Code: KDelete}
+					case "5":
+						return Key{Code: KPgUp}
+					case "6":
+						return Key{Code: KPgDn}
 					case "200":
 						return kr.paste()
 					}

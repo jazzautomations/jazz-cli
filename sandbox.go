@@ -187,6 +187,9 @@ func sbProbeOS() (backend, bin, why string) {
 		}
 		return sbSeatbelt, p, ""
 	case "linux":
+		if isTermux() {
+			return "", "", "indisponível no Android (Termux: sem bubblewrap nem user namespaces; proteções de software ativas)"
+		}
 		p, err := exec.LookPath("bwrap")
 		if err != nil {
 			return "", "", "bubblewrap (bwrap) não instalado — sudo apt install bubblewrap"
@@ -590,6 +593,7 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 // unreadable). verbose also prints the exact wrapper argv; probe prints
 // every path the live check tried and what it got.
 func sbDoctor(ok func(bool) string, gray func(string) string, verbose, probe bool) {
+	termuxDoctor(ok, gray)
 	st, _ := sbStatus.Load().(string)
 	sb := sbCurrent()
 	fmt.Printf("  %s sandbox: %s\n", ok(sb.Isolates()), st)

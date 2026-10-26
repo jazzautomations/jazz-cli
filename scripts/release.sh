@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build signed release assets for `jazz update` / scripts/install.sh into dist/release:
-#   jazz-<os>-<arch> for linux/386, linux/amd64, linux/arm64, darwin/arm64, darwin/amd64,
+#   jazz-<os>-<arch> for linux/386, linux/amd64, linux/arm64, android/arm64,
+#   darwin/arm64, darwin/amd64, jazz-linux-armv7 (linux/arm, GOARM=7),
 #   jazz-windows-<arch>.exe for windows/amd64, windows/arm64,
 #   checksums.txt (sha256), manifest.txt (version + sha256, signed), VERSION,
 #   install.sh and install.ps1 (both carrying the public key).
@@ -45,11 +46,14 @@ fi
 OUT=dist/release
 rm -rf "$OUT"
 mkdir -p "$OUT"
-for t in linux/386 linux/amd64 linux/arm64 darwin/arm64 darwin/amd64 windows/amd64 windows/arm64; do
+for t in linux/386 linux/amd64 linux/arm64 linux/arm android/arm64 darwin/arm64 darwin/amd64 windows/amd64 windows/arm64; do
   os=${t%/*}; arch=${t#*/}
   ext=""; [ "$os" = windows ] && ext=".exe"
-  echo "› $os/$arch"
-  CGO_ENABLED=0 GOOS=$os GOARCH=$arch "$GO" build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=$VER -X main.updatePubKey=$PUB" -o "$OUT/jazz-$os-$arch$ext" .
+  # 32-bit ARM (Raspberry Pi 2/3 with a 32-bit OS, TV boxes): ARMv7 hard-float
+  name=$arch; goarm=""
+  if [ "$arch" = arm ]; then name=armv7; goarm=7; fi
+  echo "› $os/$arch${goarm:+ (GOARM=$goarm)}"
+  CGO_ENABLED=0 GOOS=$os GOARCH=$arch GOARM=$goarm "$GO" build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=$VER -X main.updatePubKey=$PUB" -o "$OUT/jazz-$os-$name$ext" .
 done
 if command -v sha256sum >/dev/null 2>&1; then
   ( cd "$OUT" && sha256sum jazz-* > checksums.txt )

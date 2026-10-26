@@ -23,7 +23,6 @@ package main
 // (`--harness`, improve_harness.go) labelled as a proposal for a human.
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -968,10 +967,8 @@ func cmdImprove(cfg *Config, root, ref string, args []string, w io.Writer) int {
 		return 0
 	}
 	if !o.apply && !o.yes && !o.json && isTTY(os.Stdin) && isTTY(os.Stdout) {
-		fmt.Fprint(w, "\naplicar estas lições? [s/N] ")
-		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		switch strings.ToLower(strings.TrimSpace(line)) {
-		case "s", "sim", "y", "yes":
+		fmt.Fprintln(w)
+		if cliChoose(os.Stdin, w, "Aplicar estas lições?", yesNo("Sim, aplicar", "Não"), 1) == 0 {
 			o.apply = true
 		}
 	}

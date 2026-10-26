@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "jz-secret-literal",
+      "severity": "CRITICAL",
+      "exclude": [
+        "**/*.md",
+        "**/*.example",
+        "**/*.sample",
+        "**/*.template",
+        "**/.env.example"
+      ],
+      "detector": "secret",
+      "message_pt": "parece um segredo escrito direto no código (chave, token ou senha)",
+      "why": "Segredo no repositório vaza pelo histórico do git e por qualquer cópia do código. Use variável de ambiente ou um cofre."
+    },
+    {
+      "id": "jz-tls-off",
+      "severity": "HIGH",
+      "exclude": [
+        "**/*.md"
+      ],
+      "regex": "(\\bverify\\s*=\\s*False\\b|InsecureSkipVerify\\s*:\\s*true|rejectUnauthorized\\s*:\\s*(false|0)\\b|NODE_TLS_REJECT_UNAUTHORIZED\\s*[=:]\\s*['\\\"]?0|\\bcurl\\b[^\\n|;&]*\\s(--insecure|-[A-Za-z]*k[A-Za-z]*)(\\s|$)|--no-check-certificate|strict-ssl\\s*=\\s*[Ff]alse|\\bsslVerify\\s*[= ]\\s*[Ff]alse|GIT_SSL_NO_VERIFY|_create_unverified_context|\\bcheck_hostname\\s*=\\s*False|ssl\\.CERT_NONE|verify_ssl\\s*[:=]\\s*[Ff]alse|StrictHostKeyChecking[ =]+no\\b)",
+      "message_pt": "a verificação de certificado TLS ou de host foi desligada",
+      "why": "Sem a verificação, qualquer um na rede pode se passar pelo servidor e ler ou alterar o tráfego. Corrija o certificado ou a cadeia de CA em vez de desligar a checagem."
+    },
+    {
+      "id": "jz-dep-url",
+      "severity": "HIGH",
+      "globs": [
+        "package.json",
+        "requirements*.txt",
+        "constraints*.txt",
+        "pyproject.toml",
+        "Pipfile",
+        "setup.py",
+        "setup.cfg",
+        "Cargo.toml",
+        "go.mod",
+        "Gemfile",
+        "composer.json"
+      ],
+      "regex": "(git\\+(https?|ssh|git)://|\\bgit://|\\\"(github|gitlab|bitbucket):|@\\s*https?://|https?://\\S+\\.(tgz|tar\\.gz|zip|whl)\\b|\\bgit\\s*=\\s*[\\\"']|^\\s*replace\\s|\\bgit:\\s*[\\\"']?https?://)",
+      "message_pt": "dependência vinda de URL git, tarball ou endereço fora do registro",
+      "why": "Pacote fora do registro não passa pelas checagens do registro (versão fixa, malware conhecido, histórico) e o conteúdo da URL pode mudar a qualquer momento."
+    },
+    {
+      "id": "jz-dep-registry",
+      "severity": "HIGH",
+      "globs": [
+        "requirements*.txt",
+        "pip.conf",
+        ".npmrc",
+        ".yarnrc",
+        ".yarnrc.yml",
+        "pyproject.toml",
+        "Pipfile",
+        "Cargo.toml",
+        "Gemfile",
+        "uv.toml",
+        ".cargo/config.toml"
+      ],
+      "detector": "registry",
+      "message_pt": "registro de pacotes desconhecido (fora dos registros públicos oficiais)",
+      "why": "Um registro alternativo pode servir pacotes diferentes dos oficiais com o mesmo nome (dependency confusion)."
+    },
+    {
+      "id": "jz-dep-typosquat",
+      "severity": "HIGH",
+      "globs": [
+        "package.json",
+        "requirements*.txt",
+        "Pipfile",
+        "Cargo.toml",
+        "go.mod",
+        "Gemfile",
+        "composer.json"
+      ],
+      "detector": "typosquat",
+      "message_pt": "dependência com nome quase igual ao de um pacote popular (possível typosquat)",
+      "why": "Nomes parecidos com pacotes famosos são o truque mais comum para distribuir malware por dependência."
+    },
+    {
+      "id": "jz-lifecycle-script",
+      "severity": "HIGH",
+      "globs": [
+        "package.json",
+        "setup.py"
+      ],
+      "regex": "(\"(preinstall|install|postinstall|prepare|prepublish|prepack|postpack)\"\\s*:|\\bcmdclass\\s*=|class\\s+\\w+\\((\\w+\\.)*(install|develop|egg_info|build_py|build_ext)\\))",
+      "message_pt": "novo script de ciclo de vida de pacote (roda sozinho na instalação)",
+      "why": "Scripts como postinstall rodam código no computador de quem instala o pacote, sem nenhuma confirmação."
+    },
+    {
+      "id": "jz-ci-change",
+      "severity": "HIGH",
+      "globs": [
+        ".github/workflows/**",
+        ".github/actions/**",
+        ".gitlab-ci.yml",
+        ".gitlab-ci.yaml",
+        "Jenkinsfile",
+        "Jenkinsfile.*",
+        "azure-pipelines.yml",
+        "azure-pipelines.yaml",
+        "azure-pipelines-*.yml",
+        ".circleci/config.yml",
+        "bitbucket-pipelines.yml"
+      ],
+      "message_pt": "arquivo de CI/CD alterado (roda com os segredos do repositório)",
+      "why": "Pipelines executam código com tokens e chaves de deploy; uma mudança aqui pode vazá-los ou publicar algo sem revisão."
+    },
+    {
+      "id": "jz-persist-outside",
+      "severity": "HIGH",
+      "scope": "outside",
+      "globs": [
+        "**/.bashrc",
+        "**/.bash_profile",
+        "**/.profile",
+        "**/.zshrc",
+        "**/.zprofile",
+        "**/.zshenv",
+        "**/.bash_aliases",
+        "**/.config/fish/config.fish",
+        "**/crontab",
+        "**/cron.d/**",
+        "**/var/spool/cron/**",
+        "**/LaunchAgents/**",
+        "**/LaunchDaemons/**",
+        "**/.config/autostart/**",
+        "**/systemd/user/**",
+        "**/.xinitrc",
+        "**/.xprofile"
+      ],
+      "message_pt": "mudança fora do projeto num arquivo que roda sozinho (shell, cron ou inicialização)",
+      "why": "Esses arquivos executam comandos a cada login ou a cada hora; é onde um código malicioso se instala para continuar rodando."
+    },
+    {
+      "id": "jz-hidden-unicode",
+      "severity": "MEDIUM",
+      "exclude": [
+        "**/*.md",
+        "**/*.txt",
+        "**/*.po",
+        "**/*.json",
+        "**/locales/**",
+        "**/i18n/**"
+      ],
+      "detector": "unicode",
+      "message_pt": "caracteres invisíveis ou de direção de texto (bidi, largura zero) numa linha nova",
+      "why": "Esses caracteres fazem o código parecer diferente do que ele executa (Trojan Source) e escondem instruções."
+    }
+  ]
+}

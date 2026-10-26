@@ -436,7 +436,7 @@ func TestSupplyChainChecks(t *testing.T) {
 	sgFake(t, func(u string, body []byte) (int, string) {
 		switch {
 		case strings.Contains(u, "osv.dev"):
-			if bytes.Contains(body, []byte("evilpkg")) {
+			if bytes.Contains(body, []byte("evilpkg")) && bytes.Contains(body, []byte(`"version":"0.1"`)) {
 				return 200, `{"vulns":[{"id":"MAL-2026-1"}]}`
 			}
 			return 200, `{}`
@@ -445,7 +445,7 @@ func TestSupplyChainChecks(t *testing.T) {
 		case strings.HasSuffix(u, "/pypi/fresh-pkg/json"):
 			return 200, `{"releases":{"0.1":[{"upload_time_iso_8601":"` + young + `"}]}}`
 		case strings.HasSuffix(u, "/pypi/evilpkg/json"):
-			return 200, `{"releases":{"0.1":[{"upload_time_iso_8601":"` + old + `"}]}}`
+			return 200, `{"info":{"version":"0.1"},"releases":{"0.1":[{"upload_time_iso_8601":"` + old + `"}]}}`
 		case strings.HasSuffix(u, "/pypi/reqeusts/json"):
 			return 200, `{"releases":{"0.1":[{"upload_time_iso_8601":"` + young + `"}]}}`
 		}
@@ -479,8 +479,9 @@ func TestSupplyChainChecks(t *testing.T) {
 		return 0, nil, false, errors.New("dial tcp: no route")
 	}
 	defer func() { sgFetch = old2 }()
-	if ok, reason := grPermit(h, "pip install brand-new-thing"); ok || !strings.Contains(reason, "não consegui verificar") {
-		t.Errorf("offline must ask: %v %q", ok, reason)
+	h.ui.notices = nil
+	if ok, reason := grPermit(h, "pip install brand-new-thing"); !ok || reason != "" || !strings.Contains(strings.Join(h.ui.notices, "|"), "não consegui verificar") {
+		t.Errorf("offline must warn, not ask: %v %q %v", ok, reason, h.ui.notices)
 	}
 	h.cfg.Mode = "yolo"
 	if ok, _ := grPermit(h, "pip install brand-new-thing"); !ok {

@@ -42,6 +42,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -628,42 +629,83 @@ type sgVerdict struct {
 	Err       string    `json:"err,omitempty"`
 	Created   time.Time `json:"created,omitzero"`
 	Downloads int64     `json:"downloads,omitempty"` // -1 = unknown
-	Typo      string    `json:"typo,omitempty"`      // popular name this one is close to
 	Malicious string    `json:"malicious,omitempty"` // OSV MAL- id
-	Critical  string    `json:"critical,omitempty"`  // OSV id of a critical vuln affecting Version
+	Critical  string    `json:"critical,omitempty"`  // OSV id of a HIGH/CRITICAL vuln with a fix, affecting the version
+	Latest    string    `json:"latest,omitempty"`    // version the registry would install (OSV is asked about it)
+	Releases  int       `json:"releases,omitempty"`  // number of releases (pypi), a "few downloads" proxy
+	Advice    []string  `json:"advice,omitempty"`    // lower-severity OSV advisories: warn, never block
+	Scripts   string    `json:"scripts,omitempty"`   // lifecycle scripts the package declares (npm)
+	Seen      bool      `json:"seen,omitempty"`      // advisories already shown once
 	Checked   time.Time `json:"checked"`
+
+	// computed per check, never cached
+	Typo     string `json:"-"` // BLOCK: near a more popular name AND young / few downloads
+	TypoWarn string `json:"-"` // warn: near a popular name but the registry could not confirm
+	Popular  bool   `json:"-"` // exact match to the popular list
+	Trusted  bool   `json:"-"` // pinned in the project's lockfile / requirements
 }
 
 // sgMinAge: packages younger than this ask.
 const sgMinAge = 30 * 24 * time.Hour
 
-// problems lists why the package must be confirmed ("" each = fine).
+// problems lists why the package must be confirmed (BLOCK level); warnings()
+// has the rest. A registry that could not be reached is a warning, not a block.
 func (v sgVerdict) problems() []string {
-	name := v.Pkg.Name
-	if v.Pkg.Version != "" {
-		name += "@" + v.Pkg.Version
-	}
+	name := v.display()
 	reg := sgEcoTitle[v.Pkg.Eco]
 	var out []string
 	switch {
 	case v.Unknown:
-		out = append(out, fmt.Sprintf("não consegui verificar %s no %s (%s)", name, reg, v.Err))
-		return out
+		return nil
 	case !v.Exists:
-		out = append(out, fmt.Sprintf("%s não existe no %s (nome inventado pelo modelo? risco de slopsquatting)", name, reg))
-		return out
+		return append(out, fmt.Sprintf("%s não existe no %s (nome inventado pelo modelo? risco de slopsquatting)", name, reg))
 	}
 	if v.Malicious != "" {
 		out = append(out, fmt.Sprintf("%s está marcado como malicioso no OSV (%s)", name, v.Malicious))
 	}
 	if v.Critical != "" {
-		out = append(out, fmt.Sprintf("%s tem vulnerabilidade crítica conhecida (%s)", name, v.Critical))
+		out = append(out, fmt.Sprintf("%s tem vulnerabilidade grave com correção disponível (%s)", name, v.Critical))
 	}
-	if !v.Created.IsZero() && time.Since(v.Created) < sgMinAge {
+	if !v.Popular && !v.Trusted && !v.Created.IsZero() && time.Since(v.Created) < sgMinAge {
 		out = append(out, fmt.Sprintf("%s foi publicado há %d dias (menos de 30)", name, int(time.Since(v.Created).Hours()/24)))
 	}
 	if v.Typo != "" {
-		out = append(out, fmt.Sprintf("o nome %s parece typosquat de %s", v.Pkg.Name, v.Typo))
+		out = append(out, fmt.Sprintf("o nome %s parece typosquat de %s (pacote novo ou pouco usado)", v.Pkg.Name, v.Typo))
+	}
+	return out
+}
+
+func (v sgVerdict) display() string {
+	if v.Pkg.Version != "" {
+		return v.Pkg.Name + "@" + v.Pkg.Version
+	}
+	return v.Pkg.Name
+}
+
+// warnings lists what is worth saying but never worth a prompt: an
+// unverifiable registry, a name near a popular one that the registry could not
+// confirm, advisories below HIGH (or without a fix) and install scripts of a
+// package that is not popular.
+func (v sgVerdict) warnings() []string {
+	name := v.display()
+	var out []string
+	if v.Unknown {
+		out = append(out, fmt.Sprintf("não consegui verificar %s no %s (%s)", name, sgEcoTitle[v.Pkg.Eco], v.Err))
+		if v.TypoWarn != "" {
+			out = append(out, fmt.Sprintf("o nome %s lembra %s: confira antes de confiar", v.Pkg.Name, v.TypoWarn))
+		}
+		return out
+	}
+	if !v.Exists {
+		return nil
+	}
+	if !v.Seen {
+		for _, a := range v.Advice {
+			out = append(out, fmt.Sprintf("%s: aviso de segurança no OSV (%s)", name, a))
+		}
+	}
+	if v.Scripts != "" && !v.Popular {
+		out = append(out, fmt.Sprintf("%s declara scripts de ciclo de vida (%s); o jazz acrescenta --ignore-scripts", name, v.Scripts))
 	}
 	return out
 }
@@ -751,11 +793,15 @@ func sgLookup(ctx context.Context, p sgPkg) sgVerdict {
 			return v
 		}
 		var doc struct {
+			Info struct {
+				Version string `json:"version"`
+			} `json:"info"`
 			Releases map[string][]struct {
 				Upload string `json:"upload_time_iso_8601"`
 			} `json:"releases"`
 		}
 		if json.Unmarshal(b, &doc) == nil {
+			v.Latest, v.Releases = doc.Info.Version, len(doc.Releases)
 			for _, files := range doc.Releases {
 				for _, f := range files {
 					if t, err := time.Parse(time.RFC3339, f.Upload); err == nil && (v.Created.IsZero() || t.Before(v.Created)) {
@@ -765,7 +811,33 @@ func sgLookup(ctx context.Context, p sgPkg) sgVerdict {
 			}
 		}
 	case "npm":
-		st, b, tr, err := get(sgBase["npm"]+strings.Replace(url.PathEscape(p.Name), "%40", "@", 1), 8<<20)
+		reg := sgBase["npm"] + strings.Replace(url.PathEscape(p.Name), "%40", "@", 1)
+		// the "latest" version document is small: the version npm would install
+		// and the lifecycle scripts it declares
+		latestOK := false
+		if st, b, _, err := get(reg+"/latest", 256<<10); err == nil && st == 200 {
+			var d struct {
+				Version string            `json:"version"`
+				Scripts map[string]string `json:"scripts"`
+			}
+			if json.Unmarshal(b, &d) == nil && d.Version != "" {
+				latestOK, v.Latest = true, d.Version
+				var found []string
+				for _, k := range []string{"preinstall", "install", "postinstall"} {
+					if d.Scripts[k] != "" {
+						found = append(found, k)
+					}
+				}
+				v.Scripts = strings.Join(found, ", ")
+			}
+		} else if err != nil {
+			return fail(err)
+		}
+		if latestOK && sgIsPopular(p) {
+			v.Exists = true // a popular name: age and downloads are not needed
+			return v
+		}
+		st, b, tr, err := get(reg, 8<<20)
 		if err != nil {
 			return fail(err)
 		}
@@ -802,6 +874,7 @@ func sgLookup(ctx context.Context, p sgPkg) sgVerdict {
 				if len(vers) > 0 {
 					sort.Slice(vers, func(i, j int) bool { return pfVersionNewer(vers[j], vers[i]) })
 					ref = "@v/" + vers[0] + ".info"
+					v.Latest = vers[0]
 				}
 				if st, b, _, err := get(sgBase["go"]+sgGoEscape(mod)+"/"+ref, 64<<10); err == nil && st == 200 {
 					var info struct{ Time time.Time }
@@ -835,10 +908,15 @@ func sgLookup(ctx context.Context, p sgPkg) sgVerdict {
 			Crate struct {
 				Created   time.Time `json:"created_at"`
 				Downloads int64     `json:"downloads"`
+				MaxStable string    `json:"max_stable_version"`
+				Newest    string    `json:"newest_version"`
 			} `json:"crate"`
 		}
 		if json.Unmarshal(b, &doc) == nil {
 			v.Created, v.Downloads = doc.Crate.Created, doc.Crate.Downloads
+			if v.Latest = doc.Crate.MaxStable; v.Latest == "" {
+				v.Latest = doc.Crate.Newest
+			}
 		}
 	case "gems":
 		st, b, _, err := get(sgBase["gems"]+url.PathEscape(p.Name)+".json", 8<<20)
@@ -849,11 +927,19 @@ func sgLookup(ctx context.Context, p sgPkg) sgVerdict {
 			return v
 		}
 		var vers []struct {
-			Created   time.Time `json:"created_at"`
-			Downloads int64     `json:"downloads_count"`
+			Number     string    `json:"number"`
+			Prerelease bool      `json:"prerelease"`
+			Created    time.Time `json:"created_at"`
+			Downloads  int64     `json:"downloads_count"`
 		}
 		if json.Unmarshal(b, &vers) == nil {
 			v.Downloads = 0
+			for _, x := range vers { // newest first
+				if !x.Prerelease {
+					v.Latest = x.Number
+					break
+				}
+			}
 			for _, x := range vers {
 				v.Downloads += x.Downloads
 				if v.Created.IsZero() || x.Created.Before(v.Created) {
@@ -900,16 +986,24 @@ func sgGoEscape(m string) string {
 	return b.String()
 }
 
-// sgOSV asks OSV.dev about the package: any MAL- entry marks it malicious;
-// with a version, a CRITICAL advisory affecting it is reported too.
+// sgOSV asks OSV.dev about the version that will be installed (the pinned one,
+// else what the registry resolved as latest). A MAL- record marks the package
+// malicious only because OSV matched it against THAT version: those records
+// cover the compromised releases, not the whole package (axios, chalk). A
+// HIGH/CRITICAL advisory with a fix available blocks; anything lower, or
+// without a fix, is a warning. Without a resolvable version nothing is flagged.
 func sgOSV(ctx context.Context, v *sgVerdict) {
-	q := map[string]any{"package": map[string]string{"name": v.Pkg.Name, "ecosystem": sgOSVEco[v.Pkg.Eco]}}
-	if v.Pkg.Version != "" {
-		q["version"] = strings.TrimPrefix(v.Pkg.Version, "v")
-		if v.Pkg.Eco == "go" {
-			q["version"] = v.Pkg.Version
-		}
+	ver := v.Pkg.Version
+	if ver == "" {
+		ver = v.Latest
 	}
+	if ver == "" {
+		return
+	}
+	if v.Pkg.Eco != "go" {
+		ver = strings.TrimPrefix(ver, "v")
+	}
+	q := map[string]any{"package": map[string]string{"name": v.Pkg.Name, "ecosystem": sgOSVEco[v.Pkg.Eco]}, "version": ver}
 	body, _ := json.Marshal(q)
 	st, b, tr, err := sgFetch(ctx, sgBase["osv"], body, 4<<20)
 	if err != nil || st != 200 || tr {
@@ -921,18 +1015,46 @@ func sgOSV(ctx context.Context, v *sgVerdict) {
 			DB struct {
 				Severity string `json:"severity"`
 			} `json:"database_specific"`
-			Summary string `json:"summary"`
+			Summary  string `json:"summary"`
+			Affected []struct {
+				Ranges []struct {
+					Events []map[string]string `json:"events"`
+				} `json:"ranges"`
+			} `json:"affected"`
 		} `json:"vulns"`
 	}
 	if json.Unmarshal(b, &res) != nil {
 		return
 	}
 	for _, x := range res.Vulns {
-		if strings.HasPrefix(x.ID, "MAL-") && v.Malicious == "" {
-			v.Malicious = x.ID
+		sev := strings.ToUpper(x.DB.Severity)
+		fixed := false
+		for _, af := range x.Affected {
+			for _, r := range af.Ranges {
+				for _, e := range r.Events {
+					if e["fixed"] != "" {
+						fixed = true
+					}
+				}
+			}
 		}
-		if v.Pkg.Version != "" && strings.EqualFold(x.DB.Severity, "CRITICAL") && v.Critical == "" {
-			v.Critical = x.ID
+		switch {
+		case strings.HasPrefix(x.ID, "MAL-"):
+			if v.Malicious == "" {
+				v.Malicious = x.ID
+			}
+		case (sev == "CRITICAL" || sev == "HIGH") && fixed:
+			if v.Critical == "" {
+				v.Critical = x.ID
+			}
+		default:
+			tag := x.ID
+			if sev != "" {
+				tag += ", " + strings.ToLower(sev)
+			}
+			if len(v.Advice) < 3 {
+				v.Advice = append(v.Advice, tag)
+			}
 		}
 	}
 }
@@ -1100,9 +1222,23 @@ func sgStoreCache(vs []sgVerdict) {
 	}
 }
 
-// sgCheckPkgs checks packages (cache first, then registry + OSV, at most 4 at
-// a time) and returns one verdict per package, in order.
+// sgStrict (config supply_chain: strict, JAZZ_SUPPLY_CHAIN=strict) restores the
+// name-only typosquat block of v0.7.2 for people who prefer false alarms.
+var sgStrict atomic.Bool
+
+// sgTypoTimeout bounds the registry metadata fetch of a typosquat candidate:
+// slow means "could not confirm", which warns instead of blocking.
+var sgTypoTimeout = 2 * time.Second
+
+// sgCheckPkgs checks packages with no project context (jazz deps audit).
 func sgCheckPkgs(ctx context.Context, pkgs []sgPkg) []sgVerdict {
+	return sgCheckPkgsIn(ctx, "", pkgs)
+}
+
+// sgCheckPkgsIn checks packages (cache first, then registry + OSV, at most 4 at
+// a time) and returns one verdict per package, in order. dir names the project
+// whose lockfile / requirements pins make a package trusted ("" = none).
+func sgCheckPkgsIn(ctx context.Context, dir string, pkgs []sgPkg) []sgVerdict {
 	sgCacheMu.Lock()
 	cache := sgLoadCache()
 	sgCacheMu.Unlock()
@@ -1129,9 +1265,15 @@ func sgCheckPkgs(ctx context.Context, pkgs []sgPkg) []sgVerdict {
 				go func(i int) {
 					defer wg.Done()
 					defer func() { <-sem }()
-					v := sgLookup(ctx, pkgs[i])
+					lctx := ctx
+					if !sgIsPopular(pkgs[i]) && sgTyposquat(pkgs[i]) != "" {
+						var cancel context.CancelFunc
+						lctx, cancel = context.WithTimeout(ctx, sgTypoTimeout)
+						defer cancel()
+					}
+					v := sgLookup(lctx, pkgs[i])
 					if v.Exists && !v.Unknown {
-						sgOSV(ctx, &v)
+						sgOSV(lctx, &v)
 					}
 					out[i] = v
 				}(i)
@@ -1144,17 +1286,131 @@ func sgCheckPkgs(ctx context.Context, pkgs []sgPkg) []sgVerdict {
 		}
 		sgStoreCache(fresh)
 	}
+	pins := sgTrustedPins(dir)
 	for i := range out {
-		v := &out[i]
-		if v.Exists && !v.Unknown && v.Typo == "" {
-			// old, used packages that happen to sit near a popular name are fine
-			established := !v.Created.IsZero() && time.Since(v.Created) > 365*24*time.Hour && (v.Downloads < 0 || v.Downloads > 1000)
-			if !established {
-				v.Typo = sgTyposquat(v.Pkg)
-			}
-		}
+		sgClassify(&out[i], pins)
 	}
 	return out
+}
+
+// sgIsPopular reports an exact match to the embedded popular list.
+func sgIsPopular(p sgPkg) bool {
+	_, set := sgTopLists()
+	return set[p.Eco][sgTopNorm(p.Eco, p.Name)]
+}
+
+// sgFewDownloads: the registry says the package is little used (npm: weekly
+// downloads; crates, gems and composer: lifetime totals; pypi: release count).
+func sgFewDownloads(v *sgVerdict) bool {
+	switch v.Pkg.Eco {
+	case "npm":
+		return v.Downloads >= 0 && v.Downloads < 1000
+	case "crates", "gems", "composer":
+		return v.Downloads >= 0 && v.Downloads < 5000
+	case "pypi":
+		return v.Releases > 0 && v.Releases <= 2
+	}
+	return false
+}
+
+// sgYoung: published less than 90 days ago.
+func sgYoung(v *sgVerdict) bool {
+	return !v.Created.IsZero() && time.Since(v.Created) < 90*24*time.Hour
+}
+
+// sgClassify derives the per-check fields from the (possibly cached) registry
+// verdict. Typosquat scoring needs all of: the name is NOT in the popular
+// list, it is within distance 1-2 of a more popular package, and the registry
+// says it is young or little used. A registry that could not answer only warns.
+func sgClassify(v *sgVerdict, pins map[string]string) {
+	v.Typo, v.TypoWarn, v.Popular, v.Trusted = "", "", false, false
+	v.Popular = sgIsPopular(v.Pkg)
+	v.Trusted = sgPinnedIn(pins, v.Pkg)
+	if v.Popular {
+		return // (a) an exact match to the popular list never flags on name
+	}
+	near := sgTyposquat(v.Pkg)
+	if near == "" {
+		return
+	}
+	switch {
+	case sgStrict.Load() && v.Exists && !v.Unknown:
+		v.Typo = near // legacy behaviour (supply_chain: strict): any near-miss blocks
+	case v.Unknown:
+		if !v.Trusted {
+			v.TypoWarn = near // offline / slow registry: warn, do not block
+		}
+	case v.Exists && (sgYoung(v) || sgFewDownloads(v)):
+		v.Typo = near // pinned or not: a young near-miss of a popular name still blocks
+	}
+}
+
+// sgPinKey is the key of a pin map.
+func sgPinKey(eco, name string) string { return eco + ":" + name }
+
+// sgTrustedPins reads what the project already pinned to an exact version:
+// package-lock.json, poetry.lock, uv.lock, Cargo.lock, go.sum and the "=="
+// lines of requirements*.txt. An unpinned name in requirements.txt is NOT
+// trusted (an attacker's repository lists its typosquats there).
+func sgTrustedPins(dir string) map[string]string {
+	pins := map[string]string{}
+	if dir == "" {
+		return pins
+	}
+	add := func(eco, name, ver string) {
+		if name == "" || ver == "" {
+			return
+		}
+		k := sgPinKey(eco, name)
+		if old, ok := pins[k]; ok && old != ver {
+			pins[k] = old + "," + ver
+		} else {
+			pins[k] = ver
+		}
+	}
+	for f, eco := range map[string]string{"package-lock.json": "npm", "poetry.lock": "pypi", "uv.lock": "pypi", "Cargo.lock": "crates", "go.sum": "go"} {
+		fi, err := os.Stat(filepath.Join(dir, f))
+		if err != nil || fi.Size() > 8<<20 {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			continue
+		}
+		for n, ver := range sgParseLock(f, b) {
+			if eco == "pypi" {
+				n = sgNormPyPI(n)
+			}
+			add(eco, n, ver)
+		}
+	}
+	reqs, _ := filepath.Glob(filepath.Join(dir, "requirements*.txt"))
+	for _, f := range reqs {
+		if fi, err := os.Stat(f); err != nil || fi.Size() > 1<<20 {
+			continue
+		}
+		for _, p := range sgRequirementsFile(f) {
+			add("pypi", p.Name, p.Version) // Version is set only for ==
+		}
+	}
+	return pins
+}
+
+// sgPinnedIn: the package is pinned (to the very version asked, when one is).
+func sgPinnedIn(pins map[string]string, p sgPkg) bool {
+	have, ok := pins[sgPinKey(p.Eco, p.Name)]
+	if !ok {
+		return false
+	}
+	if p.Version == "" {
+		return true
+	}
+	for _, x := range strings.Split(have, ",") {
+		if strings.TrimPrefix(x, "v") == strings.TrimPrefix(p.Version, "v") {
+			return true
+		}
+	}
+	return false
 }
 
 // sgEnabled reports whether the supply-chain guard is on (config supply_chain,
@@ -1169,40 +1425,89 @@ func (a *Agent) sgEnabled() bool {
 // sgTimeout bounds the registry checks of one command.
 var sgTimeout = 15 * time.Second
 
-// sgCheckCommand returns why an install command must be confirmed, or "".
-// allowed = an explicit allow rule matched: it covers "could not check"
-// (offline), but real findings still ask.
-func (a *Agent) sgCheckCommand(ctx context.Context, cmd string, allowed bool) string {
+var (
+	sgWarnMu   sync.Mutex
+	sgWarnSeen = map[string]bool{}
+)
+
+// sgWarnOnce reports whether text is new in this process (each warning is
+// shown once, not on every install).
+func sgWarnOnce(text string) bool {
+	sgWarnMu.Lock()
+	defer sgWarnMu.Unlock()
+	if sgWarnSeen[text] {
+		return false
+	}
+	sgWarnSeen[text] = true
+	return true
+}
+
+// sgCheckCommand returns why an install command must be confirmed ("" = no
+// need) and the warnings to show inline without asking. allowed = an explicit
+// allow rule matched: it covers "could not check" (offline), but real findings
+// still ask. Only BLOCK-level findings (does not exist, malicious version,
+// HIGH/CRITICAL with a fix, a young or little-used near-miss of a popular
+// name, a custom lifecycle script) come back as the reason; in turbo the
+// lifecycle script is a warning too (the sandbox and --ignore-scripts contain it).
+func (a *Agent) sgCheckCommand(ctx context.Context, cmd string, allowed bool) (string, []string) {
+	return a.sgCheckCommandIn(ctx, cmd, allowed, a.tools.lockDir())
+}
+
+// sgCheckCommandIn is sgCheckCommand for a command whose effective cwd is
+// different from the agent's project root (for example, a nested build target).
+func (a *Agent) sgCheckCommandIn(ctx context.Context, cmd string, allowed bool, dir string) (string, []string) {
 	if !a.sgEnabled() {
-		return ""
+		return "", nil
 	}
+	if dir == "" {
+		dir = a.tools.lockDir()
+	}
+	sgStrict.Store(strings.EqualFold(os.Getenv("JAZZ_SUPPLY_CHAIN"), "strict") || a.cfg != nil && strings.EqualFold(a.cfg.SupplyChain, "strict"))
 	pkgs := sgParseInstalls(cmd)
-	if len(pkgs) == 0 {
-		return ""
-	}
-	if len(pkgs) > 40 {
-		pkgs = pkgs[:40]
-	}
-	cctx, cancel := context.WithTimeout(ctx, sgTimeout)
-	defer cancel()
-	a.ui.Thinking("verificando pacotes")
-	vs := sgCheckPkgs(cctx, pkgs)
-	a.ui.StopThinking()
-	var probs []string
-	for _, v := range vs {
-		if allowed && v.Unknown {
-			continue
+	turbo := a.mode() == "turbo" && turboSandboxOK()
+	var probs, warns []string
+	if len(pkgs) > 0 {
+		if len(pkgs) > 40 {
+			pkgs = pkgs[:40]
 		}
-		probs = append(probs, v.problems()...)
+		cctx, cancel := context.WithTimeout(ctx, sgTimeout)
+		defer cancel()
+		a.ui.Thinking("verificando pacotes")
+		vs := sgCheckPkgsIn(cctx, dir, pkgs)
+		a.ui.StopThinking()
+		var shown []sgVerdict
+		for i := range vs {
+			v := vs[i]
+			probs = append(probs, v.problems()...)
+			if allowed && v.Unknown {
+				continue
+			}
+			for _, w := range v.warnings() {
+				if v.Seen || sgWarnOnce(w) {
+					warns = append(warns, w)
+				}
+			}
+			if len(v.Advice) > 0 && !v.Seen {
+				v.Seen = true
+				shown = append(shown, v)
+			}
+		}
+		if len(shown) > 0 {
+			sgStoreCache(shown)
+		}
 	}
-	if why := sgLifecycleReason(a.tools.lockDir(), cmd); why != "" {
-		probs = append(probs, why)
+	if why, own := sgLifecycleReason(dir, cmd); why != "" {
+		if own && !turbo {
+			probs = append(probs, why)
+		} else if sgWarnOnce(why) {
+			warns = append(warns, why)
+		}
 	}
-	dbg("supply", map[string]any{"cmd": cmd, "problems": probs})
+	dbg("supply", map[string]any{"cmd": cmd, "problems": probs, "warnings": warns})
 	if len(probs) == 0 {
-		return ""
+		return "", warns
 	}
-	return "instalação de pacote: " + strings.Join(probs, "; ")
+	return "instalação de pacote: " + strings.Join(probs, "; "), warns
 }
 
 // acReplaceCommand rebuilds the bash tool args with a new command string.
@@ -1222,11 +1527,13 @@ func acReplaceCommand(rawArgs, old, hardened string) string {
 	return rawArgs
 }
 
-// sgLifecycleReason names a manifest lifecycle script (npm postinstall, a pip
-// sdist with setup.py) that an install in cmd would execute, or "". These run
-// arbitrary code as the user the moment the package is fetched, before the
-// identity check means anything (review LLM03).
-func sgLifecycleReason(dir, cmd string) string {
+// sgLifecycleReason names a manifest lifecycle script (npm postinstall) that an
+// install in cmd would execute, or "". These run arbitrary code as the user the
+// moment the package is fetched, before the identity check means anything
+// (review LLM03). The second result is true for the project's own scripts; a
+// script that only runs a popular tool (husky, patch-package, node-gyp, tsc,
+// a build step that does) is not reported at all.
+func sgLifecycleReason(dir, cmd string) (string, bool) {
 	for _, seg := range shellSegments(cmd) {
 		t := stripWrappers(shellFields(seg))
 		if len(t) == 0 {
@@ -1240,14 +1547,58 @@ func sgLifecycleReason(dir, cmd string) string {
 				continue
 			}
 			if s := sgPkgJSONScripts(dir); s != "" {
-				return "o package.json declara scripts de ciclo de vida (" + s + ") que rodariam no install; o jazz acrescenta --ignore-scripts"
+				return "o package.json declara scripts de ciclo de vida (" + s + ") que rodariam no install; o jazz acrescenta --ignore-scripts", true
 			}
 		}
 	}
-	return ""
+	return "", false
 }
 
-// sgPkgJSONScripts lists the lifecycle script names declared in dir/package.json.
+// sgBenignTools are build tools that are not packages in the popular list under
+// their binary name.
+var sgBenignTools = map[string]bool{"tsc": true, "node-gyp": true, "prisma": true, "husky": true, "patch-package": true, "ngcc": true, "tsup": true, "vite": true, "esbuild": true, "rollup": true, "webpack": true, "next": true, "nuxt": true, "svelte-kit": true, "playwright": true}
+
+// sgBenignScript: a single plain command that runs a popular tool (directly,
+// through npx/npm run/pnpm/yarn, or a script that itself is benign).
+func sgBenignScript(body string, scripts map[string]string, depth int) bool {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return true
+	}
+	if depth > 2 || strings.ContainsAny(body, ";&|<>`$()\n") {
+		return false
+	}
+	t := stripWrappers(shellFields(body))
+	if len(t) == 0 {
+		return false
+	}
+	w := filepath.Base(t[0])
+	switch w {
+	case "npx", "pnpx", "bunx", "dlx":
+		if len(t) < 2 {
+			return false
+		}
+		w = filepath.Base(t[1])
+	case "npm", "pnpm", "yarn", "bun":
+		if len(t) >= 3 && (t[1] == "run" || t[1] == "run-script") {
+			inner, ok := scripts[t[2]]
+			return ok && sgBenignScript(inner, scripts, depth+1)
+		}
+		if len(t) >= 3 && (t[1] == "exec" || t[1] == "dlx") {
+			w = filepath.Base(t[2])
+		} else {
+			return false
+		}
+	}
+	if sgBenignTools[w] {
+		return true
+	}
+	_, set := sgTopLists()
+	return set["npm"][strings.ToLower(w)]
+}
+
+// sgPkgJSONScripts lists the lifecycle script names declared in dir/package.json
+// whose body is not a plain run of a popular tool.
 func sgPkgJSONScripts(dir string) string {
 	b, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil || len(b) > 4<<20 {
@@ -1261,7 +1612,7 @@ func sgPkgJSONScripts(dir string) string {
 	}
 	var found []string
 	for _, k := range []string{"preinstall", "install", "postinstall", "prepare", "prepublish"} {
-		if doc.Scripts[k] != "" {
+		if doc.Scripts[k] != "" && !sgBenignScript(doc.Scripts[k], doc.Scripts, 0) {
 			found = append(found, k)
 		}
 	}

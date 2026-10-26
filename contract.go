@@ -57,6 +57,8 @@ type TurnStats struct {
 	Cost  float64 // USD for this turn (provider-reported or priced), 0 = unknown/free
 	Stop  string  // string(StopReason)
 	Steps int     // model requests made in this turn
+	// Redacted: distinct secrets first replaced by placeholders this turn (redact.go)
+	Redacted int
 }
 
 // StopReason says why Agent.Run returned.

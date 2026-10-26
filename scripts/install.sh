@@ -8,7 +8,8 @@
 # amd64/arm64) from the GitHub release of jazzautomations/jazz-cli, verifies the
 # release signature (manifest.txt.sig: Ed25519, public key embedded below by
 # scripts/release.sh) and the binary's sha256 from the signed manifest, and
-# installs it to ~/.local/bin.
+# installs it to ~/.local/bin ($PREFIX/bin on Termux, detected by TERMUX_VERSION
+# or a PREFIX containing com.termux; there sudo and --system are ignored).
 #
 # The signature is checked with minisign (minisign -V) or OpenSSL 3 (ed25519).
 # Without either tool, or with a copy of this script that carries no key (the
@@ -66,7 +67,14 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# Termux is recognized by TERMUX_VERSION or its conventional PREFIX suffix.
+# Do not treat a generic PREFIX (common in other environments) as Android.
+TERMUX=""
+case "${PREFIX:-}" in */com.termux/files/usr) TERMUX=1 ;; esac
+[ -z "${TERMUX_VERSION:-}" ] || TERMUX=1
+if [ -n "$TERMUX" ]; then SYSTEM=""; fi
 if [ -n "$SYSTEM" ] && [ -z "$BIN_DIR" ]; then BIN_DIR=/usr/local/bin; fi
+if [ -z "$BIN_DIR" ] && [ -n "$TERMUX" ]; then BIN_DIR="${PREFIX:-/data/data/com.termux/files/usr}/bin"; fi
 [ -n "$BIN_DIR" ] || BIN_DIR="$HOME/.local/bin"
 
 # ---- platform ----
@@ -75,13 +83,20 @@ case "$os" in
   linux|darwin) ;;
   *) die "sistema não suportado: $os (no Windows use install.ps1)" ;;
 esac
+if [ -n "$TERMUX" ]; then os=android; fi
 arch=$(uname -m)
 case "$arch" in
   i386|i486|i586|i686|x86) arch=386 ;;
   x86_64|amd64) arch=amd64 ;;
   aarch64|arm64) arch=arm64 ;;
-  *) die "arquitetura não suportada: $arch (há binários para 386, amd64 e arm64)" ;;
+  armv7l|armv7|armv7a|armv8l|armhf) arch=armv7 ;;
+  *) die "arquitetura não suportada: $arch (há binários para 386, amd64, arm64 e armv7)" ;;
 esac
+# 32-bit ARM userland on a 64-bit kernel (Raspberry Pi OS 32 bits on a Pi 3/4)
+if [ "$os" = linux ] && [ "$arch" = arm64 ] && [ "$(getconf LONG_BIT 2>/dev/null || echo 64)" = 32 ]; then
+  arch=armv7
+fi
+[ "$os/$arch" != android/armv7 ] || die "Android 32 bits não é suportado (há binário para android/arm64)"
 # 32-bit userland on a 64-bit kernel: the amd64 binary would not run
 if [ "$os" = linux ] && [ "$arch" = amd64 ] && [ "$(getconf LONG_BIT 2>/dev/null || echo 64)" = 32 ]; then
   arch=386
@@ -114,6 +129,7 @@ fetch() { # fetch URL OUT
     # shellcheck disable=SC2086 # $wsec is empty or one flag
     wget -q $wsec -O "$2" "$1"
   else
+    if [ -n "$TERMUX" ]; then die "preciso de curl: pkg install curl openssl python git bash"; fi
     die "preciso de curl ou wget"
   fi
 }
@@ -188,6 +204,7 @@ elif command -v shasum >/dev/null 2>&1; then
 elif ossl=$(command -v openssl); then
   got=$("$ossl" dgst -sha256 "$tmp/jazz" | awk '{print $NF}')
 else
+  if [ -n "$TERMUX" ]; then die "preciso de openssl para conferir o download: pkg install openssl"; fi
   die "preciso de sha256sum, shasum ou openssl para conferir o download"
 fi
 [ "$want" = "$got" ] || die "sha256 não confere (esperado $want, recebido $got)"
@@ -231,4 +248,5 @@ case ":$PATH:" in
     ;;
 esac
 "$BIN_DIR/jazz" version 2>/dev/null || true
+if [ -n "$TERMUX" ]; then say "  Termux: sem sandbox do sistema (modo auto); faltando algo? pkg install curl openssl python git bash"; fi
 say "  próximos passos: jazz doctor · jazz omni setup · jazz (na pasta do projeto)"

@@ -33,6 +33,12 @@ func TestPTYChild(t *testing.T) {
 		t.Skip("child of TestPTYSession")
 	}
 	os.Args = append([]string{"jazz"}, strings.Split(os.Getenv("JAZZ_PTY_ARGS"), "\x1f")...)
+	switch os.Getenv("JAZZ_TEST_SANDBOX") { // fake sandbox availability (default mode, Shift+Tab)
+	case "1":
+		turboSandboxOK = func() bool { return true }
+	case "0":
+		turboSandboxOK = func() bool { return false }
+	}
 	main()
 	os.Exit(0)
 }
@@ -86,6 +92,18 @@ func ptyModel(t *testing.T) *httptest.Server {
 			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c1", "type": "function",
 				"function": map[string]any{"name": "bash", "arguments": string(args)}}}}, "tool_calls")
 			fmt.Fprint(w, "data: [DONE]\n\n")
+		case strings.Contains(content, "rode devagar"): // time to type ahead before the approval
+			time.Sleep(1500 * time.Millisecond)
+			args, _ := json.Marshal(map[string]any{"command": "git branch -D jazz-pty-nada"})
+			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c3", "type": "function",
+				"function": map[string]any{"name": "bash", "arguments": string(args)}}}}, "tool_calls")
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		case strings.Contains(content, "pergunte algo"):
+			args, _ := json.Marshal(map[string]any{"question": "Qual banco usar?", "options": []map[string]any{
+				{"label": "SQLite", "description": "arquivo local"}, {"label": "Postgres"}}})
+			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c4", "type": "function",
+				"function": map[string]any{"name": "ask_user", "arguments": string(args)}}}}, "tool_calls")
+			fmt.Fprint(w, "data: [DONE]\n\n")
 		case strings.Contains(content, "rode perigoso"):
 			args, _ := json.Marshal(map[string]any{"command": "git branch -D jazz-pty-nada"})
 			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c2", "type": "function",
@@ -98,6 +116,16 @@ func ptyModel(t *testing.T) *httptest.Server {
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
+		case strings.Contains(content, "rode curto"):
+			args, _ := json.Marshal(map[string]any{"command": "seq 1 5"})
+			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c3", "type": "function",
+				"function": map[string]any{"name": "bash", "arguments": string(args)}}}}, "tool_calls")
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		case strings.Contains(content, "ECO-LINHAS"):
+			// the user text as it arrived: line count and indentation kept
+			i := strings.Index(content, "ECO-LINHAS")
+			body := content[i:]
+			text(fmt.Sprintf("linhas=%d recuo=%v tab=%v", strings.Count(body, "\n")+1, strings.Contains(body, "\n  dois"), strings.Contains(body, "\n\ttres")), 0)
 		case strings.Contains(content, "linha 50 colada"):
 			text(fmt.Sprintf("recebi %d linhas", strings.Count(content, "colada")), 0)
 		default:
@@ -128,6 +156,7 @@ type ptySession struct {
 	raw    strings.Builder
 	cmd    *exec.Cmd
 	done   chan struct{}
+	root   string // the project folder jazz runs in (-C)
 }
 
 func (s *ptySession) write(str string) {
@@ -197,6 +226,25 @@ func ptyStart(t *testing.T, term string) *ptySession {
 // the keyless defaults) and extra environment.
 func ptyStartWith(t *testing.T, term string, cfg map[string]any, env ...string) *ptySession {
 	t.Helper()
+	return ptyStartIn(t, term, cfg, t.TempDir(), t.TempDir(), nil, env...)
+}
+
+// trust answers the first-run folder question with Enter (trust), if it shows.
+func (s *ptySession) trust() {
+	s.t.Helper()
+	s.waitFor("the trust question", 15*time.Second, func(sc string) bool {
+		return strings.Contains(sc, "Primeira vez nesta pasta") || strings.Contains(sc, "╭") && strings.Contains(sc, "? atalhos") && !strings.Contains(sc, "Confiar")
+	})
+	if strings.Contains(s.screen(), "Primeira vez nesta pasta") {
+		time.Sleep(uiApproveGrace + 50*time.Millisecond)
+		s.write("\r")
+	}
+}
+
+// ptyStartIn is ptyStartWith with a given JAZZ_HOME and project dir (tests
+// that seed sessions first) and extra command-line args after -C root.
+func ptyStartIn(t *testing.T, term string, cfg map[string]any, home, root string, args []string, env ...string) *ptySession {
+	t.Helper()
 	master, slaveName, err := ptyOpen()
 	if err != nil {
 		t.Skipf("no pty: %v", err)
@@ -207,7 +255,6 @@ func ptyStartWith(t *testing.T, term string, cfg map[string]any, env ...string) 
 		t.Skipf("pty slave: %v", err)
 	}
 	_ = unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 27, Col: 86})
-	home, root := t.TempDir(), t.TempDir()
 	if cfg != nil {
 		b, _ := json.Marshal(cfg)
 		if err := os.WriteFile(filepath.Join(home, "config.json"), b, 0o600); err != nil {
@@ -215,7 +262,7 @@ func ptyStartWith(t *testing.T, term string, cfg map[string]any, env ...string) 
 		}
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPTYChild$")
-	cmd.Env = append(os.Environ(), "JAZZ_PTY_CHILD=1", "JAZZ_PTY_ARGS="+strings.Join([]string{"-C", root}, "\x1f"),
+	cmd.Env = append(os.Environ(), "JAZZ_PTY_CHILD=1", "JAZZ_PTY_ARGS="+strings.Join(append([]string{"-C", root}, args...), "\x1f"),
 		"JAZZ_HOME="+home, "TERM="+term, "COLORTERM=", "TERM_PROGRAM=", "NO_COLOR=", "JAZZ_NO_UPDATE_CHECK=1", "JAZZ_OFFLINE=")
 	cmd.Env = append(cmd.Env, env...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
@@ -224,7 +271,7 @@ func ptyStartWith(t *testing.T, term string, cfg map[string]any, env ...string) 
 		t.Fatal(err)
 	}
 	slave.Close()
-	s := &ptySession{t: t, master: master, vt: newVT(t, 86, 27), cmd: cmd, done: make(chan struct{})}
+	s := &ptySession{t: t, master: master, vt: newVT(t, 86, 27), cmd: cmd, done: make(chan struct{}), root: root}
 	s.vt.reflow = true // VTE (roxterm) rewraps on resize
 	go func() {
 		defer close(s.done)
@@ -276,10 +323,7 @@ func ptyPrompt(sc string) bool {
 
 func ptyScript(t *testing.T, term string) {
 	s := ptyStart(t, term)
-	s.waitFor("the trust prompt", 15*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || ptyPrompt(sc) })
-	if strings.Contains(s.screen(), "[s/N]") {
-		s.write("s\r")
-	}
+	s.trust()
 	s.waitFor("the input box", 15*time.Second, ptyPrompt)
 	if sc := s.screen(); !strings.Contains(sc, "modelo m1") {
 		t.Errorf("no startup line:\n%s", sc)
@@ -467,68 +511,113 @@ func (s *ptySession) boxAligned(when string) {
 	}
 }
 
-// TestPTYApproveKeys: a confirmation is one line answered by one key, no
-// typing + Enter: n denies, Enter runs, a (sempre) runs and is never asked
+// TestPTYApproveKeys: a confirmation is a boxed menu (the exact command, the
+// reason in red, three options) answered by a key or ↑↓ + Enter, never a
+// typed word: n denies, Enter runs, ↓ Enter (sempre) runs and is never asked
 // again in this project.
 func TestPTYApproveKeys(t *testing.T) {
 	if testing.Short() {
 		t.Skip("pty session")
 	}
 	s := ptyStart(t, "xterm-256color")
-	s.waitFor("the trust prompt", 15*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || ptyPrompt(sc) })
-	if strings.Contains(s.screen(), "[s/N]") {
-		s.write("s\r")
-	}
+	s.trust()
 	s.waitFor("the input box", 15*time.Second, ptyPrompt)
 	count := func(sub string) int { return strings.Count(strings.Join(s.all(), "\n"), sub) }
-	prompts := func() int { return count("│ Bash  git branch -D jazz-pty-nada") } // the answer replaces the question line
+	answers := func() int { return count("· Bash git branch -D jazz-pty-nada") } // the answer replaces the menu
 	results := func() int { return count("pronto: 300 linhas.") }
-	ask := func(key string, wantPrompt bool) {
+	ask := func(keys []string, wantPrompt bool) {
 		t.Helper()
-		p0, r0 := prompts(), results()
+		a0, r0 := answers(), results()
 		s.typeSlow("rode perigoso")
 		s.write("\r")
 		if wantPrompt {
-			s.waitFor("the one-line prompt", 10*time.Second, func(sc string) bool { return prompts() > p0 && strings.Contains(sc, "? Rodar este comando?") })
-			var line string
-			for _, l := range strings.Split(s.screen(), "\n") {
-				if strings.Contains(l, "? Rodar este comando?") {
-					line = l
+			s.waitFor("the approval menu", 10*time.Second, func(sc string) bool { return strings.Contains(sc, "Rodar este comando?") })
+			sc := s.screen()
+			for _, want := range []string{"─ Bash ─", "│ git branch -D jazz-pty-nada", "⚠ apaga branch do git", "▸ 1. Sim",
+				"2. Sim, e não perguntar de novo neste projeto", "3. Não, e me diga o que fazer", "s sim", "n/esc não"} {
+				if !strings.Contains(sc, want) {
+					t.Errorf("approval lacks %q:\n%s", want, sc)
 				}
 			}
-			for _, want := range []string{"perigo: apaga branch do git", "enter sim", "a sempre", "n não"} {
-				if !strings.Contains(line, want) {
-					t.Errorf("prompt line lacks %q: %q", want, line)
-				}
-			}
+			s.boxRows("the approval box")
 			time.Sleep(uiApproveIdle + 100*time.Millisecond) // a key typed at once is not an answer (bug 11)
-			s.write(key)
+			for _, k := range keys {
+				s.write(k)
+				time.Sleep(60 * time.Millisecond)
+			}
 		}
 		s.waitFor("the turn to end", 15*time.Second, func(sc string) bool { return results() > r0 && ptyPrompt(sc) })
-		if got := prompts() - p0; wantPrompt && got != 1 || !wantPrompt && got != 0 {
+		if got := answers() - a0; wantPrompt && got != 1 || !wantPrompt && got != 0 {
 			s.mu.Lock()
-			t.Errorf("key %q: %d prompts (want prompt=%v)\n%s", key, got, wantPrompt, s.vt.Dump())
+			t.Errorf("keys %q: %d answers (want prompt=%v)\n%s", keys, got, wantPrompt, s.vt.Dump())
 			s.mu.Unlock()
 		}
+		if strings.Contains(s.screen(), "Rodar este comando?") {
+			t.Errorf("the menu was not erased after the answer:\n%s", s.screen())
+		}
 	}
-	ask("n", true)
-	if count("● não") < 1 && count("* não") < 1 {
+	ask([]string{"n"}, true)
+	if count("● não · Bash git branch") < 1 {
 		t.Error("n did not deny")
 	}
-	ask("\r", true)
-	ask("a", true)
-	if count("não pergunto de novo neste projeto") != 1 {
-		t.Error("a (sempre) did not remember")
+	ask([]string{"\r"}, true)
+	if count("● sim · Bash git branch") < 1 {
+		t.Error("enter did not run")
 	}
-	ask("", false) // remembered: runs without a prompt
-	if strings.Contains(strings.Join(s.all(), "\n"), "confirmar?") || strings.Contains(strings.Join(s.all(), "\n"), "digite sim") {
-		t.Error("old typed confirmation still shown")
+	ask([]string{"\x1b[B", "\r"}, true) // ↓ Enter = option 2, sempre
+	if count("não pergunto de novo neste projeto") != 1 {
+		t.Error("↓ enter (sempre) did not remember")
+	}
+	ask(nil, false) // remembered: runs without a prompt
+	all := strings.Join(s.all(), "\n")
+	for _, old := range []string{"confirmar?", "digite sim", "resposta ›", "responda com uma palavra", "[B"} {
+		if strings.Contains(all, old) {
+			t.Errorf("old typed confirmation or a raw key shown: %q", old)
+		}
 	}
 	s.write("\x04")
 	select {
 	case <-s.done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("jazz did not exit on Ctrl+D")
+	}
+}
+
+// boxRows: every row of the last box on screen (╭ to ╰) ends at the same
+// cell, nothing is wider than the terminal, and no row wrapped.
+func (s *ptySession) boxRows(what string) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	top, bot := -1, -1
+	for y := 0; y < s.vt.h; y++ {
+		switch s.vt.row(y).cells[0] {
+		case '╭':
+			top, bot = y, -1
+		case '╰':
+			bot = y
+		}
+	}
+	if top < 0 || bot < top {
+		s.t.Errorf("%s: no box on screen\n%s", what, s.vt.Dump())
+		return
+	}
+	end := -1
+	for y := top; y <= bot; y++ {
+		r := s.vt.row(y)
+		last := -1
+		for x, c := range r.cells {
+			if c != 0 && c != ' ' {
+				last = x
+			}
+		}
+		if end < 0 {
+			end = last
+		}
+		if last != end || last >= s.vt.w {
+			s.t.Errorf("%s: row %d ends at %d, top border at %d\n%s", what, y, last, end, s.vt.Dump())
+			return
+		}
 	}
 }
 
@@ -540,16 +629,15 @@ func TestPTYTypoCommand(t *testing.T) {
 		t.Skip("pty session")
 	}
 	s := ptyStart(t, "xterm-256color")
-	s.waitFor("the trust prompt", 15*time.Second, func(sc string) bool { return strings.Contains(sc, "[s/N]") || ptyPrompt(sc) })
-	if strings.Contains(s.screen(), "[s/N]") {
-		s.write("s\r")
-	}
+	s.trust()
 	s.waitFor("the input box", 15*time.Second, ptyPrompt)
 	s.typeSlow("/modle")
 	s.write("\r")
+	// the fuzzy palette already highlights /model for the typo, so Enter runs
+	// it straight away (without the palette: the "interpretei" note)
 	s.waitFor("/modle read as /model", 10*time.Second, func(sc string) bool {
 		all := strings.Join(s.all(), "\n")
-		return strings.Contains(all, "interpretei /modle como /model") && strings.Contains(all, "modelo atual: fake/m1") && ptyPrompt(sc)
+		return strings.Contains(all, "modelo atual: fake/m1") && ptyPrompt(sc)
 	})
 	// closed-set argument: /mode atuo -> /mode auto (a prefix like /mod opens the editor's own picker)
 	s.waitFor("the input box again", 10*time.Second, ptyPrompt)

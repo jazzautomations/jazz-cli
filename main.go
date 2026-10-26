@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var version = "0.7.2"
+var version = "0.8.0"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -31,7 +31,8 @@ uso:
   jazz -p "x" - < arq          lê o stdin até o fim (ou --stdin); sem isso, o stdin só é lido se
                                chegar dado logo, e nunca segura a execução
   jazz -c                       continua a última sessão desta pasta (também com -p)
-  jazz -r <id>                  retoma uma sessão específica (também com -p; <id>@<entrada> retoma num ponto da árvore)
+  jazz -r [id]                  retoma uma sessão: sem id abre a lista (↑↓, digite pra filtrar); com id também no -p
+                               (<id>@<entrada> retoma num ponto da árvore)
   jazz -p --resume-last-in DIR  retoma a última sessão de DIR (ou começa uma nova); sem prompt, continua de onde parou
 
   jazz login [chatgpt] [--browser]   login com a conta do ChatGPT (código no celular)
@@ -50,6 +51,7 @@ uso:
   jazz update [--check]              atualiza o jazz (verifica sha256)
   jazz bug                           gera um pacote .tar.gz pra reportar problema
   jazz doctor [-v] [--sandbox-probe] diagnóstico (-v: argv do sandbox; probe: o que o sandbox lê)
+  jazz doctor --provider <p>[/modelo] testa um pedido real e mostra HTTP + erro (sem a chave)
   jazz script [nome] ['{json}']      lista os scripts prontos ou roda um (JSON no stdout, sem modelo)
   jazz sessions [--json] [-n N]      sessões desta pasta: situação (concluída/incompleta/negada), tokens, custo, duração
   jazz trace [id] [--json]           linha do tempo de uma sessão (requisições, ferramentas, bloqueios, checkpoints)
@@ -68,6 +70,7 @@ opções:
                          o checkout principal fica intocado; depois: jazz worktree merge <nome>
   --turbo | --yolo | --ask | --smart  modo de permissão só nesta sessão (padrão: auto — pede confirmação em comando perigoso;
                          turbo/--full-auto: com sandbox do sistema, só pergunta o realmente necessário)
+  --ack-no-sandbox                  confirma YOLO headless sem sandbox do sistema; não cria isolamento
   -v                     (com -p) mostra o progresso no stderr
   --output-format F      (com -p) text (padrão) · json (só o resultado final) · stream-json (um evento por linha)
   --max-steps N          limite de passos do modelo por turno
@@ -80,6 +83,8 @@ opções:
   --system-append T      texto extra no fim do prompt de sistema
   --until "CMD"          só termina quando CMD sai com 0 (roda no shell; falhou, o modelo continua)
   --until-rounds N       máximo de vezes que o --until roda por turno (padrão 5)
+  --follow-up "MSG"      (com -p, repetível) roda MSG como turno seguinte quando o anterior termina bem;
+                         JAZZ_STEER_FILE=ARQ: cada linha nova do arquivo entra no turno como mensagem "agora"
   --review               depois de um turno com mudanças, um subagente só-leitura revisa o diff
   --omni-judge on|off    escolhe o modelo de cada turno pelo tipo de tarefa e pelo placar medido
                          (UCB1 sobre os candidatos grátis; padrão off; config judge.mode; JAZZ_OMNI_JUDGE)
@@ -100,6 +105,8 @@ opções:
                          (ou JAZZ_PREFETCH)
   --parallel-tools M     chamadas só-leitura da mesma resposta rodam em paralelo: auto (padrão; com 1 CPU
                          só as de rede) · on · off · N (ou JAZZ_PARALLEL_TOOLS; config tools.parallel)
+  --redact M             segredos em arquivos/saídas viram <secreto:tipo#n> antes de ir ao provedor:
+                         on (padrão) · strict (também média confiança) · off (ou JAZZ_REDACT; config redact)
   --budget B             orçamento de passos/exploração: lean (padrão) · normal (dobro, sem parada) · off
   --quality Q            checagem de qualidade ao terminar: standard (padrão) · strict · off
   --guards on|off        guardas de conclusão honesta: testes protegidos, sem hardcode, remoção conferida, testes rodados no fim (padrão on)
@@ -120,6 +127,9 @@ opções:
                          mais pastas do sistema; config allow_outside_project; JAZZ_ALLOW_OUTSIDE=1)
   --block-ux on|off      bloqueio que orienta o modelo e para o turno após 3 tentativas bloqueadas no mesmo
                          alvo ou 6 no turno (padrão on; config block_ux; JAZZ_BLOCK_UX)
+  --diff-guard on|off|strict  no fim de cada turno revisa os arquivos que o jazz mexeu (TLS desligado, segredo,
+                         dependência suspeita, CI/CD…) e pergunta antes de aceitar o que for de risco
+                         (padrão on; config diff_guard; JAZZ_DIFF_GUARD; veja jazz scan --rules)
   --cutoff-continue on|off  write/edit cortado no limite de saída: pede a continuação e junta as partes
                          (até 3; padrão on; config cutoff_continue; JAZZ_CUTOFF_CONTINUE)
   --lessons on|off       lições de .jazz/lessons.md e ~/.config/jazz-cli/lessons.md no início da sessão
@@ -194,6 +204,7 @@ func main() {
 	fs.StringVar(resume, "resume", "", "")
 	dir := fs.String("C", "", "")
 	yolo := fs.Bool("yolo", false, "")
+	ackNoSandbox := fs.Bool("ack-no-sandbox", false, "")
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
 	turbo := fs.Bool("turbo", false, "")
@@ -210,10 +221,12 @@ func main() {
 	debugFlag := fs.Bool("debug", false, "")
 	bannerFlag := fs.Bool("banner", false, "")
 	untilFlag := fs.String("until", "", "")
+	fs.Var(&qFollowFlag, "follow-up", "") // queue.go
 	untilRounds := fs.Int("until-rounds", 0, "")
 	reviewFlag := fs.Bool("review", false, "")
 	opFl := opRegisterFlags(fs) // --parse-output, --grep-trunc, --tool-budget, --prefetch (outshape.go)
 	ptFl := ptRegisterFlags(fs) // --parallel-tools (partools.go)
+	rdFl := rdRegisterFlags(fs) // --redact (redact.go)
 	budgetFlag := fs.String("budget", "", "")
 	qualityFlag := fs.String("quality", "", "")
 	guardsFlag := fs.String("guards", "", "")
@@ -227,7 +240,9 @@ func main() {
 	recoverFlag := fs.String("recover", "", "")
 	fs.IntVar(&saFlagParallel, "subagents-parallel", 0, "")
 	allowOutside := fs.Bool("allow-outside", false, "")
+	fs.BoolVar(&h2AllowTampered, "allow-tampered", false, "") // resume a session altered outside jazz (hardening2.go)
 	blockUXFlag := fs.String("block-ux", "", "")
+	diffGuardFlag := fs.String("diff-guard", "", "")
 	cutoffFlag := fs.String("cutoff-continue", "", "")
 	stdinFlag := fs.Bool("stdin", false, "")
 	sandboxFlag := fs.String("sandbox", "", "")
@@ -241,7 +256,7 @@ func main() {
 	if wtErr != nil {
 		pfUsageErr(wtErr.Error())
 	}
-	args := reorderFlags(wtArgs)
+	args := reorderFlags(pfResumeArgs(wtArgs)) // bare -r opens the session list (sessions_ui.go)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return
@@ -249,6 +264,9 @@ func main() {
 		os.Exit(2)
 	}
 	if err := opFl.apply(); err != nil {
+		pfUsageErr(err.Error())
+	}
+	if err := rdFl.apply(); err != nil {
 		pfUsageErr(err.Error())
 	}
 	if err := ptFl.apply(); err != nil {
@@ -297,6 +315,11 @@ func main() {
 	case "", "on", "off":
 	default:
 		pfUsageErr("--block-ux deve ser on ou off")
+	}
+	switch *diffGuardFlag {
+	case "", "on", "off", "strict":
+	default:
+		pfUsageErr("--diff-guard deve ser on, off ou strict")
 	}
 	switch *cutoffFlag {
 	case "", "on", "off":
@@ -429,8 +452,12 @@ func main() {
 			return
 		case "script":
 			os.Exit(cmdScript(root, rest[1:]))
+		case "mcp":
+			os.Exit(cmdMCP(rest[1:], os.Stdout)) // presets (mcp_presets.go)
 		case "worktree", "worktrees":
 			os.Exit(cmdWorktree(root, rest[1:], os.Stdin, os.Stdout))
+		case "scan":
+			os.Exit(cmdScan(root, rest[1:], os.Stdout)) // diff-review rule engine (diffguard_cmd.go)
 		case "doctor":
 			cmdDoctor(cfg, root, rest[1:], *verbose || *debugFlag || os.Getenv("JAZZ_DEBUG") == "1")
 			return
@@ -457,6 +484,9 @@ func main() {
 	}
 	if *blockUXFlag != "" {
 		cfg.BlockUXRun = *blockUXFlag
+	}
+	if *diffGuardFlag != "" {
+		cfg.DiffGuardRun = *diffGuardFlag
 	}
 	if *cutoffFlag != "" {
 		cfg.CutoffContinueRun = *cutoffFlag
@@ -507,6 +537,9 @@ func main() {
 	}
 	prompt := strings.Join(rest, " ")
 	stdinTTY := isTTY(os.Stdin)
+	if pfHeadlessYoloNeedsAck(cfg.EffMode(), turboSandboxOK(), *pr || !stdinTTY || forceStdin) && !*ackNoSandbox {
+		pfUsageErr("YOLO headless sem sandbox do sistema não é isolado; passe --ack-no-sandbox para confirmar explicitamente")
+	}
 	if *pr || !stdinTTY || forceStdin {
 		if !stdinTTY || forceStdin {
 			wait := siWaitArg
@@ -524,6 +557,9 @@ func main() {
 		if prompt == "" && !o.cont && o.resumeID == "" {
 			pfUsageErr("nada pra fazer: passe um prompt (jazz -p \"...\")")
 		}
+		if o.resumeID == pfPickResume {
+			pfUsageErr("jazz -p -r precisa do id da sessão (jazz sessions lista; -c continua a última)")
+		}
 		code := runHeadless(cfg, root, ref, prompt, o)
 		wtExitHint(os.Stderr)
 		os.Exit(code)
@@ -535,7 +571,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
@@ -549,7 +585,7 @@ func reorderFlags(a []string) []string {
 		"--allow-tools": true, "-allow-tools": true, "--allowedTools": true, "--system-append": true, "-system-append": true,
 		"--append-system-prompt": true, "--until": true, "-until": true, "--until-rounds": true, "-until-rounds": true,
 		"--budget": true, "-budget": true, "--quality": true, "-quality": true, "--guards": true, "-guards": true,
-		"--recover": true, "-recover": true, "--subagents-parallel": true, "-subagents-parallel": true, "--scripts": true, "-scripts": true, "--block-ux": true, "-block-ux": true, "--cutoff-continue": true, "-cutoff-continue": true,
+		"--recover": true, "-recover": true, "--subagents-parallel": true, "-subagents-parallel": true, "--scripts": true, "-scripts": true, "--block-ux": true, "-block-ux": true, "--diff-guard": true, "-diff-guard": true, "--cutoff-continue": true, "-cutoff-continue": true,
 		"--ui-lint": true, "-ui-lint": true, "--sandbox": true, "-sandbox": true}
 	var flags, pos []string
 	sub := false
@@ -619,6 +655,7 @@ func pfSetupAgent(ag *Agent, cfg *Config, root string, o pfOpts) {
 	ag.Hooks = LoadHooks(cfg, root, pfProjectPolicyTrusted(root))
 	ag.SetLoopOpts(o.loop)
 	ag.AskStdin = o.askStdin
+	dcConfigure(o.offline) // docs tool: --offline serves the cache only (docs.go)
 }
 
 // pfStartSession builds the system prompt (once), applies --system-append and
@@ -698,6 +735,11 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 				mcp.Close()
 				return 1
 			}
+			if h2TamperedAbort(ag.sess) { // altered session: untrusted by default, headless refuses (hardening2.go)
+				fmt.Fprintln(os.Stderr, "jazz: "+h2SessionNotice(ag.sess.Tampered)+"; use --allow-tampered para retomar mesmo assim")
+				mcp.Close()
+				return 5
+			}
 			// an incomplete run left a handoff note: it leads the next message
 			// (a user message, never the system prompt: the cache holds)
 			if note := obResumeNote(si.Path); note != "" {
@@ -745,7 +787,7 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	var stop StopReason
 	var err error
 	if fp == nil {
-		stop, err = ag.Run(ctx, mprompt)
+		stop, err = ag.qRunHeadless(ctx, mprompt) // + --follow-up turns, JAZZ_STEER_FILE (queue.go)
 		if err != nil && ctx.Err() == nil {
 			fp = olHeadlessFallback(ctx, ag, tools, ui, err, prompt)
 		}
@@ -846,15 +888,23 @@ func pfTimeoutMsg(d time.Duration) string {
 }
 
 func friendlyErr(err error) string {
+	var re *RefusalError
+	if errors.As(err, &re) {
+		return re.Error() + " — reformule o pedido ou troque de modelo (/model)"
+	}
 	var ae *APIError
 	if errors.As(err, &ae) {
 		switch {
 		case ae.Status == 401 || ae.Status == 403:
 			return "credencial recusada pelo provedor (" + firstSentence(ae.Body) + ") — use /key ou /login"
-		case ae.Status == 402:
+		case ae.Status == 402 || pvClassify(ae) == "credit":
 			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
 		case ae.Status == 429:
-			return "limite de requisições atingido (" + firstSentence(ae.Body) + "). Na OpenRouter grátis o limite é baixo; espere ou troque de modelo"
+			msg := "limite de requisições atingido (" + firstSentence(pvErrMessage(ae.Body)) + ")"
+			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
+				msg += ". Na OpenRouter grátis o limite é baixo"
+			}
+			return msg + "; espere ou troque de modelo (/model)"
 		case ae == errNoNet:
 			if p := pvProxyFor(); p != "" {
 				return "o proxy " + p + " (HTTPS_PROXY) não responde"
@@ -862,6 +912,8 @@ func friendlyErr(err error) string {
 			return "nenhuma conexão: nem o provedor nem 1.1.1.1 responderam"
 		case ae.Status == 0:
 			return "falha de rede: " + firstSentence(ae.Body)
+		case ae.Status >= 400 && ae.Status < 500:
+			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, firstSentence(pvErrMessage(ae.Body)))
 		}
 		return ae.Error()
 	}
@@ -905,18 +957,16 @@ type App struct {
 }
 
 func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
-	// the trust prompt runs in the cooked terminal, before anything project-level starts
-	pfTrustGateWith(root, true, true, os.Stdin, os.Stdout)
-	untrusted := !pfFolderTrusted(root)
-	untrustedAsk := false
-	if untrusted {
-		if m := pfUntrustedMode(cfg); m != "" {
-			cfg.ModeOverride, untrustedAsk = m, true // F1: ask until the folder is trusted
-		}
+	if cfg.Mode == "" {
+		cfg.DefaultMode = pfDefaultMode() // turbo when an OS sandbox isolates (confirm.go)
 	}
 	fd := int(os.Stdin.Fd())
 	if runtime.GOOS == "windows" && !termVT() {
 		fatal("este console não aceita sequências VT/ANSI, que a interface do jazz precisa. Use o Windows Terminal (ou o console do Windows 10 1809+), ou o modo sem interface: jazz -p \"…\"")
+	}
+	if cfg.EffMode() == "yolo" && !turboSandboxOK() && !pfConfirmYoloWithoutSandbox() {
+		cfg.ModeOverride = "auto" // keep the persisted choice intact, but start safely this session
+		fmt.Fprintln(os.Stderr, "jazz: YOLO cancelado; iniciando em auto (sem sandbox do sistema)")
 	}
 	restore, err := enterCbreak(fd)
 	if err != nil {
@@ -929,6 +979,15 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGHUP)
 	keys := NewKeyReader()
 	ui := NewTermUI(cfg, keys)
+	// the trust question (a menu) runs before anything project-level starts
+	pfTrustGateUI(root, cfg, ui)
+	untrusted := !pfFolderTrusted(root)
+	untrustedAsk := false
+	if untrusted {
+		if m := pfUntrustedMode(cfg); m != "" {
+			cfg.ModeOverride, untrustedAsk = m, true // F1: ask until the folder is trusted
+		}
+	}
 	tools := NewToolbox(root)
 	tools.Web = cfg.Web
 	tools.Checkpoints = true // shadow-git: /undo and /rewind also cover bash changes
@@ -983,9 +1042,6 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	})
 	defer cleanup()
 
-	if o.cont || o.resumeID != "" {
-		app.resume(o.resumeID)
-	}
 	app.ed = NewEditor(ui)
 	app.ed.complete = app.completeCmd
 	app.ed.CycleMode = app.cycleMode
@@ -994,6 +1050,14 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	app.ed.LiveFooter = func() bool { return app.ol.on && !app.ol.forced } // offline countdown
 	app.ed.Commands = app.edCommands
 	ui.print(app.welcome())
+	modeNoteSeen(cfg)
+	// banner, then the resumed conversation, then the notice (sessions_ui.go)
+	switch {
+	case o.resumeID == pfPickResume:
+		app.resumePick()
+	case o.cont || o.resumeID != "":
+		app.resumeAt(o.resumeID, o.resumeAt)
+	}
 	if !cfg.HasCreds(mustProvider(app.agent.Model)) {
 		ui.Warn("sem credencial pra " + app.agent.Model + ". Use /key <provedor> ou /login (ChatGPT). Veja /help")
 	}
@@ -1071,8 +1135,19 @@ func (a *App) bannerInfo() []string {
 		t.fg(cGold, 33) + b + "jazz-cli" + r + dim + " v" + version + r,
 		dim + "modelo " + r + a.agent.Model,
 		dim + "pasta  " + r + dir,
-		dim + "modo   " + r + a.cfg.EffMode() + dim + "  " + t.G().dot + "  /help" + pfHintSuffix(dim, t.G().dot, turboWelcomeHint(a.cfg.EffMode())) + r,
+		dim + "modo   " + r + a.cfg.EffMode() + dim + "  " + t.G().dot + "  /help" + pfHintSuffix(dim, t.G().dot, a.welcomeHint()) + r,
 	}
+}
+
+// welcomeHint is what follows the mode on the start screen: the mode's
+// one-line explanation the first time it is the start mode, then the turbo
+// recommendation where it applies.
+func (a *App) welcomeHint() string {
+	note, hint := modeNote(a.cfg)
+	if note != "" {
+		return note
+	}
+	return hint
 }
 
 // welcome is the start screen: the compact box, or the big logo with
@@ -1087,7 +1162,8 @@ func (a *App) welcome() string {
 	if home != "" && strings.HasPrefix(dir, home) {
 		dir = "~" + strings.TrimPrefix(dir, home)
 	}
-	return Welcome(a.ui.T, w, WelcomeInfo{Version: version, Model: a.agent.Model, Dir: dir, Mode: a.cfg.EffMode(), Hint: turboWelcomeHint(a.cfg.EffMode())})
+	note, hint := modeNote(a.cfg)
+	return Welcome(a.ui.T, w, WelcomeInfo{Version: version, Model: a.agent.Model, Dir: dir, Mode: a.cfg.EffMode(), Hint: hint, Note: note})
 }
 
 // footer is the line under the input box.
@@ -1150,6 +1226,11 @@ func (a *App) ensureStarted(ctx context.Context) {
 }
 
 func (a *App) send(text string) {
+	var ok bool
+	if text, ok = a.confirmPastedToolTranscript(text); !ok {
+		return
+	}
+	defer a.qSend()() // message queue: next queued turn, or back to the editor (queue.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	a.turnMu.Lock()
 	a.cancelTurn = cancel
@@ -1196,10 +1277,18 @@ func (a *App) send(text string) {
 	}
 	if reason == StopDone && a.cfg.EffMode() == "plan" && ctx.Err() == nil {
 		// G12: the plan is ready; let the user switch to execution in one key
-		switch a.ui.Ask("executar o plano? [s] sim (auto)  [a] sim, perguntando antes (ask)  [n] continuar planejando", "san") {
-		case 's':
-			a.setSessionMode("auto")
-		case 'a':
+		base := a.cfg.BaseMode()
+		if base == "ask" || base == "plan" {
+			base = "auto"
+		}
+		switch a.ui.Choose("Executar o plano?", []mnItem{
+			{Label: "Sim, executar (modo " + base + ")", Key: 's', Keys: "y"},
+			{Label: "Sim, perguntando antes de cada mudança (modo ask)", Key: 'a'},
+			{Label: "Não, continuar planejando", Key: 'n'},
+		}, 0) {
+		case 0:
+			a.setSessionMode(base)
+		case 1:
 			a.setSessionMode("ask")
 		default:
 			return
@@ -1229,7 +1318,7 @@ func (a *App) pfShowProviderWarnings() {
 
 // setSessionMode switches the effective mode for this session only.
 func (a *App) setSessionMode(m string) {
-	if m == a.cfg.Mode {
+	if m == a.cfg.BaseMode() {
 		a.cfg.ModeOverride = ""
 	} else {
 		a.cfg.ModeOverride = m
@@ -1237,14 +1326,11 @@ func (a *App) setSessionMode(m string) {
 	a.ui.SetMode(a.cfg.EffMode())
 }
 
-// cycleMode is bound to Shift+Tab / Ctrl+T: auto → turbo → smart → plan → ask → auto.
-// The choice lasts for this session only (ModeOverride is never saved).
+// cycleMode is bound to Shift+Tab / Ctrl+T: turbo → auto → plan → ask →
+// turbo (modeCycleNext; smart stays on /mode smart). The choice lasts for
+// this session only (ModeOverride is never saved).
 func (a *App) cycleMode() {
-	next := map[string]string{"auto": "turbo", "turbo": "smart", "smart": "plan", "plan": "ask", "ask": "auto", "yolo": "auto"}[a.cfg.EffMode()]
-	if next == "" {
-		next = "auto"
-	}
-	a.setSessionMode(next)
+	a.setSessionMode(modeCycleNext(a.cfg.EffMode(), turboSandboxOK()))
 }
 
 func (a *App) shellEscape(cmd string) {
@@ -1270,22 +1356,28 @@ func (a *App) shellEscape(cmd string) {
 	}
 }
 
-func (a *App) resume(id string) {
+func (a *App) resume(id string) { a.resumeAt(id, "") }
+
+// resumeAt loads a session (id "" = the newest) at an entry of its tree.
+func (a *App) resumeAt(id, at string) {
 	si, err := pfFindSession(a.root, id)
 	if err != nil {
 		a.ui.Warn(err.Error())
 		return
 	}
-	a.loadSession(si)
+	a.loadSessionAt(si, at)
 }
 
-func (a *App) loadSession(si SessionInfo) {
-	if err := a.agent.LoadSession(si); err != nil {
+func (a *App) loadSession(si SessionInfo) { a.loadSessionAt(si, "") }
+
+// loadSessionAt resumes si and renders the conversation again (sessions_ui.go).
+func (a *App) loadSessionAt(si SessionInfo, at string) {
+	if err := a.agent.LoadSessionAt(si, at); err != nil {
 		a.ui.Error("não consegui abrir a sessão: " + err.Error())
 		return
 	}
 	a.started = false
-	a.ui.Notice(fmt.Sprintf("sessão %s retomada (%d mensagens): %s", a.agent.SessionID, len(a.agent.Msgs), si.Title))
+	a.showResumed(si)
 }
 
 // newAgent replaces the conversation with a fresh one (keeps tools and MCP).
@@ -1306,22 +1398,23 @@ func (a *App) confirmJobs(exiting bool) bool {
 	if n == 0 {
 		return true
 	}
+	q := fmt.Sprintf("%d job(s) em segundo plano rodando. Encerrar?", n)
 	if exiting {
-		switch a.ui.Ask(fmt.Sprintf("%d job(s) em segundo plano rodando. [s] encerrar e sair  [n] sair e deixar rodando  [esc] cancelar", n), "sn") {
-		case 's':
+		switch a.ui.Choose(q, yesNo("Sim, encerrar e sair", "Não, sair e deixar rodando"), 0) {
+		case 0:
 			a.tools.KillJobs()
 			return true
-		case 'n':
+		case 1:
 			a.keepJobs = true
 			return true
 		}
 		return false
 	}
-	switch a.ui.Ask(fmt.Sprintf("%d job(s) em segundo plano rodando. Encerrar? [s] sim  [n] deixar rodando  [esc] cancelar", n), "sn") {
-	case 's':
+	switch a.ui.Choose(q, yesNo("Sim, encerrar", "Não, deixar rodando"), 0) {
+	case 0:
 		a.tools.KillJobs()
 		return true
-	case 'n':
+	case 1:
 		return true
 	}
 	return false
@@ -1337,7 +1430,7 @@ var slashCommands = []struct{ name, help string }{
 	{"/key", "salva uma chave de API (escondida): /key openrouter"},
 	{"/login", "login com a conta do ChatGPT (--browser pra fluxo no navegador)"},
 	{"/logout", "remove credencial: /logout openai"},
-	{"/mode", "permissões: auto (padrão) · turbo (sandbox; só pergunta o necessário) · smart (modelo rápido decide) · ask · yolo · plan (só investiga) — shift+tab alterna"},
+	{"/mode", "permissões: turbo (padrão com sandbox; só pergunta o necessário) · auto (padrão sem sandbox) · plan (só investiga) · ask · smart (modelo rápido decide) · yolo — shift+tab alterna turbo → auto → plan → ask"},
 	{"/approvals", "aprovações \"sempre\" deste projeto (saída de dados, fora do projeto, git destrutivo): lista · clear"},
 	{"/permissions", "regras de permissão: lista · /permissions remove <n|regra> · add allow|deny|ask <regra>"},
 	{"/effort", "esforço de raciocínio: low · medium · high · off"},
@@ -1347,15 +1440,18 @@ var slashCommands = []struct{ name, help string }{
 	{"/undo", "desfaz as mudanças de arquivo do último turno"},
 	{"/rewind", "volta a conversa (e os arquivos) para antes de uma mensagem sua"},
 	{"/fork", "copia a conversa para uma sessão nova (opcional: até a mensagem n)"},
-	{"/tree", "mostra a árvore da sessão; /tree <id> continua a partir daquele ponto (novo ramo)"},
+	{"/tree", "árvore da sessão com ↑↓: enter continua daquele ponto (novo ramo) · /tree <id>"},
 	{"/export", "exporta a conversa: /export [md|html] [arquivo]"},
 	{"/clear", "começa uma conversa nova"},
-	{"/resume", "retoma uma sessão anterior desta pasta"},
+	{"/resume", "retoma uma sessão: lista com ↑↓ (digite pra filtrar, tab: todas as pastas) · /resume <id>"},
+	{"/sessions", "o mesmo que /resume"},
+	{"/rename", "renomeia a sessão: /rename <título> (sem título edita o atual)"},
 	{"/script", "scripts prontos (JSON): lista · /script <nome> {\"arg\": valor}"},
 	{"/offline", "modo offline: sem modelo (atalhos, /script, !comando) · /online volta"},
 	{"/online", "sai do modo offline e tenta os provedores agora"},
 	{"/forget", "apaga do disco a sessão atual"},
 	{"/worktree", "worktree git isolado desta sessão: info, ou lista os worktrees (jazz --worktree [nome] cria)"},
+	{"/redact", "segredos que não saem da máquina: status · on|off|strict · allow <secreto:tipo#n> (falso positivo)"},
 	{"/trust", "confia nesta pasta (AGENTS.md, skills, .mcp.json, hooks) e sai do modo ask · /trust status · /trust revoke"},
 	{"/todo", "mostra o plano atual"},
 	{"/goal", "objetivo fixo da sessão, lembrado a cada turno: /goal <objetivo> · /goal off"},
@@ -1384,36 +1480,6 @@ func (a *App) completeCmd(prefix string) []string {
 		}
 	}
 	return out
-}
-
-// pickNumber shows a numbered prompt and returns 1..max (0 = cancelled).
-func (a *App) pickNumber(label string, max int) int {
-	t := a.ui.T
-	sel, err := a.ed.ReadLine(t.fg(cGray, 90)+"  "+label+" "+t.G().prompt+" "+t.sgr("0"), len([]rune(label))+4)
-	if err != nil || strings.TrimSpace(sel) == "" {
-		return 0
-	}
-	var n int
-	if _, err := fmt.Sscan(sel, &n); err != nil || n < 1 || n > max {
-		a.ui.Error("número inválido")
-		return 0
-	}
-	return n
-}
-
-// listTurns prints the last user messages for /rewind and /fork; it returns them.
-func (a *App) listTurns() []TurnRef {
-	turns := a.agent.UserTurns()
-	if len(turns) > 15 {
-		turns = turns[len(turns)-15:]
-	}
-	t := a.ui.T
-	var b strings.Builder
-	for i, tr := range turns {
-		fmt.Fprintf(&b, "  %s%2d%s %s\n", t.fg(cMagenta, 35), i+1, t.sgr("0"), oneLine(sanitizeTerm(tr.Text), 90))
-	}
-	a.ui.print(b.String())
-	return turns
 }
 
 func (a *App) command(line string) {
@@ -1452,8 +1518,8 @@ func (a *App) command(line string) {
 			item(t.fg(cCyan, 36), "/"+c.name, c.desc)
 		}
 		b.WriteString("\n")
-		for _, l := range []string{"!comando roda no shell direto · esc interrompe o agente · digitar durante o trabalho entra na fila",
-			"\\ + enter ou alt+enter quebra linha · ↑↓ histórico · tab completa · shift+tab ou ctrl+t troca o modo · @arquivo anexa"} {
+		for _, l := range []string{"!comando roda no shell direto · esc interrompe o agente (com texto digitado: a 1ª limpa) · digitar durante o trabalho entra na fila",
+			"shift+enter, alt+enter ou \\ + enter quebra linha · ↑↓ histórico (filtra pelo que já foi digitado) · ctrl+r busca · tab completa · shift+tab ou ctrl+t troca o modo · @ abre a lista de arquivos · ctrl+o expande/recolhe · ? atalhos"} {
 			b.WriteString("  " + t.fg(cGray, 90) + strings.Join(uiWrapWords(l, max(w-2, 20)), "\n  ") + t.sgr("0") + "\n")
 		}
 		b.WriteString("\n")
@@ -1550,6 +1616,10 @@ func (a *App) command(line string) {
 		args[0] = tbModeName(args[0])
 		switch args[0] {
 		case "auto", "smart", "ask", "yolo", "turbo":
+			if args[0] == "yolo" && !turboSandboxOK() && !pfConfirmYoloWithoutSandbox() {
+				ui.Notice("modo não alterado")
+				return
+			}
 			a.cfg.SetMode(args[0])
 			_ = a.cfg.Save()
 			ui.SetMode(args[0])
@@ -1575,6 +1645,8 @@ func (a *App) command(line string) {
 		a.approvalsCmd(args)
 	case "/trust":
 		a.trustCmd(args)
+	case "/redact", "/segredos":
+		a.redactCmd(args)
 	case "/effort":
 		if len(args) == 0 {
 			e := a.cfg.Effort
@@ -1623,16 +1695,16 @@ func (a *App) command(line string) {
 		ui.Notice("restaurado: " + strings.Join(paths, ", "))
 		a.agent.Note("<system-reminder>The user reverted (/undo) your last changes to: " + strings.Join(paths, ", ") + ". Those files are back to their previous content.</system-reminder>")
 	case "/rewind":
-		turns := a.listTurns()
+		turns := a.agent.UserTurns()
 		if len(turns) == 0 {
 			ui.Notice("nenhuma mensagem sua pra voltar")
 			return
 		}
-		n := a.pickNumber("voltar para antes de qual? (enter cancela)", len(turns))
-		if n == 0 {
+		i := a.pickTurn(turns, "Voltar para antes de qual mensagem?")
+		if i < 0 {
 			return
 		}
-		tr := turns[n-1]
+		n, tr := i+1, turns[i]
 		if err := a.agent.RewindTo(tr.Index); err != nil {
 			ui.Error("rewind falhou: " + err.Error())
 			return
@@ -1673,31 +1745,17 @@ func (a *App) command(line string) {
 		a.tools.Reset()
 		a.tools.Shell.Close()
 		ui.print("\x1b[H\x1b[2J" + a.welcome())
-	case "/resume", "/sessions":
-		list := ListSessions(a.root)
-		if len(list) == 0 {
-			ui.Notice("nenhuma sessão salva nesta pasta")
-			return
-		}
-		if len(list) > 15 {
-			list = list[:15]
-		}
-		var b strings.Builder
-		for i, s := range list {
-			fmt.Fprintf(&b, "  %s%2d%s %s%-6s%s %s %s(%d msgs · %s)%s\n", t.fg(cMagenta, 35), i+1, t.sgr("0"), t.fg(cGray, 90), fmtAgo(s.Mod), t.sgr("0"), sanitizeTerm(s.Title), t.fg(cGray, 90), s.Msgs, s.Model, t.sgr("0"))
-		}
-		ui.print(b.String())
-		if n := a.pickNumber("número (enter cancela)", len(list)); n > 0 {
-			a.loadSession(list[n-1])
-		}
+	case "/resume", "/sessions": // sessions_ui.go
+		a.resumeCmd(args)
+	case "/rename":
+		a.renameCmd(argStr)
 	case "/forget":
 		id := a.agent.SessionID
 		if id == "" {
 			ui.Notice("esta conversa ainda não foi salva")
 			return
 		}
-		if a.ui.Ask("apagar do disco a sessão "+id+"? [enter/s] sim · [n] não", "sn") != 's' {
-			ui.Notice("cancelado")
+		if a.ui.Choose("Apagar do disco a sessão "+id+"?", yesNo("Sim, apagar", "Não"), 0) != 0 {
 			return
 		}
 		p := filepath.Join(sessionsDir(a.root), id+".jsonl")
@@ -1813,7 +1871,7 @@ func (a *App) permissionsCmd(args []string) {
 	if len(args) == 0 || args[0] == "list" {
 		rules := perms.Rules()
 		if len(rules) == 0 {
-			ui.Notice("nenhuma regra. Escolha [t] numa confirmação, ou: /permissions add allow 'Bash(npm test:*)'")
+			ui.Notice("nenhuma regra. Escolha \"Sim, e não perguntar de novo\" numa confirmação, ou: /permissions add allow 'Bash(npm test:*)'")
 			return
 		}
 		var b strings.Builder
@@ -2153,7 +2211,7 @@ func cmdModels(cfg *Config, provider string, w io.Writer, t Theme) {
 	defer cancel()
 	ms, err := ListModels(ctx, cfg, provider)
 	if err != nil {
-		fmt.Fprintf(w, "  %s%s%s\n", t.fg(cRed, 31), friendlyErr(err), t.sgr("0"))
+		fmt.Fprint(w, uiErrorLine(t, friendlyErr(err), termWidth()-1))
 		return
 	}
 	shown := 0
@@ -2307,12 +2365,21 @@ func cmdExport(cfg *Config, root string, args []string) {
 // check tried and what it got.
 func cmdDoctor(cfg *Config, root string, args []string, verbose bool) {
 	probe := false
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch strings.TrimLeft(a, "-") {
 		case "v", "verbose", "debug":
 			verbose = true
 		case "sandbox-probe", "probe":
 			probe = true
+		case "provider", "p":
+			if i+1 >= len(args) {
+				pfUsageErr("uso: jazz doctor --provider <provedor>[/modelo]   (ex.: anthropic, anthropic/claude-sonnet-5-5)")
+			}
+			os.Exit(pfDoctorProvider(cfg, args[i+1], os.Stdout))
+		}
+		if v, ok := strings.CutPrefix(a, "--provider="); ok {
+			os.Exit(pfDoctorProvider(cfg, v, os.Stdout))
 		}
 	}
 	t := DetectTheme()
@@ -2350,9 +2417,14 @@ func cmdDoctor(cfg *Config, root string, args []string, verbose bool) {
 	if len(missing) > 0 && runtime.GOOS == "windows" {
 		fmt.Printf("  %sdica: winget install BurntSushi.ripgrep.MSVC sharkdp.fd Git.Git (o Git traz o Git Bash, que o jazz prefere ao PowerShell)%s\n", t.fg(cGold, 33), t.sgr("0"))
 	} else if len(missing) > 0 {
-		fmt.Printf("  %sdica: sudo apt install %s (o jazz usa grep/find enquanto isso)%s\n", t.fg(cGold, 33), strings.Join(missing, " "), t.sgr("0"))
+		fmt.Printf("  %sdica: %s (o jazz usa grep/find enquanto isso)%s\n", t.fg(cGold, 33), installHint(missing), t.sgr("0"))
 	} else if !have["fd"] && have["fdfind"] {
 		fmt.Printf("  %sfd → fdfind: o shell do jazz já cria o atalho fd%s\n", t.fg(cGray, 90), t.sgr("0"))
+	}
+	if p := dgSemgrepPath(); p != "" {
+		fmt.Printf("  %s semgrep (revisão do diff: p/security-audit e p/secrets) %s\n", ok(true), t.fg(cGray, 90)+p+t.sgr("0"))
+	} else {
+		fmt.Printf("  %s semgrep %s\n", t.fg(cGray, 90)+"·"+t.sgr("0"), t.fg(cGray, 90)+"(opcional, regras extras na revisão do diff: pip install semgrep)"+t.sgr("0"))
 	}
 	sbDoctor(ok, func(s string) string { return t.fg(cGray, 90) + s + t.sgr("0") }, verbose, probe)
 	fmt.Println()
@@ -2363,7 +2435,7 @@ func cmdDoctor(cfg *Config, root string, args []string, verbose bool) {
 	if m == "" {
 		m = cfg.PickDefaultModel() + " (automático)"
 	}
-	fmt.Printf("\n  modelo padrão: %s · modo: %s · omni: %v\n", m, cfg.Mode, cfg.Omni.Enabled)
+	fmt.Printf("\n  modelo padrão: %s · modo: %s · omni: %v\n", m, cfg.BaseMode(), cfg.Omni.Enabled)
 	fmt.Println("  " + olDoctorLine(cfg, root)) // scripts, fast paths, offline (offline.go)
 	if w := AuthWarning(); w != "" {
 		fmt.Printf("  %s%s%s\n", t.fg(cRed, 31), w, t.sgr("0"))
@@ -2433,22 +2505,8 @@ func (a *App) treeCmd(args []string) {
 		return
 	}
 	if len(args) == 0 {
-		lines, err := sessTreeLines(a.agent.sess.Path)
-		if err != nil {
-			ui.Error(err.Error())
-			return
-		}
-		if len(lines) == 0 {
-			ui.Notice("sessão vazia")
-			return
-		}
-		ui.print(strings.Join(lines, "\n") + "\n\n/tree <id> continua a partir daquela mensagem (o ramo atual fica salvo)")
+		a.treePick() // sessions_ui.go
 		return
 	}
-	si := SessionInfo{ID: a.agent.SessionID, Path: a.agent.sess.Path}
-	if err := a.agent.LoadSessionAt(si, args[0]); err != nil {
-		ui.Error(err.Error())
-		return
-	}
-	ui.Notice(fmt.Sprintf("conversa agora continua de %s (%d mensagens); os arquivos não foram alterados — use /undo se precisar", args[0], len(a.agent.Msgs)))
+	a.treeGo(args[0])
 }

@@ -50,7 +50,9 @@ type apStore struct {
 	loaded    bool
 	ignored   bool // the file exists but jazz did not write it (or it was edited since)
 	m         map[string]apEntry
-	persisted bool // false: memory only (no project root)
+	persisted bool   // false: memory only (no project root)
+	fname     string // file under .jazz ("" = approvals.json)
+	kind      string // trust store kind ("" = apTrustKind)
 }
 
 const apTrustKind = "approvals"
@@ -59,12 +61,30 @@ func newAPStore(root string) *apStore {
 	return &apStore{root: root, persisted: root != ""}
 }
 
+// newAPStoreFile is a store kept in .jazz/<fname> under trust kind kind (the
+// diff-guard allowlist, diffguard.go, uses scan-allow.json).
+func newAPStoreFile(root, fname, kind string) *apStore {
+	return &apStore{root: root, persisted: root != "", fname: fname, kind: kind}
+}
+
+func (s *apStore) trustKind() string {
+	if s.kind != "" {
+		return s.kind
+	}
+	return apTrustKind
+}
+
 func apKey(class, target string) string {
 	h := sha256.Sum256([]byte(class + "\x00" + target))
 	return hex.EncodeToString(h[:12])
 }
 
-func (s *apStore) file() string { return filepath.Join(s.root, ".jazz", "approvals.json") }
+func (s *apStore) file() string {
+	if s.fname != "" {
+		return filepath.Join(s.root, ".jazz", s.fname)
+	}
+	return filepath.Join(s.root, ".jazz", "approvals.json")
+}
 
 // loadLocked reads the file once; an untrusted file is ignored.
 func (s *apStore) loadLocked() {
@@ -80,7 +100,7 @@ func (s *apStore) loadLocked() {
 	if err != nil || len(b) == 0 {
 		return
 	}
-	if !IsTrusted(s.root, apTrustKind, b) {
+	if !IsTrusted(s.root, s.trustKind(), b) {
 		s.ignored = true
 		return
 	}
@@ -156,7 +176,7 @@ func (s *apStore) Clear() error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return Trust(s.root, apTrustKind, nil)
+	return Trust(s.root, s.trustKind(), nil)
 }
 
 func (s *apStore) saveLocked() error {
@@ -180,7 +200,7 @@ func (s *apStore) saveLocked() error {
 		return err
 	}
 	s.ignored = false
-	return Trust(s.root, apTrustKind, b)
+	return Trust(s.root, s.trustKind(), b)
 }
 
 // approvals returns the agent's store (created on first use).
