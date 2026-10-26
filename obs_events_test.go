@@ -75,7 +75,8 @@ func TestObsDeadlineGraceThenResume(t *testing.T) {
 			{ID: "c2", Name: "bash", Args: jsonArgs(map[string]any{"command": "echo should-not-run > never.txt"})}}},
 		fakeResp{Text: "should never be requested"},
 	))
-	o := pfOpts{timeout: 3 * time.Second, grace: 2500 * time.Millisecond, metricsOut: filepath.Join(t.TempDir(), "m.json")}
+	// grace point at 1.5 s: enough headroom for a slow CI start (Windows took >0.5 s once)
+	o := pfOpts{timeout: 5 * time.Second, grace: 3500 * time.Millisecond, metricsOut: filepath.Join(t.TempDir(), "m.json")}
 	code, res := obRun(t, cfg, root, "make the tests pass", o)
 	if code != 124 {
 		t.Fatalf("exit %d, want 124 (incomplete by deadline); res=%v", code, res)
