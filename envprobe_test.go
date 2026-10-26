@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,13 +25,14 @@ func epFakeSys(files map[string]string, dirs map[string][]string, cmds map[strin
 	return epSys{GOOS: "linux", GOARCH: "386", Home: "/home/u", PathEnv: "/usr/bin:/bin", NumCPU: 1,
 		Getenv: func(k string) string { return files["env:"+k] },
 		ReadFile: func(p string) ([]byte, error) {
+			p = filepath.ToSlash(p) // keys are POSIX; callers join with the OS separator (Windows CI)
 			if v, ok := files[p]; ok {
 				return []byte(v), nil
 			}
 			return nil, os.ErrNotExist
 		},
 		ReadDir: func(p string) ([]os.DirEntry, error) {
-			l, ok := dirs[p]
+			l, ok := dirs[filepath.ToSlash(p)]
 			if !ok {
 				return nil, os.ErrNotExist
 			}
@@ -41,7 +43,7 @@ func epFakeSys(files map[string]string, dirs map[string][]string, cmds map[strin
 			return out, nil
 		},
 		Stat: func(p string) (os.FileInfo, error) {
-			if _, ok := files[p]; ok {
+			if _, ok := files[filepath.ToSlash(p)]; ok {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -130,7 +132,7 @@ func TestEnvProbeProfile(t *testing.T) {
 	if strings.Join(hosts, ",") != "labbox,vps,prod,media01" {
 		t.Errorf("ssh hosts (no wildcards, Include followed): %v", hosts)
 	}
-	if p.SSHHosts[0].User != "ops" || p.SSHHosts[0].HostName != "198.51.100.7" {
+	if len(p.SSHHosts) == 0 || p.SSHHosts[0].User != "ops" || p.SSHHosts[0].HostName != "198.51.100.7" {
 		t.Errorf("ssh labbox: %+v", p.SSHHosts[0])
 	}
 	if len(p.Tailscale) != 3 || !p.Tailscale[0].Self || p.Tailscale[2].Name != "fono" || p.Tailscale[2].Online {

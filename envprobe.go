@@ -277,6 +277,18 @@ func epPeek() *epProfile {
 	return epCache
 }
 
+// epInstall makes p the cached profile that epPeek/epGet hand out (while it is
+// fresh) and returns the previous one. The offline eval installs its synthetic
+// profile so name resolution ("talscle", "labbx") sees the same hosts and tools
+// on every machine, CI included; the cache file on disk is not touched.
+func epInstall(p *epProfile) *epProfile {
+	epMu.Lock()
+	defer epMu.Unlock()
+	prev := epCache
+	epCache = p
+	return prev
+}
+
 // epToolchains are the tools whose version matters to a plan.
 var epToolchains = []struct{ name, flag string }{
 	{"go", "version"}, {"python3", "--version"}, {"node", "--version"}, {"npm", "--version"}, {"rustc", "--version"},

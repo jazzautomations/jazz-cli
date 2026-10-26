@@ -68,9 +68,9 @@ func askFromFacts(root string, q askArgs) (afFact, bool) {
 					if st.IsDir() {
 						kind = "a pasta"
 					}
-					f, ok = afFact{answer: "sim, " + kind + " " + p + " existe", source: "stat"}, true
+					f, ok = afFact{answer: "sim, " + kind + " " + filepath.ToSlash(p) + " existe", source: "stat"}, true
 				} else if os.IsNotExist(err) {
-					f, ok = afFact{answer: "não, " + p + " não existe", source: "stat"}, true
+					f, ok = afFact{answer: "não, " + filepath.ToSlash(p) + " não existe", source: "stat"}, true
 				}
 			}
 		}

@@ -177,6 +177,8 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 	}
 	defer os.RemoveAll(base)
 	prof := eoProfile()
+	prev := epInstall(prof)
+	defer epInstall(prev)
 	var lat []float64
 	for _, tk := range suite.Tasks {
 		if len(only) > 0 && !only[tk.ID] {

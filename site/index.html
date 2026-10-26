@@ -38,7 +38,7 @@
 <script src="/boot.js"></script>
 <script src="/app.js" defer></script>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"jazz-cli","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","softwareVersion":"0.8.0","license":"https://opensource.org/licenses/MIT","url":"https://jazz-cli.jazzautomations.com.br/","codeRepository":"https://github.com/jazzautomations/jazz-cli","author":{"@type":"Organization","name":"Jazz Automations"},"offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"jazz-cli","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","softwareVersion":"0.9.0","license":"https://opensource.org/licenses/MIT","url":"https://jazz-cli.jazzautomations.com.br/","codeRepository":"https://github.com/jazzautomations/jazz-cli","author":{"@type":"Organization","name":"Jazz Automations"},"offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}}
 </script>
 </head>
 <body>
@@ -79,7 +79,7 @@
 <section class="hero" id="top" aria-labelledby="hero-title">
   <div class="wrap hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow mono"><span class="dot-ok" aria-hidden="true"></span>v0.8.0 · Go · MIT · linux/386 → arm64</p>
+      <p class="eyebrow mono"><span class="dot-ok" aria-hidden="true"></span>v0.9.0 · Go · MIT · linux/386 → arm64</p>
       <h1 id="hero-title">
         <span data-l="pt">Um agente de código no terminal que roda em qualquer máquina — <em>até num Pentium M de 2005.</em></span>
         <span data-l="en" lang="en">A coding agent for the terminal that runs on any machine — <em>even a 2005 Pentium M.</em></span>
@@ -96,13 +96,13 @@
           <button role="tab" type="button" id="tab-src" aria-controls="panel-src" aria-selected="false" tabindex="-1"><span data-l="pt">Do código</span><span data-l="en" lang="en">From source</span></button>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-unix" aria-labelledby="tab-unix" tabindex="0">
-          <p class="panel-label"><span class="tag tag-ok">v0.8.0</span></p>
-          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">$ </span>curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.8.0/install.sh | sh</code></pre><button class="copy" type="button" data-copy="curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.8.0/install.sh | sh"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
+          <p class="panel-label"><span class="tag tag-ok">v0.9.0</span></p>
+          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">$ </span>curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.9.0/install.sh | sh</code></pre><button class="copy" type="button" data-copy="curl -fsSL https://github.com/jazzautomations/jazz-cli/releases/download/v0.9.0/install.sh | sh"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
           <p class="fine"><span data-l="pt">Detecta sistema e arquitetura (inclusive i386 e ARM 32 bits/armv7), confere a assinatura Ed25519 do manifesto e o sha256, instala em <code>~/.local/bin</code> sem sudo.</span><span data-l="en" lang="en">Detects OS and architecture (i386 and 32-bit ARM/armv7 included), verifies the manifest's Ed25519 signature and the sha256, installs to <code>~/.local/bin</code> without sudo.</span></p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" tabindex="0">
-          <p class="panel-label"><span class="tag tag-ok">v0.8.0</span></p>
-          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">PS&gt; </span>irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.8.0/install.ps1 | iex</code></pre><button class="copy" type="button" data-copy="irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.8.0/install.ps1 | iex"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
+          <p class="panel-label"><span class="tag tag-ok">v0.9.0</span></p>
+          <div class="cmd"><pre><code><span class="pr" aria-hidden="true">PS&gt; </span>irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.9.0/install.ps1 | iex</code></pre><button class="copy" type="button" data-copy="irm https://github.com/jazzautomations/jazz-cli/releases/download/v0.9.0/install.ps1 | iex"><span data-l="pt">copiar</span><span data-l="en" lang="en">copy</span></button></div>
           <p class="fine"><span data-l="pt">PowerShell sem administrador. Windows nativo, com build e CI em <code>windows-latest</code>.</span><span data-l="en" lang="en">PowerShell, no admin rights. Native Windows, with build and CI on <code>windows-latest</code>.</span></p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-src" aria-labelledby="tab-src" tabindex="0">
@@ -129,7 +129,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
         </div>
         <div class="term-body mono" id="term-body" aria-hidden="true">
 <svg class="t-banner" viewBox="0 0 384 120" aria-hidden="true" focusable="false"><g class="bn-s"><path d="M84 7.8H92.2V20M84 12.2H87.8V20M168 7.8H176.2V20M168 12.2H171.8V20M276 7.8H284.2V20M276 12.2H279.8V20M372 7.8H380.2V20M372 12.2H375.8V20M87.8 20V40M92.2 20V40M132 27.8H123.8V40M132 32.2H128.2V40M132 27.8H144M132 32.2H144M144 27.8H156M144 32.2H156M180 27.8H188.2V40M180 32.2H183.8V40M204 32.2H195.8V20M204 27.8H200.2V20M204 27.8H216M204 32.2H216M216 27.8H228M216 32.2H228M276 27.8H267.8V40M276 32.2H272.2V40M276 32.2H284.2V20M276 27.8H279.8V20M300 32.2H291.8V20M300 27.8H296.2V20M300 27.8H312M300 32.2H312M312 27.8H324M312 32.2H324M372 27.8H363.8V40M372 32.2H368.2V40M372 32.2H380.2V20M372 27.8H375.8V20M87.8 40V60M92.2 40V60M183.8 40V60M188.2 40V60M264 47.8H255.8V60M264 52.2H260.2V60M264 52.2H272.2V40M264 47.8H267.8V40M360 47.8H351.8V60M360 52.2H356.2V60M360 52.2H368.2V40M360 47.8H363.8V40M87.8 60V80M92.2 60V80M132 67.8H123.8V80M132 72.2H128.2V80M132 67.8H144M132 72.2H144M144 67.8H156M144 72.2H156M183.8 60V80M188.2 60V80M252 67.8H243.8V80M252 72.2H248.2V80M252 72.2H260.2V60M252 67.8H255.8V60M348 67.8H339.8V80M348 72.2H344.2V80M348 72.2H356.2V60M348 67.8H351.8V60M12 92.2H3.8V80M12 87.8H8.2V80M84 87.8H75.8V100M84 92.2H80.2V100M84 92.2H92.2V80M84 87.8H87.8V80M123.8 80V100M128.2 80V100M183.8 80V100M188.2 80V100M276 87.8H284.2V100M276 92.2H279.8V100M372 87.8H380.2V100M372 92.2H375.8V100M24 112.2H15.8V100M24 107.8H20.2V100M24 107.8H36M24 112.2H36M36 107.8H48M36 112.2H48M48 107.8H60M48 112.2H60M60 107.8H72M60 112.2H72M72 112.2H80.2V100M72 107.8H75.8V100M108 112.2H99.8V100M108 107.8H104.2V100M108 107.8H120M108 112.2H120M120 112.2H128.2V100M120 107.8H123.8V100M168 112.2H159.8V100M168 107.8H164.2V100M168 107.8H180M168 112.2H180M180 112.2H188.2V100M180 107.8H183.8V100M204 112.2H195.8V100M204 107.8H200.2V100M204 107.8H216M204 112.2H216M216 107.8H228M216 112.2H228M228 107.8H240M228 112.2H240M240 107.8H252M240 112.2H252M252 107.8H264M252 112.2H264M264 107.8H276M264 112.2H276M276 112.2H284.2V100M276 107.8H279.8V100M300 112.2H291.8V100M300 107.8H296.2V100M300 107.8H312M300 112.2H312M312 107.8H324M312 112.2H324M324 107.8H336M324 112.2H336M336 107.8H348M336 112.2H348M348 107.8H360M348 112.2H360M360 107.8H372M360 112.2H372M372 112.2H380.2V100M372 107.8H375.8V100"/></g><g class="bn-b"><rect x="60" y="0" width="24" height="20.6"/><rect x="108" y="0" width="60" height="20.6"/><rect x="192" y="0" width="84" height="20.6"/><rect x="288" y="0" width="84" height="20.6"/><rect x="60" y="20" width="24" height="20.6"/><rect x="96" y="20" width="24" height="20.6"/><rect x="156" y="20" width="24" height="20.6"/><rect x="228" y="20" width="36" height="20.6"/><rect x="324" y="20" width="36" height="20.6"/><rect x="60" y="40" width="24" height="20.6"/><rect x="96" y="40" width="84" height="20.6"/><rect x="216" y="40" width="36" height="20.6"/><rect x="312" y="40" width="36" height="20.6"/><rect x="0" y="60" width="24" height="20.6"/><rect x="60" y="60" width="24" height="20.6"/><rect x="96" y="60" width="24" height="20.6"/><rect x="156" y="60" width="24" height="20.6"/><rect x="204" y="60" width="36" height="20.6"/><rect x="300" y="60" width="36" height="20.6"/><rect x="12" y="80" width="60" height="20.6"/><rect x="96" y="80" width="24" height="20.6"/><rect x="156" y="80" width="24" height="20.6"/><rect x="192" y="80" width="84" height="20.6"/><rect x="288" y="80" width="84" height="20.6"/></g></svg>
-<div class="tl"><span class="c-dim">  v0.8.0 · minimax-m3.1-flash · ~/parser · </span><span class="c-green">▸▸ auto</span></div>
+<div class="tl"><span class="c-dim">  v0.9.0 · minimax-m3.1-flash · ~/parser · </span><span class="c-green">▸▸ auto</span></div>
 <div class="tl tl-gap" data-w="700" data-type><span class="c-gold">›</span> <span class="tx">conserte o teste que falha no parser</span></div>
 <div class="tl" data-w="2600" data-s="Pensando"><span class="c-green">●</span> <b>Bash</b>(go test ./...)</div>
 <div class="tl" data-w="1500" data-s="rodando"><span class="c-dim">  ⎿  </span><span class="c-red">FAIL TestParseDuration (parser_test.go:42): got "90s", want "1m30s"</span></div>
@@ -328,6 +328,12 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
         <p data-l="pt">Sem WSL: Git Bash ou PowerShell, job objects. Windows nativo (PowerShell), build e CI.</p>
         <p data-l="en" lang="en">No WSL: Git Bash or PowerShell, job objects. Native Windows (PowerShell), build and CI.</p>
       </li>
+      <li class="feat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM5 9h14v11H5z"/><path d="M9 14l2 2 4-4"/></svg>
+        <h3><span data-l="pt">Cérebro offline</span><span data-l="en" lang="en">Offline brain</span></h3>
+        <p data-l="pt">Sem modelo (ou no <code>-p</code>, em pedidos claros só de leitura), um interpretador clássico com entidades do projeto e da máquina tolerantes a erro de digitação (<code>talscle status</code> vira <code>tailscale status</code>) roda métodos com pré-condições e verificadores. "Feito" só com evidência; sem verificador, o estado é "não verificado". Veja <code>jazz env</code> e <code>jazz eval offline</code>.</p>
+        <p data-l="en" lang="en">Without a model (or in <code>-p</code>, for clear read-only requests), a classical interpreter with typo-tolerant project and machine entities (<code>talscle status</code> becomes <code>tailscale status</code>) runs methods with preconditions and verifiers. "Done" only with evidence; with no verifier, the state is "unverified". See <code>jazz env</code> and <code>jazz eval offline</code>.</p>
+      </li>
     </ul>
   </div>
 </section>
@@ -436,7 +442,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
     <header class="sec-head">
       <p class="kicker mono">04 · <span data-l="pt">números honestos</span><span data-l="en" lang="en">honest numbers</span></p>
       <h2 id="numbers-title"><span data-l="pt">Medido de verdade, com modelo grátis.</span><span data-l="en" lang="en">Really measured, with a free model.</span></h2>
-      <p class="sec-lede"><span data-l="pt">Todos os números vêm de suítes abertas, com verificadores ocultos, documentadas em docs/research/. Mais números em breve.</span><span data-l="en" lang="en">All numbers come from open suites with hidden checkers, documented in docs/research/. More numbers coming soon.</span></p>
+      <p class="sec-lede"><span data-l="pt">Todos os números vêm de suítes abertas, com verificadores ocultos, documentadas em results/ e docs/research/low-level-performance.md.</span><span data-l="en" lang="en">All numbers come from open suites with hidden checkers, documented in results/ and docs/research/low-level-performance.md.</span></p>
     </header>
 
     <ul class="stats" role="list">
@@ -465,7 +471,34 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
         <p class="stat-v mono">20/24</p>
         <p class="stat-d"><span data-l="pt">20/24 nas tarefas concluídas até agora · série completa em breve.</span><span data-l="en" lang="en">20/24 on the tasks completed so far · full series coming soon.</span></p>
       </li>
+      <li class="stat">
+        <p class="stat-k mono">jazz version</p>
+        <p class="stat-v mono">83–151 ms<span class="arrow"> → </span>15–16 ms</p>
+        <p class="stat-d"><span data-l="pt">Dell: 2 GCs na 0.8.1 → 0 GC na 0.9.</span><span data-l="en" lang="en">Dell: 2 GCs on 0.8.1 → 0 GC on 0.9.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono">jazz -p --offline "abre o README.md"</p>
+        <p class="stat-v mono">14–21 s<span class="arrow"> → </span>120–139 ms</p>
+        <p class="stat-d"><span data-l="pt">32k tokens na 0.8.1 → 0 tokens na 0.9.</span><span data-l="en" lang="en">32k tokens on 0.8.1 → 0 tokens on 0.9.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono">jazz -p --offline "git status"</p>
+        <p class="stat-v mono">35 s<span class="arrow"> → </span>133–203 ms</p>
+        <p class="stat-d"><span data-l="pt">0.8.1 → 0.9, num repositório de 915 arquivos.</span><span data-l="en" lang="en">0.8.1 → 0.9, in a 915-file repository.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono">jazz eval offline</p>
+        <p class="stat-v mono">39/39</p>
+        <p class="stat-d"><span data-l="pt">Sucesso verificado, falso sucesso 0, 34/39 sem modelo, p50 14 ms.</span><span data-l="en" lang="en">Verified success, 0 false success, 34/39 without a model, p50 14 ms.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono">init main</p>
+        <p class="stat-v mono">5,8 MB<span class="arrow"> → </span>145 KB</p>
+        <p class="stat-d"><span data-l="pt">58k alocações → 1,6k alocações (0.8.1 → 0.9).</span><span data-l="en" lang="en">58k allocs → 1.6k allocs (0.8.1 → 0.9).</span></p>
+      </li>
     </ul>
+
+    <p class="sec-lede"><span data-l="pt">Medidas da 0.9 no Dell Latitude D610 (Pentium M 1,73 GHz, 2 GB, Linux 386, o notebook de referência de 2005), 5 repetições, em <a href="https://github.com/jazzautomations/jazz-cli/blob/main/results/dell-0.9-progress.md">results/dell-0.9-progress.md</a>.</span><span data-l="en" lang="en">0.9 measurements on the Dell Latitude D610 (Pentium M 1.73 GHz, 2 GB, Linux 386, the 2005 reference laptop), 5 repetitions, in <a href="https://github.com/jazzautomations/jazz-cli/blob/main/results/dell-0.9-progress.md">results/dell-0.9-progress.md</a>.</span></p>
 
     <blockquote class="caveat">
       <p data-l="pt">SWE-bench Lite (SymPy) e a série completa do polyglot: em breve, com metodologia aberta no repositório.</p>
@@ -571,7 +604,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <li><span class="rm-n mono">02</span><div><h3><span data-l="pt">Windows em uso real</span><span data-l="en" lang="en">Windows in real use</span></h3><p data-l="pt">Compila para amd64 e arm64 e passa no CI. Relatos de uso em Windows de verdade são bem-vindos.</p><p data-l="en" lang="en">It compiles for amd64 and arm64 and passes CI. Reports from real Windows machines are welcome.</p></div></li>
       <li><span class="rm-n mono">03</span><div><h3><span data-l="pt">Mais modelos e provedores no omni</span><span data-l="en" lang="en">More models and providers in omni</span></h3><p data-l="pt">Ampliar a lista de provedores grátis que o roteador omni sabe usar.</p><p data-l="en" lang="en">Widen the list of free providers the omni router knows how to use.</p></div></li>
       <li><span class="rm-n mono">04</span><div><h3><span data-l="pt">Red-team: cenários 15 a 25</span><span data-l="en" lang="en">Red-team: scenarios 15 to 25</span></h3><p data-l="pt">Já especificados, ainda não implementados. Também: inspecionar alvos de <code>make</code>/<code>npm run</code>, medir o modo <code>ask</code> e o <code>bubblewrap</code> no Linux.</p><p data-l="en" lang="en">Already specified, not yet implemented. Also: inspect <code>make</code>/<code>npm run</code> targets, measure <code>ask</code> mode and <code>bubblewrap</code> on Linux.</p></div></li>
-      <li><span class="rm-n mono">05</span><div><h3><span data-l="pt">Modo offline com mais atalhos</span><span data-l="en" lang="en">Offline mode with more shortcuts</span></h3><p data-l="pt">Mais comandos resolvidos localmente, sem gastar chamada de modelo.</p><p data-l="en" lang="en">More commands resolved locally, without spending a model call.</p></div></li>
+      <li><span class="rm-n mono">05</span><div><h3><span data-l="pt">Offline que aprende com o online</span><span data-l="en" lang="en">Offline that learns from online</span></h3><p data-l="pt">O cérebro offline chegou na 0.9 (7 métodos, 39 tarefas no eval). Próximo: cada tarefa resolvida com modelo vira um método candidato com pré-condições e verificador, promovido só depois de validar (<code>jazz improve --promote</code>); mais métodos (corrigir teste, subir contêiner, logs de serviço, instalar dependência); modelo local pequeno como nível 2 do roteador.</p><p data-l="en" lang="en">The offline brain shipped in 0.9 (7 methods, 39 eval tasks). Next: every task solved with a model becomes a candidate method with preconditions and a verifier, promoted only after validation (<code>jazz improve --promote</code>); more methods (fix a test, bring a container up, service logs, install a dependency); a small local model as router level 2.</p></div></li>
     </ol>
   </div>
 </section>

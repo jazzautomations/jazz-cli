@@ -42,7 +42,7 @@ func TestPTYOnboarding(t *testing.T) {
 	s.write("\r")
 	// step 2: hidden key
 	s.waitFor("step 2", 10*time.Second, func(sc string) bool { return strings.Contains(sc, "2/3 · cole a chave de openai") })
-	key := "sk-teste-0123456789abcdefXYZ"
+	key := "sk-teste-0123456789abcdefXYZ" //gitleaks:allow (chave de brinquedo do teste)
 	s.typeSlow(key)
 	s.waitFor("the bullets", 5*time.Second, func(sc string) bool { return strings.Contains(sc, "(28 caracteres)") })
 	if strings.Contains(s.screen(), "0123456789") {
