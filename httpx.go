@@ -252,6 +252,7 @@ func pvNewAPIError(status int, h http.Header, raw []byte) *APIError {
 	ae := &APIError{Status: status, Body: body}
 	ae.RetryAfter = pvRetryAfter(h, body, time.Now())
 	ae.Daily = pvIsDaily(status, body)
+	pvMarkQuota(ae, time.Now())
 	return ae
 }
 

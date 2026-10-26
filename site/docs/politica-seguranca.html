@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de segurança · jazz-cli docs</title>
+<meta name="description" content="O jazz executa comandos de shell e edita arquivos escolhidos por um modelo de linguagem. Leia antes de usar:">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/politica-seguranca">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="Política de segurança · jazz-cli docs">
+<meta property="og:description" content="O jazz executa comandos de shell e edita arquivos escolhidos por um modelo de linguagem. Leia antes de usar:">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/politica-seguranca">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="Política de segurança · jazz-cli docs" data-title-en="Security policy · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca" aria-current="page" class="cur"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#o-que-o-jazz-pode-fazer-na-sua-máquina">O que o jazz pode fazer na sua máquina</a></li><li><a href="#redação-de-segredos-antes-do-provedor-redact">Redação de segredos antes do provedor (redact)</a></li><li><a href="#sandbox-do-sistema---sandbox">Sandbox do sistema (--sandbox)</a></li><li><a href="#auditoria-jazz-audit">Auditoria (jazz audit)</a></li><li><a href="#endurecimento-2-determinístico-vale-também-em-turbo-e-yolo">Endurecimento 2 (determinístico, vale também em turbo e yolo)</a></li><li><a href="#revisão-do-próprio-diff">Revisão do próprio diff</a></li><li><a href="#versões-suportadas">Versões suportadas</a></li><li><a href="#relatando-uma-vulnerabilidade">Relatando uma vulnerabilidade</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#o-que-o-jazz-pode-fazer-na-sua-máquina">O que o jazz pode fazer na sua máquina</a></li><li><a href="#redação-de-segredos-antes-do-provedor-redact">Redação de segredos antes do provedor (redact)</a></li><li><a href="#sandbox-do-sistema---sandbox">Sandbox do sistema (--sandbox)</a></li><li><a href="#auditoria-jazz-audit">Auditoria (jazz audit)</a></li><li><a href="#endurecimento-2-determinístico-vale-também-em-turbo-e-yolo">Endurecimento 2 (determinístico, vale também em turbo e yolo)</a></li><li><a href="#revisão-do-próprio-diff">Revisão do próprio diff</a></li><li><a href="#versões-suportadas">Versões suportadas</a></li><li><a href="#relatando-uma-vulnerabilidade">Relatando uma vulnerabilidade</a></li></ul>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+</li>
+<li><a href="/docs/improve"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="política-de-segurança">Política de segurança<a class="anchor" href="#política-de-segurança" aria-label="link">#</a></h1>
+<h2 id="o-que-o-jazz-pode-fazer-na-sua-máquina">O que o jazz pode fazer na sua máquina<a class="anchor" href="#o-que-o-jazz-pode-fazer-na-sua-máquina" aria-label="link">#</a></h2>
+<p>O jazz executa comandos de shell e edita arquivos escolhidos por um modelo de linguagem. Leia antes de usar:</p>
+<ul><li>No modo <code>auto</code> (padrão em pastas que você confiou), comandos não marcados como perigosos rodam sem perguntar. Em pastas desconhecidas o jazz pergunta antes de confiar.</li><li>No modo <code>turbo</code> (<code>--turbo</code>, opt-in) o jazz deixa de perguntar sobre o que fica dentro do projeto e conta com o sandbox do sistema como barreira: pergunta só para escrita/remoção fora do projeto, envio de dados a host novo (uma vez por projeto), leitura de segredo, git destrutivo, pacote marcado pelo guardrail de supply chain, comando catastrófico, regra <code>ask</code>/hook e injeção suspeita no turno. Sem sandbox que isole (macOS <code>sandbox-exec</code>, Linux <code>bwrap</code>) ele aplica as regras do <code>auto</code>. Antes de executar alvos conhecidos de Make, npm/yarn/pnpm/bun, just, Task, Rake, Gradle, Maven, Cargo Make, tox ou nox, o jazz inspeciona o alvo e scripts locais que consegue resolver. Ações críticas bloqueiam em todos os modos; riscos altos pedem confirmação. A inspeção é heurística, não prova o comportamento de expressões dinâmicas, includes ou sintaxe não reconhecida, e não substitui sandbox. O que o turbo não protege: arquivos do projeto (o checkpoint shadow-git desfaz o que é versionável até 1 MB) e o conteúdo do projeto enviado a um host já aprovado. Cada liberação automática entra na auditoria (<code>auto_approval</code>, com a regra).</li><li>O "sempre" (<code>a</code>) de uma pergunta com motivo de risco é guardado em <code>.jazz/approvals.json</code>, que só vale se foi o jazz que escreveu (hash no armazenamento de confiança): um repositório que já venha com esse arquivo é ignorado. Segredo, arquivo protegido, comando catastrófico, rug-pull de MCP e injeção nunca são guardados.</li><li>Conteúdo de arquivos, saídas de comandos, páginas web e respostas de servidores MCP são tratados como dados, não como instruções, mas nenhum filtro é perfeito. Não aponte o jazz para repositórios em que você não confia sem o modo <code>ask</code>.</li><li>Chaves de API ficam em <code>~/.config/jazz-cli/auth.json</code> (modo 0600). Elas são removidas do ambiente dos comandos e redigidas dos logs e sessões. Com o sandbox do sistema ativo (abaixo), nenhum comando consegue ler esse arquivo; sem ele, um comando malicioso pode ler qualquer arquivo do seu usuário.</li><li>Provedores gratuitos podem usar seus prompts para treinamento. O jazz avisa uma vez; a escolha é sua.</li><li>Não há telemetria: o jazz só fala com os provedores de modelo que você configurou, com servidores MCP que você cadastrou e, no <code>jazz update</code>, com a URL de releases.</li></ul>
+<h2 id="redação-de-segredos-antes-do-provedor-redact">Redação de segredos antes do provedor (<code>redact</code>)<a class="anchor" href="#redação-de-segredos-antes-do-provedor-redact" aria-label="link">#</a></h2>
+<p>Ler caminhos de segredo (<code>.env</code>, chaves, <code>auth.json</code>) já é bloqueado, mas um segredo também pode estar dentro de um arquivo comum (um <code>config.yaml</code> com senha, um README com token, um log com <code>Authorization: Bearer</code>, um <code>git diff</code>, a saída de <code>env</code>/<code>printenv</code>/<code>cat</code>). Antes de uma requisição remota, os adaptadores compatíveis com OpenAI (kilo, omni, OpenRouter, Gemini), Anthropic e Codex redigem o sistema, mensagens, argumentos de chamadas e metadados das ferramentas (descrições e schemas). Isso também cobre requisições de subagentes, hedge/painel/verificador e compactação, desde que passem por esses adaptadores (<code>redact.go</code>):</p>
+<ul><li>Segredos de alta confiança viram marcadores estáveis, <code>&lt;secreto:aws-key#1&gt;</code>: o mesmo valor ganha o mesmo marcador durante a sessão. O mapa reverso fica só na memória do processo (nunca em disco).</li><li>Quando o modelo usa um marcador numa chamada <code>bash</code>, <code>write</code> ou <code>edit</code>, o jazz põe o valor real antes de checar e rodar a chamada localmente; o modelo pode "usar" um token num comando sem nunca vê-lo. A saída volta a ser redigida antes de ir pro modelo. Ferramentas de rede (<code>fetch</code>, MCP) e subagentes recebem o marcador, não o valor.</li><li>Detectado (regex + entropia, inspirado no gitleaks/detect-secrets, curado para poucos falsos positivos): chaves AWS (<code>AKIA…</code>, secret com nome de chave), conta de serviço GCP (<code>private_key_id</code>), Google API/OAuth, Azure (AccountKey, SAS <code>sig=</code>, client secret <code>…Q~…</code>), GitHub (<code>ghp_</code>, <code>gho_</code>, <code>ghs_</code>, <code>github_pat_</code>), GitLab (<code>glpat-</code>…), Slack (tokens e webhooks), Discord webhook, Stripe, Twilio, SendGrid, OpenAI/Anthropic/OpenRouter/Groq/xAI/HF/npm, JWT, blocos PEM de chave privada (inclusive SSH e dentro de JSON), <code>Authorization: Bearer/Basic</code>, URL com usuário:senha (e strings de conexão de banco), <code>password=</code>/<code>senha=</code>/<code>secret=</code>/<code>token=</code> com valor não trivial, <code>.env</code> <code>*_KEY/*_SECRET/*_TOKEN/*_PASSWORD</code> com valor de alta entropia, e os valores exatos das suas credenciais locais (variáveis de chave do ambiente, <code>auth.json</code>).</li><li>Nunca redigido: hashes do git e digests, UUIDs, chaves públicas e certificados, marcadores já presentes, referências (<code>$VAR</code>, <code>${…}</code>, <code>os.Getenv(…)</code>, <code>cfg.Password</code>) e fixtures obviamente falsas (<code>CANARY</code>, <code>example</code>, <code>changeme</code>, <code>your_…</code>, <code>xxxx</code>, um caractere repetido). Os canários do red-team não são redigidos de propósito: um vazamento continua aparecendo igual no sumidouro.</li><li>Provedor na própria máquina (Ollama, llama.cpp, LM Studio em <code>localhost</code>) recebe o texto sem redação. A saída mostrada para você (resposta, <code>-p</code>, <code>--output-format json</code>) não é redigida por essa fronteira; a saída de ferramenta é redigida antes de chegar ao modelo.</li><li><code>redact: on|off|strict</code> na config, <code>--redact</code>, <code>JAZZ_REDACT</code> (padrão <code>on</code>). <code>strict</code> também redige valores de média confiança (senha que é uma palavra só, nomes camelCase) e sequências longas de alta entropia sem nome de chave por perto. <code>/redact</code> mostra o estado e as contagens; <code>/redact on|off|strict</code> muda na sessão.</li><li>Falso positivo: <code>/redact allow &lt;secreto:tipo#n&gt;</code> (digitado por você) libera aquele valor neste projeto. O <code>.jazz/redact-allow.json</code> guarda só um HMAC do valor com uma chave desta máquina (<code>~/.config/jazz-cli/redact.key</code>, que o agente não pode ler): um repositório que já venha com esse arquivo não libera nada, e o modelo não consegue acrescentar entradas.</li><li>Visibilidade: na primeira vez, um aviso ("1 segredo não saiu da máquina"); o total do turno mostra "N segredos retidos"; eventos <code>redact.hit {kind, where}</code> no <code>jazz trace</code> e registros <code>redact</code> na auditoria, sempre só com o tipo, nunca o valor.</li><li>Limites: é uma heurística de padrões e credenciais locais conhecidas, não uma garantia para qualquer valor secreto. Segredo sem forma reconhecível (uma senha curta sem nome de chave perto, um token proprietário sem prefixo) pode passar no modo <code>on</code>. O marcador restaurado dentro de aspas duplas no shell está sujeito à expansão do shell (<code>$</code> no valor). Uma sessão retomada (<code>--resume</code>) começa um mapa novo: marcadores antigos do histórico não voltam a valer.</li></ul>
+<h2 id="sandbox-do-sistema---sandbox">Sandbox do sistema (<code>--sandbox</code>)<a class="anchor" href="#sandbox-do-sistema---sandbox" aria-label="link">#</a></h2>
+<p>Tudo que o jazz executa (shell, jobs em segundo plano, hooks, servidores MCP stdio, scripts) roda dentro de um sandbox do sistema operacional, por baixo das guardas do jazz:</p>
+<ul><li><strong>macOS</strong>: <code>sandbox-exec</code> (verificado). <strong>Linux</strong>: <code>bubblewrap</code> (<code>sudo apt install bubblewrap</code>; não verificado em máquina real ainda). <strong>Windows</strong>: só limites de job object (processos, área de transferência, UI), sem isolamento de arquivos.</li><li>Dentro dele, os comandos não leem sua home (exceto a pasta do projeto e caches de ferramentas como Go, npm e Cargo), nem <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.gnupg</code>, chaveiros, perfis de navegador ou a config do jazz, mesmo que o projeto seja a sua home. Gravar só no projeto, numa pasta temporária própria e nos caches de pacote.</li><li><code>--sandbox auto</code> (padrão): usa o sandbox se houver; se não houver, roda sem e o <code>jazz doctor</code> avisa. <code>--sandbox strict</code>: recusa rodar sem sandbox e corta a rede dos comandos (só loopback). <code>--sandbox off</code>: desliga. Também <code>sandbox</code> / <code>sandbox_net</code> na config e <code>JAZZ_SANDBOX</code> / <code>JAZZ_SANDBOX_NET</code>.</li><li>O sandbox não cobre as ferramentas internas de leitura e edição de arquivos nem o <code>fetch</code> (rodam dentro do jazz, protegidas pela cerca do projeto). Nos modos <code>auto</code> e <code>turbo</code> os comandos ainda têm rede: exfiltrar algo que eles conseguem ler (o próprio projeto, arquivos fora da home) continua possível. Para repositório desconhecido use <code>--sandbox strict</code> e o modo <code>ask</code>.</li><li>Teste: <code>jazz doctor</code> (linha "sandbox"; <code>jazz doctor --sandbox-probe</code> lista o que o sandbox conseguiu ler, <code>-v</code> mostra o argv) e <code>jazz --sandbox strict -p 'echo ok'</code>.</li></ul>
+<h2 id="auditoria-jazz-audit">Auditoria (<code>jazz audit</code>)<a class="anchor" href="#auditoria-jazz-audit" aria-label="link">#</a></h2>
+<p>O jazz mantém um log de auditoria só de acréscimo, encadeado por hash, em <code>~/.local/share/jazz-cli/audit/audit.jsonl</code>: a configuração em vigor a cada início (e toda mudança do <code>config.json</code>, por hash), decisões de confiança, toda ação bloqueada, negada ou liberada por confirmação, toda escrita/edição/remoção de arquivo (caminho e hash antes/depois, sessão e passo), todo comando de shell (hash e os primeiros 200 caracteres, redigidos), o primeiro acesso de rede a cada host e as atualizações aplicadas ou recusadas (com o estado da assinatura). Nenhum conteúdo de arquivo ou prompt entra nele.</p>
+<ul><li>Verificar: <code>jazz audit --verify</code> (código 0 = cadeia íntegra; 1 = registro alterado, removido ou fora de ordem, com a linha).</li><li>Ler/exportar: <code>jazz audit [--since 24h] [--kind file] [--json]</code>.</li><li>Retenção: nunca apagado pelo jazz; acima de 16 MB é rotacionado sem quebrar a cadeia.</li><li>Limite: protege contra edição pontual, não contra quem reescreve a cadeia inteira com acesso à sua home; exporte o último hash para fora da máquina se precisar dessa garantia.</li></ul>
+<p>Detalhes, formato e o rastreio de mudanças por arquivo (<code>jazz changes</code>): <a href="/docs/governanca">docs/governance.md</a>.</p>
+<h2 id="endurecimento-2-determinístico-vale-também-em-turbo-e-yolo">Endurecimento 2 (determinístico, vale também em turbo e yolo)<a class="anchor" href="#endurecimento-2-determinístico-vale-também-em-turbo-e-yolo" aria-label="link">#</a></h2>
+<ul><li><strong>Escape de container</strong>: <code>docker|podman|nerdctl run|create</code> com <code>--privileged</code>, <code>--pid|--net|--ipc=host</code>, <code>--cap-add=SYS_ADMIN|ALL|SYS_PTRACE|SYS_MODULE</code>, <code>-v</code>/<code>--mount</code> de <code>/</code>, <code>/etc</code>, <code>/root</code>, da sua home, de <code>docker.sock</code> ou de chaves, <code>--device /dev/sd*</code>, <code>--security-opt seccomp|apparmor=unconfined</code> sempre pergunta; <code>docker exec -u 0|root</code> também. <code>docker compose up|run</code> e a escrita/edição de um arquivo compose com esses recursos pedem confirmação (<code>hardening2.go</code>).</li><li><strong>Limites de recurso</strong>: o shell persistente e o de leitura rápida começam com <code>ulimit -u</code> (processos: os atuais + 512; só se der para medir), <code>-f</code> (arquivo de até 2 GB), <code>-n</code> (4096) e, opcional, <code>-t</code> (CPU por processo); ajuste em <code>limits</code> (<code>procs</code>, <code>file_mb</code>, <code>files</code>, <code>cpu_secs</code>) na config. No Windows valem os limites de job object. Fork bomb, <code>yes &gt; arq</code>, <code>dd if=/dev/zero of=</code>, <code>fallocate</code>/<code>truncate</code> enormes, <code>cat /dev/urandom &gt; arq</code> e <code>while true</code> que grava em disco perguntam.</li><li><strong>Anti-downgrade do <code>jazz update</code></strong>: recusa manifesto assinado com versão menor que a em execução ou menor que a última vista (guardada em <code>update_seen.json</code>, só avança) salvo <code>--allow-downgrade</code>; <code>jazz update --check</code> mostra o aviso; toda tentativa vai para a auditoria.</li><li><strong>Integridade das sessões</strong>: cada linha do <code>.jsonl</code> leva um HMAC-SHA256 (chave aleatória por instalação em <code>session.key</code>, 0600). Ao retomar, linhas alteradas ou sem assinatura depois de linhas assinadas são avisadas ("sessão alterada fora do jazz: N linhas") e carregadas como dados NÃO CONFIÁVEIS (mesma marca <code>&lt;untrusted&gt;</code> do conteúdo externo, sem chamadas de ferramenta). Retomada headless de sessão alterada sai com código 5, salvo <code>--allow-tampered</code>. Sessões antigas (sem assinatura) abrem com um aviso único.</li><li><strong>Lições e plan cache</strong>: lição ou plano com URL/IP/host, comando de rede ou de segredo, pedido para desligar guarda/sandbox/redação/modo ou frase imperativa dirigida ao agente ("sempre rode", "não pergunte", "ignore as instruções") nunca é gravado nem injetado.</li><li><strong>Clone e instalação git</strong>: <code>git clone</code>, <code>git submodule add</code>, <code>pip install git+…</code>, <code>npm i git+…|github:…</code>, <code>cargo install --git</code> de um host que o repositório não usa (remotes e <code>.gitmodules</code>) perguntam mostrando o host; a pasta clonada continua não confiada até <code>/trust</code>.</li><li><strong>Escapes de terminal</strong>: OSC 52 (área de transferência), OSC 8 (links <code>javascript:</code>/<code>file:</code>), OSC 0/2 (título), DCS/APC/PM e as versões de 8 bits (C1) são removidos de toda saída mostrada ao usuário.</li></ul>
+<h2 id="revisão-do-próprio-diff">Revisão do próprio diff<a class="anchor" href="#revisão-do-próprio-diff" aria-label="link">#</a></h2>
+<p>No fim de cada turno o jazz revisa <strong>os arquivos que ele mesmo mudou</strong> (as escritas e edições do turno e o que o bash alterou, pelo checkpoint do início do turno), como um linter antes do "pronto". Só as linhas <strong>adicionadas</strong> contam; o que já estava no arquivo não é cobrado. Se aparece um achado CRITICAL ou HIGH, o jazz mostra o trecho (tecla <code>v</code>) e pergunta antes de aceitar:</p>
+<ul><li><strong>Sim</strong>: as mudanças ficam. <strong>Sempre</strong>: grava um hash de (regra, arquivo, texto da linha) em <code>.jazz/scan-allow.json</code> e a mesma linha não é perguntada de novo neste projeto. Como o <code>approvals.json</code>, o arquivo só vale se foi o jazz que o escreveu (store de confiança, tipo <code>scan-allow</code>) e as ferramentas do agente não conseguem gravá-lo.</li><li><strong>Não</strong>: os arquivos sinalizados voltam ao que eram no início do turno, o jazz avisa o que restaurou e o modelo recebe a nota de que não deve refazer sem perguntar. O turno termina como negado.</li><li><strong>Headless (<code>-p</code>)</strong>: ninguém aprova, então os arquivos sinalizados são restaurados, os achados vão para <code>.jazz/scan-findings.json</code> (regra, arquivo, linha, hash, motivo, trecho com segredos redigidos) e o código de saída é 5 (<code>StopDenied</code>).</li><li>MEDIUM e abaixo só viram um aviso (em <code>strict</code> também perguntam). Toda ocorrência entra na auditoria como <code>diffguard.finding {rule, file, line, hash}</code> e a resposta como <code>approval</code> com <code>tool: diffguard</code>.</li><li>Config <code>diff_guard: on|off|strict</code> (padrão <code>on</code>), <code>--diff-guard on|off|strict</code>, <code>JAZZ_DIFF_GUARD</code>. Vale em todos os modos de permissão, inclusive <code>yolo</code> e <code>turbo</code>. <code>jazz scan [--since ref]</code> roda o mesmo motor sob demanda (sem <code>--since</code>: árvore de trabalho contra <code>HEAD</code>, arquivos novos incluídos; sai com 5 se houver CRITICAL/HIGH) e <code>jazz scan --rules</code> lista os pacotes e regras carregados.</li></ul>
+<p><strong>Regras embutidas</strong> (<code>diffrules.json</code>):</p>
+<div class="tbl"><table><thead><tr><th>Regra</th><th>Severidade</th><th>O que pega</th></tr></thead><tbody><tr><td><code>jz-secret-literal</code></td><td>CRITICAL</td><td>chave, token ou senha literal (o mesmo detector de <code>redactSecrets</code>)</td></tr><tr><td><code>jz-tls-off</code></td><td>HIGH</td><td><code>verify=False</code>, <code>InsecureSkipVerify: true</code>, <code>rejectUnauthorized: false</code>, <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>, <code>curl -k</code>/<code>--insecure</code>, <code>StrictHostKeyChecking no</code> e parentes</td></tr><tr><td><code>jz-dep-url</code></td><td>HIGH</td><td>dependência de URL git, tarball ou endereço fora do registro</td></tr><tr><td><code>jz-dep-registry</code></td><td>HIGH</td><td>registro/índice que não é um dos públicos oficiais</td></tr><tr><td><code>jz-dep-typosquat</code></td><td>HIGH</td><td>dependência nova a distância 1-2 de um pacote popular (mesma lista do guarda de pacotes, só pelo nome)</td></tr><tr><td><code>jz-lifecycle-script</code></td><td>HIGH</td><td><code>preinstall</code>/<code>install</code>/<code>postinstall</code>/<code>prepare</code> no <code>package.json</code>, <code>cmdclass</code> no <code>setup.py</code></td></tr><tr><td><code>jz-ci-change</code></td><td>HIGH</td><td>qualquer mudança em <code>.github/workflows</code>, <code>.gitlab-ci.yml</code>, <code>Jenkinsfile</code>, <code>azure-pipelines*</code>, <code>.circleci</code>, <code>bitbucket-pipelines</code></td></tr><tr><td><code>jz-persist-outside</code></td><td>HIGH</td><td>escrita fora do projeto em arquivo de shell, cron ou inicialização (já exige confirmação da cerca; aqui aparece no resumo do turno)</td></tr><tr><td><code>jz-hidden-unicode</code></td><td>MEDIUM</td><td>caracteres invisíveis, bidi e largura zero em linha nova (mesmo detector do <code>sanitize</code>)</td></tr></tbody></table></div>
+<p><strong>Pacotes de regras.</strong> Regras são dados. Além das embutidas, o jazz lê <code>~/.config/jazz-cli/diffrules.d/*.json</code> e <code>&lt;projeto&gt;/.jazz/diffrules.d/*.json</code>, nessa ordem; uma regra com o mesmo <code>id</code> de uma anterior a substitui, e <code>"disabled": true</code> desliga a regra com aquele <code>id</code>. Os pacotes do projeto só carregam depois que você confia no conteúdo exato (<code>jazz trust</code>, tipo <code>diffrules</code>; editou, pede de novo) e as ferramentas do agente não escrevem nessa pasta. Um arquivo é <code>{"rules":[...]}</code> ou uma lista direta:</p>
+<pre class="code mono"><code>{
+  "rules": [
+    {
+      "id": "acme-aws-key",
+      "severity": "CRITICAL",
+      "globs": ["**/*.py", "src/**"],
+      "exclude": ["**/tests/**"],
+      "regex": "AKIA[0-9A-Z]{16}",
+      "message_pt": "chave de acesso AWS escrita no código",
+      "why": "A chave fica no histórico do git; use variável de ambiente."
+    }
+  ]
+}</code></pre>
+<div class="tbl"><table><thead><tr><th>Campo</th><th>Significado</th></tr></thead><tbody><tr><td><code>id</code></td><td>nome único da regra (obrigatório)</td></tr><tr><td><code>severity</code></td><td><code>CRITICAL</code>, <code>HIGH</code>, <code>MEDIUM</code>, <code>LOW</code> ou <code>INFO</code>; CRITICAL e HIGH perguntam</td></tr><tr><td><code>globs</code></td><td>arquivos que a regra olha; vazio = todos. <code>*</code> fica dentro de uma pasta, <code>**</code> atravessa pastas, sem <code>/</code> casa o nome do arquivo em qualquer lugar</td></tr><tr><td><code>exclude</code></td><td>arquivos que a regra pula (mesma sintaxe)</td></tr><tr><td><code>scope</code></td><td><code>project</code> ou <code>outside</code> (fora do projeto); vazio = os dois</td></tr><tr><td><code>regex</code></td><td>expressão RE2 testada em cada linha adicionada. Sem <code>regex</code> e sem <code>detector</code> a regra vale para qualquer mudança nos arquivos dos <code>globs</code></td></tr><tr><td><code>detector</code></td><td>alternativa à <code>regex</code>, um detector embutido: <code>secret</code>, <code>unicode</code>, <code>registry</code>, <code>typosquat</code></td></tr><tr><td><code>message_pt</code></td><td>texto mostrado ao usuário (obrigatório)</td></tr><tr><td><code>why</code></td><td>uma frase sobre o risco</td></tr><tr><td><code>disabled</code></td><td><code>true</code> desliga a regra com esse <code>id</code></td></tr></tbody></table></div>
+<p>Para portar regras de conjuntos públicos: do gitleaks, <code>id</code>→<code>id</code>, <code>regex</code>→<code>regex</code>, <code>path</code>→<code>globs</code> (e <code>allowlist.paths</code>→<code>exclude</code>); do semgrep, só as regras <code>pattern-regex</code> / <code>languages</code> simples têm equivalente (<code>pattern-regex</code>→<code>regex</code>, extensão da linguagem→<code>globs</code>, <code>severity</code> ERROR→CRITICAL, WARNING→HIGH, INFO→MEDIUM). Regras com <code>lookahead</code> ou backreference não existem em RE2 e precisam ser reescritas. Regras estruturais do semgrep rodam pelo semgrep de verdade, abaixo.</p>
+<p><strong>semgrep opcional.</strong> Se <code>semgrep</code> está no PATH (<code>pip install semgrep</code>; o <code>jazz doctor</code> mostra se foi achado), o jazz roda <code>semgrep --config p/security-audit --config p/secrets --json</code> nos arquivos alterados, com limite de 60 s, e guarda só os resultados que caem em linhas adicionadas: ERROR vira CRITICAL, WARNING vira HIGH, INFO vira MEDIUM (id <code>semgrep:&lt;check_id&gt;</code>). Sem rede e sem os pacotes de regras em cache, o jazz avisa uma vez e segue só com as regras embutidas.</p>
+<p>Limites: é revisão por padrões (regex), não análise de fluxo; quem escreve o código de forma indireta (<code>getattr</code>, string montada) passa. Só cobre o que o jazz mudou no turno, não commits e edições suas.  Arquivos fora do projeto mudados por comandos de shell não são vistos (só os das ferramentas de escrita/edição).</p>
+<h2 id="versões-suportadas">Versões suportadas<a class="anchor" href="#versões-suportadas" aria-label="link">#</a></h2>
+<p>Apenas a última versão publicada recebe correções.</p>
+<h2 id="relatando-uma-vulnerabilidade">Relatando uma vulnerabilidade<a class="anchor" href="#relatando-uma-vulnerabilidade" aria-label="link">#</a></h2>
+<p>Abra um <em>security advisory</em> privado no GitHub do projeto ou escreva para o e-mail indicado no perfil da organização. Descreva o cenário e, se possível, um comando ou arquivo que reproduza o problema. Respondemos em até 7 dias.</p></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/SECURITY.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/seguranca"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></span></a><a class="next" href="/docs/governanca"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></span></a></nav>
+  </main>
+</div>
+</body>
+</html>

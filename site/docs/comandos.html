@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comandos · jazz-cli docs</title>
+<meta name="description" content="Opções: -m &lt;provedor/modelo&gt;, -C &lt;pasta&gt;, --yolo / --ask / --smart, -v (progresso no stderr com -p), --output-format text|json|stream-json, --max-steps N, --timeout 10m, --allow-tools bash,edit,wri...">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/comandos">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="Comandos · jazz-cli docs">
+<meta property="og:description" content="Opções: -m &lt;provedor/modelo&gt;, -C &lt;pasta&gt;, --yolo / --ask / --smart, -v (progresso no stderr com -p), --output-format text|json|stream-json, --max-steps N, --timeout 10m, --allow-tools bash,edit,wri...">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/comandos">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="Comandos · jazz-cli docs" data-title-en="Commands · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos" aria-current="page" class="cur"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#linha-de-comando">Linha de comando</a></li><li><a href="#no-modo-interativo">No modo interativo</a></li><li><a href="#fila-de-mensagens">Fila de mensagens</a></li><li><a href="#erros-de-digitação">Erros de digitação</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#linha-de-comando">Linha de comando</a></li><li><a href="#no-modo-interativo">No modo interativo</a></li><li><a href="#fila-de-mensagens">Fila de mensagens</a></li><li><a href="#erros-de-digitação">Erros de digitação</a></li></ul>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+</li>
+<li><a href="/docs/improve"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="comandos">Comandos<a class="anchor" href="#comandos" aria-label="link">#</a></h1>
+<h2 id="linha-de-comando">Linha de comando<a class="anchor" href="#linha-de-comando" aria-label="link">#</a></h2>
+<div class="tbl"><table><thead><tr><th>Comando</th><th>O que faz</th></tr></thead><tbody><tr><td><code>jazz [prompt]</code></td><td>modo interativo (prompt inicial opcional)</td></tr><tr><td><code>jazz -p "prompt"</code></td><td>headless: roda até o fim e imprime só a resposta</td></tr><tr><td><code>jazz -c</code> / <code>jazz -r [id]</code></td><td>continua a última sessão da pasta / retoma uma sessão: sem id abre a lista (↑↓, digite pra filtrar); com id também no <code>-p</code></td></tr><tr><td><code>jazz login [chatgpt] [--browser]</code></td><td>login com a conta do ChatGPT</td></tr><tr><td><code>jazz key &lt;provedor&gt;</code></td><td>salva uma chave de API</td></tr><tr><td><code>jazz logout &lt;provedor&gt;</code></td><td>apaga a credencial</td></tr><tr><td><code>jazz provider add &lt;nome&gt; --url URL [--type openai] [--key-env VAR] [--model M] [--header K=V] [--no-key] [--ollama]</code></td><td>adiciona um provedor (Ollama, llama.cpp, LM Studio, qualquer URL compatível com OpenAI)</td></tr><tr><td><code>jazz models [provedor]</code></td><td>lista modelos</td></tr><tr><td><code>jazz omni setup</code></td><td>liga o roteamento entre todos os provedores</td></tr><tr><td><code>jazz export &lt;id&gt; [md|html] [arq]</code></td><td>exporta uma sessão</td></tr><tr><td><code>jazz trust [--yes] [--revoke]</code></td><td>confia na pasta e na configuração do projeto (AGENTS.md/CLAUDE.md, skills, comandos, <code>.mcp.json</code>, hooks, regras allow, steering, scripts); <code>--revoke</code> desfaz</td></tr><tr><td><code>jazz scan [--since ref] [--rules]</code></td><td>roda a revisão do diff (regras de <code>diffrules.json</code> e pacotes) na árvore de trabalho contra <code>HEAD</code> ou <code>ref</code>; sai com 5 se houver achado CRITICAL/HIGH; <code>--rules</code> lista os pacotes carregados</td></tr><tr><td><code>jazz deps audit [pasta]</code></td><td>verifica as dependências dos manifestos (existe no registro, idade, typosquat, OSV); sai com 1 se algo pede atenção</td></tr><tr><td><code>jazz sanitize &lt;arquivo&gt;</code></td><td>mostra o que seria removido antes de ir ao modelo (texto invisível, tags Unicode, bidi, HTML escondido) e se parece prompt injection</td></tr><tr><td><code>jazz update [--check]</code></td><td>atualiza o binário</td></tr><tr><td><code>jazz bug</code></td><td>gera um <code>.tar.gz</code> pra reportar problema</td></tr><tr><td><code>jazz doctor</code></td><td>diagnóstico da instalação</td></tr><tr><td><code>jazz script [nome] ['{json}']</code></td><td>lista os scripts prontos ou roda um, sem modelo (JSON no stdout; <code>-</code> lê os args do stdin)</td></tr><tr><td><code>jazz version</code></td><td>versão</td></tr></tbody></table></div>
+<p>Opções: <code>-m &lt;provedor/modelo&gt;</code>, <code>-C &lt;pasta&gt;</code>, <code>--yolo</code> / <code>--ask</code> / <code>--smart</code>, <code>-v</code> (progresso no stderr
+com <code>-p</code>), <code>--output-format text|json|stream-json</code>, <code>--max-steps N</code>, <code>--timeout 10m</code>,
+<code>--allow-tools bash,edit,write,fetch</code> ou regras como <code>'Bash(npm test:*)'</code>,
+<code>--system-append T</code>, <code>--until "CMD"</code>, <code>--until-rounds N</code>, <code>--review</code>, <code>--budget lean|normal|off</code>,
+<code>--quality off|standard|strict</code>, <code>--debug</code>, <code>--parse-output[=false]</code>, <code>--grep-trunc grouped|headtail</code>,
+<code>--tool-budget N|auto</code>, <code>--prefetch off|grep</code>, <code>--scripts on|off</code>, <code>--fast-path</code>, <code>--offline</code>,
+<code>--recover on|handoff|discard|off</code>.</p>
+<h2 id="no-modo-interativo">No modo interativo<a class="anchor" href="#no-modo-interativo" aria-label="link">#</a></h2>
+<div class="tbl"><table><thead><tr><th>Comando</th><th>O que faz</th></tr></thead><tbody><tr><td><code>/help</code></td><td>ajuda</td></tr><tr><td><code>/model [ref]</code> · <code>/models [provedor]</code></td><td>mostra/troca o modelo · lista modelos</td></tr><tr><td><code>/omni [on|off|strategy …]</code></td><td>roteamento entre provedores</td></tr><tr><td><code>/key</code> · <code>/login</code> · <code>/logout</code></td><td>credenciais</td></tr><tr><td><code>/mode auto|turbo|smart|ask|yolo|plan</code></td><td>modo de permissão (Shift+Tab ou Ctrl+T alterna turbo → auto → plan → ask nesta sessão)</td></tr><tr><td><code>/approvals [clear]</code></td><td>aprovações "sempre" deste projeto (host de egress, pasta fora, git destrutivo)</td></tr><tr><td><code>/permissions [list|remove|add]</code></td><td>regras persistentes</td></tr><tr><td><code>/effort low|medium|high|off</code> · <code>/think</code></td><td>raciocínio</td></tr><tr><td><code>/compact [foco]</code> · <code>/context</code></td><td>contexto</td></tr><tr><td><code>/undo</code> · <code>/rewind</code> · <code>/fork [n]</code></td><td>desfazer arquivos (inclusive o que o bash mudou) / voltar a conversa / copiar a conversa</td></tr><tr><td><code>/export [md|html] [arq]</code> · <code>/clear</code> · <code>/forget</code></td><td>sessões</td></tr><tr><td><code>/resume [id]</code> · <code>/sessions</code> · <code>/rename [título]</code></td><td>lista de sessões com ↑↓ (j k), Enter abre, Esc cancela, digitar filtra, Tab mostra todas as pastas; ao retomar, a conversa aparece de novo (últimas 200 entradas, <code>resume_replay</code>; <code>session_picker: off</code> volta à lista numerada) · dá nome à sessão</td></tr><tr><td><code>/tree [id]</code></td><td>árvore da sessão na mesma lista: Enter continua daquela mensagem (ramo novo)</td></tr><tr><td><code>/todo</code> · <code>/jobs [kill]</code> · <code>/mcp</code> · <code>/cost</code> · <code>/expand</code></td><td>estado · saída inteira da última ferramenta</td></tr><tr><td><code>/goal [objetivo|off]</code> · <code>/until [comando|off]</code> · <code>/review [on|off]</code></td><td>objetivo fixo · só termina quando o comando passar · revisão do diff por subagente</td></tr><tr><td><code>/init</code></td><td>cria um <code>AGENTS.md</code> analisando o projeto</td></tr><tr><td><code>/script [nome] [json]</code></td><td>lista os scripts prontos ou roda um (<code>/script git_state</code>)</td></tr><tr><td><code>/offline</code> · <code>/online</code></td><td>força o modo offline · volta a tentar os provedores agora</td></tr><tr><td><code>/doctor</code> · <code>/exit</code></td><td>diagnóstico · sair</td></tr></tbody></table></div>
+<p>Modos de permissão: veja <a href="/docs/modos#modos-de-permissão">Modos de permissão</a>.</p>
+<p>Desfazer: no modo interativo, além do snapshot de cada <code>write</code>/<code>edit</code>, o jazz guarda um
+checkpoint shadow-git (repositório separado em <code>~/.local/share/jazz-cli/checkpoints/</code>, o
+<code>.git</code> do projeto nunca é tocado) no começo de cada turno e depois de cada <code>bash</code> que pode
+escrever. <code>/undo</code> e <code>/rewind</code> voltam só os arquivos que o turno mudou, inclusive via <code>sed -i</code>,
+<code>&gt;</code> ou <code>rm</code>, apagam os que ele criou e preservam o que você editou na mão entre turnos.
+Respeita <code>.gitignore</code>, ignora arquivos acima de 1 MB e desliga sozinho (fica só o snapshot de
+write/edit) em projeto com mais de 20 mil arquivos ou sem git ≥ 2.25.</p>
+<h3 id="atalhos">Atalhos<a class="anchor" href="#atalhos" aria-label="link">#</a></h3>
+<div class="tbl"><table><thead><tr><th>Tecla</th><th>Na caixa de entrada</th><th>Durante o trabalho do agente</th></tr></thead><tbody><tr><td>Enter</td><td>envia</td><td>põe o texto na <a href="#fila-de-mensagens">fila</a> (não interrompe)</td></tr><tr><td>Shift+Enter · Alt+Enter · <code>\</code>+Enter</td><td>quebra linha (colar com várias linhas mantém o texto)</td><td>—</td></tr><tr><td>Esc</td><td>limpa a linha; fecha paleta/lista</td><td>com texto digitado, limpa o texto; sem texto, interrompe</td></tr><tr><td>Ctrl+C</td><td>limpa; 2× sai</td><td>interrompe</td></tr><tr><td><code>/</code></td><td>abre a <a href="#paleta-de-comandos">paleta de comandos</a></td><td>—</td></tr><tr><td><code>@</code></td><td>abre a lista de arquivos e pastas do projeto (busca aproximada; Enter/Tab insere <code>@caminho</code>)</td><td>—</td></tr><tr><td><code>!comando</code></td><td>roda direto no shell, sem o modelo</td><td>—</td></tr><tr><td>↑ ↓</td><td>histórico, só com as entradas que começam pelo que já está digitado; em texto de várias linhas, move entre as linhas primeiro</td><td>editam a fila</td></tr><tr><td>Ctrl+R</td><td>busca no histórico (Ctrl+R de novo: anterior; "nada encontrado" quando não acha)</td><td>—</td></tr><tr><td>Ctrl+O</td><td>expande a saída inteira da última ferramenta; de novo, recolhe (<code>/expand</code> só expande)</td><td>—</td></tr><tr><td>Shift+Tab · Ctrl+T</td><td>troca o modo nesta sessão: turbo → auto → plan → ask</td><td>—</td></tr><tr><td>Ctrl+A/E · Ctrl+U/K</td><td>início/fim da linha · apaga até o início/fim da linha</td><td>—</td></tr><tr><td>Alt+← → (Option no macOS) · Ctrl+W</td><td>pula palavra · apaga palavra</td><td>—</td></tr><tr><td>Ctrl+G</td><td>abre a mensagem no <code>$EDITOR</code></td><td>—</td></tr><tr><td><code>?</code> (linha vazia)</td><td>mostra a lista de atalhos embaixo da caixa; <code>?</code> de novo esconde</td><td>—</td></tr><tr><td>Ctrl+D (linha vazia)</td><td>sai</td><td>—</td></tr></tbody></table></div>
+<p>O rodapé encolhe com a largura (some primeiro o MCP, depois o contexto, o provedor e o modelo;
+modo e <code>? atalhos</code> ficam). Opções em <code>config.json</code>: `"ui": {"palette": "fuzzy"|"prefix",
+"mention_picker": "on"|"off", "history_prefix": "on"|"off"}<code>(ou</code>JAZZ_PALETTE`,
+<code>JAZZ_MENTION_PICKER</code>, <code>JAZZ_HISTORY_PREFIX</code>). Em roxterm/VTE o Shift+Enter costuma chegar como
+Enter comum; use <code>\</code>+Enter ou Alt+Enter.</p>
+<h3 id="paleta-de-comandos">Paleta de comandos<a class="anchor" href="#paleta-de-comandos" aria-label="link">#</a></h3>
+<p><code>/</code> abre a lista de comandos com uma linha de descrição cada. Digitar filtra com busca aproximada:
+<code>/cmp</code> acha <code>/compact</code>, <code>/modle</code> acha <code>/model</code>, e o nome exato vem sempre primeiro (<code>/mode</code> +
+Enter roda <code>/mode</code>). ↑↓ escolhe, Tab completa na caixa com um espaço, Enter roda, Esc fecha. A
+linha de dica é <code>↑↓ escolhe · enter usa · tab completa · esc fecha</code>. Comandos próprios
+(<code>.jazz/commands/*.md</code>) aparecem na mesma lista. <code>"ui": {"palette": "prefix"}</code> volta ao filtro
+só por início do nome.</p>
+<h3 id="lista-de-sessões">Lista de sessões<a class="anchor" href="#lista-de-sessões" aria-label="link">#</a></h3>
+<p><code>/resume</code>, <code>/sessions</code> e <code>jazz -r</code> sem id abrem uma lista no lugar, mais nova primeiro:</p>
+<pre class="code mono"><code>  sessões em ~/projetos/app
+  ▸ 1 Banco de dados do app  há 2 h  atual
+        turbo · 8 msgs · 12.4k tokens · concluída · ~/projetos/app
+    2 Corrigir teste de login  ontem
+        auto · 14 msgs · 30.2k tokens · $0.012 · incompleta · ~/projetos/app
+  1/2  ↑↓ jk move · enter abre · esc cancela · digite filtra · tab: todas as pastas</code></pre>
+<p>↑↓, j/k e PgUp/PgDn movem; Enter abre; 1–9 abre direto; digitar filtra com tolerância a erro (<code>/</code>
+começa um filtro quando você quer procurar por j, k ou dígitos); Esc limpa o filtro ou cancela; Tab
+mostra as sessões de todas as pastas agrupadas (uma sessão de outra pasta não é carregada: o aviso
+diz <code>jazz -C &lt;pasta&gt; -r &lt;id&gt;</code>). A lista é apagada depois. Ao retomar, a conversa é desenhada de novo
+(pedidos, respostas em markdown, cada ferramenta numa linha verde ou vermelha, sem rodar nada de
+novo), seguida de <code>✻ conversa anterior · N mensagens · N ferramentas</code> e do aviso
+<code>sessão &lt;id&gt; retomada (N mensagens): &lt;título&gt;</code>. Mostra as últimas 200 entradas (<code>resume_replay</code>:
+número, <code>all</code> ou <code>off</code>; <code>JAZZ_RESUME_REPLAY</code>); o resto fica em <code>/expand</code>. O título (5–8 palavras do
+primeiro pedido, sem chamar modelo) troca com <code>/rename &lt;título&gt;</code> ou <code>/rename</code> sozinho para editar.
+<code>/tree</code> usa a mesma lista: Enter continua daquela mensagem como um ramo novo. <code>/rewind</code> abre um menu
+com as suas mensagens. <code>session_picker: off</code> (ou <code>JAZZ_SESSION_PICKER=off</code>) volta à lista numerada.</p>
+<p>A tela: caixa de boas-vindas (o logo grande aparece com <code>--banner</code> ou em terminal de 100+
+colunas), entrada numa caixa que cresce com o texto e rodapé com modo, modelo e uso do
+contexto; respostas com <code>●</code> e markdown quebrado na largura do terminal; ferramentas como
+<code>● Bash(go test ./...)</code> com o resultado em <code>⎿</code> (até 3 linhas), diffs com número de linha e
+aprovações num menu numerado (↑↓ + Enter, ou 1-3). Paleta Nord; em 16 cores usa as cores do
+esquema do terminal, e com <code>TERM=linux</code> (ou <code>JAZZ_ASCII=1</code>) tudo vira ASCII. Comandos próprios: arquivos <code>.md</code> em <code>~/.config/jazz-cli/commands</code>,
+<code>.jazz/commands</code> ou <code>.claude/commands</code> viram <code>/nome</code>.</p>
+<h2 id="fila-de-mensagens">Fila de mensagens<a class="anchor" href="#fila-de-mensagens" aria-label="link">#</a></h2>
+<p>Enquanto o agente trabalha você continua digitando. Enter não bloqueia nem interrompe: a mensagem
+entra numa fila que aparece embaixo da linha de status (<code>na fila (2): …</code>, um item por linha), e o
+agente a pega na hora certa. Cada item tem um modo:</p>
+<ul><li><strong>agora</strong> (steer): entra no turno atual na próxima fronteira de ferramenta, como mensagem do
+usuário marcada <code>[mensagem do usuário durante a execução]: …</code>, logo depois do resultado da
+ferramenta que estava rodando. O modelo corrige o rumo sem perder o que já fez. Se ele estava
+terminando, o turno continua com a mensagem.</li><li><strong>depois</strong> (follow-up): vira o próximo turno, sozinho, quando o atual termina bem (cada turno
+passa pela própria checagem de "pronto" honesto).</li></ul>
+<p>O modo é escolhido pelo texto: até 200 caracteres, ou começando com <code>!</code>, <code>ei</code>, <code>opa</code>,
+<code>na verdade</code> ou <code>espera</code>, é <strong>agora</strong>; mais longo, ou com o prefixo <code>depois:</code> ou <code>+</code> (que saem do
+texto), é <strong>depois</strong>. Teclas durante o trabalho: ↑/↓ escolhem um item da fila e o colocam na
+linha para editar (Enter salva, ↓ no fim volta ao que você estava digitando) · Delete remove o
+item escolhido · Tab alterna agora/depois (no escolhido, ou no último) · <code>Esc</code> continua
+interrompendo o pedido · <code>Esc Esc</code> interrompe e limpa a fila. Se o turno é interrompido ou falha, o
+que sobrou na fila volta para o editor; nada se perde.</p>
+<p>As mensagens injetadas são mensagens de usuário (o system prompt não muda, o cache vale) e ficam
+gravadas na sessão antes da próxima requisição. O fluxo de eventos ganha <code>queue.add</code>,
+<code>queue.edit</code>, <code>queue.consume</code> (onde: ferramenta, fim do turno ou turno novo) e <code>queue.drop</code>
+(Delete, <code>Esc Esc</code>, editor), e o <code>jazz trace</code> mostra cada um (<code>fila + #1 [agora] …</code>).</p>
+<p>No <code>-p</code>, para scripts e evals:</p>
+<pre class="code mono"><code>jazz -p "implemente X" --follow-up "agora escreva os testes" --follow-up "atualize o CHANGELOG"
+JAZZ_STEER_FILE=/tmp/steer.txt jazz -p "refatore o parser"   # outro processo: echo "use src/" &gt;&gt; /tmp/steer.txt</code></pre>
+<p><code>--follow-up</code> (repetível) roda cada mensagem como turno seguinte, em ordem, enquanto o anterior
+termina com sucesso; se um turno falha ou é interrompido, os que faltam não rodam (aviso no stderr).
+<code>JAZZ_STEER_FILE</code>: cada linha completa do arquivo (as que já existem e as acrescentadas durante a
+execução) vira uma mensagem <strong>agora</strong>, lida em cada fronteira de ferramenta, sem processo vigiando
+o arquivo, então o resultado é reproduzível.</p>
+<h2 id="erros-de-digitação">Erros de digitação<a class="anchor" href="#erros-de-digitação" aria-label="link">#</a></h2>
+<p>Quem digita rápido não deveria ser tratado ao pé da letra. Comandos: <code>/modle</code> roda <code>/model</code>, <code>/mode trubo</code>
+roda <code>/mode turbo</code>; se for ambíguo (<code>/ofline</code>: offline ou online) aparece um menu numerado. Nomes no
+pedido: antes de o modelo rodar, o jazz confere o que parece caminho, arquivo, função ou teste contra um
+índice barato do repositório (nomes de arquivo + símbolos de topo, no máximo 20 mil arquivos, em cache) e
+anexa à mensagem uma nota de uma linha com o raciocínio, por exemplo <code>`</code> <code>parsr.go</code> → <code>parser.go</code> (arquivo
+mencionado junto de 'conserta'; único .go com esse radical) <code>`</code>, para o modelo poder discordar. A escolha
+usa o contexto, não só a distância de edição: teste/função/arquivo citados na frase, verbo, extensões do
+repositório, arquivos mexidos nesta sessão ou hoje, e tecla vizinha pesa menos que letra qualquer. Palavra
+comum nunca vira nome (só formato de nome, ou depois de "arquivo", "teste", "função"...); sem candidato
+bom não se acrescenta nada. O texto do usuário nunca é reescrito e o system prompt não muda (cache). Se um
+<code>read</code>/<code>edit</code> aponta um caminho que não existe, o erro lista os parecidos (<code>não existe; parecido: ...</code>);
+os atalhos offline e o classificador de tarefa também entendem <code>roda os teste</code>, <code>git stauts</code>,
+<code>procra X no codgio</code>, <code>arruma</code>/<code>concerta</code> = conserta. (<code>testes</code> sozinho continua sem disparar atalho.)</p></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/pronto-honesto"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></span></a><a class="next" href="/docs/scripts-offline"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></span></a></nav>
+  </main>
+</div>
+</body>
+</html>

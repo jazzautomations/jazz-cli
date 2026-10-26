@@ -64,6 +64,8 @@ type rlBucket struct {
 	MaxReq    int        `json:"max_req,omitempty"`    // learned from 413 "Limit N"
 	LastErr   string     `json:"last_err,omitempty"`
 	LastAt    int64      `json:"last_at,omitempty"`
+	LastKind  string     `json:"last_kind,omitempty"` // class of the last error: quota | daily | rate | auth | …
+	OKAt      int64      `json:"ok_at,omitempty"`     // last success (unix ms), on the provider bucket
 	inflight  int
 	// this process's increments since its last successful write: the merge
 	// adds them to the file's counters, so concurrent jazz processes (eval
@@ -203,7 +205,7 @@ func rlEmpty(b *rlBucket, now int64) bool {
 	today := time.UnixMilli(now).UTC().Format("2006-01-02")
 	return len(b.Recent) == 0 && len(b.RecentTok) == 0 && b.CoolUntil <= now && b.DeadUntil <= now &&
 		b.AuthBad == "" && b.MaxReq == 0 && b.Life == 0 && b.MReq == 0 && b.LRPD == 0 &&
-		(b.Req == 0 || b.Day < today) && b.Strikes == 0 && b.LastErr == ""
+		(b.Req == 0 || b.Day < today) && b.Strikes == 0 && b.LastErr == "" && b.OKAt < now-7*24*3600_000
 }
 
 // rlMerge folds another process's view of a bucket into mine.
@@ -250,8 +252,9 @@ func rlMerge(m, t *rlBucket) {
 		m.HdrReq, m.HdrAt, m.HdrReset = t.HdrReq, t.HdrAt, t.HdrReset
 	}
 	if t.LastAt > m.LastAt {
-		m.LastErr, m.LastAt = t.LastErr, t.LastAt
+		m.LastErr, m.LastAt, m.LastKind = t.LastErr, t.LastAt, t.LastKind
 	}
+	m.OKAt = max(m.OKAt, t.OKAt)
 }
 
 func rlTrim(b *rlBucket, now int64) {
@@ -707,6 +710,10 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 			}
 		}
 		rl.lastOK = ref
+		if lim.has() { // unlimited refs leave no state
+			rl.bucketLocked(prov).OKAt = ms
+			rl.dirty = true
+		}
 		return false
 	}
 	kind := pvClassify(err)
@@ -724,7 +731,10 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		if len(s) > 160 {
 			s = s[:160] + "…"
 		}
-		b.LastErr, b.LastAt = s, ms
+		b.LastErr, b.LastAt, b.LastKind = s, ms, kind
+		if ae != nil && ae.Quota {
+			b.LastKind = "quota"
+		}
 	}
 	rl.dirty = true
 	switch kind {
@@ -738,6 +748,19 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		return false
 	case "daily":
 		b := rl.bucketLocked(key)
+		if ae != nil && ae.Quota {
+			// a quota 429 (e.g. kilo PROMOTION_MODEL_LIMIT_REACHED) cools the whole
+			// provider, so the router rotates to other providers, not just other
+			// models of the same one; it is not a quality signal (judge.go)
+			b = rl.bucketLocked(prov)
+			until := now.Add(pvQuotaDefault)
+			if ra > 0 {
+				until = now.Add(ra)
+			}
+			b.DeadUntil = max(b.DeadUntil, until.UnixMilli())
+			note(b)
+			return true
+		}
 		_, dayEnd := rlDay(lim.Reset, now)
 		until := dayEnd
 		body := ""

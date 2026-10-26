@@ -87,7 +87,7 @@ var kiloFastFree = []string{
 var pvManualOnly = map[string]bool{"kilo/" + pvOldKiloDefault: true}
 
 // omniPresets are the free (and cheap emergency) providers known in 2026-10.
-func omniPresets() map[string]*ProviderConf {
+func omniPresetsBase() map[string]*ProviderConf {
 	return map[string]*ProviderConf{
 		"kilo": {Type: "openai", BaseURL: "https://api.kilo.ai/api/gateway", KeyEnv: "KILO_API_KEY", DefaultModel: kiloDefaultModel,
 			NoKey: true, Free: true, Train: true, Router: "kilo", FreeIDs: true, Probe: "chat1",

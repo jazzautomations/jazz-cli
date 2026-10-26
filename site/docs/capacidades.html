@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O que o jazz pode fazer na máquina · jazz-cli docs</title>
+<meta name="description" content="Leia antes de usar em repositório de terceiros (resumo na seção Segurança).">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/capacidades">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="O que o jazz pode fazer na máquina · jazz-cli docs">
+<meta property="og:description" content="Leia antes de usar em repositório de terceiros (resumo na seção Segurança).">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/capacidades">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="O que o jazz pode fazer na máquina · jazz-cli docs" data-title-en="What jazz can do on your machine · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades" aria-current="page" class="cur"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#guardrails">Guardrails</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#guardrails">Guardrails</a></li></ul>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+</li>
+<li><a href="/docs/improve"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="o-que-o-jazz-pode-fazer-na-sua-máquina">O que o jazz pode fazer na sua máquina<a class="anchor" href="#o-que-o-jazz-pode-fazer-na-sua-máquina" aria-label="link">#</a></h1>
+<p>Leia antes de usar em repositório de terceiros (resumo na seção <a href="/docs/seguranca#segurança">Segurança</a>).</p>
+<ul><li>O jazz roda comandos de shell <strong>como você</strong>, edita qualquer arquivo que você pode editar e acessa a
+rede. <code>DangerReason</code>, <code>IsReadOnly</code>, os guardrails abaixo e o modo smart são heurísticas que
+deixam os ataques comuns barulhentos, não uma fronteira de segurança. A fronteira é o sandbox do
+sistema (<code>--sandbox</code>, padrão <code>auto</code>: <code>sandbox-exec</code> no macOS, <code>bubblewrap</code> no Linux), que impede
+os comandos de ler a sua home fora do projeto e de gravar fora dele; veja <code>SECURITY.md</code>.</li><li><strong>Pasta não confiável</strong>: na primeira vez numa pasta o jazz mostra o que vai carregar (AGENTS.md,
+CLAUDE.md, <code>.jazz/*</code>, <code>.mcp.json</code>, skills, comandos, hooks, scripts) e pergunta num menu se você
+confia (Enter confia e lembra; "só nesta sessão" não grava nada).
+Até confiar (na pergunta, com <code>/trust</code> ou <code>jazz trust</code>), a sessão roda em <code>ask</code>; com <code>-p</code>, comando
+bash que não é só leitura é negado, a não ser que <code>--allow-tools</code> libere aquele comando ou você
+passe <code>--yolo</code>. Em CI rode <code>jazz trust --yes</code> antes, se o repositório é seu. AGENTS.md/skills que
+mudaram perguntam de novo; <code>/trust revoke</code> volta atrás. Flags explícitas (<code>--yolo</code>, <code>--ask</code>,
+<code>--smart</code>) valem mesmo em pasta não confiável.</li><li><code>.mcp.json</code>, hooks, regras allow, steering e scripts do projeto ficam desligados até a confiança, e
+o hash cobre também os arquivos que eles executam (<code>./scripts/lint.sh</code>, <code>node tools/mcp.js</code>): um
+<code>git pull</code> ou uma edição do modelo nesse script pergunta de novo; hooks do projeto conferem isso
+antes de cada execução.</li><li><strong>Texto do repositório pode guiar o modelo</strong>: README, AGENTS.md, issues, saída de comando e páginas
+podem conter prompt injection. O detector abaixo avisa, mas modelos fracos obedecem a texto bem escrito.</li><li><strong>Segredos</strong>: o shell, hooks e servidores MCP recebem o ambiente sem chaves (<code>*_API_KEY</code>, <code>*_TOKEN</code>,
+<code>*_SECRET*</code>, <code>AWS_SESSION_TOKEN</code>, <code>STRIPE_*</code>, <code>DATABASE_URL</code>, <code>PGPASSWORD</code>, <code>MYSQL_PWD</code>,
+<code>*_WEBHOOK_URL</code>, <code>GITHUB_TOKEN</code>/<code>GH_TOKEN</code>, <code>NPM_TOKEN</code>, URLs com senha e <code>SSH_AUTH_SOCK</code> — então
+<code>git push</code> por SSH dentro do jazz não usa seu agente SSH). Saídas passam por redação (valores do
+ambiente, formatos de token: Anthropic, OpenAI, GitHub, Slack, Google, Stripe, JWT, npm, PEM, senha
+em URL do <code>.git/config</code>). Ler <code>.env*</code>, <code>*.pem</code>, <code>id_rsa*</code>, <code>.git/config</code>, <code>/proc/*/environ</code>,
+<code>~/.ssh</code>, <code>auth.json</code> pede confirmação também no <code>auto</code> (o conteúdo iria pro provedor).</li><li><strong>Estado privado do Jazz:</strong> acesso direto detectado pelas ferramentas é bloqueado em todos os modos. Envio de arquivo sensível detectado pede confirmação nova inclusive no yolo.</li><li><strong>Outros caminhos protegidos</strong> (pedem confirmação em todo modo menos yolo): config do Claude,
+<code>~/.ssh</code>, <code>~/.aws</code>, arquivos de inicialização do shell, <code>~/.vimrc</code>, <code>~/.config/nvim</code>, <code>~/.tmux.conf</code>,
+<code>~/.cargo/config.toml</code>, <code>~/Library/LaunchAgents</code>, <code>/etc</code>, e no projeto <code>.git/config</code>, <code>.git/hooks</code>,
+<code>.mcp.json</code>, settings, <code>.envrc</code>, <code>.vscode/tasks.json</code>, <code>.gitmodules</code>, AGENTS.md/CLAUDE.md, <code>.jazz/skills</code>,
+<code>.jazz/commands</code> (o <code>/init</code> que cria AGENTS.md também pergunta).</li><li><strong>Provedores grátis podem registrar ou treinar com seu código</strong>: antes do primeiro pedido a um desses
+(Kilo/OpenRouter <code>:free</code>, Gemini grátis, Mistral Experiment, NVIDIA) o jazz mostra o aviso uma vez
+(<code>privacy_ack</code> na config); com <code>-p</code>, uma linha no stderr a cada execução até o <code>privacy_ack</code>.</li><li><strong>Rede além dos provedores</strong>: checagem diária de versão no GitHub (<code>JAZZ_NO_UPDATE_CHECK=1</code> desliga),
+catálogo do omni, DuckDuckGo pro <code>fetch</code> com busca, e os registros de pacote + OSV.dev do guardrail
+de dependências (<code>supply_chain: off</code> desliga). Sem telemetria.</li><li><strong>Atualização</strong>: <code>jazz update</code> só instala release com <code>manifest.txt</code> assinado (ed25519, versão +
+sha256 de cada binário), recusa versão mais velha ou diferente da anunciada e revalida
+redirecionamentos. O <code>install.sh</code> publicado verifica a assinatura com <code>minisign</code> ou OpenSSL 3
+(sem nenhum dos dois, só o sha256 e um aviso; <code>JAZZ_REQUIRE_SIG=1</code> transforma em erro).</li><li>Para repositório desconhecido: rode num container, em <code>ask</code>, e sem chaves pagas no ambiente.</li></ul>
+<h2 id="guardrails">Guardrails<a class="anchor" href="#guardrails" aria-label="link">#</a></h2>
+<div class="tbl"><table><thead><tr><th>Guardrail</th><th>O que faz</th><th>Config</th></tr></thead><tbody><tr><td>Pacotes (supply chain)</td><td><code>pip</code>/<code>uv</code>/<code>poetry add</code>, <code>npm</code>/<code>pnpm</code>/<code>yarn</code>/<code>bun add|install &lt;pkg&gt;</code>, <code>go get</code>, <code>cargo add</code>, <code>gem install</code>, <code>composer require</code>: cada pacote é conferido no registro (PyPI, npm, proxy.golang.org, crates.io, RubyGems, Packagist) e no OSV.dev. Pede confirmação (mesmo no <code>auto</code>) só quando há motivo real: o pacote <strong>não existe</strong> (nome inventado pelo modelo, slopsquatting), tem menos de 30 dias, a <strong>versão que será instalada</strong> está marcada como maliciosa (MAL-; o jazz resolve a versão do registro e pergunta ao OSV por ela, então <code>axios</code>/<code>chalk</code> atuais passam), tem vulnerabilidade HIGH/CRITICAL com correção disponível, ou o nome está a distância 1-2 de um nome mais popular <strong>e</strong> o registro diz que ele é novo (&lt; 90 dias) ou pouco usado. Nomes da lista popular nunca são sinalizados e pacotes já fixados no lockfile/<code>requirements</code> (<code>==</code>) são confiáveis. Vira só um aviso inline (uma vez, sem pergunta, também no <code>turbo</code>, registrado na auditoria): registro inalcançável ou lento (limite de 2 s na checagem de typosquat), avisos OSV de severidade menor ou sem correção, scripts de ciclo de vida de pacote fora da lista popular. Cache de 24 h em <code>dataDir()/supply-cache.json</code> (1 h para "não existe"). Depois da instalação, as mudanças em <code>package-lock.json</code>, <code>poetry.lock</code>, <code>uv.lock</code>, <code>go.sum</code> e <code>Cargo.lock</code> aparecem no resultado. <code>jazz deps audit</code> roda o mesmo sobre os manifestos.</td><td><code>supply_chain: on|off|strict</code> (strict = bloqueia typosquat só pelo nome, como na 0.7.2), <code>JAZZ_SUPPLY_CHAIN=off|strict</code></td></tr><tr><td>Prompt injection</td><td>Todo resultado de ferramenta (arquivo, bash, página, MCP) e as instruções do projeto são varridos atrás de texto dirigido ao agente: "ignore as instruções anteriores", "you are now", rótulos falsos <code>system:</code>/<code>assistant:</code>, tokens de chat, comentário HTML ou de código mandando o agente rodar algo, base64 com ordens, pedidos para ler <code>~/.ssh</code>/<code>auth.json</code> ou mandar segredos por <code>curl</code>. Achou: o conteúdo vai marcado <code>&lt;untrusted suspected_injection="…"&gt;</code>, as linhas com a instrução chegam ao modelo trocadas por um marcador, você vê um aviso e toda ação que muda algo pede confirmação no resto do turno, mesmo no <code>auto</code> — menos editar arquivos comuns do projeto (o arquivo marcado continua sendo alvo legítimo da tarefa; só o que a injeção pede — mandar dados, ler segredos, rodar payload — fica travado). Uma imagem lida (read/MCP) também arma a confirmação. README comum ("rode o comando abaixo") não dispara.</td><td><code>injection_guard: off|warn|strict</code> (padrão warn; strict vale até no yolo)</td></tr><tr><td>Sanitização</td><td>Antes de chegar ao modelo: remove caracteres invisíveis (zero-width, U+FEFF), controles bidi, caracteres de tag Unicode ("ASCII smuggling", o texto escondido é decodificado e mostrado), seletores de variação usados como portadores, escapes de terminal; marca letras cirílicas/gregas parecidas misturadas em palavra latina como <code>\u{0441}</code>; tira HTML escondido (<code>display:none</code>, <code>visibility:hidden</code>, <code>font-size:0</code>, branco no branco, <code>hidden</code>) de páginas e resultados MCP. O resultado diz "N caracteres invisíveis removidos". Texto colado no prompt também passa. Acentos e emoji (inclusive 👨‍👩‍👧 e ❤️) passam intactos.</td><td><code>sanitize: off|strip|strict</code> (padrão strip)</td></tr><tr><td>Baixar e executar</td><td><code>curl … | sh</code>, <code>bash &lt;(curl …)</code>, <code>curl -o x.sh &amp;&amp; sh x.sh</code>, <code>base64 -d | sh</code>, <code>python -c</code> com urllib + exec sempre pedem confirmação em auto/smart/ask (yolo continua yolo).</td><td>—</td></tr><tr><td>Jobs em segundo plano</td><td>No máximo 8 ao mesmo tempo.</td><td><code>max_jobs</code></td></tr><tr><td>Bloqueio que orienta</td><td>Todo bloqueio volta ao modelo em uma linha: o que foi bloqueado, por quê e "siga a tarefa sem isso, não tente contornar". 3 tentativas bloqueadas no mesmo alvo (arquivo, host, tipo de comando) ou 6 no turno encerram o turno com um relatório ("3 tentativas bloqueadas em X; parei para não gastar tempo. Motivo: …"), sem deixar o modelo dizer que deu certo.</td><td><code>block_ux: on|off</code>, <code>--block-ux</code></td></tr><tr><td>Cerca da pasta do projeto</td><td><code>read</code>/<code>write</code>/<code>edit</code>, caminhos no bash (inclusive <code>cd</code>) e o <code>task</code> ficam dentro da pasta onde o jazz começou (mais a raiz do git, se a pasta faz parte do repositório). Fora dela, só pastas do sistema (<code>/usr</code>, <code>/opt</code>, <code>/etc</code> …), caches de toolchain, temporários e os arquivos de spill/jobs/skills do jazz. Acesso direto detectado ao estado privado do Jazz é bloqueado em todos os modos, inclusive yolo; skills e saídas de jobs/spill mantêm suas exceções. A análise de comandos é heurística e não contém programas shell arbitrários sem sandbox. Para outros caminhos externos, interativo pergunta e <code>-p</code> recusa; aprovação permanente vale para o caminho exibido.</td><td><code>allow_outside_project</code>, <code>--allow-outside</code></td></tr></tbody></table></div></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/harness"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></span></a><a class="next" href="/docs/arquitetura"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></span></a></nav>
+  </main>
+</div>
+</body>
+</html>

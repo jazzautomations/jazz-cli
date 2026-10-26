@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jazz improve · jazz-cli docs</title>
+<meta name="description" content="O jazz guarda tudo o que faz: a sessão em árvore, o fluxo de eventos e o log de auditoria (observability.md, governance.md). jazz improve lê esses arquivos e transforma o que deu errado em lições c...">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/improve">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="jazz improve · jazz-cli docs">
+<meta property="og:description" content="O jazz guarda tudo o que faz: a sessão em árvore, o fluxo de eventos e o log de auditoria (observability.md, governance.md). jazz improve lê esses arquivos e transforma o que deu errado em lições c...">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/improve">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="jazz improve · jazz-cli docs" data-title-en="jazz improve · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+</li>
+<li><a href="/docs/improve" aria-current="page" class="cur"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#o-que-ele-aprende">O que ele aprende</a></li><li><a href="#onde-escreve">Onde escreve</a></li><li><a href="#comandos">Comandos</a></li><li><a href="#como-revisar-e-desfazer">Como revisar e desfazer</a></li><li><a href="#reaproveitar-o-que-deu-certo-da-última-vez">Reaproveitar o que deu certo ("da última vez")</a></li><li><a href="#cache-de-prompt">Cache de prompt</a></li><li><a href="#segurança">Segurança</a></li><li><a href="#limites-honestos">Limites (honestos)</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#o-que-ele-aprende">O que ele aprende</a></li><li><a href="#onde-escreve">Onde escreve</a></li><li><a href="#comandos">Comandos</a></li><li><a href="#como-revisar-e-desfazer">Como revisar e desfazer</a></li><li><a href="#reaproveitar-o-que-deu-certo-da-última-vez">Reaproveitar o que deu certo ("da última vez")</a></li><li><a href="#cache-de-prompt">Cache de prompt</a></li><li><a href="#segurança">Segurança</a></li><li><a href="#limites-honestos">Limites (honestos)</a></li></ul>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="jazz-improve-o-harness-aprende-com-as-próprias-execuções-com-segurança">jazz improve: o harness aprende com as próprias execuções (com segurança)<a class="anchor" href="#jazz-improve-o-harness-aprende-com-as-próprias-execuções-com-segurança" aria-label="link">#</a></h1>
+<p>O jazz guarda tudo o que faz: a sessão em árvore, o fluxo de eventos e o log de auditoria
+(<a href="/docs/observabilidade">observability.md</a>, <a href="/docs/governanca">governance.md</a>). <code>jazz improve</code> lê esses
+arquivos e transforma o que deu errado em <strong>lições curtas</strong>, que voltam no início das próximas
+sessões. É a parte segura do MetaHarness/Self-Harness
+(<a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/metaharness-self-improvement.md" rel="noopener">research/metaharness-self-improvement.md</a>): o jazz
+aprende texto revisável, <strong>nunca muda o próprio código</strong>, e o que mexeria no harness (regra de
+prompt, gatilho de skill, config) sai como relatório para um humano decidir.</p>
+<h2 id="o-que-ele-aprende">O que ele aprende<a class="anchor" href="#o-que-ele-aprende" aria-label="link">#</a></h2>
+<p>Primeiro uma extração determinística, sem modelo, sobre as últimas execuções:</p>
+<div class="tbl"><table><thead><tr><th>classe</th><th>sinal</th><th>escopo</th></tr></thead><tbody><tr><td><code>cmd-fixed</code></td><td>comando que não existe (127, <code>command not found</code>, módulo Python faltando) ou com opção inválida, e que depois funcionou de outra forma (<code>rg</code> → <code>grep</code>, <code>pytest</code> → <code>python3 -m unittest</code>, outras flags do mesmo programa)</td><td>projeto</td></tr><tr><td><code>tool-error</code></td><td>o mesmo erro de ferramenta ≥ 2× (assinatura com caminhos reduzidos e números mascarados): <code>edit</code> com argumentos inválidos, <code>write</code> recusado, orçamento de exploração esgotado, <code>old_string</code> que não bate, ambiente (<code>Permission denied</code>, porta em uso…)</td><td>global para erros do jazz, projeto para o ambiente</td></tr><tr><td><code>test-fixed</code></td><td>teste que falhou e passou depois, e os arquivos mudados no meio</td><td>projeto</td></tr><tr><td><code>guard</code> / <code>spiral</code></td><td>guarda que recusou a mesma coisa ≥ 2×; disjuntor de bloqueios</td><td>global</td></tr><tr><td><code>revert</code></td><td>o harness reverteu mudança num teste existente</td><td>projeto</td></tr><tr><td><code>cutoff</code></td><td>resposta cortada no limite de saída (<code>finish=length</code>), com o tamanho</td><td>global (modelo)</td></tr><tr><td><code>loop</code></td><td>execução que parou em laço, com a chamada repetida</td><td>projeto</td></tr><tr><td><code>until</code> / <code>quality</code></td><td><code>--until</code> falhando em várias rodadas; checagem de qualidade com problemas</td><td>projeto</td></tr><tr><td><code>timeout</code>, <code>rate-limit</code>, <code>self-revert</code></td><td>prazo estourado (e qual requisição estava em curso), HTTP 429 por modelo, edição desfeita na mesma execução</td><td>só no relatório: nada que o modelo possa fazer, ou ambíguo (uma prova de mutação também desfaz a edição)</td></tr></tbody></table></div>
+<p>Saída de comando de tarefa (o <code>ValueError</code> do bug que o modelo está caçando) não vira lição: para
+<code>bash</code>, só erros de ambiente contam. Texto que parece injeção (<code>injScan</code>) é descartado, segredos são
+redigidos.</p>
+<p>Depois, <strong>uma</strong> chamada sem ferramentas ao modelo barato (a mesma fila do classificador do modo
+smart: rápido e grátis primeiro) escreve até <strong>3 lições de uma linha</strong>, com a regra "acionável,
+específica deste projeto ou desta ferramenta, e que ainda não exista". O jazz valida o que volta:
+linha no formato, sessão citada que exista nos achados (senão usa a do achado mais parecido), sem
+cara de injeção, e não repetida. O <strong>escopo vem do achado, não do modelo</strong>: um achado global
+reescrito como "projeto" continua global (senão escaparia da revisão). Sem modelo (offline,
+<code>--no-model</code>, <code>improve.no_model</code>, erro) os melhores achados determinísticos viram as lições.</p>
+<p>Dedupe: texto normalizado igual (minúsculas, sem acento e pontuação) ou sobreposição de termos
+≥ 0,6 (<code>|A∩B| / min(|A|,|B|)</code> sobre as palavras do <code>pcTerms</code>, sem embeddings).</p>
+<h2 id="onde-escreve">Onde escreve<a class="anchor" href="#onde-escreve" aria-label="link">#</a></h2>
+<div class="tbl"><table><thead><tr><th>arquivo</th><th>o quê</th></tr></thead><tbody><tr><td><code>.jazz/lessons.md</code> (na raiz do repositório git, ou da pasta)</td><td>lições do projeto: markdown comum, compatível com AGENTS.md, versionável</td></tr><tr><td><code>~/.config/jazz-cli/lessons.md</code> (<code>$JAZZ_HOME/lessons.md</code>)</td><td>lições globais: ferramenta, modelos, provedores</td></tr><tr><td><code>~/.local/share/jazz-cli/improve/&lt;projeto&gt;.proposals.json</code></td><td>últimas propostas não aplicadas (o <code>--apply</code> usa estas, sem chamar o modelo de novo, por 24 h)</td></tr><tr><td><code>.jazz/improve-report.md</code></td><td>relatório do <code>--harness</code></td></tr><tr><td>log de auditoria</td><td>um registro <code>lesson.applied</code> por lição gravada (caminho, via, tag, texto, sessão, sha256)</td></tr></tbody></table></div>
+<p>Formato de <code>lessons.md</code>:</p>
+<pre class="code mono"><code># Lições do jazz
+
+Uma lição por linha: `- [tag] texto (sessão &lt;id&gt;)`. …
+
+- [comando] use `grep` em vez de `rg` aqui (`rg` falhou: command not found) (sessão 261020-080319-56df)
+- [teste] rode os testes com `python3 -m unittest` (sessão 261020-055950-e94b)
+
+## Histórico
+
+- 2026-10-20 · sessão 261020-080319-56df · auto · [comando] use `grep` em vez de `rg` aqui …</code></pre>
+<p>Só as linhas de lição (<code>- …</code> antes de <code>## Histórico</code>, até 40) entram no prompt; a prosa e o
+histórico não.</p>
+<h2 id="comandos">Comandos<a class="anchor" href="#comandos" aria-label="link">#</a></h2>
+<ul><li><code>jazz improve</code> — aprende com a última sessão desta pasta (<code>-n N</code> as N últimas, <code>-n 0</code> todas,
+<code>--session ID</code>, <code>--from PASTA</code> para sessões/resultados de outro lugar). Mostra os achados e as
+propostas com evidência e <strong>não grava nada</strong> (num terminal pergunta <code>aplicar? [s/N]</code>).</li><li><code>jazz improve --apply</code> — grava as propostas (projeto e global) com linha no histórico e registro
+na auditoria.</li><li><code>improve.auto: true</code> no config — ao fim de todo <code>jazz -p</code>, aprende com aquela execução e grava
+<strong>só lições de projeto</strong>, no máximo 3 por execução; as globais ficam como proposta
+(<code>jazz improve -r &lt;sessão&gt; --apply</code>). Padrão: desligado.</li><li><code>jazz improve --harness [--from PASTA]…</code> — agrega todas as execuções (sessões, eventos e a saída
+do <code>evals/v2/run.sh</code>: <code>summary.txt</code> + <code>&lt;tarefa&gt;.log</code>) num relatório: placar por tarefa, classes
+de falha com contagem e sessões, candidatas a regra de prompt, palavras e tipos de arquivo que
+teriam disparado uma skill, ajustes de config, e por modelo requisições, erros, 429, cortes,
+prazos e latência p50/p95. Rotulado <strong>"proposta — revisar antes de aplicar"</strong>; caminhos da home
+aparecem como <code>~</code>. <code>--out -</code> imprime em vez de gravar.</li><li><code>--lessons off</code> (ou <code>JAZZ_LESSONS=off</code>, <code>"lessons": "off"</code>) — não injeta lições nesta execução.</li></ul>
+<h2 id="como-revisar-e-desfazer">Como revisar e desfazer<a class="anchor" href="#como-revisar-e-desfazer" aria-label="link">#</a></h2>
+<p>As lições são texto comum: abra <code>.jazz/lessons.md</code> e apague a linha. O histórico diz de qual sessão
+cada uma veio (<code>jazz trace &lt;sessão&gt;</code> mostra a execução inteira); <code>jazz audit --kind lesson</code> lista
+toda gravação. Para comparar com e sem: rode a mesma tarefa com <code>--lessons off</code>.</p>
+<h2 id="reaproveitar-o-que-deu-certo-da-última-vez">Reaproveitar o que deu certo ("da última vez")<a class="anchor" href="#reaproveitar-o-que-deu-certo-da-última-vez" aria-label="link">#</a></h2>
+<p>O cache de planos (<code>plancache.go</code>) já guarda um modelo de toda execução verificada com ≥ 12 passos
+e reinjeta até 3 quando o pedido novo tem palavras em comum. Agora cada plano guarda também a
+<strong>classe da tarefa</strong> (tamanho e tipo do <code>bgClassify</code>, ex. <code>M/bugfix</code>), a **assinatura do
+repositório** (arquivos marcadores como <code>go.mod</code>/<code>package.json</code>, os tipos de arquivo da raiz, pasta
+de testes) e a sessão. Na <strong>primeira</strong> mensagem de uma sessão, se houver um plano verificado do
+mesmo projeto com a mesma classe e assinatura (e que a busca por palavras não trouxe), entra uma
+linha <code>da última vez (…, sessão X): "tarefa" — dica/abordagem; verificado com \</code>cmd``.</p>
+<h2 id="cache-de-prompt">Cache de prompt<a class="anchor" href="#cache-de-prompt" aria-label="link">#</a></h2>
+<ul><li>As lições entram <strong>uma vez</strong>, quando o prompt de sistema é montado no início da sessão, logo
+depois do bloco do AGENTS.md (pelo <code>acSteeringPrompt</code>), e nunca mudam no meio da sessão: uma
+lição gravada por outra execução só aparece na próxima sessão. Sessão retomada (<code>-r</code>, <code>-c</code>) usa o
+prompt com que nasceu.</li><li>O bloco depende só das linhas de lição (sem data, sem tarefa): duas sessões com as mesmas lições
+têm o mesmo bloco, byte a byte (teste <code>TestLessonsCacheStability</code>). Entre sessões o prefixo só
+muda quando uma lição muda.</li><li>A linha "da última vez" depende da tarefa, então <strong>não</strong> vai no prompt de sistema: vai na
+primeira mensagem do usuário (histórico só-acréscimo), como a nota de passagem do <code>-r</code>. Assim o
+prompt de sistema continua igual entre sessões com tarefas diferentes.</li></ul>
+<h2 id="segurança">Segurança<a class="anchor" href="#segurança" aria-label="link">#</a></h2>
+<p>Lições chegam ao modelo com peso de instrução de projeto, como o AGENTS.md, e são tratadas igual:
+<code>pfSafeRead</code> (nada de symlink para fora do projeto), segredos redigidos, texto invisível removido e
+o bloco marcado <code>&lt;untrusted suspected_injection=…&gt;</code> quando parece injeção. A cadeia de ataque
+"saída de ferramenta → lição → prompt" é cortada em três pontos: os achados levam só a linha de
+erro normalizada (≤ 120 caracteres) e são descartados se parecerem injeção; a resposta do modelo
+passa pelo mesmo filtro; e o <code>improve.auto</code> só grava escopo de projeto, ≤ 3 por execução, com
+histórico e auditoria. Nada aqui altera código, prompt de sistema, skills ou config do jazz.</p>
+<h2 id="limites-honestos">Limites (honestos)<a class="anchor" href="#limites-honestos" aria-label="link">#</a></h2>
+<ul><li>Os achados são heurísticos: um erro repetido de propósito (testar uma guarda) vira candidato; o
+modelo barato e o <code>--apply</code> são os filtros.</li><li><code>test-fixed</code> e <code>quality</code> costumam ser pouco acionáveis; aparecem como candidatos, raramente como
+lição.</li><li>Sessões antigas (antes da v0.6) não têm eventos nem <code>is_err</code>: o erro é deduzido do texto do
+resultado, e latência só aparece com eventos ou metadados de mensagem.</li><li>n = 1 por tarefa não mede melhora; o relatório dá contagens, não taxas.</li></ul></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/improve.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/observabilidade"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></span></a><a class="next" href="/docs/changelog"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></span></a></nav>
+  </main>
+</div>
+</body>
+</html>

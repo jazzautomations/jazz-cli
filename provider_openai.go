@@ -412,6 +412,7 @@ func (p *OpenAIProvider) chatStream(ctx context.Context, body map[string]any, fn
 			}
 			ae := &APIError{Status: code, Body: c.Error.Message}
 			ae.Daily = pvIsDaily(code, c.Error.Message)
+			pvMarkQuota(ae, time.Now())
 			apiErr = ae
 			return apiErr
 		}

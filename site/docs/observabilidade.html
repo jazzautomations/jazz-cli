@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observabilidade · jazz-cli docs</title>
+<meta name="description" content="Três arquivos por sessão, todos em ~/.local/share/jazz-cli/sessions/&lt;projeto&gt;/ (ou $JAZZ_HOME/data/sessions/...), modo 0600, só acrescentados (append-only):">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/observabilidade">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="Observabilidade · jazz-cli docs">
+<meta property="og:description" content="Três arquivos por sessão, todos em ~/.local/share/jazz-cli/sessions/&lt;projeto&gt;/ (ou $JAZZ_HOME/data/sessions/...), modo 0600, só acrescentados (append-only):">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/observabilidade">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="Observabilidade · jazz-cli docs" data-title-en="Observability · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade" aria-current="page" class="cur"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#nenhum-trabalho-perdido">Nenhum trabalho perdido</a></li><li><a href="#esquema-dos-eventos-ideventsjsonl-v--1">Esquema dos eventos (&lt;id&gt;.events.jsonl, v = 1)</a></li><li><a href="#sessão-em-árvore-idjsonl-formato-v2">Sessão em árvore (&lt;id&gt;.jsonl, formato v2)</a></li><li><a href="#comandos">Comandos</a></li><li><a href="#exportação-otlp-opcional-desligada-por-padrão">Exportação OTLP (opcional, desligada por padrão)</a></li><li><a href="#custo-medido">Custo (medido)</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#nenhum-trabalho-perdido">Nenhum trabalho perdido</a></li><li><a href="#esquema-dos-eventos-ideventsjsonl-v--1">Esquema dos eventos (&lt;id&gt;.events.jsonl, v = 1)</a></li><li><a href="#sessão-em-árvore-idjsonl-formato-v2">Sessão em árvore (&lt;id&gt;.jsonl, formato v2)</a></li><li><a href="#comandos">Comandos</a></li><li><a href="#exportação-otlp-opcional-desligada-por-padrão">Exportação OTLP (opcional, desligada por padrão)</a></li><li><a href="#custo-medido">Custo (medido)</a></li></ul>
+</li>
+<li><a href="/docs/improve"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="observabilidade-e-trabalho-que-não-se-perde">Observabilidade e trabalho que não se perde<a class="anchor" href="#observabilidade-e-trabalho-que-não-se-perde" aria-label="link">#</a></h1>
+<p>Três arquivos por sessão, todos em <code>~/.local/share/jazz-cli/sessions/&lt;projeto&gt;/</code> (ou
+<code>$JAZZ_HOME/data/sessions/...</code>), modo 0600, só acrescentados (append-only):</p>
+<div class="tbl"><table><thead><tr><th>Arquivo</th><th>O que é</th><th>Quem lê</th></tr></thead><tbody><tr><td><code>&lt;id&gt;.jsonl</code></td><td>a sessão: árvore de entradas (mensagens, compactações, rewinds, ramos) + registros write-ahead das ferramentas + registro de fim</td><td><code>-c</code>, <code>-r</code>, <code>--resume-last-in</code>, <code>/tree</code>, <code>/resume</code></td></tr><tr><td><code>&lt;id&gt;.events.jsonl</code></td><td>fluxo de eventos: requisições, ferramentas, guardas, checkpoints, orçamento, skills, erros</td><td><code>jazz trace</code>, <code>jazz sessions</code>, <code>--metrics-out</code></td></tr><tr><td><code>&lt;id&gt;.handoff.md</code></td><td>nota de passagem de uma execução que não terminou</td><td>você, e o <code>-r</code> (a nota vai na próxima mensagem)</td></tr></tbody></table></div>
+<p>O log de auditoria (global, com cadeia de hash) é outro arquivo: veja <a href="/docs/governanca">governance.md</a>.</p>
+<h2 id="nenhum-trabalho-perdido">Nenhum trabalho perdido<a class="anchor" href="#nenhum-trabalho-perdido" aria-label="link">#</a></h2>
+<ol><li><strong>Persistir antes de enviar</strong> (regra do pi): a mensagem do usuário é gravada antes da requisição;
+a resposta do modelo (texto, raciocínio e chamadas de ferramenta, mesmo cortadas) é gravada antes de
+qualquer ferramenta rodar.</li><li><strong>Write-ahead das ferramentas</strong>: <code>tool_start</code> (id, nome, sha dos argumentos, passo) antes de rodar;
+<code>tool_result</code> (resultado até 64 KB, redigido) no instante em que a ferramenta volta, antes de
+qualquer nota do harness. Se o jazz morre entre a ferramenta e o histórico, o <code>-r</code> recupera o
+resultado do write-ahead em vez de <code>TOOL_OUTCOME_UNKNOWN</code>.</li><li><strong>Resposta cortada no meio do stream</strong> (prazo, Ctrl+C): o texto e as chamadas de ferramenta que
+já chegaram ficam no histórico como texto (<code>[tool call write cut while being written...]</code>), nunca
+como chamada executável.</li><li><strong>Fim anormal</strong> (<code>--timeout</code>, erro de provedor, 429 esgotado, Ctrl+C/SIGTERM, crash, disjuntor
+de bloqueios, limite de orçamento/passos, laço, <code>--until</code>/qualidade falhando): checkpoint do
+shadow-git com rastreio, nota de passagem (<code>&lt;id&gt;.handoff.md</code>: tarefa, arquivos mudados, últimas
+ferramentas e como terminaram, última verificação, todos abertos, próximo passo), registro <code>end</code>
+na sessão e fsync de sessão, eventos e auditoria. O id da sessão e o comando de retomada saem no
+stderr e no resultado JSON (<code>outcome</code>, <code>checkpoint</code>, <code>handoff</code>, <code>resume</code>).</li><li><strong>Retomar</strong>: <code>jazz -p -r &lt;id&gt;</code> (ou <code>-c</code>, ou <code>--resume-last-in &lt;pasta&gt;</code>) recarrega a conversa
+inteira e põe a nota de passagem na frente da próxima mensagem do usuário (nunca no prompt de
+sistema: o cache continua valendo). Sem prompt, o jazz continua sozinho de onde parou.
+<code>-r &lt;id&gt;@&lt;entrada&gt;</code> retoma num ponto qualquer da árvore (novo ramo).</li><li><strong>Prazo com folga</strong> (<code>-p --timeout</code>): a <code>timeout-grace</code> (padrão 10% do prazo, entre 5 s e 60 s;
+<code>--timeout-grace D</code>) antes do fim, nenhuma requisição nova começa; a ferramenta em curso termina,
+as seguintes do mesmo lote não começam (<code>TOOL_NOT_STARTED</code>), e a execução termina como
+incompleta (saída 124) com checkpoint e nota. Uma requisição que já estava em curso continua até o
+prazo duro; se ele chegar, o que já tinha sido transmitido fica salvo (item 3).</li></ol>
+<p>Códigos de saída do <code>-p</code>: <code>0</code> concluída · <code>5</code> negada · qualquer outro = incompleta (retomável).
+O detalhe continua no código (124 prazo, 1 erro, 3 passos, 4 laço, 6 cortada, 130 interrompida…).</p>
+<p>Para runners de avaliação (pass@2): a segunda tentativa roda <code>jazz -p --resume-last-in &lt;pasta-da-tarefa&gt;</code>
+e continua a primeira em vez de recomeçar; <code>--metrics-out arq.json</code> grava os totais sem precisar ler logs.</p>
+<h2 id="esquema-dos-eventos-ideventsjsonl-v--1">Esquema dos eventos (<code>&lt;id&gt;.events.jsonl</code>, <code>v</code> = 1)<a class="anchor" href="#esquema-dos-eventos-ideventsjsonl-v--1" aria-label="link">#</a></h2>
+<p>Cada linha é um objeto JSON. Campos sempre presentes: <code>v</code> (versão do esquema), <code>seq</code> (sequência na
+sessão, continua entre execuções), <code>ts</code> (UTC, ms), <code>sid</code> (sessão), <code>kind</code>. Opcionais em todos:
+<code>step</code> (requisição do turno), <code>sub</code> (true = subagente), <code>sub_id</code> (qual subagente: <code>sub1</code>, <code>sub2</code>…; os
+filhos de um fan-out paralelo escrevem no mesmo arquivo do pai, intercalados). Um <code>kind</code> novo pode aparecer; campos novos
+podem ser acrescentados; mudar o sentido de um campo sobe <code>v</code>. Pensado para virar OTLP depois:
+<code>sid</code> = trace, <code>turn.*</code> / <code>request.*</code> / <code>tool.*</code> = spans (início/fim pareados por <code>step</code> e <code>id</code>),
+o resto = eventos de span.</p>
+<div class="tbl"><table><thead><tr><th>kind</th><th>campos</th></tr></thead><tbody><tr><td><code>session.start</code></td><td><code>source</code> (startup/resume/fork), <code>model</code>, <code>cwd</code>, <code>version</code>, <code>pid</code>, <code>os</code>, <code>arch</code>, <code>leaf</code></td></tr><tr><td><code>turn.start</code></td><td><code>prompt_sha</code> (sha256 do pedido), <code>input_bytes</code>, <code>model</code>, <code>msgs</code> (tamanho do histórico)</td></tr><tr><td><code>turn.end</code></td><td><code>stop</code> (StopReason), <code>steps</code>, <code>tools</code>, <code>dur_ms</code>, <code>in</code>, <code>out</code>, <code>cache_read</code>, <code>cache_write</code>, <code>cost</code>, <code>ctx_tokens</code></td></tr><tr><td><code>request.start</code></td><td><code>model</code>, <code>provider</code>, <code>cand</code> (índice na cadeia de fallback), <code>attempt</code>, <code>msgs</code>, <code>est_tokens</code></td></tr><tr><td><code>request.end</code></td><td><code>model</code>, <code>provider</code>, <code>cand</code>, <code>attempt</code>, <code>latency_ms</code>, <code>in</code>, <code>out</code>, <code>cache_read</code>, <code>cache_write</code>, <code>cost</code>, <code>finish</code> (finish_reason), <code>tool_calls</code>, <code>text_bytes</code>; com erro: <code>error</code>, <code>status</code>, <code>daily</code>, <code>payload</code> (300 chars, redigido), <code>retry_after_ms</code></td></tr><tr><td><code>tool.start</code></td><td><code>id</code>, <code>name</code>, <code>args_sha</code>, <code>args_bytes</code>, <code>lane</code> (<code>par</code> = já rodando em paralelo com as vizinhas, <code>seq</code> = vai rodar em ordem; <code>partools.go</code>)</td></tr><tr><td><code>tool.end</code></td><td><code>id</code>, <code>name</code>, <code>dur_ms</code>, <code>bytes</code>, <code>is_err</code>, <code>ran</code>, <code>lane</code> (<code>par</code> = o resultado veio da execução paralela; <code>seq</code> = rodou em ordem, inclusive quando a paralela foi descartada), <code>denied</code>?, <code>blocked</code>?, <code>truncated</code>? (saída longa foi para arquivo)</td></tr><tr><td><code>guard</code> (decisão)</td><td><code>guard</code> (permission/hook/honest/budget/cancel), <code>tool</code>, <code>target</code>, <code>reason</code>, <code>outcome</code> (refused/denied)</td></tr><tr><td><code>guard</code> (diagnóstico)</td><td><code>src</code> (guard/injection/supply/smart/blocked) + os campos do módulo</td></tr><tr><td><code>approval</code></td><td><code>tool</code>, <code>target</code>, <code>reason</code>, <code>answer</code> (allow/allow_always/deny)</td></tr><tr><td><code>checkpoint</code></td><td><code>tree</code>, <code>commit</code>, <code>reason</code> (turn-start/step/abnormal-end:&lt;status&gt;), <code>changed</code>, <code>error</code>?</td></tr><tr><td><code>deadline.soft</code></td><td><code>why</code></td></tr><tr><td><code>run.end</code></td><td><code>status</code>, <code>outcome</code> (completed/incomplete/denied), <code>exit</code>, <code>dur_ms</code>, <code>in</code>, <code>out</code>, <code>cache_read</code>, <code>cost</code>, <code>model</code>, <code>checkpoint</code>?, <code>handoff</code>?, <code>error</code>?</td></tr><tr><td><code>budget</code></td><td><code>src</code>, tamanho/tipo da tarefa, passos, exploração, recusas de reescrita/releitura</td></tr><tr><td><code>skill</code></td><td><code>at</code> (turn/tool), <code>pick</code>, <code>cands</code>, <code>phase</code></td></tr><tr><td><code>compact</code></td><td><code>cut</code>, <code>msgs</code>, <code>model</code></td></tr><tr><td><code>recover</code></td><td><code>why</code>, <code>mode</code>, <code>discard</code>, <code>reverted</code>, <code>files</code>, <code>step</code>, <code>note_bytes</code></td></tr><tr><td><code>provider</code></td><td><code>src</code> (stall/netwait/sticky) e detalhes (ref, prazo do primeiro byte, volta)</td></tr><tr><td><code>subagent.start</code> / <code>subagent.end</code></td><td><code>sub_id</code>, <code>work</code> (worker que edita), <code>files</code>, <code>session</code> (sessão do filho) / <code>sub_id</code>, <code>stop</code>, <code>dur_ms</code>, <code>in</code>, <code>out</code>, <code>cost</code>, <code>is_err</code></td></tr><tr><td><code>repair</code>, <code>nudge</code>, <code>quality</code>, <code>until</code>, <code>review</code>, <code>plan_cache</code>, <code>fastpath</code></td><td>diagnóstico do módulo (<code>src</code> + campos)</td></tr></tbody></table></div>
+<p>Os eventos diagnósticos são cópias pequenas do log de debug (<code>dbg</code>), feitas sempre, mesmo sem
+<code>--debug</code> (corpo de requisição e SSE continuam só no log de debug).</p>
+<h2 id="sessão-em-árvore-idjsonl-formato-v2">Sessão em árvore (<code>&lt;id&gt;.jsonl</code>, formato v2)<a class="anchor" href="#sessão-em-árvore-idjsonl-formato-v2" aria-label="link">#</a></h2>
+<p>Toda entrada tem <code>id</code> (8 hex) e <code>parentId</code> (vazio na raiz), além de <code>ts</code> (ms). A posição atual é a
+última entrada; <code>/rewind</code>, <code>/tree &lt;id&gt;</code> e <code>-r &lt;id&gt;@&lt;entrada&gt;</code> movem a posição e a próxima mensagem
+abre um ramo — os ramos abandonados ficam no arquivo. Entradas: <code>meta</code> (<code>v</code>:2), <code>msg</code> (assistente com
+<code>model</code>, <code>provider</code>, <code>usage</code>, <code>stop</code>, <code>latency_ms</code>), <code>compact</code>, <code>model</code>, <code>rewind</code>, <code>goal</code>, <code>recover</code>,
+<code>branch</code> (<code>target</code>), <code>tool_start</code>, <code>tool_result</code>, <code>end</code> (<code>status</code>, <code>outcome</code>, <code>checkpoint</code>,
+<code>handoff</code>, <code>note</code>). Cada subagente (<code>task</code>) tem a sua sessão em <code>&lt;id&gt;.sub/&lt;id&gt;.&lt;sub&gt;-&lt;rand&gt;.jsonl</code>: o <code>meta</code> traz <code>parent</code>
+(a sessão do pai), <code>parent_entry</code> (a entrada do pai de onde o filho saiu) e <code>sub</code>; termina com <code>end</code>. Não
+é um <code>.jsonl</code> da pasta, então <code>-c</code>, <code>/resume</code> e <code>jazz sessions</code> não a listam; é onde fica o trabalho
+parcial de um filho cancelado. Arquivos antigos (sem <code>id</code>) são migrados na leitura: cada entrada vira filha da
+linha anterior, com o mesmo resultado de antes. Detalhes e comparação com o pi em
+<a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/pi-sessions.md" rel="noopener">research/pi-sessions.md</a>.</p>
+<h2 id="comandos">Comandos<a class="anchor" href="#comandos" aria-label="link">#</a></h2>
+<ul><li><code>jazz trace [id] [--json]</code>: linha do tempo em português com tempos relativos, duração de cada
+requisição e ferramenta, bloqueios, checkpoints, e totais (requisições, tokens, custo, ferramentas,
+tempo ativo). <code>--json</code> despeja o arquivo de eventos cru.</li><li><code>jazz sessions [--json] [-n N | --all]</code>: sessões desta pasta com situação (concluída/incompleta/
+negada/aberta), status, tokens, custo, tempo ativo e o pedido.</li><li><code>jazz -p ... --metrics-out arq.json</code>: os mesmos totais (<code>obSummary</code>) de uma execução headless.</li><li><code>jazz changes &lt;arquivo&gt;</code> (ou <code>jazz blame</code>): quem mudou o arquivo (veja governance.md).</li><li><code>/tree</code> (interativo): a árvore da sessão; <code>/tree &lt;id&gt;</code> continua daquele ponto.</li></ul>
+<h2 id="exportação-otlp-opcional-desligada-por-padrão">Exportação OTLP (opcional, desligada por padrão)<a class="anchor" href="#exportação-otlp-opcional-desligada-por-padrão" aria-label="link">#</a></h2>
+<p>O mesmo fluxo de eventos pode ser enviado a um coletor OpenTelemetry por OTLP/HTTP <strong>JSON</strong> (sem
+protobuf, sem dependência nova). Código em <code>otlp.go</code>.</p>
+<pre class="code mono"><code>jazz -p "..." --otlp-endpoint http://localhost:4318</code></pre>
+<p>ou em <code>config.json</code>:</p>
+<pre class="code mono"><code>{ "otlp": { "endpoint": "http://localhost:4318",
+            "headers": { "Authorization": "Bearer SEU_TOKEN" },
+            "metrics": true, "batch_size": 64, "flush_ms": 2000, "queue_size": 4096 } }</code></pre>
+<p>O flag vence o config. <code>JAZZ_OTLP_HEADERS="K=V,K2=V2"</code> acrescenta cabeçalhos sem pôr o token no
+arquivo. O endpoint é a base (<code>/v1/traces</code> e <code>/v1/metrics</code> são acrescentados).</p>
+<p><strong>Traces</strong> (<code>POST &lt;endpoint&gt;/v1/traces</code>): a sessão é o trace (<code>traceId</code> = sha256 do <code>sid</code>).</p>
+<div class="tbl"><table><thead><tr><th>span</th><th>de onde vem</th><th>atributos principais</th></tr></thead><tbody><tr><td><code>session</code></td><td><code>session.start</code> até <code>run.end</code> / fim do processo</td><td>modelo, <code>source</code>, resultado da execução</td></tr><tr><td><code>turn</code></td><td><code>turn.start</code>/<code>turn.end</code></td><td>tokens, custo, passos, <code>stop</code></td></tr><tr><td><code>request &lt;modelo&gt;</code> (client)</td><td><code>request.end</code></td><td><code>gen_ai.request.model</code>, <code>gen_ai.system</code>, <code>gen_ai.usage.input_tokens/output_tokens</code>, <code>jazz.tokens.cache_read/cache_write</code>, <code>jazz.latency_ms</code>, <code>gen_ai.response.finish_reasons</code>, <code>jazz.cost</code>; erro vira status 2</td></tr><tr><td><code>tool &lt;nome&gt;</code></td><td><code>tool.start</code>/<code>tool.end</code></td><td><code>jazz.tool.name/id/args_sha/args_bytes/bytes/truncated/is_error/denied/blocked</code></td></tr><tr><td><code>subagent</code></td><td>turno com <code>sub:true</code>, filho da ferramenta que o lançou</td><td>igual a <code>turn</code>; seus requests e tools ficam dentro dele</td></tr></tbody></table></div>
+<p>Decisões de guarda (<code>guard</code>), aprovações, checkpoints, compactações, recuperações e avisos de prazo
+viram <strong>eventos de span</strong> (<code>guard.permission</code>, <code>guard.honest</code>, <code>approval</code>...) na ferramenta em curso com
+o mesmo nome, ou no turno. Só vai o que já está no fluxo de eventos (hashes e tamanhos, nunca o
+texto do pedido nem o conteúdo de arquivos); todo atributo texto passa por <code>redactSecrets</code>.</p>
+<p><strong>Métricas</strong> (<code>POST &lt;endpoint&gt;/v1/metrics</code>, temporalidade delta, desligue com <code>"metrics": false</code>):
+<code>jazz.tokens</code> (atributos <code>type</code> = input/output/cache_read/cache_write, <code>model</code>), <code>jazz.cost</code> (USD),
+<code>jazz.requests</code> (<code>model</code>, <code>status</code>), <code>jazz.tool.calls</code> (<code>name</code>, <code>status</code>) e os histogramas
+<code>jazz.request.duration</code> e <code>jazz.tool.duration</code> (ms; limites 50, 100, 250, 500, 1000, 2500, 5000, 10000,
+30000, 60000, 120000).</p>
+<p><strong>Nunca atrapalha o agente</strong>: <code>emit</code> só faz um envio não bloqueante a um canal (fila de
+<code>queue_size</code>); um worker junta em lotes de <code>batch_size</code> spans (ou a cada <code>flush_ms</code>) e posta com prazo de
+5 s. Fila cheia ou endpoint fora: o lote é descartado e contado, e sai <strong>uma</strong> linha de aviso no stderr
+(<code>jazz: otlp: não consegui exportar para ...</code>), sem repetir. Não há reenvio: o arquivo
+<code>&lt;id&gt;.events.jsonl</code> continua sendo a fonte completa. No fim da execução (<code>Agent.Close</code>) o que sobrou é
+enviado, com no máximo 3 s de espera.</p>
+<h3 id="apontar-para-um-coletor-local-sem-instalar-nada-aqui">Apontar para um coletor local (sem instalar nada aqui)<a class="anchor" href="#apontar-para-um-coletor-local-sem-instalar-nada-aqui" aria-label="link">#</a></h3>
+<p>Qualquer receptor OTLP/HTTP serve. Duas opções via Docker, na máquina que você quiser:</p>
+<pre class="code mono"><code># Jaeger all-in-one: UI em http://localhost:16686, OTLP/HTTP em :4318
+docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
+
+# ou um otel-collector que só imprime o que recebe (config mínima)
+cat &gt; otel.yaml &lt;&lt;'EOF'
+receivers: { otlp: { protocols: { http: { endpoint: 0.0.0.0:4318 } } } }
+exporters: { debug: { verbosity: detailed } }
+service:
+  pipelines:
+    traces:  { receivers: [otlp], exporters: [debug] }
+    metrics: { receivers: [otlp], exporters: [debug] }
+EOF
+docker run --rm -p 4318:4318 -v $PWD/otel.yaml:/etc/otelcol/config.yaml otel/opentelemetry-collector:latest
+
+# depois
+jazz -p "rode os testes" --otlp-endpoint http://localhost:4318</code></pre>
+<p>Se o receptor rejeitar métricas (o Jaeger é só de traces; não testado aqui), vira só o aviso único; use
+<code>"metrics": false</code> para evitar. Para uma máquina remota, faça um túnel (<code>ssh -L 4318:localhost:4318 host</code>) em vez de abrir a porta.</p>
+<h2 id="custo-medido">Custo (medido)<a class="anchor" href="#custo-medido" aria-label="link">#</a></h2>
+<p><code>go test -bench 'BenchmarkObsEmit|BenchmarkAuditRec' -benchtime 2s</code> num Apple M4 (darwin/arm64):</p>
+<div class="tbl"><table><thead><tr><th>operação</th><th>tempo</th><th>taxa</th><th>alocação</th></tr></thead><tbody><tr><td>1 evento (<code>tool.end</code>)</td><td>2,8 µs</td><td>~355 mil/s</td><td>1,3 KB, 39 allocs</td></tr><tr><td>1 registro de auditoria (lock + leitura da cauda + hash + escrita)</td><td>66 µs</td><td>~15 mil/s</td><td>15,6 KB, 73 allocs</td></tr></tbody></table></div>
+<p>Tamanho medido numa execução real (12 requisições, 15 ferramentas): 81 eventos, ~250 B cada (20 KB),
+37 registros de auditoria, ~530 B cada. Por chamada de ferramenta: 2 eventos e até 3 registros de
+auditoria, mais um checkpoint (<code>git write-tree</code>) quando o passo mudou arquivos. Nenhum fsync no
+caminho normal: as linhas vão direto ao kernel (sem buffer em espaço de usuário), então um crash do
+jazz não perde nada; fsync só no fim anormal. No Dell (i686, disco lento) os números não foram
+medidos; estimando 20–40× mais lento, fica em ~10 mil eventos/s e ~400 registros de auditoria/s,
+desprezível perto de uma requisição ao modelo (segundos). O que pode pesar no Dell é o checkpoint por
+passo em projeto grande: ele já se desliga sozinho acima de 20 mil arquivos; <code>JAZZ_CHECKPOINTS=0</code>
+desliga no <code>-p</code>.</p></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/observability.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/ux"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></span></a><a class="next" href="/docs/improve"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></span></a></nav>
+  </main>
+</div>
+</body>
+</html>

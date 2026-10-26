@@ -9,10 +9,12 @@ nesta pasta é exatamente o que vai para o ar.
 | `styles.css` | estilos (paleta Nord, tema escuro por padrão, claro no botão) |
 | `boot.js` | roda antes da pintura: escolhe idioma e tema sem piscar |
 | `app.js` | botões de idioma e tema, abas de instalação, copiar, o terminal que "digita" (respeita `prefers-reduced-motion`; sem JS a sessão aparece estática) |
+| `docs/` | documentação: HTML gerado (versionado) por `_tools/build_docs.py` a partir de `README.md`, `README.en.md`, `SECURITY.md`, `CHANGELOG.md` e `docs/*.md`; `docs.css`/`docs.js` são escritos à mão; diagramas Mermaid vêm do cdnjs (CSP própria em `/docs`) |
 | `404.html` | página de erro |
 | `assets/` | `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`, `og.png` (1200×630) e `og.svg` |
 | `vercel.json` | URLs limpas e cabeçalhos de segurança (CSP sem script inline, nosniff, Referrer-Policy, X-Frame-Options, HSTS) |
 | `robots.txt`, `sitemap.xml` | indexação |
+| `_tools/build_docs.py` | regera `docs/*.html`, `docs/search.json` e as URLs do `sitemap.xml` (`python3 site/_tools/build_docs.py`; `--check` só confere links). Rode depois de mudar qualquer Markdown de origem |
 | `_tools/make_assets.py` | regera os PNGs com Pillow (`python3 _tools/make_assets.py`; usa as fontes Menlo/Helvetica Neue do macOS) |
 
 `README.md` e `_tools/` ficam fora do deploy (`.vercelignore`).

@@ -815,6 +815,8 @@ modelo pago (`never`, `emergency` (padrão) ou `always`) e `omni.no_training` de
 provedores cujo plano grátis treina com seus prompts. Os apelidos `omni/coder`,
 `omni/smart`, `omni/fast`, `omni/free` e `omni/long` escolhem pela categoria
 (`-m omni/coder`). `/omni` mostra a ordem de tentativa atual.
+Para juntar todos os planos grátis (e o que fazer quando a cota do kilo acaba), veja
+[docs/FREE-AI.md](docs/FREE-AI.md); `jazz omni status` mostra quem está pronto e quando cada um volta.
 
 ## Configuração
 

@@ -135,6 +135,7 @@ type APIError struct {
 	Body       string
 	RetryAfter time.Duration // from Retry-After / X-RateLimit-Reset when present
 	Daily      bool          // provider says the daily/free quota is exhausted
+	Quota      bool          // 429 that says the free quota/promotion is used up (quota429.go); implies Daily
 }
 
 func (e *APIError) Error() string {

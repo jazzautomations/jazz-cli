@@ -42,6 +42,8 @@ type ProviderConf struct {
 	AccountEnv string   `json:"account_env,omitempty"` // env var holding the account id
 	Local      bool     `json:"local,omitempty"`       // local/LAN server: HasCreds probes reachability (1.5 s, cached)
 	Title      string   `json:"title,omitempty"`       // display name for the wizard/status
+
+	FreeLimits *FreeLimits `json:"free_limits,omitempty"` // documented free-tier limits with source and date (provider_free.go); metadata only
 }
 
 // ModelConf overrides per model, keyed by the full ref "provider/model".
@@ -491,6 +493,9 @@ func pvFillProvider(u, d *ProviderConf) {
 	}
 	if u.Title == "" {
 		u.Title = d.Title
+	}
+	if u.FreeLimits == nil {
+		u.FreeLimits = d.FreeLimits
 	}
 }
 

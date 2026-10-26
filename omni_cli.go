@@ -38,6 +38,9 @@ func pfOmniStatus(cfg *Config, model string) string {
 		// per-provider state and quota from the limiter (providers' omni.go)
 		b.WriteString(FormatOmniStatus(OmniStatus(cfg)))
 	}
+	if rows := OmniProviderStatus(cfg); len(rows) > 0 {
+		b.WriteString(FormatProviderStatus(cfg, rows))
+	}
 	b.WriteString("ordem de tentativa agora:\n")
 	for i, c := range cfg.Candidates(model) {
 		mark := ""
@@ -117,6 +120,13 @@ func cmdOmniSetup(cfg *Config, w io.Writer) {
 		fmt.Fprintf(w, "%s %-11s %s\n", mark, p, cfg.Providers[p].DefaultModel)
 	}
 	pfOmniSetupNext(cfg, w)
+	omniSetupAsk(cfg, w)
+	have = have[:0]
+	for _, p := range cfg.ProviderNames() {
+		if cfg.HasCreds(p) {
+			have = append(have, p)
+		}
+	}
 	if len(have) == 0 {
 		fmt.Fprintln(w, "  depois rode jazz omni setup de novo.")
 		return

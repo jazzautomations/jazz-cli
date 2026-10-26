@@ -420,6 +420,10 @@ func main() {
 			cmdProvider(cfg, rest[1:])
 			return
 		case "omni":
+			if len(rest) > 2 && rest[1] == "setup" && (rest[2] == "--list" || rest[2] == "list") {
+				omniSetupList(cfg, os.Stdout)
+				return
+			}
 			if len(rest) > 1 && rest[1] == "setup" {
 				cmdOmniSetup(cfg, os.Stdout)
 				return

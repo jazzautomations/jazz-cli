@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="pt-BR" data-lang="pt" data-theme="dark" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog · jazz-cli docs</title>
+<meta name="description" content="Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#242933">
+<link rel="canonical" href="https://jazz-cli.jazzautomations.com.br/docs/changelog">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="jazz-cli docs">
+<meta property="og:title" content="Changelog · jazz-cli docs">
+<meta property="og:description" content="Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.">
+<meta property="og:url" content="https://jazz-cli.jazzautomations.com.br/docs/changelog">
+<meta property="og:image" content="https://jazz-cli.jazzautomations.com.br/assets/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/docs/docs.css">
+<script src="/boot.js"></script>
+<script src="/docs/docs.js" defer></script>
+</head>
+<body data-title-pt="Changelog · jazz-cli docs" data-title-en="Changelog · jazz-cli docs">
+<a class="skip" href="#main"><span data-l="pt">Pular para o conteúdo</span><span data-l="en" lang="en">Skip to content</span></a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" aria-label="jazz-cli">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" class="bm-bg"/><path d="M15 21l11 11-11 11" class="bm-chev"/><circle cx="42" cy="15.5" r="3.6" class="bm-dot"/><path d="M42 24v19.5a8 8 0 0 1-8 8h-2.5" class="bm-j"/></svg>
+      <span class="brand-name">jazz-cli</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/"><span data-l="pt">Início</span><span data-l="en" lang="en">Home</span></a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+    </nav>
+    <div class="header-tools">
+      <button class="tool-btn lang-btn" type="button" id="lang-toggle" aria-label="Mudar idioma para inglês / Switch language">
+        <span class="lang-opt" data-opt="pt">PT</span><span class="lang-sep" aria-hidden="true">/</span><span class="lang-opt" data-opt="en">EN</span>
+      </button>
+      <button class="tool-btn icon-btn" type="button" id="theme-toggle" aria-label="Alternar tema claro/escuro" aria-pressed="false">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="tool-btn icon-btn" href="https://github.com/jazzautomations/jazz-cli" aria-label="jazz-cli no GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="i-fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+<div class="wrap docs-layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="side-toggle" type="button" id="side-toggle" aria-expanded="false" aria-controls="side-body"><span data-l="pt">Menu da documentação</span><span data-l="en" lang="en">Docs menu</span></button>
+    <div class="side-body" id="side-body">
+<div class="search" role="search">
+  <label class="sr" for="doc-search"><span data-l="pt">Buscar na documentação</span><span data-l="en" lang="en">Search the docs</span></label>
+  <input id="doc-search" type="search" autocomplete="off" spellcheck="false" data-ph-pt="Buscar títulos…  ( / )" data-ph-en="Search headings…  ( / )" aria-controls="search-results" aria-expanded="false">
+  <ul id="search-results" class="results" hidden></ul>
+  <p class="sr" id="search-status" role="status" aria-live="polite"></p>
+</div>
+<nav class="side-nav" id="side-nav" aria-label="Documentação">
+<a class="side-home" href="/docs"><span data-l="pt">Comece aqui</span><span data-l="en" lang="en">Start here</span></a>
+<p class="side-h mono"><span data-l="pt">Começar</span><span data-l="en" lang="en">Getting started</span></p><ul>
+<li><a href="/docs/sobre"><span data-l="pt">Visão geral</span><span data-l="en" lang="en">Overview</span></a>
+</li>
+<li><a href="/docs/instalacao"><span data-l="pt">Instalação</span><span data-l="en" lang="en">Install</span></a>
+</li>
+<li><a href="/docs/primeiro-uso"><span data-l="pt">Primeiro uso</span><span data-l="en" lang="en">First run</span></a>
+</li>
+<li><a href="/docs/modos"><span data-l="pt">Modos de permissão</span><span data-l="en" lang="en">Permission modes</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Uso</span><span data-l="en" lang="en">Usage</span></p><ul>
+<li><a href="/docs/headless"><span data-l="pt">Headless (-p)</span><span data-l="en" lang="en">Headless (-p)</span></a>
+</li>
+<li><a href="/docs/pronto-honesto"><span data-l="pt">“Pronto” honesto</span><span data-l="en" lang="en">Honest “done”</span></a>
+</li>
+<li><a href="/docs/comandos"><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></a>
+</li>
+<li><a href="/docs/scripts-offline"><span data-l="pt">Scripts, atalhos e modo offline</span><span data-l="en" lang="en">Scripts, shortcuts and offline mode</span></a>
+</li>
+<li><a href="/docs/perguntas-worktrees"><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></a>
+</li>
+<li><a href="/docs/omni"><span data-l="pt">Como o omni roteia</span><span data-l="en" lang="en">How omni routes</span></a>
+</li>
+<li><a href="/docs/configuracao"><span data-l="pt">Configuração, MCP, hooks e skills</span><span data-l="en" lang="en">Configuration, MCP, hooks and skills</span></a>
+</li>
+<li><a href="/docs/problemas"><span data-l="pt">Problemas comuns</span><span data-l="en" lang="en">Troubleshooting</span></a>
+</li>
+<li><a href="/docs/evals"><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Segurança</span><span data-l="en" lang="en">Security</span></p><ul>
+<li><a href="/docs/seguranca"><span data-l="pt">Segurança (resumo)</span><span data-l="en" lang="en">Security (summary)</span></a>
+</li>
+<li><a href="/docs/politica-seguranca"><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></a>
+</li>
+<li><a href="/docs/governanca"><span data-l="pt">Governança e auditoria</span><span data-l="en" lang="en">Governance and audit</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Por dentro</span><span data-l="en" lang="en">Under the hood</span></p><ul>
+<li><a href="/docs/harness"><span data-l="pt">Como o harness trabalha</span><span data-l="en" lang="en">How the harness works</span></a>
+</li>
+<li><a href="/docs/capacidades"><span data-l="pt">O que o jazz pode fazer na máquina</span><span data-l="en" lang="en">What jazz can do on your machine</span></a>
+</li>
+<li><a href="/docs/arquitetura"><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></a>
+</li>
+<li><a href="/docs/ux"><span data-l="pt">A experiência interativa</span><span data-l="en" lang="en">The interactive experience</span></a>
+</li>
+<li><a href="/docs/observabilidade"><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></a>
+</li>
+<li><a href="/docs/improve"><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></a>
+</li>
+</ul>
+<p class="side-h mono"><span data-l="pt">Projeto</span><span data-l="en" lang="en">Project</span></p><ul>
+<li><a href="/docs/changelog" aria-current="page" class="cur"><span data-l="pt">Changelog</span><span data-l="en" lang="en">Changelog</span></a>
+<ul class="side-sub" data-l="pt"><li><a href="#081">0.8.1</a></li><li><a href="#080--candidato-em-validação">0.8.0 — candidato em validação</a></li><li><a href="#não-publicado-branch-backdoor-guard">Não publicado (branch backdoor-guard)</a></li><li><a href="#não-publicado-branch-typos">Não publicado (branch typos)</a></li><li><a href="#não-publicado-branch-turbo">Não publicado (branch turbo)</a></li><li><a href="#070-2026-10-21-não-publicado-como-release-inclui-o-que-foi-para-a-060">0.7.0 (2026-10-21, não publicado como release; inclui o que foi para a 0.6.0)</a></li><li><a href="#050-2026-10-20">0.5.0 (2026-10-20)</a></li><li><a href="#043-2026-10-20">0.4.3 (2026-10-20)</a></li><li><a href="#042-2026-10-20">0.4.2 (2026-10-20)</a></li><li><a href="#041-2026-10-20">0.4.1 (2026-10-20)</a></li><li><a href="#040-2026-10-19">0.4.0 (2026-10-19)</a></li><li><a href="#030-2026-10-19">0.3.0 (2026-10-19)</a></li><li><a href="#020-2026-10-19">0.2.0 (2026-10-19)</a></li><li><a href="#010-2026-10-19">0.1.0 (2026-10-19)</a></li></ul>
+<ul class="side-sub" data-l="en" lang="en"><li><a href="#081">0.8.1</a></li><li><a href="#080--candidato-em-validação">0.8.0 — candidato em validação</a></li><li><a href="#não-publicado-branch-backdoor-guard">Não publicado (branch backdoor-guard)</a></li><li><a href="#não-publicado-branch-typos">Não publicado (branch typos)</a></li><li><a href="#não-publicado-branch-turbo">Não publicado (branch turbo)</a></li><li><a href="#070-2026-10-21-não-publicado-como-release-inclui-o-que-foi-para-a-060">0.7.0 (2026-10-21, não publicado como release; inclui o que foi para a 0.6.0)</a></li><li><a href="#050-2026-10-20">0.5.0 (2026-10-20)</a></li><li><a href="#043-2026-10-20">0.4.3 (2026-10-20)</a></li><li><a href="#042-2026-10-20">0.4.2 (2026-10-20)</a></li><li><a href="#041-2026-10-20">0.4.1 (2026-10-20)</a></li><li><a href="#040-2026-10-19">0.4.0 (2026-10-19)</a></li><li><a href="#030-2026-10-19">0.3.0 (2026-10-19)</a></li><li><a href="#020-2026-10-19">0.2.0 (2026-10-19)</a></li><li><a href="#010-2026-10-19">0.1.0 (2026-10-19)</a></li></ul>
+</li>
+</ul>
+</nav>
+    </div>
+  </aside>
+  <main id="main" class="doc">
+<p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
+<div class="doc-body"><h1 id="changelog">Changelog<a class="anchor" href="#changelog" aria-label="link">#</a></h1>
+<p>Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.</p>
+<h2 id="081">0.8.1<a class="anchor" href="#081" aria-label="link">#</a></h2>
+<ul><li>0.8.1: correções de CI Linux/Windows e gitleaks</li></ul>
+<h2 id="080--candidato-em-validação">0.8.0 — candidato em validação<a class="anchor" href="#080--candidato-em-validação" aria-label="link">#</a></h2>
+<h3 id="android-e-guardas">Android e guardas<a class="anchor" href="#android-e-guardas" aria-label="link">#</a></h3>
+<ul><li>Asset nativo <code>android/arm64</code>, instalador e updater correspondentes; regressões de <code>$HOME</code> no Termux. Cross-build validado; teste em aparelho pendente.</li><li>Yolo sem sandbox exige consentimento no interativo ou <code>--ack-no-sandbox</code> no headless.</li><li>Acesso direto detectado ao estado privado bloqueado em todos os modos; egress de arquivos sensíveis detectado exige confirmação nova. Parsing de shell não substitui isolamento do sistema.</li><li>Scrollback de ferramenta colado pede confirmação para envio como citação não confiável. Aprovações de caminhos externos guardam o alvo exibido.</li></ul>
+<h3 id="provedores-e-diagnóstico">Provedores e diagnóstico<a class="anchor" href="#provedores-e-diagnóstico" aria-label="link">#</a></h3>
+<ul><li>Recusa do provedor (Anthropic <code>stop_reason: "refusal"</code>, OpenAI <code>content_filter</code>/<code>refusal</code>) encerra o
+turno com "o provedor recusou: &lt;motivo&gt;" e a sugestão de reformular ou trocar de modelo (<code>/model</code>),
+sem tentar outro modelo por conta própria. Erros 4xx mostram a mensagem do provedor
+("o provedor recusou o pedido (HTTP 400: …)"); saldo zerado da Anthropic (HTTP 400 "credit balance")
+conta como falta de crédito.</li><li><code>jazz doctor --provider &lt;nome&gt;[/modelo]</code>: um pedido real mínimo pelo mesmo código do agente; mostra
+de onde veio a chave (variável ou <code>auth.json</code>, só os 4 últimos caracteres), o status HTTP e o corpo
+do erro sem segredos.</li><li>Anthropic: com <code>effort</code> definido, modelos Claude 4.6+ recebem <code>thinking: {type: "adaptive"}</code> +
+<code>output_config.effort</code> em vez de <code>budget_tokens</code> (recusado com HTTP 400 nos 4.7+ e 5.x) e não
+recebem <code>temperature</code>; os blocos de thinking assinados voltam no laço de ferramentas. Teste de
+conformidade com servidor Anthropic falso que valida cabeçalhos, corpo e o stream SSE.</li><li>Binário <code>linux/armv7</code> (GOARM=7) para ARM 32 bits (Raspberry Pi 2/3 com sistema 32 bits, TV boxes);
+instalador e <code>jazz update</code> reconhecem <code>armv7l</code>/<code>armhf</code>. Cross-build validado; sem teste em aparelho.</li></ul>
+<h3 id="próximo-foco">Próximo foco<a class="anchor" href="#próximo-foco" aria-label="link">#</a></h3>
+<ul><li>Menos idas e voltas por tarefa com modelos fortes (relato do dono com Claude: "dá muita volta à
+toa"). Medir com o placar do juiz (pedidos por tarefa) e <code>jazz trace</code> antes de mudar o laço.</li></ul>
+<h3 id="redação-de-segredos">Redação de segredos<a class="anchor" href="#redação-de-segredos" aria-label="link">#</a></h3>
+<ul><li>Segredos reconhecidos são redigidos na fronteira do provedor (OpenAI-compatível/kilo/omni,
+Anthropic, Codex; subagentes, hedge/painel/verificador e compactação passam por ela). Segredos em
+arquivos comuns, logs, diffs e saídas de comando viram marcadores estáveis <code>&lt;secreto:tipo#n&gt;</code> com
+mapa reverso só em memória; o marcador usado pelo modelo em <code>bash</code>/<code>write</code>/<code>edit</code> é trocado pelo
+valor real antes da execução local. ~30 padrões (AWS, GCP, Azure, GitHub, GitLab, Slack, Stripe,
+Twilio, SendGrid, OpenAI/Anthropic/kilo, JWT, PEM, Bearer/Basic, URL com senha, <code>password=</code>/
+<code>senha=</code>, <code>.env</code> de alta entropia, credenciais locais) com entropia e lista de falsos óbvios
+(<code>CANARY</code>, <code>example</code>, <code>changeme</code>…). <code>redact: on|off|strict</code>, <code>--redact</code>, <code>JAZZ_REDACT</code>, <code>/redact</code>,
+<code>/redact allow</code> (HMAC por máquina em <code>.jazz/redact-allow.json</code>). Aviso único, "N segredos retidos"
+no total do turno, eventos <code>redact.hit {kind, where}</code> e auditoria só com o tipo. ~0,4 ms por 10 KB
+de código denso em credenciais (M-series). Provedor em <code>localhost</code> não é redigido; a saída para o
+usuário também não.</li></ul>
+<h3 id="interface-contexto-e-execução">Interface, contexto e execução<a class="anchor" href="#interface-contexto-e-execução" aria-label="link">#</a></h3>
+<p>Interação no nível do Claude Code. Junta confirmações em menu, turbo condicionado ao sandbox do
+sistema, sessões, editor de entrada, documentação por versão, study-first e fila de mensagens.
+Passo a passo da tela com os textos exatos em <a href="/docs/ux">docs/UX.md</a>. Esta versão ainda não foi
+publicada como release.</p>
+<h3 id="confirmações-e-modo-padrão-branch-confirm">Confirmações e modo padrão (branch <code>confirm</code>)<a class="anchor" href="#confirmações-e-modo-padrão-branch-confirm" aria-label="link">#</a></h3>
+<ul><li>Toda pergunta é um menu numa caixa (↑↓/j k + Enter, número, atalhos <code>s</code> <code>a</code> <code>n</code>/Esc <code>e</code> <code>v</code>);
+nunca é preciso digitar <code>sim</code>. A pergunta de permissão mostra o comando exato ou o diff e o motivo
+de risco inteiro em vermelho, uma linha por problema. Respostas sim/não aceitam uma tecla; Enter
+é sempre a opção destacada.</li><li>Sem <code>mode</code> na config, o interativo começa em <code>turbo</code> quando há sandbox que isola
+(<code>sandbox-exec</code>/<code>bwrap</code>), senão <code>auto</code>; <code>-p</code> continua <code>auto</code>. A tela de boas-vindas explica o
+modo na primeira vez (<code>mode_intro</code>). Shift+Tab: turbo → auto → plan → ask.</li><li>"Sim, e não perguntar de novo": edição vale na sessão; comando, domínio, MCP e script viram
+regra do projeto em <code>.jazz/settings.json</code>; motivo de risco vai para <code>approvals.json</code>
+(<code>always_scope: auto|session|project</code>).</li><li>Pasta nova: menu "Sim, confiar nesta pasta / Só nesta sessão / Não, modo ask"
+(<code>trust_default: always</code>). Plano, jobs ao sair, <code>/forget</code>, atalho, <code>ask_user</code>, <code>/rewind</code>,
+<code>jazz trust</code>, <code>jazz worktree merge</code> e <code>jazz improve</code> usam o mesmo menu.</li><li>Configs antigas com <code>"mode": "auto"</code> gravado continuam em auto: apague a linha ou <code>/mode turbo</code>.</li></ul>
+<h3 id="editor-de-entrada-branch-editor">Editor de entrada (branch <code>editor</code>)<a class="anchor" href="#editor-de-entrada-branch-editor" aria-label="link">#</a></h3>
+<ul><li>Paleta <code>/</code> com busca aproximada (<code>/cmp</code> → <code>/compact</code>, <code>/modle</code> → <code>/model</code>; nome exato primeiro,
+corrige <code>/mode</code> + Enter rodando <code>/model</code>); lista <code>@</code> de arquivos e pastas do projeto; ↑↓ do
+histórico filtra pelo que já está digitado; Ctrl+R mostra "nada encontrado"; Shift+Enter nas
+duas formas (<code>ESC[13;2u</code>, <code>ESC[27;2;13~</code>); Option+seta pula palavra; Ctrl+O expande e recolhe;
+com texto digitado durante o trabalho, o primeiro Esc limpa e o segundo interrompe; rodapé
+encolhe com a largura. Config <code>ui.palette</code>, <code>ui.mention_picker</code>, <code>ui.history_prefix</code>.</li></ul>
+<h3 id="sessões-branch-sessions">Sessões (branch <code>sessions</code>)<a class="anchor" href="#sessões-branch-sessions" aria-label="link">#</a></h3>
+<ul><li>Sessões como no Claude Code: <code>/resume</code>, <code>/sessions</code> e <code>jazz -r</code> sem id abrem uma lista com ↑↓/j k,
+Enter, Esc, filtro ao digitar (tolerante a erro), 1–9 de atalho e Tab pra todas as pastas; cada
+linha tem título, data relativa, modo, mensagens, tokens, custo e situação. <code>/tree</code> usa a mesma
+lista. Retomar desenha a conversa de novo (pedidos, respostas em markdown, ferramentas recolhidas,
+totais; últimas 200 entradas, <code>resume_replay</code>), na ordem banner → conversa → aviso. Título de 5–8
+palavras gerado do primeiro pedido sem chamar modelo; <code>/rename</code> troca.</li></ul>
+<h3 id="documentação-estudo-e-revisão">Documentação, estudo e revisão<a class="anchor" href="#documentação-estudo-e-revisão" aria-label="link">#</a></h3>
+<ul><li>Ferramenta <code>docs</code>: documentação por versão detectada nos manifests/lockfiles, fonte local e cache
+para uso offline; Context7 é opcional e sujeito a guardas explícitas de HTTP. A consulta retorna
+trechos relevantes, não baixa nem executa código.</li><li>Skill study-first e orientação estática para tarefas médias e grandes: consultar instruções e
+código existente com leituras/busca antes da primeira edição. A nota dinâmica é adicionada ao
+contexto do usuário/ferramenta, sem alterar o prompt estável do sistema.</li><li><code>--review</code>/<code>/review</code>: subagente somente leitura examina o diff do turno; achados heurísticos voltam
+ao agente para uma tentativa de correção. Não é uma prova formal nem uma garantia de segurança.</li><li>Redação de saída reconhece padrões conhecidos de segredo no limite da requisição; detecção é
+parcial e não garante reconhecer todos os segredos.</li></ul>
+<h3 id="termux-branch-termux">Termux (branch <code>termux</code>)<a class="anchor" href="#termux-branch-termux" aria-label="link">#</a></h3>
+<ul><li>Suporte ao Termux (Android, sem root): detecção por <code>TERMUX_VERSION</code>/<code>PREFIX</code>; temp em <code>$TMPDIR</code> ou
+<code>$PREFIX/tmp</code>; shell de fallback <code>sh</code> do PATH (sem <code>/bin/sh</code> literal); sem sandbox do sistema (o
+<code>doctor</code> explica, o <code>turbo</code> cai no <code>auto</code>); modo de baixo consumo por padrão; <code>jazz doctor</code> confere
+python3/git/curl/openssl com a dica <code>pkg install</code>; <code>install.sh</code> instala em <code>$PREFIX/bin</code> sem sudo.
+Testado só com ambiente simulado, não em aparelho.</li></ul>
+<h2 id="não-publicado-branch-backdoor-guard">Não publicado (branch <code>backdoor-guard</code>)<a class="anchor" href="#não-publicado-branch-backdoor-guard" aria-label="link">#</a></h2>
+<ul><li>Revisão do próprio diff: no fim de cada turno o jazz revisa só os arquivos que mudou (linhas
+adicionadas) com um motor de regras em dados (<code>diffrules.json</code> embutido, pacotes em
+<code>~/.config/jazz-cli/diffrules.d</code> e <code>.jazz/diffrules.d</code> com confiança, tipo <code>diffrules</code>). Regras:
+segredo literal (CRITICAL); TLS/host desligado, dependência de URL git/tarball/registro
+desconhecido/typosquat, scripts de ciclo de vida, mudança em CI/CD, escrita fora do projeto em
+rc/cron/autostart (HIGH); Unicode invisível (MEDIUM). CRITICAL/HIGH perguntam com o trecho (<code>v</code>);
+"sempre" grava hash em <code>.jazz/scan-allow.json</code> (confiança + caminho protegido); "não" restaura os
+arquivos sinalizados; headless restaura, escreve <code>.jazz/scan-findings.json</code> e sai com 5.
+<code>diff_guard: on|off|strict</code>, <code>--diff-guard</code>, <code>JAZZ_DIFF_GUARD</code>; auditoria <code>diffguard.finding</code>.
+<code>jazz scan [--since ref] [--rules]</code> roda sob demanda; semgrep opcional (<code>jazz doctor</code> mostra).
+Red-team: cenário <code>15-tls-off</code>.</li></ul>
+<h3 id="guardas-de-supply-chain-branch-supply-fp">Guardas de supply chain (branch <code>supply-fp</code>)<a class="anchor" href="#guardas-de-supply-chain-branch-supply-fp" aria-label="link">#</a></h3>
+<ul><li>Guarda de supply chain: OSV é consultado pela versão que será instalada (a fixada
+ou a que o registro resolve), então <code>axios</code>/<code>chalk</code>/<code>debug</code> atuais não são mais "maliciosos" (só as
+versões comprometidas); typosquat só bloqueia nome fora da lista popular, a distância 1-2 de um nome
+mais popular e que o registro diz ser novo (&lt; 90 dias) ou pouco usado (checagem com limite de 2 s;
+sem rede = aviso); pinos do lockfile/<code>requirements</code> são confiáveis; scripts de ciclo de vida só
+avisam fora da lista popular; OSV bloqueia só HIGH/CRITICAL com correção, o resto é aviso uma vez;
+no <code>turbo</code> avisos nunca perguntam (inline + auditoria). <code>supply_chain: strict</code> volta ao antigo.</li></ul>
+<h3 id="fila-de-mensagens-branch-msg-queue">Fila de mensagens (branch <code>msg-queue</code>)<a class="anchor" href="#fila-de-mensagens-branch-msg-queue" aria-label="link">#</a></h3>
+<ul><li>Fila de mensagens (como no Devin CLI, semântica do pi): o que você digita durante o trabalho entra
+numa fila visível embaixo do status (<code>na fila (N): …</code>) sem bloquear nem interromper. Itens
+<strong>agora</strong> (steer: até 200 caracteres, ou <code>!</code>/<code>ei</code>/<code>opa</code>/<code>na verdade</code>/<code>espera</code>) entram no turno na
+próxima fronteira de ferramenta como mensagem do usuário marcada; itens <strong>depois</strong> (follow-up:
+mais longos, ou <code>depois:</code>/<code>+</code>) viram o próximo turno quando o atual termina bem. ↑/↓ editam,
+Delete remove, Tab alterna o modo, <code>Esc Esc</code> limpa; turno interrompido devolve a fila ao editor.
+Gravado na sessão antes da próxima requisição; system prompt intocado. Eventos <code>queue.add</code>,
+<code>queue.edit</code>, <code>queue.consume</code>, <code>queue.drop</code> no <code>jazz trace</code>. Headless: <code>--follow-up "msg"</code>
+(repetível) e <code>JAZZ_STEER_FILE</code> (linhas = mensagens agora, lidas em cada fronteira) para evals.</li></ul>
+<h2 id="não-publicado-branch-typos">Não publicado (branch <code>typos</code>)<a class="anchor" href="#não-publicado-branch-typos" aria-label="link">#</a></h2>
+<ul><li>Tolerância a erros de digitação, determinística: <code>/modle</code>→<code>/model</code>, <code>/mode trubo</code>→<code>/mode turbo</code>,
+ambíguo vira menu numerado (<code>fuzzy_cmd.go</code>); nomes do pedido (arquivo, caminho, função, teste)
+resolvidos contra um índice do repositório com contexto da frase, sessão e idade dos arquivos, e uma
+nota com o raciocínio na mensagem do usuário (<code>nameindex.go</code>); <code>read</code>/<code>edit</code> de caminho inexistente
+sugerem os parecidos, <code>write</code> avisa de gêmeo próximo, busca de símbolo vazia nos atalhos sugere
+símbolos próximos; atalhos offline e classificador de tarefa reparam typos e sinônimos
+(<code>roda os teste</code>, <code>git stauts</code>, <code>concerta</code>); uma regra estática de 1 linha no system prompt.</li></ul>
+<h2 id="não-publicado-branch-turbo">Não publicado (branch <code>turbo</code>)<a class="anchor" href="#não-publicado-branch-turbo" aria-label="link">#</a></h2>
+<ul><li>Confirmação com uma tecla em toda pergunta sim/não da TUI: <code>enter</code>/<code>s</code> sim, <code>a</code> sempre, <code>n</code>/<code>esc</code>
+não, <code>v</code> ver (comando inteiro ou diff), <code>e</code> não + instrução. Acabou o <code>sim</code> + enter dos comandos
+perigosos. Pergunta numa linha com o motivo de risco; texto sendo digitado quando ela abre ainda
+exige palavra + enter.</li><li>Modo <code>turbo</code> (<code>--turbo</code>, <code>--full-auto</code>, <code>"mode": "turbo"</code>, Shift+Tab): com sandbox do sistema, não
+pergunta nada que fica no projeto; pergunta só fora do projeto, host novo de egress (uma vez),
+segredo, git destrutivo, pacote marcado, comando catastrófico, regra ask/hook/injeção. Sem sandbox
+vira <code>auto</code> e avisa. Determinístico (sem modelo). A tela inicial recomenda turbo quando há sandbox.
+Pasta não confiada continua pedindo confirmação pra bash que muda algo (o red-team 11 derrubou a
+versão que liberava isso contando só com o sandbox).</li><li>"Sempre" de pergunta com motivo de risco guardado por projeto em <code>.jazz/approvals.json</code> (hash de
+classe + alvo; só vale se o jazz escreveu); <code>/approvals</code> lista e <code>/approvals clear</code> apaga.</li><li>Auditoria: <code>auto_approval</code> com a regra que liberou cada ação sem pergunta.</li><li><code>evals/redteam/run.sh</code> aceita <code>MODE=turbo</code>. Rodada no Mac (<code>kilo/poolside/laguna-s-2.1:free</code>, sandbox
+<code>sandbox-exec</code>): 14/14 BLOCKED. Tarefas v2 01/05/10 com <code>--turbo</code> (pasta confiada com <code>jazz trust --yes</code>):
+3/3 PASS, nenhuma pergunta, 27 <code>auto_approval</code> na auditoria.</li></ul>
+<h2 id="070-2026-10-21-não-publicado-como-release-inclui-o-que-foi-para-a-060">0.7.0 (2026-10-21, não publicado como release; inclui o que foi para a 0.6.0)<a class="anchor" href="#070-2026-10-21-não-publicado-como-release-inclui-o-que-foi-para-a-060" aria-label="link">#</a></h2>
+<ul><li>Ferramentas em paralelo: numa resposta com várias chamadas, as de leitura (<code>read</code>, bash só
+leitura, <code>fetch</code>, scripts só leitura) entre duas que mudam algo começam juntas; cada uma ainda
+passa por hooks, guardas, permissão e cerca na ordem do modelo, e o resultado entra no histórico
+na ordem original. Escrita, edição, bash que muda algo, MCP e <code>task</code> são barreiras. `--parallel-tools
+auto|on|off|N<code>,</code>JAZZ_PARALLEL_TOOLS<code>, config</code>tools.parallel`. Medido nas tarefas v2 01/05/09: as
+ferramentas somam 0,4–0,8 s de execuções de 3–9 min, então o ganho de tempo ali é desprezível.</li><li>Corrigidas três condições de corrida achadas com <code>-race</code> (texto da mensagem lido pela goroutine das
+ofertas enquanto era reescrito; vigia de conexão e sonda offline lendo globais que os testes trocam).</li><li>TUI para máquinas lentas (Dell, 1 núcleo): a resposta é desenhada em quadros por uma
+goroutine própria (≤ 20 fps, ≤ 5 fps em respostas longas, metade disso no modo econômico) em vez
+de uma escrita por token; linha de status sempre visível sob o texto (modelo, fase da requisição,
+tokens, "parado há Ns", o que você está digitando); larguras em células (emoji/CJK), cursor
+estacionado no redesenho (redimensionar não deixa pedaços da caixa), teclas em rajada viram um
+redesenho; <code>--low-power</code> / <code>JAZZ_LOW_POWER</code>, automático com 1 CPU; GOGC 200 com 1 CPU.</li><li>Rede honesta: fases <code>conectando</code> / <code>aguardando 1º token</code> / <code>gerando</code>; sem conexão em 3 s com a
+sonda falhando = sem rede na hora; no interativo isso encerra o turno e liga o modo offline
+(banner do que funciona sem modelo, contagem no rodapé, sonda a cada 30 s e volta sozinho);
+troca de modelo dita com o motivo (<code>… não respondeu em 20s → tentando …</code>); prazo do 1º byte de
+20 s no interativo; modelo grátis mais rápido primeiro quando você não fixou um; linha de início
+com modelo e estado dos provedores.</li><li>Menus numerados de ações determinísticas (offline, modelo lento, <code>!comando</code> que falhou offline) e a
+ferramenta <code>ask_user</code> (interativo: menu; <code>-p</code>: não bloqueia, <code>--ask-stdin</code> lê do stdin).</li><li><code>jazz --worktree [nome]</code>, <code>jazz worktree list|merge|rm</code>, <code>/worktree</code>.</li><li>Testes em PTY real (86x27, xterm e xterm-256color) com emulador VT e reflow como o VTE.</li><li>Exportação OTLP/HTTP JSON (<code>--otlp-endpoint</code>, config <code>otlp</code>): sessão = trace, turno/requisição/
+ferramenta/subagente = spans, guardas como eventos de span, métricas de tokens/custo/latência.
+Assíncrona, em lotes, descarta com contador e um aviso se o coletor cair; desligada por padrão.
+Veja <code>docs/observability.md</code>.</li><li>MCP resources e prompts: ferramentas <code>mcp_resource</code> e <code>mcp_prompt</code> (listar/ler/buscar), só contagens no prompt de sistema, blob grande em arquivo de spill, resultado sanitizado como não confiável, hash anti rug-pull cobre recursos/templates/prompts, <code>/mcp resources</code> e <code>/mcp prompts</code>.</li><li>Subagentes em paralelo: várias chamadas <code>task</code> no mesmo lote (ou <code>tasks[]</code> numa chamada) rodam juntas,
+até <code>subagents.parallel</code> (auto 3 remoto / 2 local; <code>--subagents-parallel</code>), cada uma com contexto,
+sessão (ramo <code>&lt;sessão&gt;.sub/</code>), shell e parte do orçamento próprios; relatórios na ordem; <code>files</code> faz um
+worker que edita, com cadeado por caminho; Esc/prazo cancelam todos e guardam o parcial;
+<code>SubagentStatusLines()</code> para a UI. Medido: 3 filhos, 218–286 s com 3 em paralelo contra 473–508 s
+(cortado pelo prazo de 600 s) um por vez.</li><li><code>jazz improve</code>: lições entre sessões tiradas das execuções medidas (sessão, eventos, logs do
+<code>evals/v2</code>). Extração determinística + uma chamada ao modelo barato, ≤ 3 lições de uma linha com
+evidência <code>(sessão &lt;id&gt;)</code>; proposta primeiro, <code>--apply</code> grava em <code>.jazz/lessons.md</code> (projeto) e
+<code>~/.config/jazz-cli/lessons.md</code> (global); <code>improve.auto</code> grava só projeto, ≤ 3 por execução, com
+histórico no arquivo e <code>lesson.applied</code> na auditoria. As lições entram no início da sessão logo
+depois do AGENTS.md e ficam congeladas (cache intacto); <code>--lessons off</code> desliga.
+<code>jazz improve --harness</code> gera <code>.jazz/improve-report.md</code> (proposta): falhas recorrentes, regras e
+gatilhos candidatos, config, 429/cortes/latência por modelo. O cache de planos agora guarda a
+classe da tarefa e a assinatura do repo e dá uma dica "da última vez" na primeira mensagem.
+Detalhes em <code>docs/improve.md</code>.</li><li>Nenhum trabalho perdido: write-ahead de cada ferramenta na sessão; em todo fim anormal do <code>-p</code>
+(prazo, erro de provedor, 429, Ctrl+C, crash, disjuntor, orçamento) checkpoint rastreado, nota de
+passagem e registro de fim; <code>jazz -p -r &lt;id&gt;</code> / <code>-c</code> / <code>--resume-last-in &lt;pasta&gt;</code> continuam de onde
+parou (sem prompt, sozinho). <code>--timeout-grace</code>: antes do prazo, nenhuma requisição nova. Saída:
+0 concluída, 5 negada, o resto incompleta; o JSON traz <code>outcome</code>, <code>checkpoint</code>, <code>handoff</code>, <code>resume</code>.</li><li>Sessão em árvore (formato v2, do pi): <code>id</code>/<code>parentId</code> em toda entrada, arquivos antigos migrados na
+leitura, <code>/tree</code> e <code>-r &lt;id&gt;@&lt;entrada&gt;</code>; o assistente grava modelo, provedor, tokens, fim e latência.</li><li>Observabilidade: <code>&lt;sessão&gt;.events.jsonl</code> (requisições, ferramentas, guardas, checkpoints, orçamento,
+skills, compactação, recuperações, erros com payload), <code>jazz trace</code>, <code>jazz sessions</code>,
+<code>--metrics-out</code>. Esquema em <code>docs/observability.md</code>.</li><li>Governança: log de auditoria com cadeia de hash (<code>jazz audit [--verify]</code>): config em vigor e
+mudanças do config.json, confiança, bloqueios/negações/aprovações, toda mudança de arquivo com hash
+antes/depois, todo comando de shell, rede por host, atualizações. <code>jazz changes &lt;arquivo&gt;</code> diz qual
+sessão/passo/modelo mudou cada trecho (commits em <code>refs/jazz/trace</code> do repositório-sombra).
+Checkpoints agora também no <code>-p</code> (<code>JAZZ_CHECKPOINTS=0</code> desliga).</li><li>Juiz omni (<code>docs/research/omni-judge.md</code>): classificador de tarefa por regras (11 tipos, S/M/L,
+sinais do repo), placar por (modelo, tipo) em <code>model-scores.json</code> gravado ao fim de cada turno,
+seleção UCB1 com exploração ε atrás de <code>--omni-judge on</code>, sementes das evals medidas,
+<code>jazz models --scores</code>, registros de debug <code>"kind":"route"</code>. Papéis <code>roles</code> (planner, editor,
+verifier), <code>--verifier</code>, <code>--hedge</code> (pedidos pequenos a 2 modelos: p50 do classificador 8,4 s →
+1,3 s no Mac), <code>--panel</code> e <code>--fusion</code> (lead/sidekick com contexto próprio); os três off por
+padrão (medidos, sem ganho comprovado). <code>LANES=N</code> nas evals v1/v2.</li><li><code>ratelimit.json</code> perdia contagem diária/mensal com vários processos (36 de 60 num teste com 4
+processos): agora cada processo soma seus incrementos ao valor do arquivo. Nomes de spill e de
+log de job incluem o pid (colidiam entre processos no mesmo segundo).</li><li><code>jazz doctor</code> no Linux: o teste ao vivo do sandbox acusava "config do jazz legível" à toa (o
+bwrap esconde a pasta com um tmpfs vazio, e o teste só fazia <code>ls</code> nela). Agora tenta ler os
+arquivos de verdade, um canário e um controle; <code>jazz doctor -v</code> mostra o argv do sandbox e
+<code>jazz doctor --sandbox-probe</code> lista cada caminho testado.</li><li><code>write</code>/<code>edit</code> cortado no limite de saída é continuado e emendado (até 3 continuações, cache
+intacto) em vez de recusado; orçamento de saída adaptativo depois de um corte (<code>max_output_tokens</code>,
+<code>max_out</code> dos modelos grátis da Kilo); regra de esqueleto + <code>edits[]</code> para arquivo novo grande.
+<code>--cutoff-continue off</code> / <code>JAZZ_CUTOFF_CONTINUE=off</code> / <code>"cutoff_continue": "off"</code> volta ao antigo.</li><li>Preparação para código aberto: README em português e inglês, <code>scripts/install.sh</code> com
+<code>--system</code>/<code>--version</code>/<code>--require-sig</code>, workflow de release que gera o manifesto, assina quando há
+chave e publica os instaladores, <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, este arquivo, aviso MIT
+do pi em <code>third_party/</code>, limpeza de caminhos pessoais e de resultados de eval versionados.</li></ul>
+<h2 id="050-2026-10-20">0.5.0 (2026-10-20)<a class="anchor" href="#050-2026-10-20" aria-label="link">#</a></h2>
+<ul><li>Sandbox do sistema para tudo que o jazz executa: <code>--sandbox auto|strict|off</code> (<code>sandbox-exec</code> no
+macOS, verificado; <code>bubblewrap</code> no Linux, ainda não verificado em máquina real; Windows só job object).</li><li>Skill embutida <code>frontend-craft</code> (derivada do Impeccable) e hook determinístico <code>ui_lint</code> depois de
+editar arquivos de UI.</li><li>Red-team: correções de validade (o sumidouro não registrava nada com o log trancado, o cenário 11
+não servia o payload, o 14 rodava sem symlink) e evidência medida do sandbox.</li></ul>
+<h2 id="043-2026-10-20">0.4.3 (2026-10-20)<a class="anchor" href="#043-2026-10-20" aria-label="link">#</a></h2>
+<ul><li>Bloqueio que orienta ("siga a tarefa sem isso"), disjuntor de tentativas bloqueadas e cerca da
+pasta do projeto; edição permitida no arquivo marcado como injeção.</li><li>Red-team: 14/14 BLOCKED, 0 ERROR numa rodada (uma repetição por cenário).</li></ul>
+<h2 id="042-2026-10-20">0.4.2 (2026-10-20)<a class="anchor" href="#042-2026-10-20" aria-label="link">#</a></h2>
+<ul><li>Guardas de conclusão honesta (anti-trapaça: teste apagado, teste enfraquecido, cache contado como teste).</li><li>Porte nativo para Windows (amd64/arm64, Git Bash ou PowerShell, job objects, <code>install.ps1</code> com
+verificação Ed25519 em PowerShell puro) e CI no <code>windows-latest</code>. Ainda não testado em uso real.</li><li>Correções vindas da eval v2.</li></ul>
+<h2 id="041-2026-10-20">0.4.1 (2026-10-20)<a class="anchor" href="#041-2026-10-20" aria-label="link">#</a></h2>
+<ul><li>Rodada de segurança: confiança da pasta, guardrails (pacotes, prompt injection, baixar-e-executar),
+sanitização de Unicode invisível, egress, atualização assinada (Ed25519), redação ampliada.</li><li>Baterias de eval v1/v2 e suíte red-team.</li></ul>
+<h2 id="040-2026-10-19">0.4.0 (2026-10-19)<a class="anchor" href="#040-2026-10-19" aria-label="link">#</a></h2>
+<ul><li>Skills embutidas escolhidas pelo harness e núcleo <code>&lt;craft&gt;</code> no prompt.</li><li>Saída resumida por parsers em Go (testes, build, stack trace, log); corte do <code>rg</code> por arquivo.</li><li>Orçamento de passos, checagem de qualidade no fim do turno, espera de rede, fallback ordenado por nota.</li><li>Ferramenta <code>script</code> (scripts embutidos em Python/sh), atalhos sem modelo e modo offline.</li><li><code>--recover</code> (passagem/descarte quando trava) e cache de planos verificados.</li></ul>
+<h2 id="030-2026-10-19">0.3.0 (2026-10-19)<a class="anchor" href="#030-2026-10-19" aria-label="link">#</a></h2>
+<ul><li>Checkpoints shadow-git (<code>/undo</code> e <code>/rewind</code> cobrem mudanças via bash), modo <code>smart</code>, steering
+condicional (formatos Kiro/Cursor), <code>--until</code>, <code>/goal</code> e <code>--review</code>.</li><li>Trava contra ação fingida, <code>--timeout</code> global no <code>-p</code>, visual novo (paleta Nord).</li></ul>
+<h2 id="020-2026-10-19">0.2.0 (2026-10-19)<a class="anchor" href="#020-2026-10-19" aria-label="link">#</a></h2>
+<ul><li>Roteador omni, limitador de cota e presets de provedores grátis.</li><li>Confiança de projeto, permissões no formato do Claude Code, hooks, log de debug, <code>jazz update</code> e MCP robusto.</li><li>Subagente, modo plano, tools em texto para modelos sem function calling, rewind/fork/export.</li></ul>
+<h2 id="010-2026-10-19">0.1.0 (2026-10-19)<a class="anchor" href="#010-2026-10-19" aria-label="link">#</a></h2>
+<ul><li>Núcleo do agente: provedores, ferramentas (<code>read</code>, <code>write</code>, <code>edit</code>, <code>bash</code>, <code>todo</code>),
+shell persistente, MCP, interface de terminal e sessões.</li></ul></div>
+<p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/CHANGELOG.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
+<nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/improve"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">jazz improve</span><span data-l="en" lang="en">jazz improve</span></span></a><span></span></nav>
+  </main>
+</div>
+</body>
+</html>
