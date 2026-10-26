@@ -381,12 +381,12 @@ func skPick(cands []skCand, threshold int, skip map[string]bool) *skBuiltin {
 }
 
 var (
-	skExitRe         = regexp.MustCompile(`\[exit code [1-9][0-9]*\]`)
-	skTraceRe        = regexp.MustCompile(`(?m)Traceback \(most recent call last\)|^panic: |^goroutine \d+ \[running\]|^\s+at \S.*\(\S+:\d+(:\d+)?\)$|^Exception in thread|^\s+File ".+", line \d+|^thread '.+' panicked at`)
-	skTestFailRe     = regexp.MustCompile(`(?m)^--- FAIL|^FAIL\s|\bFAILED\b|\b[1-9]\d* (failed|failing)\b|\bAssertionError\b|^\s*✕ |Tests:\s+[1-9]\d* failed|test result: FAILED`)
-	skConflictRe     = regexp.MustCompile(`(?m)^CONFLICT \(|^<<<<<<< |Automatic merge failed`)
-	skPathRe         = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z]{1,5}\b`)
-	skStudyNonCodeRE = regexp.MustCompile(`(?i)\b(git|merge|branch|commit|rebase)\b`)
+	skExitRe         = lazyRx(`\[exit code [1-9][0-9]*\]`)
+	skTraceRe        = lazyRx(`(?m)Traceback \(most recent call last\)|^panic: |^goroutine \d+ \[running\]|^\s+at \S.*\(\S+:\d+(:\d+)?\)$|^Exception in thread|^\s+File ".+", line \d+|^thread '.+' panicked at`)
+	skTestFailRe     = lazyRx(`(?m)^--- FAIL|^FAIL\s|\bFAILED\b|\b[1-9]\d* (failed|failing)\b|\bAssertionError\b|^\s*✕ |Tests:\s+[1-9]\d* failed|test result: FAILED`)
+	skConflictRe     = lazyRx(`(?m)^CONFLICT \(|^<<<<<<< |Automatic merge failed`)
+	skPathRe         = lazyRx(`[\w./-]*\w\.[A-Za-z]{1,5}\b`)
+	skStudyNonCodeRE = lazyRx(`(?i)\b(git|merge|branch|commit|rebase)\b`)
 )
 
 // skOutputFlags parses the tail of a bash result into trigger signals.

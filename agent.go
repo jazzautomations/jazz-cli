@@ -26,6 +26,8 @@ type Agent struct {
 	// AskStdin (-p --ask-stdin): ask_user reads the answer from stdin.
 	AskStdin bool
 
+	apb *apBatch // merged confirmations of the current response (approve_batch.go)
+
 	cfg       *Config
 	ui        UI
 	tools     *Toolbox
@@ -432,6 +434,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
+	a.cbAttachNotice(turnModel) // a model without vision: say so and name one that sees (caps.go)
 	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input), Images: a.attach})
 	a.attach = nil
 
@@ -735,6 +738,7 @@ turnLoop:
 			imgMsgs = nil
 		}
 		calls = rdRestoreCalls(calls) // placeholders the model echoed get their real value locally (redact.go)
+		a.apBatchAsk(ctx, calls)      // several confirmations: one question (approve_batch.go)
 		ps := a.ptBegin(ctx, calls)   // read-class neighbours run in parallel (partools.go)
 		var fan saResults             // results of task calls run in parallel in this batch
 		for i, tc := range calls {
@@ -1627,6 +1631,21 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			return false, "Blocked: the build target or script it runs is hostile (" + btCrit + "). Do not retry it; choose another approach or ask the user.", true
 		}
 	}
+	// menor intervenção (caps.go): writing /etc, the kernel, system binaries or
+	// container-engine/WSL configuration is CRITICAL in every mode (yolo/turbo too)
+	if !isMCP {
+		goal := ""
+		if a.oj != nil {
+			goal = a.oj.input
+		}
+		if crit := cbMinimalIntervention(tool, args, cmd, goal); crit != "" {
+			if a.blockUX() {
+				a.blockWhy = crit
+				return false, blockMsg(what, crit), true
+			}
+			return false, "Blocked: " + crit + ". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves.", true
+		}
+	}
 	mode := a.mode()
 	sensitiveEgress := tool == "bash" && !isMCP && jazzSensitiveEgress(cmd, a.tools.Root, a.fenceCwd())
 	// turbo (turbo.go) applies the auto rules plus its own relaxations, and
@@ -1700,7 +1719,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 				apClass, apTarget, apLabel = "egress", strings.ToLower(h), "egress: "+strings.ToLower(h)
 				apOnAllow = turbo
 			}
-		} else if (mode == "ask" || a.UntrustedBash) && (jobKill || cmd != "" && !IsReadOnly(cmd)) {
+		} else if (mode == "ask" || a.UntrustedBash) && (jobKill || cmd != "" && !IsReadOnly(cmd) && !cbReadGranted(ctx, cmd)) {
 			need = true
 			if a.UntrustedBash {
 				whyEN = "this folder is not trusted, so only read-only commands run without the user's approval"
@@ -1816,6 +1835,9 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 	}
 	if !need {
+		if a.apBatchCollecting() {
+			return true, "", false
+		}
 		switch {
 		case autoRule != "":
 			a.apRecordAuto(tool, a.apDetailOf(tool, detail, cmd, args), autoRule)
@@ -1838,6 +1860,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if reason == "" && a.allow[key] {
 		return true, "", false
 	}
+	if a.apBatchCollecting() {
+		a.apBatchAdd(tool, apDetail, reason)
+		return false, "", false
+	}
+	if ap, ok := a.apBatchAnswer(tc.ID); ok {
+		a.apb.answering = true
+		defer func() { a.apb.answering = false }()
+		return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, ap, "")
+	}
 	if h, ok := a.ui.(approveHinter); ok && reason == "" && a.Perms != nil {
 		scope := "neste projeto"
 		if a.alwaysSession(tool) {
@@ -1859,6 +1890,13 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		h.ApproveExtra(apPreview(tool, args))
 	}
 	ap, feedback := a.ui.Approve(ctx, tool, apDetail, reason)
+	return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, ap, feedback)
+}
+
+// permitAnswer applies the user's answer to a confirmation (asked alone or
+// merged with others, approve_batch.go): audit, remembered approvals and
+// rules, and the refusal text for the model.
+func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args map[string]any, key, apDetail, reason, whyEN, apClass, apTarget, apLabel string, apOnAllow bool, ap Approval, feedback string) (bool, string, bool) {
 	a.obApproval(tool, apDetail, reason, ap) // overrides are audited (obs.go)
 	if reason != "" && apClass != "" && (ap == AllowAlways || ap == Allow && apOnAllow) {
 		if err := a.approvals().Add(apClass, apTarget, apLabel); err != nil {

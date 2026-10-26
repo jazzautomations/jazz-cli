@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -217,25 +216,25 @@ func dpFind(deps map[string]dpDep, lib string) (dpDep, bool) {
 // ---------- parsers ----------
 
 var (
-	dpPySep      = regexp.MustCompile(`[-_.]+`)
-	dpMajorRE    = regexp.MustCompile(`^v\d+$`)
-	dpNumRE      = regexp.MustCompile(`\d+`)
-	dpGoReqLine  = regexp.MustCompile(`^\s*([^\s()]+)\s+(v[^\s]+)`)
-	dpGoReqOne   = regexp.MustCompile(`^\s*require\s+([^\s()]+)\s+(v[^\s]+)`)
-	dpTomlName   = regexp.MustCompile(`^\s*name\s*=\s*"([^"]+)"`)
-	dpTomlVer    = regexp.MustCompile(`^\s*version\s*=\s*"([^"]+)"`)
-	dpReqLine    = regexp.MustCompile(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*((?:===?|~=|>=|<=|!=|>|<)\s*[^\s;#,]+)?`)
-	dpYarnHead   = regexp.MustCompile(`^"?(@?[^@\s"]+)@`)
-	dpYarnVer    = regexp.MustCompile(`^\s+version:?\s+"?([^"\s]+)"?`)
-	dpGemSpec    = regexp.MustCompile(`^    ([A-Za-z0-9_.-]+) \(([^)]+)\)\s*$`)
-	dpPnpmImp    = regexp.MustCompile(`^\s{6}'?(@?[^:'\s]+)'?:\s*$`)
-	dpPnpmImpVer = regexp.MustCompile(`^\s{8}version:\s*'?([^\s('"]+)`)
-	dpPnpmOld    = regexp.MustCompile(`^\s{2}'?(@?[^:'\s]+)'?:\s*'?([0-9][^\s('"]*)`)
-	dpPnpmPkg    = regexp.MustCompile(`^\s{2}'?/?(@?[^@\s']+)@([0-9][^(:'\s]*)`)
-	dpPyDepsArr  = regexp.MustCompile(`(?s)\n\s*(?:dependencies|requires)\s*=\s*\[(.*?)\]`)
-	dpPyQuoted   = regexp.MustCompile(`"([^"]+)"|'([^']+)'`)
-	dpPoetrySect = regexp.MustCompile(`(?m)^\[tool\.poetry\.(?:dev-)?dependencies\]\s*$`)
-	dpPoetryLine = regexp.MustCompile(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=\s*(?:"([^"]*)"|\{[^}]*version\s*=\s*"([^"]*)")`)
+	dpPySep      = lazyRx(`[-_.]+`)
+	dpMajorRE    = lazyRx(`^v\d+$`)
+	dpNumRE      = lazyRx(`\d+`)
+	dpGoReqLine  = lazyRx(`^\s*([^\s()]+)\s+(v[^\s]+)`)
+	dpGoReqOne   = lazyRx(`^\s*require\s+([^\s()]+)\s+(v[^\s]+)`)
+	dpTomlName   = lazyRx(`^\s*name\s*=\s*"([^"]+)"`)
+	dpTomlVer    = lazyRx(`^\s*version\s*=\s*"([^"]+)"`)
+	dpReqLine    = lazyRx(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*((?:===?|~=|>=|<=|!=|>|<)\s*[^\s;#,]+)?`)
+	dpYarnHead   = lazyRx(`^"?(@?[^@\s"]+)@`)
+	dpYarnVer    = lazyRx(`^\s+version:?\s+"?([^"\s]+)"?`)
+	dpGemSpec    = lazyRx(`^    ([A-Za-z0-9_.-]+) \(([^)]+)\)\s*$`)
+	dpPnpmImp    = lazyRx(`^\s{6}'?(@?[^:'\s]+)'?:\s*$`)
+	dpPnpmImpVer = lazyRx(`^\s{8}version:\s*'?([^\s('"]+)`)
+	dpPnpmOld    = lazyRx(`^\s{2}'?(@?[^:'\s]+)'?:\s*'?([0-9][^\s('"]*)`)
+	dpPnpmPkg    = lazyRx(`^\s{2}'?/?(@?[^@\s']+)@([0-9][^(:'\s]*)`)
+	dpPyDepsArr  = lazyRx(`(?s)\n\s*(?:dependencies|requires)\s*=\s*\[(.*?)\]`)
+	dpPyQuoted   = lazyRx(`"([^"]+)"|'([^']+)'`)
+	dpPoetrySect = lazyRx(`(?m)^\[tool\.poetry\.(?:dev-)?dependencies\]\s*$`)
+	dpPoetryLine = lazyRx(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=\s*(?:"([^"]*)"|\{[^}]*version\s*=\s*"([^"]*)")`)
 )
 
 func dpGoMod(b []byte) []dpDep {

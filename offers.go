@@ -56,9 +56,9 @@ type olMenuIn struct {
 const olMenuMax = 5
 
 var (
-	olFileTok = regexp.MustCompile(`(?:^|[\s"'(])((?:[\w.-]+/)*[\w-]+\.[A-Za-z0-9]{1,6})(?::(\d+))?`)
-	olErrLoc  = regexp.MustCompile(`((?:[\w.-]+/)*[\w-]+\.[A-Za-z0-9]{1,6}):(\d+)`)
-	olQuoted  = regexp.MustCompile(`["'“”‘’]([^"'“”‘’]{2,60})["'“”‘’]`)
+	olFileTok = lazyRx(`(?:^|[\s"'(])((?:[\w.-]+/)*[\w-]+\.[A-Za-z0-9]{1,6})(?::(\d+))?`)
+	olErrLoc  = lazyRx(`((?:[\w.-]+/)*[\w-]+\.[A-Za-z0-9]{1,6}):(\d+)`)
+	olQuoted  = lazyRx(`["'“”‘’]([^"'“”‘’]{2,60})["'“”‘’]`)
 )
 
 // olStop are words never offered as a search term.

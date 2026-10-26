@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -640,10 +639,10 @@ func (c *Config) rlEnd(ref string, tokens int, u Usage, err error) {
 }
 
 var (
-	pvTooBigRE  = regexp.MustCompile(`(?i)request too large|limit (\d+), requested (\d+)`)
-	pvLimitNRE  = regexp.MustCompile(`(?i)limit:?\s*(\d+),?\s*requested:?\s*(\d+)`)
-	pvGoneRE    = regexp.MustCompile(`(?i)model.{0,80}(not found|does not exist|decommission|not available|no longer|is not supported|invalid model)|no endpoints found(?: for| matching)`)
-	pvNoToolsRE = regexp.MustCompile(`(?i)(tool|function.?call)[^.]{0,80}(not supported|unsupported|does not support|not available)|does not support (tools|function)|no endpoints found that support tool use`)
+	pvTooBigRE  = lazyRx(`(?i)request too large|limit (\d+), requested (\d+)`)
+	pvLimitNRE  = lazyRx(`(?i)limit:?\s*(\d+),?\s*requested:?\s*(\d+)`)
+	pvGoneRE    = lazyRx(`(?i)model.{0,80}(not found|does not exist|decommission|not available|no longer|is not supported|invalid model)|no endpoints found(?: for| matching)`)
+	pvNoToolsRE = lazyRx(`(?i)(tool|function.?call)[^.]{0,80}(not supported|unsupported|does not support|not available)|does not support (tools|function)|no endpoints found that support tool use`)
 )
 
 // pvClassify names the error kind: rate, daily, toobig, credit, auth, freetier,

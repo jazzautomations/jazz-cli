@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -368,7 +367,7 @@ func opLastPipeline(cmd string) []string {
 	return append(stages, cmd[start:])
 }
 
-var opGrepLineRx = regexp.MustCompile(`^([^:\s][^:]*?)[:-](\d+)[:-]`)
+var opGrepLineRx = lazyRx(`^([^:\s][^:]*?)[:-](\d+)[:-]`)
 
 // opGrepKey is the file a grep output line belongs to ("" when unknown).
 func opGrepKey(l string) string {

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -256,7 +255,7 @@ func pvNewAPIError(status int, h http.Header, raw []byte) *APIError {
 	return ae
 }
 
-var pvRetryDelayRE = regexp.MustCompile(`"retryDelay"\s*:\s*"([0-9.]+)s"`)
+var pvRetryDelayRE = lazyRx(`"retryDelay"\s*:\s*"([0-9.]+)s"`)
 
 // pvRetryAfter reads retry-after-ms, retry-after (seconds or HTTP date),
 // x-ratelimit-reset* (epoch ms, epoch s, relative seconds or Go durations such as
@@ -342,7 +341,7 @@ func pvParseReset(v string, now time.Time) time.Duration {
 	return 0
 }
 
-var pvDailyRE = regexp.MustCompile(`(?i)free-models-per-day|per[ -_]?day|perday|\(rpd\)|\(tpd\)|requests per day|tokens per day|daily (free )?(allocation|limit|quota)|quota_for_entity_exceeded|insufficient_quota|monthly limit|trial key.*month|neurons`)
+var pvDailyRE = lazyRx(`(?i)free-models-per-day|per[ -_]?day|perday|\(rpd\)|\(tpd\)|requests per day|tokens per day|daily (free )?(allocation|limit|quota)|quota_for_entity_exceeded|insufficient_quota|monthly limit|trial key.*month|neurons`)
 
 // pvIsDaily reports a quota that will not come back within minutes.
 func pvIsDaily(status int, body string) bool {

@@ -12,7 +12,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -157,26 +156,26 @@ func rtCountLines(p string) int {
 const rtBigLines = 1200
 
 var (
-	rtExplainRE  = regexp.MustCompile(`(?i)\b(sem (modificar|alterar|mexer)|without (modifying|changing)|explai\w*|expli\w*|summari[sz]e|resum\w*|descrev\w*|describe|tell me|me (diga|conte|explique)|list (the|all)|liste|show me|mostre|what (tools|does|is)|o que (faz|é)|what it does)\b`)
-	rtRewriteRE  = regexp.MustCompile(`(?i)\b(rewrite|reescrev\w*|port(e|ar)? para|migrate to)\b`)
-	rtFailRE     = regexp.MustCompile(`(?i)\b(tests? (fail\w*|are failing)|testes? (falh\w*|quebr\w*)|su[ií]te (de testes )?(est[áa] )?vermelha|is failing|est[áa] errad\w*|is wrong|wrong|errad\w*|broken|quebrad\w*|github issue|issue below|resolve the (github )?issue|valor absurdo|is supposed to|deveria)\b`)
-	rtLogRE      = regexp.MustCompile(`(?i)(\blogs?/|\.log\b|\blog (está|is|file)|\bo log\b|\bthe log\b|stack ?trace|traceback|\bcore dump)`)
-	rtCrashRE    = regexp.MustCompile(`(?i)\b(ca(iu|íram|iram)|crash\w*|derrub\w*|panic\w*|exception|exce[çc][ãa]o|segfault|em produ[çc][ãa]o|in production|causa|root cause|fila parou)\b`)
-	rtLeadNewRE  = regexp.MustCompile(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a|produce|gere|aggregate)\b`)
-	rtNewRE      = regexp.MustCompile(`(?i)\b(novo comando|new command|comando novo|create a (python )?(function|program|script|file)|crie um (programa|script|arquivo)|write a (regex|program|function)|produce a|aggregate|gere um relat|save it as|your task is to (analy[sz]e|aggregate|create|write|produce|count))\b`)
-	rtNoEditRE   = regexp.MustCompile(`(?i)\b(sem (modificar|alterar|mexer em) (os )?arquivos|without (modifying|changing) (any )?files|do not (modify|change) (any )?files)\b`)
-	rtSpecRE     = regexp.MustCompile(`(?i)(docstring|\bdesign( doc)?\b|DESIGN\.md|\bspec(ification)?\b|especifica[çc]\w*|NotImplementedError|(use|follow|siga|seguindo) (the )?(above |as )?(instructions|instru[çc][õo]es|regras)|\binstructions\.md\b)`)
-	rtImplRE     = regexp.MustCompile(`(?i)\b(implement\w*|modify the supplied|levanta NotImplementedError|raises NotImplementedError)\b`)
-	rtShellRE    = regexp.MustCompile(`(?i)\b(rod(e|ar)|run(ning)?|execut\w*|suba|subir|segundo plano|background|servidor|server|porta livre|processo\w*|process(es)?|workers?|cron\w*|install\w*|instal\w*|make setup|npm|pip|set ?up|dev environment|ambiente|kill|pare o|stop the|deploy)\b`)
-	rtGitRE      = regexp.MustCompile(`(?i)\b(git|commits?|branch|rebase|bisect|reposit[óo]rio|repository|history|hist[óo]rico)\b`)
-	rtLeadOpRE   = regexp.MustCompile(`(?i)^\W*(rode|run|execute|suba|start|install\w*|instale|build this|follow|siga|set ?up|configure|stop|pare|kill|three queue workers|find the first commit|a secret was|i was editing|in the git repository|read the readme and set up|our service)\b`)
-	rtIssueRE    = regexp.MustCompile(`(?i)(<issue>|github issue|resolve the issue)`)
-	rtFrontRE    = regexp.MustCompile(`(?i)\b(css|scss|tailwind|react|vue|svelte|componentes?|components?|p[áa]gina web|web ?page|landing|bot[ãa]o|button|tela|screen|frontend|front-end|responsiv\w*|navbar|modal|dark mode|tema escuro)\b`)
-	rtFrontFile  = regexp.MustCompile(`(?i)\.(css|scss|tsx|jsx|vue|svelte)\b`)
-	rtConfigFile = regexp.MustCompile(`(?i)(\bconfig\w*\.(json|ya?ml|toml|ini)\b|\.(ya?ml|toml|ini|env)\b|\bsettings\.json\b|\bpackage\.json\b)`)
-	rtConfigVerb = regexp.MustCompile(`(?i)\b(mude|muda|change|set|altere|aumente|increase|bump|desligu\w*|turn (off|on)|enable|disable|ligue)\b`)
-	rtOnlyRE     = regexp.MustCompile(`(?i)\b(somente|apenas|only|nenhuma outra|no other|arquivo grande|large file|(é|is) gerado|generated)\b`)
-	rtBulletRE   = regexp.MustCompile(`(?m)^\s*([-*]|\d+[.)])\s+\S`)
+	rtExplainRE  = lazyRx(`(?i)\b(sem (modificar|alterar|mexer)|without (modifying|changing)|explai\w*|expli\w*|summari[sz]e|resum\w*|descrev\w*|describe|tell me|me (diga|conte|explique)|list (the|all)|liste|show me|mostre|what (tools|does|is)|o que (faz|é)|what it does)\b`)
+	rtRewriteRE  = lazyRx(`(?i)\b(rewrite|reescrev\w*|port(e|ar)? para|migrate to)\b`)
+	rtFailRE     = lazyRx(`(?i)\b(tests? (fail\w*|are failing)|testes? (falh\w*|quebr\w*)|su[ií]te (de testes )?(est[áa] )?vermelha|is failing|est[áa] errad\w*|is wrong|wrong|errad\w*|broken|quebrad\w*|github issue|issue below|resolve the (github )?issue|valor absurdo|is supposed to|deveria)\b`)
+	rtLogRE      = lazyRx(`(?i)(\blogs?/|\.log\b|\blog (está|is|file)|\bo log\b|\bthe log\b|stack ?trace|traceback|\bcore dump)`)
+	rtCrashRE    = lazyRx(`(?i)\b(ca(iu|íram|iram)|crash\w*|derrub\w*|panic\w*|exception|exce[çc][ãa]o|segfault|em produ[çc][ãa]o|in production|causa|root cause|fila parou)\b`)
+	rtLeadNewRE  = lazyRx(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a|produce|gere|aggregate)\b`)
+	rtNewRE      = lazyRx(`(?i)\b(novo comando|new command|comando novo|create a (python )?(function|program|script|file)|crie um (programa|script|arquivo)|write a (regex|program|function)|produce a|aggregate|gere um relat|save it as|your task is to (analy[sz]e|aggregate|create|write|produce|count))\b`)
+	rtNoEditRE   = lazyRx(`(?i)\b(sem (modificar|alterar|mexer em) (os )?arquivos|without (modifying|changing) (any )?files|do not (modify|change) (any )?files)\b`)
+	rtSpecRE     = lazyRx(`(?i)(docstring|\bdesign( doc)?\b|DESIGN\.md|\bspec(ification)?\b|especifica[çc]\w*|NotImplementedError|(use|follow|siga|seguindo) (the )?(above |as )?(instructions|instru[çc][õo]es|regras)|\binstructions\.md\b)`)
+	rtImplRE     = lazyRx(`(?i)\b(implement\w*|modify the supplied|levanta NotImplementedError|raises NotImplementedError)\b`)
+	rtShellRE    = lazyRx(`(?i)\b(rod(e|ar)|run(ning)?|execut\w*|suba|subir|segundo plano|background|servidor|server|porta livre|processo\w*|process(es)?|workers?|cron\w*|install\w*|instal\w*|make setup|npm|pip|set ?up|dev environment|ambiente|kill|pare o|stop the|deploy)\b`)
+	rtGitRE      = lazyRx(`(?i)\b(git|commits?|branch|rebase|bisect|reposit[óo]rio|repository|history|hist[óo]rico)\b`)
+	rtLeadOpRE   = lazyRx(`(?i)^\W*(rode|run|execute|suba|start|install\w*|instale|build this|follow|siga|set ?up|configure|stop|pare|kill|three queue workers|find the first commit|a secret was|i was editing|in the git repository|read the readme and set up|our service)\b`)
+	rtIssueRE    = lazyRx(`(?i)(<issue>|github issue|resolve the issue)`)
+	rtFrontRE    = lazyRx(`(?i)\b(css|scss|tailwind|react|vue|svelte|componentes?|components?|p[áa]gina web|web ?page|landing|bot[ãa]o|button|tela|screen|frontend|front-end|responsiv\w*|navbar|modal|dark mode|tema escuro)\b`)
+	rtFrontFile  = lazyRx(`(?i)\.(css|scss|tsx|jsx|vue|svelte)\b`)
+	rtConfigFile = lazyRx(`(?i)(\bconfig\w*\.(json|ya?ml|toml|ini)\b|\.(ya?ml|toml|ini|env)\b|\bsettings\.json\b|\bpackage\.json\b)`)
+	rtConfigVerb = lazyRx(`(?i)\b(mude|muda|change|set|altere|aumente|increase|bump|desligu\w*|turn (off|on)|enable|disable|ligue)\b`)
+	rtOnlyRE     = lazyRx(`(?i)\b(somente|apenas|only|nenhuma outra|no other|arquivo grande|large file|(é|is) gerado|generated)\b`)
+	rtBulletRE   = lazyRx(`(?m)^\s*([-*]|\d+[.)])\s+\S`)
 )
 
 // rtClassify types and sizes a request. repo may be the zero value. When the

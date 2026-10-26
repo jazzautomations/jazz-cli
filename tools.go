@@ -336,7 +336,7 @@ func closeTruncated(s string) string {
 	return out
 }
 
-var fenceRe = regexp.MustCompile("(?is)^```[a-z_-]*\\s*")
+var fenceRe = lazyRx("(?is)^```[a-z_-]*\\s*")
 
 // parseArgs parses tool-call arguments, repairing common weak-model mistakes.
 // repaired=true means the JSON was truncated and closed heuristically: such

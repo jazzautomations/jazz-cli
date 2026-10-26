@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -178,7 +177,7 @@ func (e *Editor) ReadLine(prompt string, promptW int) (string, error) {
 // with multi-line input, with the Footer line (or the slash-command menu, or
 // the shortcut list) under it. On Enter the box is replaced by the echoed input.
 func (e *Editor) ReadInput() (string, error) {
-	if termWidth() < 24 {
+	if termWidth() < 24 || e.ui.T.dumb {
 		p := e.ui.T.fg(cAccent, 36) + e.ui.T.sgr("1") + ">" + e.ui.T.sgr("0") + " "
 		return e.read(false, p, 2)
 	}
@@ -923,7 +922,7 @@ func commonPrefix(ss []string) string {
 
 // ---------- @path mentions (G17) ----------
 
-var uiMentionRe = regexp.MustCompile(`(?:^|\s)@(\S+)`)
+var uiMentionRe = lazyRx(`(?:^|\s)@(\S+)`)
 
 var uiImageMime = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 

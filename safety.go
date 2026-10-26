@@ -20,7 +20,7 @@ import (
 // be analysed at all.
 func shellSegments(cmd string) []string { return shellParse(cmd).segs }
 
-var reSplit = regexp.MustCompile(`\n|;|&&|\|\||\||&`)
+var reSplit = lazyRx(`\n|;|&&|\|\||\||&`)
 
 func isShell(w string) bool {
 	switch filepath.Base(w) {
@@ -125,7 +125,7 @@ func stripWrappers(t []string) []string {
 // ---------- danger detection ----------
 
 // rePWDTarget: the current directory spelled through the shell.
-var rePWDTarget = regexp.MustCompile(`^(\$PWD|\$\{PWD\}|\$\(pwd\)|` + "`pwd`" + `)(/|/\*|/\.)?$`)
+var rePWDTarget = lazyRx(`^(\$PWD|\$\{PWD\}|\$\(pwd\)|` + "`pwd`" + `)(/|/\*|/\.)?$`)
 
 // rmHomeOrRoot flags a recursive rm target that is the home directory, the
 // project (current) directory, an ancestor of either, or a .git directory.
@@ -164,19 +164,19 @@ func expandTilde(p string) string {
 	return p
 }
 
-var broadTarget = regexp.MustCompile(`^(/|/\*|~|~/|~/\*|\$HOME|\$HOME/|\$HOME/\*|\$\{HOME\}|\$\{HOME\}/|\$\{HOME\}/\*|\.|\./|\./\*|\.\.|\.\./?.*|\*|/(bin|boot|dev|etc|home|lib|lib32|lib64|opt|proc|root|sbin|srv|sys|usr|var)(/|/\*)?)$`)
+var broadTarget = lazyRx(`^(/|/\*|~|~/|~/\*|\$HOME|\$HOME/|\$HOME/\*|\$\{HOME\}|\$\{HOME\}/|\$\{HOME\}/\*|\.|\./|\./\*|\.\.|\.\./?.*|\*|/(bin|boot|dev|etc|home|lib|lib32|lib64|opt|proc|root|sbin|srv|sys|usr|var)(/|/\*)?)$`)
 
 var (
-	rePipeShell   = regexp.MustCompile(`\|\s*(sudo\s+)?(ba|z|da|k)?sh\b|\|\s*(sudo\s+)?(python3?|perl|ruby|node)\s*(-\s*)?($|[;&|])`)
-	reShellRemote = regexp.MustCompile(`\b((ba|z|da|k)?sh|source|\.|eval|python[0-9.]*|perl|ruby|node|php)\s+(-c\s+)?["']?(\$\(|<\(|` + "`" + `)\s*(curl|wget|fetch|http)\b`)
-	reB64Shell    = regexp.MustCompile(`(base64\s+(-d|--decode|-D)|xxd\s+-r|openssl\s+(base64|enc)\b[^|]*\s-d)[^|]*\|\s*(sudo\s+)?((ba|z|da|k)?sh|python[0-9.]*|perl|ruby|node|php)\b`)
-	reXargsRm     = regexp.MustCompile(`\bxargs\b[^|;&]*\brm\s+(-\w*[rR]|--recursive)`)
-	reForkBomb    = regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}`)
-	reDotfileW    = regexp.MustCompile(`(>|>>)\s*["']?(~|\$HOME|\$\{HOME\})/\.[A-Za-z]|\btee\s+(-a\s+)?["']?(~|\$HOME|\$\{HOME\})/\.[A-Za-z]`)
-	reSecretFile  = regexp.MustCompile(`auth\.json|\.ssh/|authorized_keys|\.gnupg|\.aws/credentials|\.netrc|\.git-credentials|jazz-cli/(config|mcp|trusted)\.json`)
-	reExfilVerb   = regexp.MustCompile(`\b(curl|wget|nc|ncat|scp|rsync|sftp|ftp)\b|(>|>>)\s*\S|\btee\b|\bsed\s+-i|\bcp\b|\bmv\b`)
-	reDevTarget   = regexp.MustCompile(`^of=/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk|loop|md|dm-|mapper/)`)
-	reRawDisk     = regexp.MustCompile(`>\s*/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk)`)
+	rePipeShell   = lazyRx(`\|\s*(sudo\s+)?(ba|z|da|k)?sh\b|\|\s*(sudo\s+)?(python3?|perl|ruby|node)\s*(-\s*)?($|[;&|])`)
+	reShellRemote = lazyRx(`\b((ba|z|da|k)?sh|source|\.|eval|python[0-9.]*|perl|ruby|node|php)\s+(-c\s+)?["']?(\$\(|<\(|` + "`" + `)\s*(curl|wget|fetch|http)\b`)
+	reB64Shell    = lazyRx(`(base64\s+(-d|--decode|-D)|xxd\s+-r|openssl\s+(base64|enc)\b[^|]*\s-d)[^|]*\|\s*(sudo\s+)?((ba|z|da|k)?sh|python[0-9.]*|perl|ruby|node|php)\b`)
+	reXargsRm     = lazyRx(`\bxargs\b[^|;&]*\brm\s+(-\w*[rR]|--recursive)`)
+	reForkBomb    = lazyRx(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}`)
+	reDotfileW    = lazyRx(`(>|>>)\s*["']?(~|\$HOME|\$\{HOME\})/\.[A-Za-z]|\btee\s+(-a\s+)?["']?(~|\$HOME|\$\{HOME\})/\.[A-Za-z]`)
+	reSecretFile  = lazyRx(`auth\.json|\.ssh/|authorized_keys|\.gnupg|\.aws/credentials|\.netrc|\.git-credentials|jazz-cli/(config|mcp|trusted)\.json`)
+	reExfilVerb   = lazyRx(`\b(curl|wget|nc|ncat|scp|rsync|sftp|ftp)\b|(>|>>)\s*\S|\btee\b|\bsed\s+-i|\bcp\b|\bmv\b`)
+	reDevTarget   = lazyRx(`^of=/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk|loop|md|dm-|mapper/)`)
+	reRawDisk     = lazyRx(`>\s*/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk)`)
 )
 
 // DangerReason returns a short reason when a command is destructive or escalates
@@ -292,13 +292,13 @@ func downloadExecReason(segs []string) string {
 }
 
 var (
-	reCodeSpawn  = regexp.MustCompile(`os\.system|os\.popen|os\.exec\w*|subprocess|pty\.spawn|commands\.getoutput|child_process|execSync|spawnSync|\bexecFile|\bspawn\(|\bsystem\s*\(|\bexec\s*\(|` + "`" + `|\bqx[{(/]|Open3|IO\.popen|Kernel\.exec|shell_exec|passthru|proc_open`)
-	reCodeNet    = regexp.MustCompile(`urllib|urlopen|requests\.(get|post)|http\.client|httpx|\bfetch\(|https?\.(get|request)|axios|LWP|HTTP::Tiny|Net::HTTP|open-uri|URI\.open|file_get_contents\(\s*["']https?:|socket\.|curl_exec`)
-	reCodeEval   = regexp.MustCompile(`\bexec\s*\(|\beval\s*\(|new\s+Function\(|\bFunction\(|\bcompile\(|instance_eval|marshal\.loads|pickle\.loads`)
-	reCodeRm     = regexp.MustCompile(`shutil\.rmtree|os\.(remove|unlink|rmdir|removedirs)|fs\.(rm|rmdir|unlink)(Sync)?\(|rm_rf|rmtree|FileUtils\.rm|File\.delete|\bunlink\s*\(`)
-	reCodeBroad  = regexp.MustCompile(`expanduser\(\s*["']~/?["']\s*\)|["']~/?["']|["']/["']|Path\.home\(\)|os\.homedir\(\)|\$HOME|ENV\[["']HOME["']\]|getenv\(["']HOME["']\)|environ\[["']HOME["']\]`)
-	reCodeSecret = regexp.MustCompile(`auth\.json|\.ssh|id_rsa|id_ed25519|\.aws|credentials|/proc/[^"']*environ|os\.environ|process\.env|ENV\[|getenv|\.netrc|\.git-credentials|\.env\b`)
-	reCodeStr    = regexp.MustCompile(`"((?:[^"\\]|\\.){2,400})"|'((?:[^'\\]|\\.){2,400})'`)
+	reCodeSpawn  = lazyRx(`os\.system|os\.popen|os\.exec\w*|subprocess|pty\.spawn|commands\.getoutput|child_process|execSync|spawnSync|\bexecFile|\bspawn\(|\bsystem\s*\(|\bexec\s*\(|` + "`" + `|\bqx[{(/]|Open3|IO\.popen|Kernel\.exec|shell_exec|passthru|proc_open`)
+	reCodeNet    = lazyRx(`urllib|urlopen|requests\.(get|post)|http\.client|httpx|\bfetch\(|https?\.(get|request)|axios|LWP|HTTP::Tiny|Net::HTTP|open-uri|URI\.open|file_get_contents\(\s*["']https?:|socket\.|curl_exec`)
+	reCodeEval   = lazyRx(`\bexec\s*\(|\beval\s*\(|new\s+Function\(|\bFunction\(|\bcompile\(|instance_eval|marshal\.loads|pickle\.loads`)
+	reCodeRm     = lazyRx(`shutil\.rmtree|os\.(remove|unlink|rmdir|removedirs)|fs\.(rm|rmdir|unlink)(Sync)?\(|rm_rf|rmtree|FileUtils\.rm|File\.delete|\bunlink\s*\(`)
+	reCodeBroad  = lazyRx(`expanduser\(\s*["']~/?["']\s*\)|["']~/?["']|["']/["']|Path\.home\(\)|os\.homedir\(\)|\$HOME|ENV\[["']HOME["']\]|getenv\(["']HOME["']\)|environ\[["']HOME["']\]`)
+	reCodeSecret = lazyRx(`auth\.json|\.ssh|id_rsa|id_ed25519|\.aws|credentials|/proc/[^"']*environ|os\.environ|process\.env|ENV\[|getenv|\.netrc|\.git-credentials|\.env\b`)
+	reCodeStr    = lazyRx(`"((?:[^"\\]|\\.){2,400})"|'((?:[^'\\]|\\.){2,400})'`)
 )
 
 // inlineCodeDanger scans interpreter code given on the command line (python
@@ -548,13 +548,13 @@ func gitDanger(args []string) string {
 // ---------- read-only allowlist (used by "ask" and plan modes) ----------
 
 var (
-	readOnlyCmd    = regexp.MustCompile(`^(ls|ll|la|cat|head|tail|wc|pwd|echo|printf|which|type|file|stat|du|df|tree|rg|grep|egrep|fgrep|fd|fdfind|find|sort|uniq|cut|diff|cmp|whoami|uname|id|uptime|free|ps|jq|realpath|readlink|dirname|basename|nproc|true|false|test|\[|sha256sum|md5sum|cksum|column|tr|nl|seq|go\s+(version|env|list|doc|vet)|python3?\s+(--version|-V)|node\s+(--version|-v)|git\s+(status|diff|log|show|rev-parse|ls-files|blame|describe|shortlog|grep|ls-tree|cat-file)|git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes))*|git\s+tag(\s+(-l|--list))?|git\s+remote(\s+(-v|show|get-url)(\s+\S+)?)?)(\s|$)`)
-	readOnlyBadArg = regexp.MustCompile(`(^|\s)(-o|--output|--output=\S*|-fprint\w*|-fls|-ok\w*|-exec\w*|-delete|--pre(=\S*)?|-toolexec|-vettool\S*|--exec\S*|-w|--write)(\s|$)`)
+	readOnlyCmd    = lazyRx(`^(ls|ll|la|cat|head|tail|wc|pwd|echo|printf|which|type|file|stat|du|df|tree|rg|grep|egrep|fgrep|fd|fdfind|find|sort|uniq|cut|diff|cmp|whoami|uname|id|uptime|free|ps|jq|realpath|readlink|dirname|basename|nproc|true|false|test|\[|sha256sum|md5sum|cksum|column|tr|nl|seq|go\s+(version|env|list|doc|vet)|python3?\s+(--version|-V)|node\s+(--version|-v)|git\s+(status|diff|log|show|rev-parse|ls-files|blame|describe|shortlog|grep|ls-tree|cat-file)|git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes))*|git\s+tag(\s+(-l|--list))?|git\s+remote(\s+(-v|show|get-url)(\s+\S+)?)?)(\s|$)`)
+	readOnlyBadArg = lazyRx(`(^|\s)(-o|--output|--output=\S*|-fprint\w*|-fls|-ok\w*|-exec\w*|-delete|--pre(=\S*)?|-toolexec|-vettool\S*|--exec\S*|-w|--write)(\s|$)`)
 )
 
 var (
-	reGitBranchList = regexp.MustCompile(`^git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes|--merged|--no-merged|--contains|--sort=\S+|--format=\S+))*\s*$`)
-	reGitTagList    = regexp.MustCompile(`^git\s+tag(\s+(-l|--list|-n\d*|--sort=\S+|--contains)(\s+[^-\s]\S*)?)*\s*$`)
+	reGitBranchList = lazyRx(`^git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes|--merged|--no-merged|--contains|--sort=\S+|--format=\S+))*\s*$`)
+	reGitTagList    = lazyRx(`^git\s+tag(\s+(-l|--list|-n\d*|--sort=\S+|--contains)(\s+[^-\s]\S*)?)*\s*$`)
 )
 
 // isReadOnlySh is a conservative check: true only for plainly read-only
@@ -648,7 +648,7 @@ func roUnsafeArgs(toks []string) bool {
 // reSecretArg matches arguments that name credential files, so `cat` and
 // friends of those paths are not treated as read-only (they ask in ask mode
 // and are refused in plan mode and by the research subagent).
-var reSecretArg = regexp.MustCompile(`(^|/)\.ssh(/|$)|(^|/)\.gnupg(/|$)|(^|/)\.aws/|\.netrc$|\.git-credentials$|\.pgpass$|(^|/)\.npmrc$|(^|/)\.pypirc$|authorized_keys|(^|/)id_(rsa|dsa|ecdsa|ed25519)(_sk)?$|jazz-cli/(auth|config|mcp|trusted)\.json|jazz-cli/[^/]*[*?\[]|\.codex/auth\.json|\.credentials\.json$|(^|/)\.kube/|/etc/(shadow|gshadow|sudoers)|/proc/[^/]+/environ$|(^|/)\.git/config$|\.(pem|p12|pfx)$`)
+var reSecretArg = lazyRx(`(^|/)\.ssh(/|$)|(^|/)\.gnupg(/|$)|(^|/)\.aws/|\.netrc$|\.git-credentials$|\.pgpass$|(^|/)\.npmrc$|(^|/)\.pypirc$|authorized_keys|(^|/)id_(rsa|dsa|ecdsa|ed25519)(_sk)?$|jazz-cli/(auth|config|mcp|trusted)\.json|jazz-cli/[^/]*[*?\[]|\.codex/auth\.json|\.credentials\.json$|(^|/)\.kube/|/etc/(shadow|gshadow|sudoers)|/proc/[^/]+/environ$|(^|/)\.git/config$|\.(pem|p12|pfx)$`)
 
 // roSecretArgs reports whether any argument (or --opt=value) names a secret
 // file. $HOME/~ are expanded and globs (cat ~/.config/jazz-cli/au*) are
@@ -745,11 +745,11 @@ func secretReasonSh(cmd string) string {
 	return ""
 }
 
-var reProcEnviron = regexp.MustCompile(`/proc/[^/\s]+/environ`)
+var reProcEnviron = lazyRx(`/proc/[^/\s]+/environ`)
 
 var (
-	reUploadFlag = regexp.MustCompile(`(^|\s)(-d|--data|--data-\S+|-F|--form|-T|--upload-file|--post-file)(\s|=|$)`)
-	reHostPort   = regexp.MustCompile(`^(\[[0-9A-Fa-f:]+\]|[0-9A-Za-z._-]+)`)
+	reUploadFlag = lazyRx(`(^|\s)(-d|--data|--data-\S+|-F|--form|-T|--upload-file|--post-file)(\s|=|$)`)
+	reHostPort   = lazyRx(`^(\[[0-9A-Fa-f:]+\]|[0-9A-Za-z._-]+)`)
 )
 
 // EgressTarget returns the destination host of a command that sends data out of
@@ -1049,10 +1049,10 @@ func secretPath(p string) bool {
 // …_WEBHOOK_URL), anything with SECRET in the name, provider prefixes, and
 // well-known names (AWS session/secret, Stripe, database URLs, Postgres/MySQL
 // passwords, GitHub/npm tokens, the SSH agent socket).
-var secretEnvNames = regexp.MustCompile(`(?i)(^|_)(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|ACCESS_?KEY|SECRET_?KEY|PRIVATE_?KEY|SIGNING_?KEY|DSN|WEBHOOK(_URL)?|COOKIE)$|SECRET|^(OPENROUTER|ANTHROPIC|OPENAI|GROQ|OPENCODE|DEEPSEEK|GEMINI|GOOGLE_API|MISTRAL|XAI|COHERE|TOGETHER|FIREWORKS|HF|HUGGINGFACE|STRIPE)_|^(AWS_SESSION_TOKEN|DATABASE_URL|[A-Z0-9]+_DATABASE_URL|REDIS_URL|MONGO(DB)?_(URI|URL)|PGPASSWORD|PGPASSFILE|MYSQL_PWD|SSH_AUTH_SOCK|GITHUB_TOKEN|GH_TOKEN|GH_ENTERPRISE_TOKEN|NPM_TOKEN|NODE_AUTH_TOKEN|SLACK_[A-Z0-9_]*|TWILIO_AUTH_TOKEN|SENTRY_DSN|VAULT_TOKEN)$`)
+var secretEnvNames = lazyRx(`(?i)(^|_)(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|ACCESS_?KEY|SECRET_?KEY|PRIVATE_?KEY|SIGNING_?KEY|DSN|WEBHOOK(_URL)?|COOKIE)$|SECRET|^(OPENROUTER|ANTHROPIC|OPENAI|GROQ|OPENCODE|DEEPSEEK|GEMINI|GOOGLE_API|MISTRAL|XAI|COHERE|TOGETHER|FIREWORKS|HF|HUGGINGFACE|STRIPE)_|^(AWS_SESSION_TOKEN|DATABASE_URL|[A-Z0-9]+_DATABASE_URL|REDIS_URL|MONGO(DB)?_(URI|URL)|PGPASSWORD|PGPASSFILE|MYSQL_PWD|SSH_AUTH_SOCK|GITHUB_TOKEN|GH_TOKEN|GH_ENTERPRISE_TOKEN|NPM_TOKEN|NODE_AUTH_TOKEN|SLACK_[A-Z0-9_]*|TWILIO_AUTH_TOKEN|SENTRY_DSN|VAULT_TOKEN)$`)
 
 // reCredURL: a URL with an embedded password (postgres://u:p@h, https://x:token@github.com).
-var reCredURL = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@'"]+:)([^@\s/'"]{3,})@`)
+var reCredURL = lazyRx(`(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@'"]+:)([^@\s/'"]{3,})@`)
 
 // pfKeyEnvNames holds the KeyEnv of every configured provider (set by main via
 // pfNoteConfig), so custom providers' keys are scrubbed and redacted too.
@@ -1115,7 +1115,7 @@ var (
 	// fine-grained), GitLab, npm, Slack (tokens and webhooks), AWS key ids,
 	// Google API keys and OAuth tokens, Stripe, JWTs. Test fixtures use a
 	// TEST marker inside the same shapes (sk-ant-TESTKEY-0000…), which still matches.
-	secretShapes = regexp.MustCompile(`\b(sk-ant-[A-Za-z0-9_-]{20,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}|xox[abeprs]-[A-Za-z0-9-]{10,}|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|ya29\.[0-9A-Za-z_-]{20,}|(sk|rk)_(live|test)_[0-9A-Za-z]{16,}|whsec_[0-9A-Za-z]{20,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b|https://hooks\.slack\.com/services/[A-Za-z0-9/_-]{20,}|https://discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+`)
+	secretShapes = lazyRx(`\b(sk-ant-[A-Za-z0-9_-]{20,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}|xox[abeprs]-[A-Za-z0-9-]{10,}|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|ya29\.[0-9A-Za-z_-]{20,}|(sk|rk)_(live|test)_[0-9A-Za-z]{16,}|whsec_[0-9A-Za-z]{20,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b|https://hooks\.slack\.com/services/[A-Za-z0-9/_-]{20,}|https://discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+`)
 )
 
 // refreshSecrets collects known secret values (env + auth.json) for redaction.
@@ -1156,25 +1156,25 @@ func redactSecrets(s string) string {
 		}
 	}
 	// rdReplaceKeepPH (redact.go) leaves <secreto:…> placeholders alone
-	s = rdReplaceKeepPH(secretShapes, s, "[REDACTED]")
+	s = rdReplaceKeepPH(secretShapes.R(), s, "[REDACTED]")
 	if strings.Contains(s, "PRIVATE KEY-----") {
-		s = rdReplaceKeepPH(secretPrivKey, s, "[REDACTED PRIVATE KEY]")
+		s = rdReplaceKeepPH(secretPrivKey.R(), s, "[REDACTED PRIVATE KEY]")
 	}
 	if strings.Contains(s, "://") {
-		s = rdReplaceKeepPH(reCredURL, s, "${1}[REDACTED]@")
+		s = rdReplaceKeepPH(reCredURL.R(), s, "${1}[REDACTED]@")
 	}
-	s = rdReplaceKeepPH(secretEnvKV, s, "${1}[REDACTED]")
-	return rdReplaceKeepPH(secretKV, s, "${1}[REDACTED]${2}")
+	s = rdReplaceKeepPH(secretEnvKV.R(), s, "${1}[REDACTED]")
+	return rdReplaceKeepPH(secretKV.R(), s, "${1}[REDACTED]${2}")
 }
 
 var (
 	// PEM private keys (OpenSSH, RSA, EC, PKCS#8, encrypted)
-	secretPrivKey = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
+	secretPrivKey = lazyRx(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
 	// credentials-file style assignments; only literal values (no $VAR,
 	// ${…} or function calls), so code that reads a secret stays editable
 	// dotenv / shell style KEY=value lines whose name looks secret
-	secretEnvKV = regexp.MustCompile(`(?m)^([ \t]*(?:export[ \t]+)?[A-Z][A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|ACCESS_KEY|PRIVATE_KEY|_DSN|WEBHOOK_URL|DATABASE_URL)[A-Z0-9_]*[ \t]*=[ \t]*["']?)[^\s"'$#]{8,}`)
-	secretKV    = regexp.MustCompile(`(?im)((?:secret_access_key|session_token|secret_key|password|passwd)[ \t]*[=:][ \t]*["']?)[A-Za-z0-9/+=_\-!@#%^&*.~]{8,}(["']?[ \t]*(?:$|[,;#\r]))`)
+	secretEnvKV = lazyRx(`(?m)^([ \t]*(?:export[ \t]+)?[A-Z][A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|ACCESS_KEY|PRIVATE_KEY|_DSN|WEBHOOK_URL|DATABASE_URL)[A-Z0-9_]*[ \t]*=[ \t]*["']?)[^\s"'$#]{8,}`)
+	secretKV    = lazyRx(`(?im)((?:secret_access_key|session_token|secret_key|password|passwd)[ \t]*[=:][ \t]*["']?)[A-Za-z0-9/+=_\-!@#%^&*.~]{8,}(["']?[ \t]*(?:$|[,;#\r]))`)
 )
 
 // ---------- terminal sanitizing ----------

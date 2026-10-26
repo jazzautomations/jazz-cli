@@ -32,7 +32,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -68,10 +67,10 @@ func (l lsLesson) lsLine() string {
 }
 
 var (
-	lsTagRE     = regexp.MustCompile(`^\[([^\]\n]{1,24})\]\s*`)
-	lsSessRE    = regexp.MustCompile(`\s*\((?:sessão|sessao|session)\s+([A-Za-z0-9_.@-]{4,40})\)\s*$`)
-	lsBulletRE  = regexp.MustCompile(`^\s{0,3}[-*]\s+`)
-	lsHeadingRE = regexp.MustCompile(`^\s{0,3}#{1,6}\s`)
+	lsTagRE     = lazyRx(`^\[([^\]\n]{1,24})\]\s*`)
+	lsSessRE    = lazyRx(`\s*\((?:sessão|sessao|session)\s+([A-Za-z0-9_.@-]{4,40})\)\s*$`)
+	lsBulletRE  = lazyRx(`^\s{0,3}[-*]\s+`)
+	lsHeadingRE = lazyRx(`^\s{0,3}#{1,6}\s`)
 )
 
 // lsParseLine parses "- [tag] text (sessão id)"; ok=false for non-lesson lines.

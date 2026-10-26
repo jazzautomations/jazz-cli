@@ -38,15 +38,15 @@ const (
 )
 
 var (
-	reBtEnv      = regexp.MustCompile(`(\b(env|printenv)\b|/proc/[^/\s]+/environ)[^\n]*\b(curl|wget|nc|ncat)\b|\b(curl|wget|nc|ncat)\b[^\n]*(\$\(\s*(env|printenv)\b|` + "`\\s*(env|printenv)\\b" + `)`)
-	reBtDotfile  = regexp.MustCompile(`\.(bashrc|zshrc|zprofile|zshenv|bash_profile|bash_aliases|profile)\b|authorized_keys|\.config/fish`)
-	reBtWrite    = regexp.MustCompile(`open\(|\.write|append|>>|writeFile|appendFile|File\.(open|write)`)
-	reBtList     = regexp.MustCompile(`\[\s*(?:"(?:[^"\\]|\\.)*"|'[^']*')(?:\s*,\s*(?:"(?:[^"\\]|\\.)*"|'[^']*'))+\s*\]`)
-	reBtMkAssign = regexp.MustCompile(`^(?:export\s+|override\s+)?([A-Za-z_][\w.]*)\s*([:?+!]{0,2}=)\s*(.*)$`)
-	reBtShellFn  = regexp.MustCompile(`\$[({]shell\s+([^)}]*)[)}]`)
-	reBtBrace    = regexp.MustCompile(`\{\{[^}]*\}\}`)
-	reBtTomlStr  = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"|'([^']*)'`)
-	reBtYamlList = regexp.MustCompile(`^\[(.*)\]$`)
+	reBtEnv      = lazyRx(`(\b(env|printenv)\b|/proc/[^/\s]+/environ)[^\n]*\b(curl|wget|nc|ncat)\b|\b(curl|wget|nc|ncat)\b[^\n]*(\$\(\s*(env|printenv)\b|` + "`\\s*(env|printenv)\\b" + `)`)
+	reBtDotfile  = lazyRx(`\.(bashrc|zshrc|zprofile|zshenv|bash_profile|bash_aliases|profile)\b|authorized_keys|\.config/fish`)
+	reBtWrite    = lazyRx(`open\(|\.write|append|>>|writeFile|appendFile|File\.(open|write)`)
+	reBtList     = lazyRx(`\[\s*(?:"(?:[^"\\]|\\.)*"|'[^']*')(?:\s*,\s*(?:"(?:[^"\\]|\\.)*"|'[^']*'))+\s*\]`)
+	reBtMkAssign = lazyRx(`^(?:export\s+|override\s+)?([A-Za-z_][\w.]*)\s*([:?+!]{0,2}=)\s*(.*)$`)
+	reBtShellFn  = lazyRx(`\$[({]shell\s+([^)}]*)[)}]`)
+	reBtBrace    = lazyRx(`\{\{[^}]*\}\}`)
+	reBtTomlStr  = lazyRx(`"((?:[^"\\]|\\.)*)"|'([^']*)'`)
+	reBtYamlList = lazyRx(`^\[(.*)\]$`)
 )
 
 type btCtx struct {
@@ -134,7 +134,7 @@ func btLines(body string) []string {
 	return out
 }
 
-var reBtSplit = regexp.MustCompile(`\s*(?:&&|\|\||;|\|)\s*`)
+var reBtSplit = lazyRx(`\s*(?:&&|\|\||;|\|)\s*`)
 
 func btSegs(line string) []string {
 	if pr := shellParse(line); pr.ok {

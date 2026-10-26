@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -21,14 +20,14 @@ type acSpan struct {
 }
 
 var (
-	reTCTagOpen   = regexp.MustCompile(`<tool_call>`)
-	reTCFuncOpen  = regexp.MustCompile(`<function=([\w.:-]+)>`)
-	reTCParam     = regexp.MustCompile(`(?s)<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>`)
-	reTCHarmony   = regexp.MustCompile(`to=functions\.([\w.-]+)`)
-	reTCSpecial   = regexp.MustCompile(`<\|tool_call\|>|<\|python_tag\|>|\[TOOL_CALLS\]`)
-	reTCMistralV3 = regexp.MustCompile(`^\s*([\w.-]+)\s*\[ARGS\]`)
-	reTCFence     = regexp.MustCompile("(?m)^[ \t]*```")
-	reTCTrailer   = regexp.MustCompile(`^\s*(?:</tool_call>|</function>|<\|call\|>|<\|end\|>|<\|eom_id\|>|<\|eot_id\|>|<\|/tool_call\|>|\s)*`)
+	reTCTagOpen   = lazyRx(`<tool_call>`)
+	reTCFuncOpen  = lazyRx(`<function=([\w.:-]+)>`)
+	reTCParam     = lazyRx(`(?s)<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>`)
+	reTCHarmony   = lazyRx(`to=functions\.([\w.-]+)`)
+	reTCSpecial   = lazyRx(`<\|tool_call\|>|<\|python_tag\|>|\[TOOL_CALLS\]`)
+	reTCMistralV3 = lazyRx(`^\s*([\w.-]+)\s*\[ARGS\]`)
+	reTCFence     = lazyRx("(?m)^[ \t]*```")
+	reTCTrailer   = lazyRx(`^\s*(?:</tool_call>|</function>|<\|call\|>|<\|end\|>|<\|eom_id\|>|<\|eot_id\|>|<\|/tool_call\|>|\s)*`)
 )
 
 var acTxtSeq atomic.Int64

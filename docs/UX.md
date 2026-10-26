@@ -1,4 +1,4 @@
-# A experiência interativa do jazz (0.8.0)
+# A experiência interativa do jazz
 
 Passo a passo do que aparece na tela quando você roda `jazz` numa pasta, com os textos exatos.
 As telas abaixo foram capturadas de uma sessão real num PTY de 86x27 (o terminal do Dell), com um
@@ -6,11 +6,51 @@ modelo falso (`fake/m1`) e o sandbox ativo; só o caminho da pasta foi trocado p
 `~/projetos/app`. Cores e negrito não aparecem aqui.
 
 Sumário: [início](#1-início) · [modos](#2-modos) · [caixa de entrada](#3-caixa-de-entrada) ·
-[paleta](#4-paleta-de-comandos) · [@arquivo](#5-arquivo) · [perguntas](#6-perguntas) ·
+[paleta](#4-paleta-de-comandos) · [modelos](#modelo-model-e-omni) · [@arquivo](#5-arquivo) · [perguntas](#6-perguntas) ·
 [trabalho e fila](#7-enquanto-o-agente-trabalha) · [sessões](#8-sessões) ·
 [atalhos](#9-atalhos) · [configuração](#10-o-que-dá-pra-mudar)
 
 ## 1. Início
+
+### Primeira vez (nenhuma chave)
+
+Sem `config.json` e sem chave nenhuma (variável de ambiente, `auth.json` ou login do ChatGPT), o
+`jazz` abre três passos antes de tudo. `jazz setup` abre os mesmos passos quando quiser.
+
+```
+  ✻ bem-vindo ao jazz  três passos e você está programando (jazz setup refaz)
+
+╭─ 1/3 · como rodar ────────────────────────────────────────────────────────────────╮
+│ Como você quer rodar o jazz?                                                      │
+│ ▸ 1. Grátis (pool de modelos grátis)  sem chave, começa já; a qualidade varia     │
+│   2. Chave da Anthropic (Claude)  pago; a chave começa com sk-ant-                │
+│   3. Chave da OpenAI  pago; a chave começa com sk-                                │
+│   4. Login do ChatGPT (Plus/Pro)  usa o seu plano, sem chave                      │
+│   5. Ollama local (no seu computador)  sem internet nem chave; precisa do ollama… │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+  ↑↓ ou nº escolhe · enter confirma · esc pula (fica no grátis)
+```
+
+Passo 2: a chave é colada escondida (só aparecem 12 pontos e o tamanho) e guardada como no
+`jazz key`; o login do ChatGPT mostra o código; o Ollama lista os modelos baixados numa lista.
+Passo 3: um pedido real mínimo (o mesmo de `jazz doctor --provider`), com o resultado na tela:
+
+```
+  ● 1/3 · Chave da OpenAI
+  crie a chave em https://platform.openai.com/api-keys
+  2/3 · cole a chave de openai (fica escondida) › •••••••••••• (28 caracteres)
+  · chave de openai salva (…fXYZ) em ~/.config/jazz-cli/auth.json
+  3/3 · testando openai/m1…
+  provedor openai (openai) · https://api.openai.com/v1
+  modelo   m1
+  chave    …fXYZ (de ~/.config/jazz-cli/auth.json)
+  ✓ HTTP 200 em 13 ms · stop stop · 0+0 tokens · resposta: ok
+  · pronto: modelo openai/m1 (salvo como padrão) · /model troca quando quiser
+```
+
+Se o teste falha: `Escolher outra opção` (volta ao passo 1) ou `Seguir assim mesmo`. Esc no passo 1
+fica no grátis e grava a config (não abre de novo sozinho). Sem terminal (`jazz -p`, pipe) nada
+disso aparece; `JAZZ_ONBOARD=off` desliga.
 
 ### Pasta nova
 
@@ -166,7 +206,7 @@ Digitar refina; Ctrl+R de novo vai para o resultado anterior; sem resultado apar
 │ › /                                                                               │
 ╰───────────────────────────────────────────────────────────────────────────────────╯
   ▸ /help         esta ajuda
-    /model        mostra ou troca o modelo: /model anthropic/claude-sonnet-5-5
+    /model        escolhe o modelo numa lista (↑↓ ou nº, digite filtra) · /model anthr…
     /models       lista modelos de um provedor: /models openrouter
     /omni         roteamento entre provedores: /omni [on|off|strategy free-first|wei…
     /key          salva uma chave de API (escondida): /key openrouter
@@ -187,6 +227,47 @@ Digitar filtra com busca aproximada, e o nome exato vem primeiro:
 seleção, Tab completa na caixa com um espaço no fim (`› /models `), Enter roda, Esc fecha a
 paleta (outro Esc limpa a linha). Comandos próprios (`.md` em `~/.config/jazz-cli/commands`,
 `.jazz/commands`, `.claude/commands`) entram na mesma lista.
+
+### Modelo: /model e /omni
+
+`/model` sozinho abre a lista de modelos, agrupada por provedor: o provedor atual primeiro, depois
+o omni, os que têm chave, os locais e os sem chave (só o modelo padrão de cada um):
+
+```
+› /model
+  modelo atual: fake/m1 · escolha outro (↑↓, nº ou digite pra filtrar)
+  fake
+  ▸  1 fake/m1  pago  atual
+     2 fake/m2  pago
+     3 fake/m3  pago
+  omni · todos os seus provedores, grátis primeiro
+     4 omni/coder  roteado
+     …
+  kilo · grátis (pool, sem chave)
+     9 kilo/poolside/laguna-s-2.1:free  grátis
+  anthropic · sem chave (enter pede a chave)
+    15 anthropic/claude-sonnet-5-5  pago
+  chatgpt · sem login (enter faz o login)
+    17 chatgpt/gpt-5.5-codex  assinatura
+  1/33 … +16  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra
+```
+
+- ↑↓ (j/k) movem; Enter escolhe e grava como padrão (`· modelo: fake/m2 (salvo como padrão)`).
+- Número: até 9 linhas, o dígito escolhe na hora; com 10 ou mais, o primeiro dígito marca a linha
+  e espera (`nº 1_ (outro dígito ou enter)`): `1` `2` = linha 12, `1` Enter = linha 1. Um número
+  que não pode crescer (`3` numa lista de 20) escolhe direto.
+- Digitar filtra (`/` antes, para procurar j, k ou dígitos). Esc limpa o filtro; outro Esc cancela
+  (`· modelo atual: fake/m1 (nada mudou)`).
+- Cada linha diz `grátis`, `pago` (com o preço por milhão quando o catálogo diz), `assinatura`, o
+  contexto e a latência medida (média dos pedidos que deram certo).
+- Escolher um modelo `sem chave` pede a chave ali mesmo (escondida, como `/key`); `sem login`
+  abre o login do ChatGPT; um servidor local que não respondeu avisa como iniciar.
+- `/model provedor/modelo` continua trocando direto. Sem terminal (ou `session_picker: off`) volta
+  a lista simples.
+
+`/omni` sozinho abre um menu: ligar/desligar o omni, e um modelo por papel (Planejador, Editor,
+Verificador). O papel abre a mesma lista, com `auto` (o omni escolhe por tarefa) em primeiro.
+`/omni status`, `/omni on`, `/omni strategy …` continuam como antes.
 
 ## 5. @arquivo
 
@@ -242,6 +323,46 @@ projeto em `.jazz/settings.json` (`neste projeto para Bash(npm test:*)`); um mot
 para `.jazz/approvals.json` (`neste projeto para <classe>: <alvo>`). Ler segredo, comando
 catastrófico, regra `ask`, hook e injeção suspeita perguntam sempre.
 
+### Várias confirmações de uma vez
+
+Quando uma resposta do modelo traz duas ou mais ações que precisam de confirmação, elas vêm numa
+caixa só, numerada, com o risco de cada uma em vermelho:
+
+```
+╭─ 2 confirmações ──────────────────────────────────────────────────────────────────╮
+│ 1. Bash  git branch -D jazz-pty-a                                                 │
+│    ⚠ apaga branch do git                                                          │
+│ 2. Bash  git branch -D jazz-pty-b                                                 │
+│    ⚠ apaga branch do git                                                          │
+│                                                                                   │
+│ Fazer estas 2 ações?                                                              │
+│ ▸ 1. Sim, as 2                                                                    │
+│   2. Uma por uma                                                                  │
+│   3. Não, nenhuma                                                                 │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+  enter sim pra tudo · u uma por uma · n/esc nenhuma · v ver tudo
+```
+
+Enter = sim para todas (`● sim pra tudo · 2 ações`); `u` volta às perguntas uma por uma; `n` ou
+Esc recusa todas. Cada ação continua passando pelas regras, guardas e auditoria dela; só a
+pergunta é juntada. Não vale nos modos `smart`, `yolo` e `plan`. `JAZZ_APPROVE_BATCH=off` desliga.
+
+### Perguntas que o projeto responde
+
+Uma `ask_user` que pergunta um fato do projeto não chega até você: branch atual (git), comando de
+teste (`go.mod`, `package.json`, `Cargo.toml`, pytest, Makefile…), gerenciador de pacotes (pelo
+lockfile) e "o arquivo X existe?". A linha mostra de onde veio:
+
+```
+● Pergunta(Qual o comando de teste do projeto?)
+  ⎿  respondida pelo projeto (go.mod): go test ./...
+```
+
+Pergunta de preferência ou intenção ("qual banco você prefere?", "quer que eu crie uma branch?")
+continua indo para você. Com opções, o fato precisa bater com uma delas. `JAZZ_ASK_FACTS=off`
+desliga. O prompt de sistema também pede ao modelo para checar esses fatos com uma ferramenta,
+juntar as perguntas numa só e mostrar o plano uma vez.
+
 ### `ask_user`
 
 ```
@@ -270,8 +391,19 @@ Um menu cancelado com Esc deixa `● cancelado`.
 ## 7. Enquanto o agente trabalha
 
 A resposta aparece com `●` e markdown quebrado na largura; cada ferramenta como
-`● Bash(go test ./...)` com o resultado em `⎿` (até 3 linhas). No fim do turno, uma linha de
-totais: `✻ 1.1s · 1 ferramenta · ctx 1%`.
+`● Bash(go test ./...)` com o resultado em `⎿` (até 3 linhas; Ctrl+O expande e recolhe). Uma
+ferramenta que levou 1 s ou mais mostra o tempo no fim da linha: `● Bash(go test ./...) 2.1s`.
+Edição mostra o diff com `-` vermelho e `+` verde (fundo tingido só com 256 cores ou mais). No
+fim do turno, uma linha de totais: `✻ 1.1s · 1 ferramenta · ctx 1%`.
+
+O rodapé da caixa mostra também `grátis` (modelo grátis) ou o custo da sessão (`$0.031`); é a
+primeira coisa a sumir quando falta espaço.
+
+A linha de status (spinner, tempo, tokens) é feita pra SSH lento: entre um segundo e outro só o
+caractere do spinner é redesenhado, e o texto que chega na mesma linha é escrito no fim dela, sem
+reescrever o resto. Medido em `ui_bench_test.go` (`TestUIRedrawBudget`, 86 colunas): esperando o
+modelo ~310 B/s (limite 600), streaming a 30 tokens/s ~1,1 KB/s além do próprio texto (limite
+2,5 KB/s). Sem terminal não há spinner.
 
 Você continua digitando durante o trabalho. Enter não interrompe: a mensagem entra na fila,
 mostrada embaixo da linha de status (`na fila (2): …`, um item por linha, com a dica
@@ -290,6 +422,12 @@ ainda é a última coisa na tela (senão expande de novo). `/expand` só expande
 
 ## 8. Sessões
 
+Fora da sessão: `jazz sessions` no terminal abre a mesma lista (↑↓ ou o número) e retoma a
+escolhida; `jazz sessions --list` (ou sem terminal, ou com `--json`, `-n`, `--all`) imprime a
+tabela. `jazz resume 2` retoma a segunda mais nova (o número da lista), `jazz resume <id>` uma
+sessão pelo id, `jazz resume` sozinho abre a lista; `--full` mostra a conversa inteira sem
+paginar. Sem terminal, `jazz resume` imprime a conversa em texto e sai (não pergunta nada).
+
 `/resume`, `/sessions` e `jazz -r` sem id abrem a lista no lugar, mais nova primeiro:
 
 ```
@@ -299,13 +437,14 @@ ainda é a última coisa na tela (senão expande de novo). `/expand` só expande
         turbo · 2 msgs · concluída · ~/projetos/app
     2 Rode perigoso  agora
         turbo · 8 msgs · concluída · ~/projetos/app
-  1/2  ↑↓ jk move · enter abre · esc cancela · digite filtra · tab: todas as pastas
+  1/2  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra · tab: todas as pastas
 ```
 
 - Cada linha: título, data relativa (`agora`, `há 5 min`, `há 2 h`, `ontem`, `há 3 dias`,
   `12 out`), `atual` na sessão em uso; embaixo modo · mensagens · tokens · custo · situação
   (`concluída`, `incompleta`, `negada`) · pasta.
-- ↑↓, j/k, PgUp/PgDn movem; Enter abre; 1–9 abre direto; digitar filtra (tolerante a erro de
+- ↑↓, j/k, PgUp/PgDn movem; Enter abre; o número abre direto (com 10 ou mais linhas, dois
+  dígitos: `1` `2` = linha 12, ou o dígito e Enter); digitar filtra (tolerante a erro de
   digitação; `/` começa um filtro para procurar j, k ou dígitos); Esc limpa o filtro, e com o
   filtro vazio cancela; Tab mostra todas as pastas, agrupadas. Sessão de outra pasta não é
   carregada: `essa sessão é de ~/outra — abra lá: jazz -C ~/outra -r <id>`.
@@ -332,6 +471,19 @@ Ao abrir, a conversa é desenhada de novo, numa escrita só, sem rodar nada:
   · sessão 261021-170442-e529 retomada (8 mensagens): Rode perigoso
 ```
 
+Conversa maior que a tela é mostrada uma página por vez, sem tela alternativa (o que você leu fica
+no histórico do terminal):
+
+```
+› PEDIDO-07 sobre o parser
+ 20% · espaço próxima página · enter +1 linha · q pula pro fim
+```
+
+Espaço (ou PgDn, `f`) mostra a próxima página, Enter (↓, `j`) mais uma linha, `q` (Esc, `G`) pula
+para o fim: aparece `… 49 linhas puladas (/expand mostra)` e a última meia tela, com o aviso de
+sessão retomada embaixo. `/expand` mostra a conversa toda. Com `jazz resume --full`, sem
+terminal ou em `TERM=dumb`, tudo sai de uma vez.
+
 Cada ferramenta vira uma linha verde ou vermelha a partir do resultado gravado (o texto é o que o
 modelo recebeu, por isso pode estar em inglês). Só as últimas 200 entradas aparecem, com
 `… (N mais acima, /expand)` em cima; `/expand` mostra o resto (`resume_replay`: número, `all`,
@@ -352,7 +504,7 @@ atual para editar.
     4 ● você · pergunte algo  48798e3f
     5 ● jazz · [ask_user]  4f3e2119
   ▸ 6 ● jazz · pronto: 300 linhas.  f80f0742  atual
-  6/6  ↑↓ jk move · enter abre · esc cancela · digite filtra
+  6/6  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra
 ```
 
 Enter continua daquela mensagem como um ramo novo, e o ramo é desenhado de novo.
@@ -380,7 +532,8 @@ Enter continua daquela mensagem como um ramo novo, e o ramo é desenhado de novo
 | Ctrl+D | sai (linha vazia) | — | — |
 | ↑ ↓ (j k em menus) | histórico filtrado pelo início | editam a fila | movem |
 | PgUp PgDn | — | — | movem uma página |
-| 1–9 | — | — | escolhem direto |
+| 1–9 | — | — | escolhem direto (listas com 10+: dois dígitos, ou dígito + Enter) |
+| Espaço · Enter · `q` | — | — | conversa retomada: próxima página · +1 linha · pula pro fim |
 | `/` | paleta de comandos | — | começa um filtro (lista de sessões) |
 | `@` | lista de arquivos | — | — |
 | `!` | roda no shell | — | — |
@@ -407,5 +560,10 @@ Enter continua daquela mensagem como um ramo novo, e o ramo é desenhado de novo
 | `ui.mention_picker` | `JAZZ_MENTION_PICKER` | `on` | `off` desliga a lista do `@` |
 | `ui.history_prefix` | `JAZZ_HISTORY_PREFIX` | `on` | `off`: ↑↓ percorre o histórico todo |
 | — | `JAZZ_ASCII=1` / `TERM=linux` | — | tudo em ASCII (`cima/baixo`, `2x`) |
+| — | `TERM=dumb` | — | ASCII, sem status ao vivo, entrada sem caixa, menus impressos uma vez e respondidos pelo número |
+| — | `NO_COLOR` | — | sem cores (com 16 cores, os papéis usam os slots ANSI da paleta Nord) |
+| — | `JAZZ_ONBOARD=off` | — | a primeira execução não abre os três passos (`jazz setup` abre sempre) |
+| — | `JAZZ_APPROVE_BATCH=off` | — | uma confirmação por ação, mesmo várias na mesma resposta |
+| — | `JAZZ_ASK_FACTS=off` | — | toda `ask_user` vai para você, mesmo as que o projeto responde |
 
 Nada disso entra no system prompt: o cache de prompt continua estável entre turnos.

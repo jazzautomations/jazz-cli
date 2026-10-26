@@ -127,16 +127,46 @@
   </aside>
   <main id="main" class="doc">
 <p class="notice-en" data-l="en" lang="en">This page is only available in Portuguese.</p>
-<div class="doc-body"><h1 id="a-experiência-interativa-do-jazz-080">A experiência interativa do jazz (0.8.0)<a class="anchor" href="#a-experiência-interativa-do-jazz-080" aria-label="link">#</a></h1>
+<div class="doc-body"><h1 id="a-experiência-interativa-do-jazz">A experiência interativa do jazz<a class="anchor" href="#a-experiência-interativa-do-jazz" aria-label="link">#</a></h1>
 <p>Passo a passo do que aparece na tela quando você roda <code>jazz</code> numa pasta, com os textos exatos.
 As telas abaixo foram capturadas de uma sessão real num PTY de 86x27 (o terminal do Dell), com um
 modelo falso (<code>fake/m1</code>) e o sandbox ativo; só o caminho da pasta foi trocado por
 <code>~/projetos/app</code>. Cores e negrito não aparecem aqui.</p>
 <p>Sumário: <a href="#1-início">início</a> · <a href="#2-modos">modos</a> · <a href="#3-caixa-de-entrada">caixa de entrada</a> ·
-<a href="#4-paleta-de-comandos">paleta</a> · <a href="#5-arquivo">@arquivo</a> · <a href="#6-perguntas">perguntas</a> ·
+<a href="#4-paleta-de-comandos">paleta</a> · <a href="#modelo-model-e-omni">modelos</a> · <a href="#5-arquivo">@arquivo</a> · <a href="#6-perguntas">perguntas</a> ·
 <a href="#7-enquanto-o-agente-trabalha">trabalho e fila</a> · <a href="#8-sessões">sessões</a> ·
 <a href="#9-atalhos">atalhos</a> · <a href="#10-o-que-dá-pra-mudar">configuração</a></p>
 <h2 id="1-início">1. Início<a class="anchor" href="#1-início" aria-label="link">#</a></h2>
+<h3 id="primeira-vez-nenhuma-chave">Primeira vez (nenhuma chave)<a class="anchor" href="#primeira-vez-nenhuma-chave" aria-label="link">#</a></h3>
+<p>Sem <code>config.json</code> e sem chave nenhuma (variável de ambiente, <code>auth.json</code> ou login do ChatGPT), o
+<code>jazz</code> abre três passos antes de tudo. <code>jazz setup</code> abre os mesmos passos quando quiser.</p>
+<pre class="code mono"><code>  ✻ bem-vindo ao jazz  três passos e você está programando (jazz setup refaz)
+
+╭─ 1/3 · como rodar ────────────────────────────────────────────────────────────────╮
+│ Como você quer rodar o jazz?                                                      │
+│ ▸ 1. Grátis (pool de modelos grátis)  sem chave, começa já; a qualidade varia     │
+│   2. Chave da Anthropic (Claude)  pago; a chave começa com sk-ant-                │
+│   3. Chave da OpenAI  pago; a chave começa com sk-                                │
+│   4. Login do ChatGPT (Plus/Pro)  usa o seu plano, sem chave                      │
+│   5. Ollama local (no seu computador)  sem internet nem chave; precisa do ollama… │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+  ↑↓ ou nº escolhe · enter confirma · esc pula (fica no grátis)</code></pre>
+<p>Passo 2: a chave é colada escondida (só aparecem 12 pontos e o tamanho) e guardada como no
+<code>jazz key</code>; o login do ChatGPT mostra o código; o Ollama lista os modelos baixados numa lista.
+Passo 3: um pedido real mínimo (o mesmo de <code>jazz doctor --provider</code>), com o resultado na tela:</p>
+<pre class="code mono"><code>  ● 1/3 · Chave da OpenAI
+  crie a chave em https://platform.openai.com/api-keys
+  2/3 · cole a chave de openai (fica escondida) › •••••••••••• (28 caracteres)
+  · chave de openai salva (…fXYZ) em ~/.config/jazz-cli/auth.json
+  3/3 · testando openai/m1…
+  provedor openai (openai) · https://api.openai.com/v1
+  modelo   m1
+  chave    …fXYZ (de ~/.config/jazz-cli/auth.json)
+  ✓ HTTP 200 em 13 ms · stop stop · 0+0 tokens · resposta: ok
+  · pronto: modelo openai/m1 (salvo como padrão) · /model troca quando quiser</code></pre>
+<p>Se o teste falha: <code>Escolher outra opção</code> (volta ao passo 1) ou <code>Seguir assim mesmo</code>. Esc no passo 1
+fica no grátis e grava a config (não abre de novo sozinho). Sem terminal (<code>jazz -p</code>, pipe) nada
+disso aparece; <code>JAZZ_ONBOARD=off</code> desliga.</p>
 <h3 id="pasta-nova">Pasta nova<a class="anchor" href="#pasta-nova" aria-label="link">#</a></h3>
 <p>Na primeira vez numa pasta, antes de qualquer coisa do projeto carregar, aparece o menu de
 confiança. Pasta sem configuração própria recebe a versão curta:</p>
@@ -232,7 +262,7 @@ abre a busca no lugar da caixa:</p>
 │ › /                                                                               │
 ╰───────────────────────────────────────────────────────────────────────────────────╯
   ▸ /help         esta ajuda
-    /model        mostra ou troca o modelo: /model anthropic/claude-sonnet-5-5
+    /model        escolhe o modelo numa lista (↑↓ ou nº, digite filtra) · /model anthr…
     /models       lista modelos de um provedor: /models openrouter
     /omni         roteamento entre provedores: /omni [on|off|strategy free-first|wei…
     /key          salva uma chave de API (escondida): /key openrouter
@@ -247,6 +277,35 @@ abre a busca no lugar da caixa:</p>
 seleção, Tab completa na caixa com um espaço no fim (<code>› /models</code>), Enter roda, Esc fecha a
 paleta (outro Esc limpa a linha). Comandos próprios (<code>.md</code> em <code>~/.config/jazz-cli/commands</code>,
 <code>.jazz/commands</code>, <code>.claude/commands</code>) entram na mesma lista.</p>
+<h3 id="modelo-model-e-omni">Modelo: /model e /omni<a class="anchor" href="#modelo-model-e-omni" aria-label="link">#</a></h3>
+<p><code>/model</code> sozinho abre a lista de modelos, agrupada por provedor: o provedor atual primeiro, depois
+o omni, os que têm chave, os locais e os sem chave (só o modelo padrão de cada um):</p>
+<pre class="code mono"><code>› /model
+  modelo atual: fake/m1 · escolha outro (↑↓, nº ou digite pra filtrar)
+  fake
+  ▸  1 fake/m1  pago  atual
+     2 fake/m2  pago
+     3 fake/m3  pago
+  omni · todos os seus provedores, grátis primeiro
+     4 omni/coder  roteado
+     …
+  kilo · grátis (pool, sem chave)
+     9 kilo/poolside/laguna-s-2.1:free  grátis
+  anthropic · sem chave (enter pede a chave)
+    15 anthropic/claude-sonnet-5-5  pago
+  chatgpt · sem login (enter faz o login)
+    17 chatgpt/gpt-5.5-codex  assinatura
+  1/33 … +16  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra</code></pre>
+<ul><li>↑↓ (j/k) movem; Enter escolhe e grava como padrão (<code>· modelo: fake/m2 (salvo como padrão)</code>).</li><li>Número: até 9 linhas, o dígito escolhe na hora; com 10 ou mais, o primeiro dígito marca a linha
+e espera (<code>nº 1_ (outro dígito ou enter)</code>): <code>1</code> <code>2</code> = linha 12, <code>1</code> Enter = linha 1. Um número
+que não pode crescer (<code>3</code> numa lista de 20) escolhe direto.</li><li>Digitar filtra (<code>/</code> antes, para procurar j, k ou dígitos). Esc limpa o filtro; outro Esc cancela
+(<code>· modelo atual: fake/m1 (nada mudou)</code>).</li><li>Cada linha diz <code>grátis</code>, <code>pago</code> (com o preço por milhão quando o catálogo diz), <code>assinatura</code>, o
+contexto e a latência medida (média dos pedidos que deram certo).</li><li>Escolher um modelo <code>sem chave</code> pede a chave ali mesmo (escondida, como <code>/key</code>); <code>sem login</code>
+abre o login do ChatGPT; um servidor local que não respondeu avisa como iniciar.</li><li><code>/model provedor/modelo</code> continua trocando direto. Sem terminal (ou <code>session_picker: off</code>) volta
+a lista simples.</li></ul>
+<p><code>/omni</code> sozinho abre um menu: ligar/desligar o omni, e um modelo por papel (Planejador, Editor,
+Verificador). O papel abre a mesma lista, com <code>auto</code> (o omni escolhe por tarefa) em primeiro.
+<code>/omni status</code>, <code>/omni on</code>, <code>/omni strategy …</code> continuam como antes.</p>
 <h2 id="5-arquivo">5. @arquivo<a class="anchor" href="#5-arquivo" aria-label="link">#</a></h2>
 <p><code>@</code> abre a lista de arquivos e pastas do projeto, com busca aproximada sobre o índice de nomes:</p>
 <pre class="code mono"><code>│ › olha @ser                                                                       │
@@ -284,6 +343,34 @@ não responde. Isso não muda o que Enter quer dizer.</li><li>Depois da resposta
 projeto em <code>.jazz/settings.json</code> (<code>neste projeto para Bash(npm test:*)</code>); um motivo de risco vai
 para <code>.jazz/approvals.json</code> (<code>neste projeto para &lt;classe&gt;: &lt;alvo&gt;</code>). Ler segredo, comando
 catastrófico, regra <code>ask</code>, hook e injeção suspeita perguntam sempre.</p>
+<h3 id="várias-confirmações-de-uma-vez">Várias confirmações de uma vez<a class="anchor" href="#várias-confirmações-de-uma-vez" aria-label="link">#</a></h3>
+<p>Quando uma resposta do modelo traz duas ou mais ações que precisam de confirmação, elas vêm numa
+caixa só, numerada, com o risco de cada uma em vermelho:</p>
+<pre class="code mono"><code>╭─ 2 confirmações ──────────────────────────────────────────────────────────────────╮
+│ 1. Bash  git branch -D jazz-pty-a                                                 │
+│    ⚠ apaga branch do git                                                          │
+│ 2. Bash  git branch -D jazz-pty-b                                                 │
+│    ⚠ apaga branch do git                                                          │
+│                                                                                   │
+│ Fazer estas 2 ações?                                                              │
+│ ▸ 1. Sim, as 2                                                                    │
+│   2. Uma por uma                                                                  │
+│   3. Não, nenhuma                                                                 │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+  enter sim pra tudo · u uma por uma · n/esc nenhuma · v ver tudo</code></pre>
+<p>Enter = sim para todas (<code>● sim pra tudo · 2 ações</code>); <code>u</code> volta às perguntas uma por uma; <code>n</code> ou
+Esc recusa todas. Cada ação continua passando pelas regras, guardas e auditoria dela; só a
+pergunta é juntada. Não vale nos modos <code>smart</code>, <code>yolo</code> e <code>plan</code>. <code>JAZZ_APPROVE_BATCH=off</code> desliga.</p>
+<h3 id="perguntas-que-o-projeto-responde">Perguntas que o projeto responde<a class="anchor" href="#perguntas-que-o-projeto-responde" aria-label="link">#</a></h3>
+<p>Uma <code>ask_user</code> que pergunta um fato do projeto não chega até você: branch atual (git), comando de
+teste (<code>go.mod</code>, <code>package.json</code>, <code>Cargo.toml</code>, pytest, Makefile…), gerenciador de pacotes (pelo
+lockfile) e "o arquivo X existe?". A linha mostra de onde veio:</p>
+<pre class="code mono"><code>● Pergunta(Qual o comando de teste do projeto?)
+  ⎿  respondida pelo projeto (go.mod): go test ./...</code></pre>
+<p>Pergunta de preferência ou intenção ("qual banco você prefere?", "quer que eu crie uma branch?")
+continua indo para você. Com opções, o fato precisa bater com uma delas. <code>JAZZ_ASK_FACTS=off</code>
+desliga. O prompt de sistema também pede ao modelo para checar esses fatos com uma ferramenta,
+juntar as perguntas numa só e mostrar o plano uma vez.</p>
 <h3 id="ask_user"><code>ask_user</code><a class="anchor" href="#ask_user" aria-label="link">#</a></h3>
 <pre class="code mono"><code>● Pergunta(Qual banco usar?)
 
@@ -304,8 +391,17 @@ atalho determinístico <code>⚡ atalho</code>; <code>/rewind</code>; e, fora da
 Um menu cancelado com Esc deixa <code>● cancelado</code>.</p>
 <h2 id="7-enquanto-o-agente-trabalha">7. Enquanto o agente trabalha<a class="anchor" href="#7-enquanto-o-agente-trabalha" aria-label="link">#</a></h2>
 <p>A resposta aparece com <code>●</code> e markdown quebrado na largura; cada ferramenta como
-<code>● Bash(go test ./...)</code> com o resultado em <code>⎿</code> (até 3 linhas). No fim do turno, uma linha de
-totais: <code>✻ 1.1s · 1 ferramenta · ctx 1%</code>.</p>
+<code>● Bash(go test ./...)</code> com o resultado em <code>⎿</code> (até 3 linhas; Ctrl+O expande e recolhe). Uma
+ferramenta que levou 1 s ou mais mostra o tempo no fim da linha: <code>● Bash(go test ./...) 2.1s</code>.
+Edição mostra o diff com <code>-</code> vermelho e <code>+</code> verde (fundo tingido só com 256 cores ou mais). No
+fim do turno, uma linha de totais: <code>✻ 1.1s · 1 ferramenta · ctx 1%</code>.</p>
+<p>O rodapé da caixa mostra também <code>grátis</code> (modelo grátis) ou o custo da sessão (<code>$0.031</code>); é a
+primeira coisa a sumir quando falta espaço.</p>
+<p>A linha de status (spinner, tempo, tokens) é feita pra SSH lento: entre um segundo e outro só o
+caractere do spinner é redesenhado, e o texto que chega na mesma linha é escrito no fim dela, sem
+reescrever o resto. Medido em <code>ui_bench_test.go</code> (<code>TestUIRedrawBudget</code>, 86 colunas): esperando o
+modelo ~310 B/s (limite 600), streaming a 30 tokens/s ~1,1 KB/s além do próprio texto (limite
+2,5 KB/s). Sem terminal não há spinner.</p>
 <p>Você continua digitando durante o trabalho. Enter não interrompe: a mensagem entra na fila,
 mostrada embaixo da linha de status (<code>na fila (2): …</code>, um item por linha, com a dica
 <code>↑↓ editar · del remove · tab agora/depois · esc esc limpa</code>). Mensagem curta (até 200 caracteres,
@@ -319,6 +415,11 @@ para a caixa.</p>
 <p>Ctrl+O expande a saída inteira da última ferramenta; Ctrl+O de novo recolhe, se a saída expandida
 ainda é a última coisa na tela (senão expande de novo). <code>/expand</code> só expande.</p>
 <h2 id="8-sessões">8. Sessões<a class="anchor" href="#8-sessões" aria-label="link">#</a></h2>
+<p>Fora da sessão: <code>jazz sessions</code> no terminal abre a mesma lista (↑↓ ou o número) e retoma a
+escolhida; <code>jazz sessions --list</code> (ou sem terminal, ou com <code>--json</code>, <code>-n</code>, <code>--all</code>) imprime a
+tabela. <code>jazz resume 2</code> retoma a segunda mais nova (o número da lista), <code>jazz resume &lt;id&gt;</code> uma
+sessão pelo id, <code>jazz resume</code> sozinho abre a lista; <code>--full</code> mostra a conversa inteira sem
+paginar. Sem terminal, <code>jazz resume</code> imprime a conversa em texto e sai (não pergunta nada).</p>
 <p><code>/resume</code>, <code>/sessions</code> e <code>jazz -r</code> sem id abrem a lista no lugar, mais nova primeiro:</p>
 <pre class="code mono"><code>› /resume
   sessões em ~/projetos/app
@@ -326,10 +427,11 @@ ainda é a última coisa na tela (senão expande de novo). <code>/expand</code> 
         turbo · 2 msgs · concluída · ~/projetos/app
     2 Rode perigoso  agora
         turbo · 8 msgs · concluída · ~/projetos/app
-  1/2  ↑↓ jk move · enter abre · esc cancela · digite filtra · tab: todas as pastas</code></pre>
+  1/2  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra · tab: todas as pastas</code></pre>
 <ul><li>Cada linha: título, data relativa (<code>agora</code>, <code>há 5 min</code>, <code>há 2 h</code>, <code>ontem</code>, <code>há 3 dias</code>,
 <code>12 out</code>), <code>atual</code> na sessão em uso; embaixo modo · mensagens · tokens · custo · situação
-(<code>concluída</code>, <code>incompleta</code>, <code>negada</code>) · pasta.</li><li>↑↓, j/k, PgUp/PgDn movem; Enter abre; 1–9 abre direto; digitar filtra (tolerante a erro de
+(<code>concluída</code>, <code>incompleta</code>, <code>negada</code>) · pasta.</li><li>↑↓, j/k, PgUp/PgDn movem; Enter abre; o número abre direto (com 10 ou mais linhas, dois
+dígitos: <code>1</code> <code>2</code> = linha 12, ou o dígito e Enter); digitar filtra (tolerante a erro de
 digitação; <code>/</code> começa um filtro para procurar j, k ou dígitos); Esc limpa o filtro, e com o
 filtro vazio cancela; Tab mostra todas as pastas, agrupadas. Sessão de outra pasta não é
 carregada: <code>essa sessão é de ~/outra — abra lá: jazz -C ~/outra -r &lt;id&gt;</code>.</li><li>A lista é apagada ao fechar. <code>/resume &lt;id&gt;</code> abre direto.</li></ul>
@@ -350,6 +452,14 @@ carregada: <code>essa sessão é de ~/outra — abra lá: jazz -C ~/outra -r &lt
 
   ✻ conversa anterior · 8 mensagens · 2 ferramentas
   · sessão 261021-170442-e529 retomada (8 mensagens): Rode perigoso</code></pre>
+<p>Conversa maior que a tela é mostrada uma página por vez, sem tela alternativa (o que você leu fica
+no histórico do terminal):</p>
+<pre class="code mono"><code>› PEDIDO-07 sobre o parser
+ 20% · espaço próxima página · enter +1 linha · q pula pro fim</code></pre>
+<p>Espaço (ou PgDn, <code>f</code>) mostra a próxima página, Enter (↓, <code>j</code>) mais uma linha, <code>q</code> (Esc, <code>G</code>) pula
+para o fim: aparece <code>… 49 linhas puladas (/expand mostra)</code> e a última meia tela, com o aviso de
+sessão retomada embaixo. <code>/expand</code> mostra a conversa toda. Com <code>jazz resume --full</code>, sem
+terminal ou em <code>TERM=dumb</code>, tudo sai de uma vez.</p>
 <p>Cada ferramenta vira uma linha verde ou vermelha a partir do resultado gravado (o texto é o que o
 modelo recebeu, por isso pode estar em inglês). Só as últimas 200 entradas aparecem, com
 <code>… (N mais acima, /expand)</code> em cima; <code>/expand</code> mostra o resto (<code>resume_replay</code>: número, <code>all</code>,
@@ -366,7 +476,7 @@ atual para editar.</p>
     4 ● você · pergunte algo  48798e3f
     5 ● jazz · [ask_user]  4f3e2119
   ▸ 6 ● jazz · pronto: 300 linhas.  f80f0742  atual
-  6/6  ↑↓ jk move · enter abre · esc cancela · digite filtra</code></pre>
+  6/6  ↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra</code></pre>
 <p>Enter continua daquela mensagem como um ramo novo, e o ramo é desenhado de novo.</p>
 <p><code>/rewind</code> volta a conversa (e os arquivos) para antes de uma mensagem sua:</p>
 <pre class="code mono"><code>╭─ mensagens ───────────────────────────────────────────────────────────────────────╮
@@ -377,9 +487,9 @@ atual para editar.</p>
 ╰───────────────────────────────────────────────────────────────────────────────────╯
   ↑↓ escolhe · digite pra filtrar · enter abre · esc cancela</code></pre>
 <h2 id="9-atalhos">9. Atalhos<a class="anchor" href="#9-atalhos" aria-label="link">#</a></h2>
-<div class="tbl"><table><thead><tr><th>Tecla</th><th>Na caixa de entrada</th><th>Durante o trabalho</th><th>Em menus e listas</th></tr></thead><tbody><tr><td>Enter</td><td>envia</td><td>põe na fila</td><td>escolhe a opção destacada</td></tr><tr><td>Shift+Enter · Alt+Enter · <code>\</code>+Enter</td><td>quebra linha</td><td>—</td><td>—</td></tr><tr><td>Esc</td><td>fecha paleta/lista; limpa a linha</td><td>limpa o texto digitado; sem texto, interrompe</td><td>não / cancela (lista: limpa o filtro primeiro)</td></tr><tr><td>Ctrl+C</td><td>limpa; 2× sai</td><td>interrompe</td><td>cancela</td></tr><tr><td>Ctrl+D</td><td>sai (linha vazia)</td><td>—</td><td>—</td></tr><tr><td>↑ ↓ (j k em menus)</td><td>histórico filtrado pelo início</td><td>editam a fila</td><td>movem</td></tr><tr><td>PgUp PgDn</td><td>—</td><td>—</td><td>movem uma página</td></tr><tr><td>1–9</td><td>—</td><td>—</td><td>escolhem direto</td></tr><tr><td><code>/</code></td><td>paleta de comandos</td><td>—</td><td>começa um filtro (lista de sessões)</td></tr><tr><td><code>@</code></td><td>lista de arquivos</td><td>—</td><td>—</td></tr><tr><td><code>!</code></td><td>roda no shell</td><td>—</td><td>—</td></tr><tr><td><code>?</code></td><td>lista de atalhos (linha vazia)</td><td>—</td><td>—</td></tr><tr><td>Tab</td><td>completa (paleta, @, comando)</td><td>alterna agora/depois na fila</td><td>lista de sessões: todas as pastas</td></tr><tr><td>Shift+Tab · Ctrl+T</td><td>troca o modo</td><td>—</td><td>—</td></tr><tr><td>Ctrl+R</td><td>busca no histórico</td><td>—</td><td>—</td></tr><tr><td>Ctrl+O</td><td>expande/recolhe a última saída</td><td>—</td><td>—</td></tr><tr><td>Ctrl+G</td><td>abre a mensagem no <code>$EDITOR</code></td><td>—</td><td>—</td></tr><tr><td>Ctrl+A/E · Ctrl+U/K · Ctrl+W</td><td>início/fim · apaga até início/fim · apaga palavra (por linha)</td><td>—</td><td>—</td></tr><tr><td>Alt+← → (Option no macOS)</td><td>pula palavra</td><td>—</td><td>—</td></tr><tr><td><code>s</code> <code>a</code> <code>n</code> <code>e</code> <code>v</code></td><td>—</td><td>—</td><td>permissão: sim · sempre · não · instruir · ver tudo</td></tr></tbody></table></div>
+<div class="tbl"><table><thead><tr><th>Tecla</th><th>Na caixa de entrada</th><th>Durante o trabalho</th><th>Em menus e listas</th></tr></thead><tbody><tr><td>Enter</td><td>envia</td><td>põe na fila</td><td>escolhe a opção destacada</td></tr><tr><td>Shift+Enter · Alt+Enter · <code>\</code>+Enter</td><td>quebra linha</td><td>—</td><td>—</td></tr><tr><td>Esc</td><td>fecha paleta/lista; limpa a linha</td><td>limpa o texto digitado; sem texto, interrompe</td><td>não / cancela (lista: limpa o filtro primeiro)</td></tr><tr><td>Ctrl+C</td><td>limpa; 2× sai</td><td>interrompe</td><td>cancela</td></tr><tr><td>Ctrl+D</td><td>sai (linha vazia)</td><td>—</td><td>—</td></tr><tr><td>↑ ↓ (j k em menus)</td><td>histórico filtrado pelo início</td><td>editam a fila</td><td>movem</td></tr><tr><td>PgUp PgDn</td><td>—</td><td>—</td><td>movem uma página</td></tr><tr><td>1–9</td><td>—</td><td>—</td><td>escolhem direto (listas com 10+: dois dígitos, ou dígito + Enter)</td></tr><tr><td>Espaço · Enter · <code>q</code></td><td>—</td><td>—</td><td>conversa retomada: próxima página · +1 linha · pula pro fim</td></tr><tr><td><code>/</code></td><td>paleta de comandos</td><td>—</td><td>começa um filtro (lista de sessões)</td></tr><tr><td><code>@</code></td><td>lista de arquivos</td><td>—</td><td>—</td></tr><tr><td><code>!</code></td><td>roda no shell</td><td>—</td><td>—</td></tr><tr><td><code>?</code></td><td>lista de atalhos (linha vazia)</td><td>—</td><td>—</td></tr><tr><td>Tab</td><td>completa (paleta, @, comando)</td><td>alterna agora/depois na fila</td><td>lista de sessões: todas as pastas</td></tr><tr><td>Shift+Tab · Ctrl+T</td><td>troca o modo</td><td>—</td><td>—</td></tr><tr><td>Ctrl+R</td><td>busca no histórico</td><td>—</td><td>—</td></tr><tr><td>Ctrl+O</td><td>expande/recolhe a última saída</td><td>—</td><td>—</td></tr><tr><td>Ctrl+G</td><td>abre a mensagem no <code>$EDITOR</code></td><td>—</td><td>—</td></tr><tr><td>Ctrl+A/E · Ctrl+U/K · Ctrl+W</td><td>início/fim · apaga até início/fim · apaga palavra (por linha)</td><td>—</td><td>—</td></tr><tr><td>Alt+← → (Option no macOS)</td><td>pula palavra</td><td>—</td><td>—</td></tr><tr><td><code>s</code> <code>a</code> <code>n</code> <code>e</code> <code>v</code></td><td>—</td><td>—</td><td>permissão: sim · sempre · não · instruir · ver tudo</td></tr></tbody></table></div>
 <h2 id="10-o-que-dá-pra-mudar">10. O que dá pra mudar<a class="anchor" href="#10-o-que-dá-pra-mudar" aria-label="link">#</a></h2>
-<div class="tbl"><table><thead><tr><th>Config (<code>config.json</code>)</th><th>Variável</th><th>Padrão</th><th>Efeito</th></tr></thead><tbody><tr><td><code>mode</code></td><td>—</td><td>(vazio)</td><td>fixa o modo de início; vazio = turbo com sandbox, senão auto</td></tr><tr><td><code>trust_default</code></td><td>—</td><td><code>prompt</code></td><td><code>always</code> confia sem perguntar em pasta sem configuração própria</td></tr><tr><td><code>always_scope</code></td><td>—</td><td><code>auto</code></td><td><code>session</code> / <code>project</code>: onde "não perguntar de novo" fica</td></tr><tr><td><code>session_picker</code></td><td><code>JAZZ_SESSION_PICKER</code></td><td><code>on</code></td><td><code>off</code> volta à lista numerada</td></tr><tr><td><code>resume_replay</code></td><td><code>JAZZ_RESUME_REPLAY</code></td><td><code>200</code></td><td>número, <code>all</code> ou <code>off</code></td></tr><tr><td><code>ui.palette</code></td><td><code>JAZZ_PALETTE</code></td><td><code>fuzzy</code></td><td><code>prefix</code> filtra só pelo início do nome</td></tr><tr><td><code>ui.mention_picker</code></td><td><code>JAZZ_MENTION_PICKER</code></td><td><code>on</code></td><td><code>off</code> desliga a lista do <code>@</code></td></tr><tr><td><code>ui.history_prefix</code></td><td><code>JAZZ_HISTORY_PREFIX</code></td><td><code>on</code></td><td><code>off</code>: ↑↓ percorre o histórico todo</td></tr><tr><td>—</td><td><code>JAZZ_ASCII=1</code> / <code>TERM=linux</code></td><td>—</td><td>tudo em ASCII (<code>cima/baixo</code>, <code>2x</code>)</td></tr></tbody></table></div>
+<div class="tbl"><table><thead><tr><th>Config (<code>config.json</code>)</th><th>Variável</th><th>Padrão</th><th>Efeito</th></tr></thead><tbody><tr><td><code>mode</code></td><td>—</td><td>(vazio)</td><td>fixa o modo de início; vazio = turbo com sandbox, senão auto</td></tr><tr><td><code>trust_default</code></td><td>—</td><td><code>prompt</code></td><td><code>always</code> confia sem perguntar em pasta sem configuração própria</td></tr><tr><td><code>always_scope</code></td><td>—</td><td><code>auto</code></td><td><code>session</code> / <code>project</code>: onde "não perguntar de novo" fica</td></tr><tr><td><code>session_picker</code></td><td><code>JAZZ_SESSION_PICKER</code></td><td><code>on</code></td><td><code>off</code> volta à lista numerada</td></tr><tr><td><code>resume_replay</code></td><td><code>JAZZ_RESUME_REPLAY</code></td><td><code>200</code></td><td>número, <code>all</code> ou <code>off</code></td></tr><tr><td><code>ui.palette</code></td><td><code>JAZZ_PALETTE</code></td><td><code>fuzzy</code></td><td><code>prefix</code> filtra só pelo início do nome</td></tr><tr><td><code>ui.mention_picker</code></td><td><code>JAZZ_MENTION_PICKER</code></td><td><code>on</code></td><td><code>off</code> desliga a lista do <code>@</code></td></tr><tr><td><code>ui.history_prefix</code></td><td><code>JAZZ_HISTORY_PREFIX</code></td><td><code>on</code></td><td><code>off</code>: ↑↓ percorre o histórico todo</td></tr><tr><td>—</td><td><code>JAZZ_ASCII=1</code> / <code>TERM=linux</code></td><td>—</td><td>tudo em ASCII (<code>cima/baixo</code>, <code>2x</code>)</td></tr><tr><td>—</td><td><code>TERM=dumb</code></td><td>—</td><td>ASCII, sem status ao vivo, entrada sem caixa, menus impressos uma vez e respondidos pelo número</td></tr><tr><td>—</td><td><code>NO_COLOR</code></td><td>—</td><td>sem cores (com 16 cores, os papéis usam os slots ANSI da paleta Nord)</td></tr><tr><td>—</td><td><code>JAZZ_ONBOARD=off</code></td><td>—</td><td>a primeira execução não abre os três passos (<code>jazz setup</code> abre sempre)</td></tr><tr><td>—</td><td><code>JAZZ_APPROVE_BATCH=off</code></td><td>—</td><td>uma confirmação por ação, mesmo várias na mesma resposta</td></tr><tr><td>—</td><td><code>JAZZ_ASK_FACTS=off</code></td><td>—</td><td>toda <code>ask_user</code> vai para você, mesmo as que o projeto responde</td></tr></tbody></table></div>
 <p>Nada disso entra no system prompt: o cache de prompt continua estável entre turnos.</p></div>
 <p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/UX.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
 <nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/arquitetura"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Arquitetura</span><span data-l="en" lang="en">Architecture</span></span></a><a class="next" href="/docs/observabilidade"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Observabilidade</span><span data-l="en" lang="en">Observability</span></span></a></nav>

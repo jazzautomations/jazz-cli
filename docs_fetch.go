@@ -139,8 +139,8 @@ func dcGoModCaches() []string {
 }
 
 var (
-	dcPyVerRE   = regexp.MustCompile(`(?m)^__version__\s*(?::\s*str\s*)?=\s*['"]([^'"]+)['"]`)
-	dcPyImpName = regexp.MustCompile(`^[A-Za-z_]\w*$`)
+	dcPyVerRE   = lazyRx(`(?m)^__version__\s*(?::\s*str\s*)?=\s*['"]([^'"]+)['"]`)
+	dcPyImpName = lazyRx(`^[A-Za-z_]\w*$`)
 )
 
 // dcPyDir: a vendored package in the project, a project virtualenv, then the
@@ -289,7 +289,7 @@ func dcDocText(dir string, files []string, budget int) string {
 	return b.String()
 }
 
-var dcRstUnder = regexp.MustCompile(`^(={3,}|-{3,}|~{3,}|\^{3,}|\*{3,})\s*$`)
+var dcRstUnder = lazyRx(`^(={3,}|-{3,}|~{3,}|\^{3,}|\*{3,})\s*$`)
 
 // dcRstHeadings turns reStructuredText underlined titles into "##" headings
 // so dcSplit can cut them.
@@ -306,8 +306,8 @@ func dcRstHeadings(s string) string {
 }
 
 var (
-	dcPyDefRE = regexp.MustCompile(`(?m)^([ \t]*)(?:async[ \t]+)?(def|class)[ \t]+([A-Za-z]\w*)[ \t]*(\((?:[^()]|\([^()]*\))*\))?[ \t]*(->[^:\n]+)?:[ \t]*\n(?:[ \t]*\n)*[ \t]*[rRbBuU]{0,2}("""|''')`)
-	dcPyModRE = regexp.MustCompile(`^(?:\s*#[^\n]*\n)*\s*[rRuU]?("""|''')`)
+	dcPyDefRE = lazyRx(`(?m)^([ \t]*)(?:async[ \t]+)?(def|class)[ \t]+([A-Za-z]\w*)[ \t]*(\((?:[^()]|\([^()]*\))*\))?[ \t]*(->[^:\n]+)?:[ \t]*\n(?:[ \t]*\n)*[ \t]*[rRbBuU]{0,2}("""|''')`)
+	dcPyModRE = lazyRx(`^(?:\s*#[^\n]*\n)*\s*[rRuU]?("""|''')`)
 )
 
 // dcLocalPy: docs files plus the public functions/classes with signature and
@@ -424,7 +424,7 @@ func dcDedent(s string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-var dcTSDeclRE = regexp.MustCompile(`(?m)(/\*\*(?:[^*]|\*[^/])*\*/\s*)?^[ \t]*(?:export[ \t]+)(?:declare[ \t]+)?(?:default[ \t]+)?(function|class|interface|type|const|let|enum|namespace|abstract class)[ \t]+([A-Za-z_$][\w$]*)([^\n{;]*)`)
+var dcTSDeclRE = lazyRx(`(?m)(/\*\*(?:[^*]|\*[^/])*\*/\s*)?^[ \t]*(?:export[ \t]+)(?:declare[ \t]+)?(?:default[ \t]+)?(function|class|interface|type|const|let|enum|namespace|abstract class)[ \t]+([A-Za-z_$][\w$]*)([^\n{;]*)`)
 
 // dcLocalNode: README plus the declarations of the package's .d.ts files.
 func dcLocalNode(dir string) string {
@@ -470,8 +470,8 @@ func dcIsFile(p string) bool {
 }
 
 var (
-	dcGoDeclRE = regexp.MustCompile(`(?m)((?:^//[^\n]*\n)+)?^(func(?:\s*\([^)]*\))?\s+([A-Z]\w*)[^\n{]*|type\s+([A-Z]\w*)[^\n{]*)`)
-	dcRsDeclRE = regexp.MustCompile(`(?m)((?:^[ \t]*///[^\n]*\n)+)(?:[ \t]*#\[[^\n]*\n)*[ \t]*(pub(?:\([^)]*\))?\s+(?:async\s+)?(?:unsafe\s+)?(fn|struct|enum|trait|type|const|mod)\s+(\w+)[^\n{;]*)`)
+	dcGoDeclRE = lazyRx(`(?m)((?:^//[^\n]*\n)+)?^(func(?:\s*\([^)]*\))?\s+([A-Z]\w*)[^\n{]*|type\s+([A-Z]\w*)[^\n{]*)`)
+	dcRsDeclRE = lazyRx(`(?m)((?:^[ \t]*///[^\n]*\n)+)(?:[ \t]*#\[[^\n]*\n)*[ \t]*(pub(?:\([^)]*\))?\s+(?:async\s+)?(?:unsafe\s+)?(fn|struct|enum|trait|type|const|mod)\s+(\w+)[^\n{;]*)`)
 )
 
 // dcLocalGo: README plus exported declarations with their doc comments.
@@ -586,7 +586,7 @@ func dcMarkdown(s string) (string, string) {
 	return page, (snReport{Hidden: hidden}).suspect()
 }
 
-var dcMainRE = regexp.MustCompile(`(?is)<main\b[^>]*>(.*)</main>`)
+var dcMainRE = lazyRx(`(?is)<main\b[^>]*>(.*)</main>`)
 
 // dcMainHTML keeps <main> when the page has one (docs sites put menus around it).
 func dcMainHTML(page string) string {
@@ -596,7 +596,7 @@ func dcMainHTML(page string) string {
 	return page
 }
 
-var dcExactVer = regexp.MustCompile(`^v?\d+(\.\d+)*([-+.][\w.]+)?$`)
+var dcExactVer = lazyRx(`^v?\d+(\.\d+)*([-+.][\w.]+)?$`)
 
 // dcNative fetches the official docs of the ecosystem for tg.
 func dcNative(ctx context.Context, tg dcTarget, query string) dcResult {
@@ -833,8 +833,8 @@ func dcContext7Conf() MCPServerConf {
 }
 
 var (
-	dcC7IDRE  = regexp.MustCompile(`(?m)(?:Context7-compatible library ID|Library ID)[^/\n]*(/[\w.-]+/[\w.-]+(?:/[\w.-]+)?)`)
-	dcC7AnyID = regexp.MustCompile(`(/[\w.-]+/[\w.-]+)`)
+	dcC7IDRE  = lazyRx(`(?m)(?:Context7-compatible library ID|Library ID)[^/\n]*(/[\w.-]+/[\w.-]+(?:/[\w.-]+)?)`)
+	dcC7AnyID = lazyRx(`(/[\w.-]+/[\w.-]+)`)
 )
 
 // dcFromContext7 resolves the library id and asks for the docs of query.

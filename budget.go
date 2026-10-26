@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 )
@@ -117,25 +116,25 @@ func (a *Agent) budgetLevel() string {
 // ---------- classification ----------
 
 var (
-	bgSensitiveRE = regexp.MustCompile(`(?i)\b(auth(?:[nz]\w*|entic\w*|ori[sz]\w*)?|login|oauth|passwords?|senhas?|credenciai?s?|credentials?|tokens?|jwt|secrets?|segredos?|crypt\w*|payments?|pagamentos?|billing|cobran[çc]a\w*|invoices?|faturas?|money|dinheiro|saldo|balance|refunds?|reembolso|migrations?|migra[çc](ão|ões|ao|oes)|schema|permiss(ion|ões|oes)\w*)\b`)
-	bgRefactorRE  = regexp.MustCompile(`(?i)\b(refactor\w*|refator\w*|clean[ -]?up|limpe\w*|limpar|extract\w*|extrai\w*|extrair|renam\w*|renomei\w*|renomear|split|divid\w*|dedup\w*|reorgani[sz]\w*|simplif\w*)\b`)
-	bgBugRE       = regexp.MustCompile(`(?i)\b(bugs?|fix\w*|conserta\w*|corrig\w*|corrij\w*|errors?|erros?|falh\w*|quebr\w*|broken|traceback|panic\w*|crash\w*|exceptions?|failing|fails?|flaky|regress\w*)\b|n[ãa]o (funciona|roda|compila|passa)`)
-	bgNewRE       = regexp.MustCompile(`(?i)\b(add\w*|adicion\w*|create\w*|cri[ae]\w*|implement\w*|build|constru\w*|feature|funcionalidade|recurso|new|nov[oa]s?|write|escrev\w*|support\w*|suport\w*|suporte)\b`)
-	bgLargeRE     = regexp.MustCompile(`(?i)\b(features?|funcionalidade\w*|refactor\w*|refator\w*|migrat\w*|migr[ae]\w*|rewrite|reescrev\w*|port(ar|e)?\b|implement\w* (a|o|um|uma|the)?\s*(full|complet\w*|whole|inteir\w*)|from scratch|do zero|add support|adicion\w* suporte|end[- ]to[- ]end|across|em todo)\b`)
-	bgQuestionRE  = regexp.MustCompile(`(?i)^\s*(how|what|why|where|which|who|when|explain|describe|tell me|is there|does|do|can|como|o que|por ?que|onde|qual|quais|quem|quando|explique|explica|descreva|me (diga|fala|explica)|existe|tem)\b`)
-	bgActionRE    = regexp.MustCompile(`(?i)\b(fix|add|create|implement|change|edit|write|update|remove|delete|rename|refactor|make|conserte|corrija|adicione|crie|implemente|mude|altere|edite|escreva|atualize|remova|apague|renomeie|refatore|fa[çc]a)\b`)
-	bgFileRE      = regexp.MustCompile(`[\w./-]*\w\.(go|py|js|jsx|ts|tsx|rs|c|h|cc|cpp|java|kt|rb|php|sh|lua|swift|cs|md|json|ya?ml|toml|sql|html|css|vue|svelte)\b`)
-	bgSymbolRE    = regexp.MustCompile("`[^`\n]{2,60}`")
+	bgSensitiveRE = lazyRx(`(?i)\b(auth(?:[nz]\w*|entic\w*|ori[sz]\w*)?|login|oauth|passwords?|senhas?|credenciai?s?|credentials?|tokens?|jwt|secrets?|segredos?|crypt\w*|payments?|pagamentos?|billing|cobran[çc]a\w*|invoices?|faturas?|money|dinheiro|saldo|balance|refunds?|reembolso|migrations?|migra[çc](ão|ões|ao|oes)|schema|permiss(ion|ões|oes)\w*)\b`)
+	bgRefactorRE  = lazyRx(`(?i)\b(refactor\w*|refator\w*|clean[ -]?up|limpe\w*|limpar|extract\w*|extrai\w*|extrair|renam\w*|renomei\w*|renomear|split|divid\w*|dedup\w*|reorgani[sz]\w*|simplif\w*)\b`)
+	bgBugRE       = lazyRx(`(?i)\b(bugs?|fix\w*|conserta\w*|corrig\w*|corrij\w*|errors?|erros?|falh\w*|quebr\w*|broken|traceback|panic\w*|crash\w*|exceptions?|failing|fails?|flaky|regress\w*)\b|n[ãa]o (funciona|roda|compila|passa)`)
+	bgNewRE       = lazyRx(`(?i)\b(add\w*|adicion\w*|create\w*|cri[ae]\w*|implement\w*|build|constru\w*|feature|funcionalidade|recurso|new|nov[oa]s?|write|escrev\w*|support\w*|suport\w*|suporte)\b`)
+	bgLargeRE     = lazyRx(`(?i)\b(features?|funcionalidade\w*|refactor\w*|refator\w*|migrat\w*|migr[ae]\w*|rewrite|reescrev\w*|port(ar|e)?\b|implement\w* (a|o|um|uma|the)?\s*(full|complet\w*|whole|inteir\w*)|from scratch|do zero|add support|adicion\w* suporte|end[- ]to[- ]end|across|em todo)\b`)
+	bgQuestionRE  = lazyRx(`(?i)^\s*(how|what|why|where|which|who|when|explain|describe|tell me|is there|does|do|can|como|o que|por ?que|onde|qual|quais|quem|quando|explique|explica|descreva|me (diga|fala|explica)|existe|tem)\b`)
+	bgActionRE    = lazyRx(`(?i)\b(fix|add|create|implement|change|edit|write|update|remove|delete|rename|refactor|make|conserte|corrija|adicione|crie|implemente|mude|altere|edite|escreva|atualize|remova|apague|renomeie|refatore|fa[çc]a)\b`)
+	bgFileRE      = lazyRx(`[\w./-]*\w\.(go|py|js|jsx|ts|tsx|rs|c|h|cc|cpp|java|kt|rb|php|sh|lua|swift|cs|md|json|ya?ml|toml|sql|html|css|vue|svelte)\b`)
+	bgSymbolRE    = lazyRx("`[^`\n]{2,60}`")
 	// bgNegatedRE: a verb the user forbids ("não refatore", "don't refactor",
 	// "sem unificar") says nothing about the kind of task.
-	bgNegatedRE = regexp.MustCompile(`(?i)\b(n[ãa]o|nem|sem|don'?t|do not|never|without|no)\s+(\w+\s+){0,2}?(refator\w*|refactor\w*|unifi\w*|unify\w*|rename\w*|renome\w*|extra(ia|ir|ct\w*)|limp\w*|clean\w*)`)
+	bgNegatedRE = lazyRx(`(?i)\b(n[ãa]o|nem|sem|don'?t|do not|never|without|no)\s+(\w+\s+){0,2}?(refator\w*|refactor\w*|unifi\w*|unify\w*|rename\w*|renome\w*|extra(ia|ir|ct\w*)|limp\w*|clean\w*)`)
 	// bgSpecErrRE: errors the request specifies as behaviour ("valor inválido é
 	// erro de uso", "dá o mesmo erro", "raises an error") are not a bug report.
-	bgSpecErrRE = regexp.MustCompile(`(?i)\b(é|e|d[áa]|dar|gera|gerar|levanta|lan[çc]a|retorna|devolve|vira|mesmo|mesma|raises?|returns?|throws?|same|an?)\s+(um\s+|o\s+|a\s+)?(mesmo\s+)?(erro|error|exce[çc][ãa]o|exception)s?\b|\b(mensage(m|ns)|messages?)\s+(do|de|of)\s+(erro|error)s?\b|\bexce[çc][õo]es\s+e\s+mensagens\b`)
+	bgSpecErrRE = lazyRx(`(?i)\b(é|e|d[áa]|dar|gera|gerar|levanta|lan[çc]a|retorna|devolve|vira|mesmo|mesma|raises?|returns?|throws?|same|an?)\s+(um\s+|o\s+|a\s+)?(mesmo\s+)?(erro|error|exce[çc][ãa]o|exception)s?\b|\b(mensage(m|ns)|messages?)\s+(do|de|of)\s+(erro|error)s?\b|\bexce[çc][õo]es\s+e\s+mensagens\b`)
 	// bgNoTestEditRE: the request forbids changing tests.
-	bgNoTestEditRE = regexp.MustCompile(`(?i)\b(n[ãa]o|nem|never|don'?t|do not)\s+(\w+\s+){0,2}?(alter\w*|mex\w*|edit\w*|modifi\w*|toqu\w*|toca\w*|change|modify|touch|edit)\b[^.\n]{0,25}\b(tests?/?|testes?)(\b|/)`)
+	bgNoTestEditRE = lazyRx(`(?i)\b(n[ãa]o|nem|never|don'?t|do not)\s+(\w+\s+){0,2}?(alter\w*|mex\w*|edit\w*|modifi\w*|toqu\w*|toca\w*|change|modify|touch|edit)\b[^.\n]{0,25}\b(tests?/?|testes?)(\b|/)`)
 	// bgLeadNewRE: the request opens with "add/implement/create": a feature.
-	bgLeadNewRE = regexp.MustCompile(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a)\b`)
+	bgLeadNewRE = lazyRx(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a)\b`)
 )
 
 // bgClassify sizes and types a request from its text (reminders stripped).
@@ -531,9 +530,9 @@ var (
 		"ls": true, "cat": true, "head": true, "tail": true, "less": true, "more": true, "wc": true, "tree": true, "file": true, "stat": true, "nl": true,
 		"awk": true, "sed": true, "cd": true, "pwd": true, "echo": true, "sort": true, "uniq": true, "cut": true, "du": true, "realpath": true, "basename": true, "dirname": true}
 	bgGitExplore  = map[string]bool{"grep": true, "log": true, "show": true, "diff": true, "status": true, "ls-files": true, "blame": true, "branch": true}
-	bgSplitCmdRE  = regexp.MustCompile(`&&|\|\||[;|\n]`)
-	bgWriteBashRE = regexp.MustCompile(`(^|[;&|(]\s*)(sed\s+(-\w+\s+)*-i|perl\s+-\w*i|tee\b|patch\b|git\s+(apply|checkout\s+--|restore)\b|mv\b|cp\b|rm\b|touch\b|truncate\b|dd\b)|(^|[^0-9&>])>>?\s*[^\s&|;>]`)
-	bgTestCmdRE   = regexp.MustCompile(`^(\S*/)?(go\s+test|pytest|py\.test|python[0-9.]*\s+(-m\s+(pytest|unittest|doctest)|\S*test\S*\.py)|(npm|yarn|pnpm|bun)\s+(run\s+)?test|npx\s+(jest|vitest|mocha|ava|tap)|jest|vitest|mocha|cargo\s+(test|nextest)|make\s+(\S+\s+)*(test|check|tests)|ctest|mvn\s+(\S+\s+)*test|gradlew?\s+test|rspec|bundle\s+exec\s+rspec|tox|nox|bats|deno\s+test|mix\s+test|dotnet\s+test|swift\s+test|zig\s+build\s+test|phpunit|run_?tests\S*|test\.sh)\b`)
+	bgSplitCmdRE  = lazyRx(`&&|\|\||[;|\n]`)
+	bgWriteBashRE = lazyRx(`(^|[;&|(]\s*)(sed\s+(-\w+\s+)*-i|perl\s+-\w*i|tee\b|patch\b|git\s+(apply|checkout\s+--|restore)\b|mv\b|cp\b|rm\b|touch\b|truncate\b|dd\b)|(^|[^0-9&>])>>?\s*[^\s&|;>]`)
+	bgTestCmdRE   = lazyRx(`^(\S*/)?(go\s+test|pytest|py\.test|python[0-9.]*\s+(-m\s+(pytest|unittest|doctest)|\S*test\S*\.py)|(npm|yarn|pnpm|bun)\s+(run\s+)?test|npx\s+(jest|vitest|mocha|ava|tap)|jest|vitest|mocha|cargo\s+(test|nextest)|make\s+(\S+\s+)*(test|check|tests)|ctest|mvn\s+(\S+\s+)*test|gradlew?\s+test|rspec|bundle\s+exec\s+rspec|tox|nox|bats|deno\s+test|mix\s+test|dotnet\s+test|swift\s+test|zig\s+build\s+test|phpunit|run_?tests\S*|test\.sh)\b`)
 )
 
 // bgSegWords splits a shell command into its simple commands, each as words

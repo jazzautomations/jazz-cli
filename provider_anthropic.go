@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -27,7 +26,7 @@ type pvAnthExtra struct {
 	Thinking []map[string]any `json:"thinking,omitempty"`
 }
 
-var pvAnthIDRE = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+var pvAnthIDRE = lazyRx(`^[a-zA-Z0-9_-]{1,64}$`)
 
 // pvAnthID makes a foreign tool call id acceptable to Anthropic, deterministically.
 func pvAnthID(id string) string {
@@ -131,7 +130,7 @@ func pvThinkingBudget(effort string, maxTok int) int {
 
 // pvAnthLegacyRE: Claude models from before adaptive thinking (3.x, 4.0, 4.1,
 // 4.5), which still take thinking.budget_tokens and temperature.
-var pvAnthLegacyRE = regexp.MustCompile(`^claude-(?:instant|2|3)|^claude-(?:opus|sonnet|haiku)-4(?:-[0-5])?(?:$|[-@]\d{8}|-latest$)`)
+var pvAnthLegacyRE = lazyRx(`^claude-(?:instant|2|3)|^claude-(?:opus|sonnet|haiku)-4(?:-[0-5])?(?:$|[-@]\d{8}|-latest$)`)
 
 // pvAnthModern reports whether model is a current Claude model (4.6 and later):
 // adaptive thinking with output_config.effort, no budget_tokens, no temperature.

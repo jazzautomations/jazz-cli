@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -246,13 +245,13 @@ func snHomoglyphs(s string, strict bool) (string, int) {
 // ---------- hidden HTML ----------
 
 var (
-	reOpenTag      = regexp.MustCompile(`(?is)<([a-z][a-z0-9]*)\b([^>]*)>`)
-	reHiddenAttr   = regexp.MustCompile(`(?is)(^|\s)hidden(\s|=|$)|aria-hidden\s*=\s*["']?true`)
-	reStyleAttr    = regexp.MustCompile(`(?is)\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')`)
-	reStyleHidden  = regexp.MustCompile(`(?i)display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(px|em|rem|pt|%)?\s*(;|$)|opacity\s*:\s*0(\.0+)?\s*(;|$)|(left|top|text-indent)\s*:\s*-[0-9]{4,}`)
-	reStyleColor   = regexp.MustCompile(`(?i)(^|[;\s])color\s*:\s*(#fff(fff)?|white|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))`)
-	reStyleBgWhite = regexp.MustCompile(`(?i)background(-color)?\s*:\s*(#fff(fff)?|white|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))`)
-	reHTMLAttrText = regexp.MustCompile(`(?is)\b(alt|title|aria-label|data-[a-z-]+)\s*=\s*["']([^"']{12,})["']`)
+	reOpenTag      = lazyRx(`(?is)<([a-z][a-z0-9]*)\b([^>]*)>`)
+	reHiddenAttr   = lazyRx(`(?is)(^|\s)hidden(\s|=|$)|aria-hidden\s*=\s*["']?true`)
+	reStyleAttr    = lazyRx(`(?is)\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	reStyleHidden  = lazyRx(`(?i)display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(px|em|rem|pt|%)?\s*(;|$)|opacity\s*:\s*0(\.0+)?\s*(;|$)|(left|top|text-indent)\s*:\s*-[0-9]{4,}`)
+	reStyleColor   = lazyRx(`(?i)(^|[;\s])color\s*:\s*(#fff(fff)?|white|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))`)
+	reStyleBgWhite = lazyRx(`(?i)background(-color)?\s*:\s*(#fff(fff)?|white|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))`)
+	reHTMLAttrText = lazyRx(`(?is)\b(alt|title|aria-label|data-[a-z-]+)\s*=\s*["']([^"']{12,})["']`)
 )
 
 // snHiddenHTML removes elements the browser would not show and returns the

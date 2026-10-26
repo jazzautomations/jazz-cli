@@ -108,7 +108,13 @@ func (a *Agent) runAskUser(ctx context.Context, tc ToolCall) ToolOutput {
 	if a.sub {
 		return ToolOutput{IsErr: true, Text: "ask_user is not available inside a subagent: report the open question instead."}
 	}
+	if f, ok := askFromFacts(a.tools.Root, q); ok { // a fact on disk: no round trip (askfacts.go)
+		a.obEv("ask.auto", map[string]any{"source": f.source})
+		return ToolOutput{Text: "Answered from the project (" + f.source + ") without asking the user: " + f.answer + ". Facts like this (files, branch, test runner) are yours to check with a tool; ask the user only about intent or preferences.",
+			Display: Display{Summary: "respondida pelo projeto (" + f.source + "): " + oneLine(f.answer, 80)}}
+	}
 	if asker, ok := a.ui.(uiAsker); ok {
+		a.obEv("ask.user", map[string]any{"options": len(q.Options)})
 		ans, ok := asker.AskUser(ctx, q)
 		if !ok {
 			return ToolOutput{Text: "The user skipped the question (Esc). Choose the most reasonable default, state the assumption, and continue.", Display: Display{Summary: "pergunta pulada"}}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -10,8 +9,8 @@ var (
 	// and Claude Code. A leading tool heading catches single-line scrollback; otherwise requiring
 	// both a heading and an exit footer keeps
 	// normal reports and discussion about tools out of the confirmation path.
-	transcriptToolLine = regexp.MustCompile(`(?m)^\s*[●⏺]\s+(Bash|Read|Write|Edit|Grep|Glob|Task|WebFetch|WebSearch|NotebookEdit)\(`)
-	transcriptExitLine = regexp.MustCompile(`(?m)^\s*⎿\s*exit(?:\s+code)?\s*[:=]?\s*[0-9]+\b`)
+	transcriptToolLine = lazyRx(`(?m)^\s*[●⏺]\s+(Bash|Read|Write|Edit|Grep|Glob|Task|WebFetch|WebSearch|NotebookEdit)\(`)
+	transcriptExitLine = lazyRx(`(?m)^\s*⎿\s*exit(?:\s+code)?\s*[:=]?\s*[0-9]+\b`)
 )
 
 func looksLikePastedToolTranscript(text string) bool {

@@ -128,10 +128,10 @@ func (a *Agent) hgOn(name string) bool {
 
 var (
 	// hgAskTestsRE: the request asks to add or change tests.
-	hgAskTestsRE = regexp.MustCompile(`(?i)\b(adicion\w*|acrescent\w*|escrev\w*|cri[ea]\w*|atualiz\w*|ajust\w*|ampli\w*|estend\w*|cubr\w*|cobr\w*|inclu\w*|mud\w*|alter\w*|edit\w*|modifiq\w*|modific\w*|reescrev\w*|add\w*|writ\w*|creat\w*|updat\w*|extend\w*|cover\w*|chang\w*|modify\w*|rewrit\w*|includ\w*)\b[^.;:\n]{0,40}?\b(tests?|testes?|specs?)\b|\b(com|with)\s+(\S+\s+){0,2}?(tests?|testes?)\b|\btdd\b|test[- ]first`)
-	hgAskCIRE    = regexp.MustCompile(`(?i)\b(ci|workflows?|pipelines?|github actions|gitlab-ci|circleci|jenkinsfile)\b`)
+	hgAskTestsRE = lazyRx(`(?i)\b(adicion\w*|acrescent\w*|escrev\w*|cri[ea]\w*|atualiz\w*|ajust\w*|ampli\w*|estend\w*|cubr\w*|cobr\w*|inclu\w*|mud\w*|alter\w*|edit\w*|modifiq\w*|modific\w*|reescrev\w*|add\w*|writ\w*|creat\w*|updat\w*|extend\w*|cover\w*|chang\w*|modify\w*|rewrit\w*|includ\w*)\b[^.;:\n]{0,40}?\b(tests?|testes?|specs?)\b|\b(com|with)\s+(\S+\s+){0,2}?(tests?|testes?)\b|\btdd\b|test[- ]first`)
+	hgAskCIRE    = lazyRx(`(?i)\b(ci|workflows?|pipelines?|github actions|gitlab-ci|circleci|jenkinsfile)\b`)
 	// hgTestsRightRE: "os testes estão certos" also forbids editing them.
-	hgTestsRightRE = regexp.MustCompile(`(?i)\b(os\s+)?testes\s+est[ãa]o\s+cert|\btests\s+are\s+(correct|right)`)
+	hgTestsRightRE = lazyRx(`(?i)\b(os\s+)?testes\s+est[ãa]o\s+cert|\btests\s+are\s+(correct|right)`)
 )
 
 // hgTestPolicy reads the request's stance on tests.
@@ -152,12 +152,12 @@ func hgTestPolicy(s string) (hgPolicy, bool) {
 }
 
 var (
-	hgRemoveVerbRE = regexp.MustCompile(`(?i)\b(remov\w*|apag\w*|delet\w*|exclu[ai]\w*|elimin\w*|renome\w*|rename\w*|dedup\w*|deduplic\w*|substitu\w*|replac\w*|drop)\b`)
-	hgNegBeforeRE  = regexp.MustCompile(`(?i)\b(n[ãa]o|nem|sem|don'?t|do not|never|without)\s+(\S+\s+){0,1}$`)
-	hgToRE         = regexp.MustCompile(`(?i)\s(para|to|por|with|pelo|pela|into|em)\s|→|->`)
-	hgBacktickRE   = regexp.MustCompile("`([A-Za-z_][\\w.]*)(?:\\(\\))?`")
-	hgCodeIdentRE  = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9]*(?:_[A-Za-z0-9_]+|[a-z][A-Z][A-Za-z0-9_]*))(?:\(\))?`)
-	hgFuncCallRE   = regexp.MustCompile(`\b([A-Za-z_]\w*)\(\)`)
+	hgRemoveVerbRE = lazyRx(`(?i)\b(remov\w*|apag\w*|delet\w*|exclu[ai]\w*|elimin\w*|renome\w*|rename\w*|dedup\w*|deduplic\w*|substitu\w*|replac\w*|drop)\b`)
+	hgNegBeforeRE  = lazyRx(`(?i)\b(n[ãa]o|nem|sem|don'?t|do not|never|without)\s+(\S+\s+){0,1}$`)
+	hgToRE         = lazyRx(`(?i)\s(para|to|por|with|pelo|pela|into|em)\s|→|->`)
+	hgBacktickRE   = lazyRx("`([A-Za-z_][\\w.]*)(?:\\(\\))?`")
+	hgCodeIdentRE  = lazyRx(`\b([A-Za-z_][A-Za-z0-9]*(?:_[A-Za-z0-9_]+|[a-z][A-Z][A-Za-z0-9_]*))(?:\(\))?`)
+	hgFuncCallRE   = lazyRx(`\b([A-Za-z_]\w*)\(\)`)
 )
 
 // hgRemovalIDs: identifiers the request says to remove, rename or replace
@@ -218,8 +218,8 @@ func hgRemovalIDs(s string) []string {
 }
 
 var (
-	hgExtractRE  = regexp.MustCompile(`(?i)\b(extra[ií]\w*|extract\w*|mov[ae]\w*|mover|consolid\w*|centraliz\w*|unifi\w*|junt\w*)\b[^;\n]{0,200}?\s(?:para|into|to|em|no|na|in)\s+(?:\S+\s+){0,4}?([\w./-]+\.(?:py|go|js|mjs|ts|jsx|tsx|rb|rs|java|kt|php|lua))\b`)
-	hgNoCopiesRE = regexp.MustCompile(`(?i)\bsem\s+(deixar\s+)?(nenhuma\s+)?(as\s+)?(c[óo]pias?|duplica\w*)|n[ãa]o\s+deix\w*\s+(nenhuma\s+)?c[óo]pias?|\bno\s+(more\s+)?(copies|duplicates?)\b|\bwithout\s+(leaving\s+)?(any\s+)?(copies|duplicates?|duplication)\b|\bremov\w*\s+(as\s+|the\s+)?(c[óo]pias|duplica\w*|copies)\b|\bdedup\w*`)
+	hgExtractRE  = lazyRx(`(?i)\b(extra[ií]\w*|extract\w*|mov[ae]\w*|mover|consolid\w*|centraliz\w*|unifi\w*|junt\w*)\b[^;\n]{0,200}?\s(?:para|into|to|em|no|na|in)\s+(?:\S+\s+){0,4}?([\w./-]+\.(?:py|go|js|mjs|ts|jsx|tsx|rb|rs|java|kt|php|lua))\b`)
+	hgNoCopiesRE = lazyRx(`(?i)\bsem\s+(deixar\s+)?(nenhuma\s+)?(as\s+)?(c[óo]pias?|duplica\w*)|n[ãa]o\s+deix\w*\s+(nenhuma\s+)?c[óo]pias?|\bno\s+(more\s+)?(copies|duplicates?)\b|\bwithout\s+(leaving\s+)?(any\s+)?(copies|duplicates?|duplication)\b|\bremov\w*\s+(as\s+|the\s+)?(c[óo]pias|duplica\w*|copies)\b|\bdedup\w*`)
 )
 
 // hgExtractTarget: "extract … into m.py … without copies" names m.py.
@@ -236,9 +236,9 @@ func hgExtractTarget(s string) string {
 // ---------- protected paths ----------
 
 var (
-	hgTestCfgRE = regexp.MustCompile(`(?i)(^|/)(pytest\.ini|tox\.ini|noxfile\.py|conftest\.py|\.coveragerc|phpunit\.xml(\.dist)?|karma\.conf\.[cm]?[jt]s|\.mocharc(\.\w+)?|(jest|vitest|playwright|cypress)\.config\.[cm]?[jt]s|run_?tests?\.\w+)$`)
-	hgCIRE      = regexp.MustCompile(`(?i)(^|/)(\.github/workflows/[^/]+|\.gitlab-ci\.ya?ml|\.circleci/[^/]+|azure-pipelines\.ya?ml|Jenkinsfile|\.travis\.ya?ml|bitbucket-pipelines\.ya?ml|\.woodpecker\.ya?ml|\.drone\.ya?ml)$`)
-	hgSectionRE = regexp.MustCompile(`(^|/)(GNUmakefile|[Mm]akefile|pyproject\.toml|setup\.cfg|package\.json)$`)
+	hgTestCfgRE = lazyRx(`(?i)(^|/)(pytest\.ini|tox\.ini|noxfile\.py|conftest\.py|\.coveragerc|phpunit\.xml(\.dist)?|karma\.conf\.[cm]?[jt]s|\.mocharc(\.\w+)?|(jest|vitest|playwright|cypress)\.config\.[cm]?[jt]s|run_?tests?\.\w+)$`)
+	hgCIRE      = lazyRx(`(?i)(^|/)(\.github/workflows/[^/]+|\.gitlab-ci\.ya?ml|\.circleci/[^/]+|azure-pipelines\.ya?ml|Jenkinsfile|\.travis\.ya?ml|bitbucket-pipelines\.ya?ml|\.woodpecker\.ya?ml|\.drone\.ya?ml)$`)
+	hgSectionRE = lazyRx(`(^|/)(GNUmakefile|[Mm]akefile|pyproject\.toml|setup\.cfg|package\.json)$`)
 )
 
 // hgKind classifies a path: "test", "testcfg", "ci", "section" (only the test
@@ -268,9 +268,9 @@ func hgKind(rel string) string {
 }
 
 var (
-	hgMakeTargetRE = regexp.MustCompile(`^(test|tests|check|unittest|unit|coverage|ci)[\w.-]*\s*:`)
-	hgTomlHeadRE   = regexp.MustCompile(`^\s*\[`)
-	hgTomlTestRE   = regexp.MustCompile(`^\s*\[+\s*(tool\.(pytest|coverage)|tool:pytest|pytest|coverage:)`)
+	hgMakeTargetRE = lazyRx(`^(test|tests|check|unittest|unit|coverage|ci)[\w.-]*\s*:`)
+	hgTomlHeadRE   = lazyRx(`^\s*\[`)
+	hgTomlTestRE   = lazyRx(`^\s*\[+\s*(tool\.(pytest|coverage)|tool:pytest|pytest|coverage:)`)
 )
 
 // hgSection extracts the test-related part of a "section" file.
@@ -433,12 +433,12 @@ func hgRefusal(why string, weakening bool) string {
 }
 
 var (
-	hgSkipRE      = regexp.MustCompile(`@pytest\.mark\.(skip|skipif|xfail)\b|@unittest\.(skip|skipIf|skipUnless|expectedFailure)\b|\bunittest\.skip\w*\(|\.skipTest\(|\bpytest\.(skip|xfail)\(|\bt\.Skip(Now|f)?\(|\b(it|test|describe|context|suite)\.(skip|only|todo)\(|\b(xit|xdescribe|xtest|fit|fdescribe)\(|@Disabled\b|@Ignore\b|#\[ignore\]`)
-	hgAssertRE    = regexp.MustCompile(`\bassert\w*\b|\bexpect\(|\bt\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow)\b|\.should\b|\bself\.fail\(|\brequire\.\w+\(|\bassert\.\w+\(`)
-	hgTrivialRE   = regexp.MustCompile(`^\s*(assert\s+(True|1|not\s+False)\s*$|self\.assertTrue\(\s*True\s*\)|expect\(\s*true\s*\)\.toBe\(\s*true\s*\)|assert\.True\(t,\s*true\))`)
-	hgSuppressRE  = regexp.MustCompile(`#\s*noqa\b|#\s*type:\s*ignore\b|//\s*nolint\b|@ts-ignore\b|@ts-nocheck\b|eslint-disable|#\[allow\(|@SuppressWarnings\b|#\s*pragma:\s*no\s*cover|#\s*pylint:\s*disable`)
-	hgPyTestDefRE = regexp.MustCompile(`^(\s*)(async\s+)?def\s+(test\w*)\s*\(`)
-	hgGoTestDefRE = regexp.MustCompile(`^func\s+(Test\w*)\s*\(`)
+	hgSkipRE      = lazyRx(`@pytest\.mark\.(skip|skipif|xfail)\b|@unittest\.(skip|skipIf|skipUnless|expectedFailure)\b|\bunittest\.skip\w*\(|\.skipTest\(|\bpytest\.(skip|xfail)\(|\bt\.Skip(Now|f)?\(|\b(it|test|describe|context|suite)\.(skip|only|todo)\(|\b(xit|xdescribe|xtest|fit|fdescribe)\(|@Disabled\b|@Ignore\b|#\[ignore\]`)
+	hgAssertRE    = lazyRx(`\bassert\w*\b|\bexpect\(|\bt\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow)\b|\.should\b|\bself\.fail\(|\brequire\.\w+\(|\bassert\.\w+\(`)
+	hgTrivialRE   = lazyRx(`^\s*(assert\s+(True|1|not\s+False)\s*$|self\.assertTrue\(\s*True\s*\)|expect\(\s*true\s*\)\.toBe\(\s*true\s*\)|assert\.True\(t,\s*true\))`)
+	hgSuppressRE  = lazyRx(`#\s*noqa\b|#\s*type:\s*ignore\b|//\s*nolint\b|@ts-ignore\b|@ts-nocheck\b|eslint-disable|#\[allow\(|@SuppressWarnings\b|#\s*pragma:\s*no\s*cover|#\s*pylint:\s*disable`)
+	hgPyTestDefRE = lazyRx(`^(\s*)(async\s+)?def\s+(test\w*)\s*\(`)
+	hgGoTestDefRE = lazyRx(`^func\s+(Test\w*)\s*\(`)
 )
 
 // hgWeakening: why the change from old to new weakens tests or checks ("" = no).
@@ -468,7 +468,7 @@ func hgWeakening(rel, old, new string, test bool) string {
 	if !test {
 		return ""
 	}
-	if o, n := len(qgMatchLines(old, hgAssertRE)), len(qgMatchLines(new, hgAssertRE)); n < o {
+	if o, n := len(qgMatchLines(old, hgAssertRE.R())), len(qgMatchLines(new, hgAssertRE.R())); n < o {
 		return fmt.Sprintf("it removes %d assertion line(s) from %s", o-n, rel)
 	}
 	oldHollow := hgHollowTests(old)
@@ -1006,12 +1006,12 @@ func (a *Agent) hgCheckSnap() []string {
 // ---------- hardcode detection ----------
 
 var (
-	hgLitRE       = regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\b\d+(?:\.\d+)?\b`)
-	hgCallNameRE  = regexp.MustCompile(`\b([A-Za-z_]\w*)\s*\(`)
-	hgAssertLnRE  = regexp.MustCompile(`assert|expect\(|==|Equal|toBe|should|t\.Error|t\.Fatal`)
-	hgReturnLitRE = regexp.MustCompile(`\breturn\s+(` + `"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?` + `)\s*(?:,\s*nil\s*)?;?\s*$`)
-	hgIfEqRE      = regexp.MustCompile(`\bif\b.*?(?:==|===)\s*(` + `"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?` + `)`)
-	hgDefRE       = regexp.MustCompile(`^(\s*)(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)|^func\s+(?:\([^)]*\)\s*)?(\w+)\s*\(([^)]*)\)|^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
+	hgLitRE       = lazyRx(`"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\b\d+(?:\.\d+)?\b`)
+	hgCallNameRE  = lazyRx(`\b([A-Za-z_]\w*)\s*\(`)
+	hgAssertLnRE  = lazyRx(`assert|expect\(|==|Equal|toBe|should|t\.Error|t\.Fatal`)
+	hgReturnLitRE = lazyRx(`\breturn\s+(` + `"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?` + `)\s*(?:,\s*nil\s*)?;?\s*$`)
+	hgIfEqRE      = lazyRx(`\bif\b.*?(?:==|===)\s*(` + `"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?` + `)`)
+	hgDefRE       = lazyRx(`^(\s*)(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)|^func\s+(?:\([^)]*\)\s*)?(\w+)\s*\(([^)]*)\)|^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
 	hgNotFnName   = map[string]bool{"assert": true, "assertEqual": true, "assertEquals": true, "assertTrue": true, "assertFalse": true, "assertIn": true, "assertAlmostEqual": true, "assertRaises": true, "assertIs": true, "assertIsNone": true, "assertRaisesRegex": true, "assertCountEqual": true, "assertListEqual": true, "assertDictEqual": true, "expect": true, "toBe": true, "toEqual": true, "toStrictEqual": true, "equal": true, "deepEqual": true, "strictEqual": true, "Equal": true, "Errorf": true, "Fatalf": true, "Error": true, "Fatal": true, "len": true, "str": true, "int": true, "float": true, "round": true, "list": true, "dict": true, "set": true, "tuple": true, "sorted": true, "print": true, "repr": true, "isinstance": true, "type": true, "bool": true, "Decimal": true, "date": true, "time": true, "datetime": true, "if": true, "for": true, "while": true, "return": true}
 )
 
@@ -1244,7 +1244,7 @@ func (a *Agent) hgDefinitions(id string) []string {
 	return out
 }
 
-var hgTopDefRE = regexp.MustCompile(`(?m)^(?:async\s+)?(?:def|class)\s+(\w+)|^func\s+(\w+)|^type\s+(\w+)|^(?:export\s+)?(?:async\s+)?(?:function|class|const|let)\s+(\w+)`)
+var hgTopDefRE = lazyRx(`(?m)^(?:async\s+)?(?:def|class)\s+(\w+)|^func\s+(\w+)|^type\s+(\w+)|^(?:export\s+)?(?:async\s+)?(?:function|class|const|let)\s+(\w+)`)
 
 func hgTopDefs(s string) map[string]int {
 	out := map[string]int{}

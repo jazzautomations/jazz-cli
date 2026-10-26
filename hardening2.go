@@ -47,7 +47,7 @@ var h2HostNS = map[string]bool{"--pid": true, "--net": true, "--network": true, 
 
 var h2BadCaps = map[string]bool{"SYS_ADMIN": true, "ALL": true, "SYS_PTRACE": true, "SYS_MODULE": true, "SYS_RAWIO": true, "DAC_READ_SEARCH": true}
 
-var reH2Device = regexp.MustCompile(`^/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk|dm-|mapper/|loop|md|mem$|kmem$|port$)`)
+var reH2Device = lazyRx(`^/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk|dm-|mapper/|loop|md|mem$|kmem$|port$)`)
 
 // h2BadMountSrc reports whether a bind-mount source hands the host to the container.
 func h2BadMountSrc(src string) bool {
@@ -296,11 +296,11 @@ func h2ComposeRunDanger(sub string, rest []string) string {
 }
 
 var (
-	reH2CompPriv = regexp.MustCompile(`^\s*privileged:\s*["']?true`)
-	reH2CompNS   = regexp.MustCompile(`^\s*(network_mode|pid|ipc|userns_mode|uts|cgroup):\s*["']?host`)
-	reH2CompSec  = regexp.MustCompile(`(?i)(seccomp|apparmor)\s*[:=]\s*unconfined|label\s*[:=]\s*disable`)
-	reH2CompItem = regexp.MustCompile(`^\s*-\s*["']?([^"'\s]+)`)
-	reH2CompCap  = regexp.MustCompile(`^\s*cap_add:\s*(.*)$`)
+	reH2CompPriv = lazyRx(`^\s*privileged:\s*["']?true`)
+	reH2CompNS   = lazyRx(`^\s*(network_mode|pid|ipc|userns_mode|uts|cgroup):\s*["']?host`)
+	reH2CompSec  = lazyRx(`(?i)(seccomp|apparmor)\s*[:=]\s*unconfined|label\s*[:=]\s*disable`)
+	reH2CompItem = lazyRx(`^\s*-\s*["']?([^"'\s]+)`)
+	reH2CompCap  = lazyRx(`^\s*cap_add:\s*(.*)$`)
 )
 
 // h2ComposeText flags a compose file that grants host-level access.
@@ -448,13 +448,13 @@ func h2LimitsLine(d shellDialect) string {
 }
 
 var (
-	reH2ForkNamed = regexp.MustCompile(`([\w:.-]+)\s*\(\)\s*\{\s*([\w:.-]+)\s*\|\s*([\w:.-]+)\s*&\s*\}\s*;?\s*([\w:.-]+)`)
-	reH2ForkPerl  = regexp.MustCompile(`\bfork\s+while\b|while\s*\(\s*1\s*\)\s*\{\s*fork`)
-	reH2Yes       = regexp.MustCompile(`(^|[;&|(]\s*)yes\b[^;&|<>\n]*>>?\s*(\S+)`)
-	reH2Urandom   = regexp.MustCompile(`/dev/(u?random|zero)\b[^|;&\n]*>>?\s*([^\s&|;]+)|\b(cat|head|pv)\b[^|;&\n]*/dev/(u?random|zero)\b[^|;&\n]*>>?\s*([^\s&|;]+)`)
-	reH2HeadC     = regexp.MustCompile(`\bhead\s+(?:-c\s*|--bytes[= ])([0-9]+[kKmMgGtT]?)`)
-	reH2While     = regexp.MustCompile(`(?s)\b(while\s+(true|:|\[\s*(1|true)\s*\]|\(\(\s*1\s*\)\))|until\s+(false|\[\s*0\s*\])|for\s*\(\(\s*;\s*;\s*\)\))\s*;?\s*do\b(.*)\bdone`)
-	reH2WriteOp   = regexp.MustCompile(`>>|\btee\b|\bdd\b|\bfallocate\b|\bcp\b|\btruncate\b|\bhead\s+-c|/dev/(u?random|zero)`)
+	reH2ForkNamed = lazyRx(`([\w:.-]+)\s*\(\)\s*\{\s*([\w:.-]+)\s*\|\s*([\w:.-]+)\s*&\s*\}\s*;?\s*([\w:.-]+)`)
+	reH2ForkPerl  = lazyRx(`\bfork\s+while\b|while\s*\(\s*1\s*\)\s*\{\s*fork`)
+	reH2Yes       = lazyRx(`(^|[;&|(]\s*)yes\b[^;&|<>\n]*>>?\s*(\S+)`)
+	reH2Urandom   = lazyRx(`/dev/(u?random|zero)\b[^|;&\n]*>>?\s*([^\s&|;]+)|\b(cat|head|pv)\b[^|;&\n]*/dev/(u?random|zero)\b[^|;&\n]*>>?\s*([^\s&|;]+)`)
+	reH2HeadC     = lazyRx(`\bhead\s+(?:-c\s*|--bytes[= ])([0-9]+[kKmMgGtT]?)`)
+	reH2While     = lazyRx(`(?s)\b(while\s+(true|:|\[\s*(1|true)\s*\]|\(\(\s*1\s*\)\))|until\s+(false|\[\s*0\s*\])|for\s*\(\(\s*;\s*;\s*\)\))\s*;?\s*do\b(.*)\bdone`)
+	reH2WriteOp   = lazyRx(`>>|\btee\b|\bdd\b|\bfallocate\b|\bcp\b|\btruncate\b|\bhead\s+-c|/dev/(u?random|zero)`)
 )
 
 // h2WholeDanger covers abuse patterns that need the whole command line.
@@ -497,7 +497,7 @@ func h2WholeDanger(cmd string) string {
 	return ""
 }
 
-var reH2Size = regexp.MustCompile(`^([0-9]+)([kKmMgGtT]?)[bB]?$`)
+var reH2Size = lazyRx(`^([0-9]+)([kKmMgGtT]?)[bB]?$`)
 
 // h2Bytes parses sizes such as 100G, 4096, 1M.
 func h2Bytes(s string) int64 {
@@ -573,8 +573,8 @@ func h2SegmentDanger(w string, args []string) string {
 // ---------- 6. clones and git installs from a new host ----------
 
 var (
-	reH2URLHost = regexp.MustCompile(`(?i)^(?:git\+)?(?:https?|ssh|git|ftp)://(?:[^/@\s]+@)?([A-Za-z0-9.-]+)`)
-	reH2SCPHost = regexp.MustCompile(`^(?:[\w.-]+@)([A-Za-z0-9.-]+):`)
+	reH2URLHost = lazyRx(`(?i)^(?:git\+)?(?:https?|ssh|git|ftp)://(?:[^/@\s]+@)?([A-Za-z0-9.-]+)`)
+	reH2SCPHost = lazyRx(`^(?:[\w.-]+@)([A-Za-z0-9.-]+):`)
 )
 
 // h2RootFn returns the project directory (tests replace it).
@@ -597,7 +597,7 @@ func h2GitHost(s string) string {
 	return ""
 }
 
-var reH2ConfURL = regexp.MustCompile(`(?m)^\s*url\s*=\s*(\S+)`)
+var reH2ConfURL = lazyRx(`(?m)^\s*url\s*=\s*(\S+)`)
 
 // h2SeenHosts are the git hosts the repository already talks to: remotes in
 // .git/config and submodule urls in .gitmodules.
@@ -809,7 +809,7 @@ const (
 	h2Invalid
 )
 
-var reH2Trailer = regexp.MustCompile(`,"h":"([0-9a-f]{32})"\}$`)
+var reH2Trailer = lazyRx(`,"h":"([0-9a-f]{32})"\}$`)
 
 // h2CheckLine classifies one raw line.
 func h2CheckLine(key, line []byte) int {
@@ -944,15 +944,15 @@ func h2LegacyNoticeOnce() string {
 
 var h2PoisonRes = []struct {
 	label string
-	re    *regexp.Regexp
+	re    *lazyRe
 }{
-	{"URL externa", regexp.MustCompile(`(?i)\b(?:https?|ftp|ssh|git|wss?)://(?:[^/\s@]+@)?(?:[a-z0-9-]+\.)+[a-z0-9-]+|\b(?:https?|ftp|ssh|git|wss?)://(?:\d{1,3}\.){3}\d{1,3}`)},
-	{"endereço IP", regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)},
-	{"nome de host", regexp.MustCompile(`(?i)\b(?:[a-z0-9][a-z0-9-]*\.)+(?:com|net|org|io|dev|app|xyz|ru|cn|ai|info|biz|cloud|tk|top|site|online|link|click|ly|gg|cc|to)\b`)},
-	{"comando de rede", regexp.MustCompile(`(?i)\b(?:curl|wget|nc|ncat|netcat|scp|sftp|socat|telnet|rsync)\s+\S|\bssh\s+(?:-|[\w.-]+@)|\|\s*(?:ba|z)?sh\b`)},
-	{"operação com segredo", regexp.MustCompile(`(?i)\b(?:cat|type|less|head|tail|base64|cp|mv|tar|zip|printenv|env|echo|send|upload)\b[^\n]*(?:\.env\b|id_rsa|id_ed25519|\.ssh/|auth\.json|\.aws/|\.netrc|\.git-credentials|\.gnupg|api[_-]?key|\bsecrets?\b|\$\{?[A-Z_]*(?:KEY|TOKEN|SECRET|PASSWORD)\b)|\$\{?[A-Z_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)\}?`)},
-	{"desliga proteções", regexp.MustCompile(`(?i)\b(?:desativ\w*|desabilit\w*|desligu?\w*|disable\w*|turn\s+off|bypass\w*|skip\w*|pul[ae]\w*|contorn\w*|remov\w*|remove)\b[^\n]{0,40}\b(?:guard\w*|sandbox|redact\w*|reda[cç]\w*|prote[cç]\w*|seguran[cç]a|safety|confirma\w*|permiss\w*|approval|aprova\w*|hooks?|audit\w*|trust|confian[cç]a|modo\b|mode\b|injection|injeção)|--(?:yolo|turbo|dangerously\w*|no-sandbox|allow-outside|full-auto)\b|sandbox\s*[=:]?\s*off|\b(?:modo|mode)\s+(?:yolo|turbo)\b|\byolo\b`)},
-	{"instrução ao agente", regexp.MustCompile(`(?i)\b(?:sempre|always)\s+(?:rode|rodar|execute|executar|run|exec)\b|\b(?:ignor\w+|desconsider\w+|esque[çc]a|forget|disregard)\b[^\n]{0,30}\b(?:instru\w*|instruction\w*|previous|anterior\w*|regras|rules|prompt|usu[aá]rio|user)\b|\b(?:n[aã]o|nunca|never|don'?t|do\s+not)\s+(?:pergunt\w*|peça|peca|pedir|ask|confirm\w*|avis\w*|tell|mention\w*|mostr\w*|reveal|revel\w*)\b|\b(?:sem|without)\s+(?:perguntar|pedir|confirma\w*|asking|confirmation|approval|aprova\w*)\b|\b(?:voc[êe]|you)\s+(?:deve|must|should)\s+(?:sempre|always|obey|obedecer)\b|\bobe(?:y|ça|deça)\b`)},
+	{"URL externa", lazyRx(`(?i)\b(?:https?|ftp|ssh|git|wss?)://(?:[^/\s@]+@)?(?:[a-z0-9-]+\.)+[a-z0-9-]+|\b(?:https?|ftp|ssh|git|wss?)://(?:\d{1,3}\.){3}\d{1,3}`)},
+	{"endereço IP", lazyRx(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)},
+	{"nome de host", lazyRx(`(?i)\b(?:[a-z0-9][a-z0-9-]*\.)+(?:com|net|org|io|dev|app|xyz|ru|cn|ai|info|biz|cloud|tk|top|site|online|link|click|ly|gg|cc|to)\b`)},
+	{"comando de rede", lazyRx(`(?i)\b(?:curl|wget|nc|ncat|netcat|scp|sftp|socat|telnet|rsync)\s+\S|\bssh\s+(?:-|[\w.-]+@)|\|\s*(?:ba|z)?sh\b`)},
+	{"operação com segredo", lazyRx(`(?i)\b(?:cat|type|less|head|tail|base64|cp|mv|tar|zip|printenv|env|echo|send|upload)\b[^\n]*(?:\.env\b|id_rsa|id_ed25519|\.ssh/|auth\.json|\.aws/|\.netrc|\.git-credentials|\.gnupg|api[_-]?key|\bsecrets?\b|\$\{?[A-Z_]*(?:KEY|TOKEN|SECRET|PASSWORD)\b)|\$\{?[A-Z_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)\}?`)},
+	{"desliga proteções", lazyRx(`(?i)\b(?:desativ\w*|desabilit\w*|desligu?\w*|disable\w*|turn\s+off|bypass\w*|skip\w*|pul[ae]\w*|contorn\w*|remov\w*|remove)\b[^\n]{0,40}\b(?:guard\w*|sandbox|redact\w*|reda[cç]\w*|prote[cç]\w*|seguran[cç]a|safety|confirma\w*|permiss\w*|approval|aprova\w*|hooks?|audit\w*|trust|confian[cç]a|modo\b|mode\b|injection|injeção)|--(?:yolo|turbo|dangerously\w*|no-sandbox|allow-outside|full-auto)\b|sandbox\s*[=:]?\s*off|\b(?:modo|mode)\s+(?:yolo|turbo)\b|\byolo\b`)},
+	{"instrução ao agente", lazyRx(`(?i)\b(?:sempre|always)\s+(?:rode|rodar|execute|executar|run|exec)\b|\b(?:ignor\w+|desconsider\w+|esque[çc]a|forget|disregard)\b[^\n]{0,30}\b(?:instru\w*|instruction\w*|previous|anterior\w*|regras|rules|prompt|usu[aá]rio|user)\b|\b(?:n[aã]o|nunca|never|don'?t|do\s+not)\s+(?:pergunt\w*|peça|peca|pedir|ask|confirm\w*|avis\w*|tell|mention\w*|mostr\w*|reveal|revel\w*)\b|\b(?:sem|without)\s+(?:perguntar|pedir|confirma\w*|asking|confirmation|approval|aprova\w*)\b|\b(?:voc[êe]|you)\s+(?:deve|must|should)\s+(?:sempre|always|obey|obedecer)\b|\bobe(?:y|ça|deça)\b`)},
 }
 
 // h2PoisonReason returns why a lesson or a reused-plan line must be rejected

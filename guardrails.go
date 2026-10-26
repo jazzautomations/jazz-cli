@@ -57,28 +57,28 @@ type grState struct {
 
 type grPattern struct {
 	label string
-	re    *regexp.Regexp
+	re    *lazyRe
 }
 
 var grInjPatterns = []grPattern{
-	{"ignore as instruções anteriores", regexp.MustCompile(`(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|system|original|all other)\b[^.\n]{0,25}\b(instructions?|prompts?|rules|directions|guidelines|directives)\b`)},
-	{"ignore as instruções anteriores", regexp.MustCompile(`(?i)\b(ignore|desconsidere|esqueça|ignora)\b[^.\n]{0,40}\b(instruções|regras|orientações)\b[^.\n]{0,25}\b(anteriores|acima|do sistema|originais)\b`)},
-	{"redefine o papel do agente", regexp.MustCompile(`(?i)\byou are now\s+(a|an|DAN|no longer|free|acting|unrestricted|jailbroken|in developer mode)\b|\bfrom now on,?\s+you\s+(are|will|must|should)\b|\b(new|updated|real) (system )?instructions\s*:|\bsystem prompt override\b`)},
-	{"rótulo falso de papel (system/assistant)", regexp.MustCompile(`(?im)^[\s>#*]*(system|assistant|developer)\s*:\s*(you\b|ignore|from now|new instructions|important|the user|always|never|do not|don't|run\b|execute|forget)`)},
-	{"tokens de controle de chat", regexp.MustCompile(`<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>`)},
-	{"instrução dirigida a um agente de IA", regexp.MustCompile(`(?i)\b(ai|llm|assistant|agent|claude|gpt|chatgpt|copilot|cursor|codex|gemini|language model|coding agent)s?\b[^\n]{0,100}\b(must|should|need to|have to|are required to|is required to|please)\b[^\n]{0,60}\b(run|execute|curl|wget|read|cat|send|post|upload|delete|rm|install|download|open|fetch|exfiltrate)\b`)},
-	{"instrução dirigida a um agente de IA", regexp.MustCompile(`(?i)\b(note|message|instructions?) (to|for) (the |any )?(ai|llm|assistant|agent|model|language model)s?\b|\bif you are an? (ai|llm|language model|assistant|agent|bot)\b|\b(attention|important|hey)[,:!]?\s+(ai|llm|assistant|agent|claude|gpt)s?\b`)},
+	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|system|original|all other)\b[^.\n]{0,25}\b(instructions?|prompts?|rules|directions|guidelines|directives)\b`)},
+	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|desconsidere|esqueça|ignora)\b[^.\n]{0,40}\b(instruções|regras|orientações)\b[^.\n]{0,25}\b(anteriores|acima|do sistema|originais)\b`)},
+	{"redefine o papel do agente", lazyRx(`(?i)\byou are now\s+(a|an|DAN|no longer|free|acting|unrestricted|jailbroken|in developer mode)\b|\bfrom now on,?\s+you\s+(are|will|must|should)\b|\b(new|updated|real) (system )?instructions\s*:|\bsystem prompt override\b`)},
+	{"rótulo falso de papel (system/assistant)", lazyRx(`(?im)^[\s>#*]*(system|assistant|developer)\s*:\s*(you\b|ignore|from now|new instructions|important|the user|always|never|do not|don't|run\b|execute|forget)`)},
+	{"tokens de controle de chat", lazyRx(`<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>`)},
+	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(ai|llm|assistant|agent|claude|gpt|chatgpt|copilot|cursor|codex|gemini|language model|coding agent)s?\b[^\n]{0,100}\b(must|should|need to|have to|are required to|is required to|please)\b[^\n]{0,60}\b(run|execute|curl|wget|read|cat|send|post|upload|delete|rm|install|download|open|fetch|exfiltrate)\b`)},
+	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(note|message|instructions?) (to|for) (the |any )?(ai|llm|assistant|agent|model|language model)s?\b|\bif you are an? (ai|llm|language model|assistant|agent|bot)\b|\b(attention|important|hey)[,:!]?\s+(ai|llm|assistant|agent|claude|gpt)s?\b`)},
 	// code comments and docstrings that address the agent: "# AI agent: run …", "// Claude, execute …"
-	{"comentário de código dirigido ao agente", regexp.MustCompile(`(?im)(^|[#;*/"'\s])\s*(ai|llm|assistant|ai agent|coding agent|claude|gpt|chatgpt|copilot|cursor|codex)s?\s*[:,]\s*(please\s+)?(run|execute|curl|wget|send|post|upload|delete|rm|install|download|ignore|fetch|read|cat)\b`)},
-	{"pede para ler ou enviar segredos", regexp.MustCompile(`(?i)\b(read|cat|print|show|dump|send|upload|post|exfiltrate|include|copy|leak)\b[^\n]{0,60}(~/\.ssh|\.ssh/|id_rsa|id_ed25519|auth\.json|\.aws/credentials|/proc/self/environ|\.env\b|api[_ -]?keys?|access tokens?|secrets?|credentials|private keys?)[^\n]{0,80}\b(to|into|at)\b[^\n]{0,40}(https?://|curl|webhook|pastebin|ngrok|requestbin|discord|telegram)`)},
-	{"comando que envia segredos", regexp.MustCompile(`(?i)\b(curl|wget|nc)\b[^\n]{0,120}(-d|--data[-a-z]*|-F|--form|-T|--upload-file|--post-file)[^\n]{0,40}(@|\$\(|` + "`" + `)[^\n]{0,60}(\.ssh|auth\.json|\.env\b|environ|credentials|\$\{?[A-Z_]*(KEY|TOKEN|SECRET)|printenv|\benv\b)`)},
+	{"comentário de código dirigido ao agente", lazyRx(`(?im)(^|[#;*/"'\s])\s*(ai|llm|assistant|ai agent|coding agent|claude|gpt|chatgpt|copilot|cursor|codex)s?\s*[:,]\s*(please\s+)?(run|execute|curl|wget|send|post|upload|delete|rm|install|download|ignore|fetch|read|cat)\b`)},
+	{"pede para ler ou enviar segredos", lazyRx(`(?i)\b(read|cat|print|show|dump|send|upload|post|exfiltrate|include|copy|leak)\b[^\n]{0,60}(~/\.ssh|\.ssh/|id_rsa|id_ed25519|auth\.json|\.aws/credentials|/proc/self/environ|\.env\b|api[_ -]?keys?|access tokens?|secrets?|credentials|private keys?)[^\n]{0,80}\b(to|into|at)\b[^\n]{0,40}(https?://|curl|webhook|pastebin|ngrok|requestbin|discord|telegram)`)},
+	{"comando que envia segredos", lazyRx(`(?i)\b(curl|wget|nc)\b[^\n]{0,120}(-d|--data[-a-z]*|-F|--form|-T|--upload-file|--post-file)[^\n]{0,40}(@|\$\(|` + "`" + `)[^\n]{0,60}(\.ssh|auth\.json|\.env\b|environ|credentials|\$\{?[A-Z_]*(KEY|TOKEN|SECRET)|printenv|\benv\b)`)},
 }
 
 var (
-	grHTMLComment = regexp.MustCompile(`(?s)<!--(.{0,1000}?)-->`)
-	grCommentBad  = regexp.MustCompile(`(?i)\b(ignore|disregard)\b[^\n]{0,60}\b(instructions?|above|previous|rules)\b|\b(ai|llm|assistant|agent|claude|gpt|copilot|cursor|model)s?\b[^\n]{0,80}\b(must|should|need to|run|execute|read|send|curl|fetch)\b|\b(curl|wget)\s+\S|\.ssh/|auth\.json|api[_ ]?key|/proc/self/environ`)
-	grB64Blob     = regexp.MustCompile(`[A-Za-z0-9+/]{40,}={0,2}`)
-	grB64Bad      = regexp.MustCompile(`(?i)\b(ignore (all |the )?(previous|prior|above)|you are now|system\s*:|instructions?\b|run (the|this)|execute|curl\s|wget\s|\.ssh|auth\.json|rm -rf)`)
+	grHTMLComment = lazyRx(`(?s)<!--(.{0,1000}?)-->`)
+	grCommentBad  = lazyRx(`(?i)\b(ignore|disregard)\b[^\n]{0,60}\b(instructions?|above|previous|rules)\b|\b(ai|llm|assistant|agent|claude|gpt|copilot|cursor|model)s?\b[^\n]{0,80}\b(must|should|need to|run|execute|read|send|curl|fetch)\b|\b(curl|wget)\s+\S|\.ssh/|auth\.json|api[_ ]?key|/proc/self/environ`)
+	grB64Blob     = lazyRx(`[A-Za-z0-9+/]{40,}={0,2}`)
+	grB64Bad      = lazyRx(`(?i)\b(ignore (all |the )?(previous|prior|above)|you are now|system\s*:|instructions?\b|run (the|this)|execute|curl\s|wget\s|\.ssh|auth\.json|rm -rf)`)
 )
 
 // injScan returns a short PT-BR label of the first instruction-like pattern
@@ -166,7 +166,7 @@ func grRot13(s string) string {
 	}, s)
 }
 
-var reURLEsc = regexp.MustCompile(`%[0-9A-Fa-f]{2}`)
+var reURLEsc = lazyRx(`%[0-9A-Fa-f]{2}`)
 
 func grURLDecode(s string) string {
 	if !strings.Contains(s, "%") {
@@ -182,7 +182,7 @@ func grURLDecode(s string) string {
 	})
 }
 
-var reHexRun = regexp.MustCompile(`(?:[0-9A-Fa-f]{2}[\s:,]?){8,}|(?:\\x[0-9A-Fa-f]{2}){6,}`)
+var reHexRun = lazyRx(`(?:[0-9A-Fa-f]{2}[\s:,]?){8,}|(?:\\x[0-9A-Fa-f]{2}){6,}`)
 
 // grHexDecode decodes long runs of hex pairs (with optional \x) to ASCII.
 func grHexDecode(s string) string {
@@ -301,7 +301,7 @@ func grWrapUntrusted(label, text string) string {
 const grHiddenLine = "[jazz: line hidden — injected instruction aimed at AI agents]"
 
 // reReadPrefix is the line-number prefix of the read tool ("    12\t").
-var reReadPrefix = regexp.MustCompile(`^ *[0-9]+\t`)
+var reReadPrefix = lazyRx(`^ *[0-9]+\t`)
 
 // grNeutralize hides every line that matches an agent-directed injection
 // pattern (the line-number prefix of read output is kept, so the model still
@@ -392,10 +392,10 @@ var sgEcoTitle = map[string]string{"pypi": "PyPI", "npm": "npm", "go": "proxy.go
 var sgOSVEco = map[string]string{"pypi": "PyPI", "npm": "npm", "go": "Go", "crates": "crates.io", "gems": "RubyGems", "composer": "Packagist"}
 
 var (
-	reSgPipVer   = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*(==|===|>=|<=|~=|!=|>|<)?\s*([^;,\s]*)`)
-	reSgExactVer = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){0,3}([-+.][0-9A-Za-z.-]+)?$`)
-	reSgPipBin   = regexp.MustCompile(`^pip[0-9.]*$`)
-	reSgPyBin    = regexp.MustCompile(`^python[0-9.]*$`)
+	reSgPipVer   = lazyRx(`^([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*(==|===|>=|<=|~=|!=|>|<)?\s*([^;,\s]*)`)
+	reSgExactVer = lazyRx(`^v?[0-9]+(\.[0-9]+){0,3}([-+.][0-9A-Za-z.-]+)?$`)
+	reSgPipBin   = lazyRx(`^pip[0-9.]*$`)
+	reSgPyBin    = lazyRx(`^python[0-9.]*$`)
 )
 
 // sgParseInstalls finds the packages a bash command installs.
@@ -617,7 +617,7 @@ func sgIsInstall(cmd string) bool {
 	return len(sgParseInstalls(cmd)) > 0 || reSgLockCmd.MatchString(cmd)
 }
 
-var reSgLockCmd = regexp.MustCompile(`\b(npm|pnpm|yarn|bun)\s+(install|i|add|update|up|upgrade|remove|rm|uninstall)\b|\b(poetry|uv|pdm)\s+(add|remove|lock|update|sync)\b|\bgo\s+(get|mod\s+tidy)\b|\bcargo\s+(add|remove|update)\b`)
+var reSgLockCmd = lazyRx(`\b(npm|pnpm|yarn|bun)\s+(install|i|add|update|up|upgrade|remove|rm|uninstall)\b|\b(poetry|uv|pdm)\s+(add|remove|lock|update|sync)\b|\bgo\s+(get|mod\s+tidy)\b|\bcargo\s+(add|remove|update)\b`)
 
 // ---------- registry checks ----------
 
@@ -1669,8 +1669,8 @@ func sgLockSnapshot(dir string) map[string]map[string]string {
 }
 
 var (
-	reTomlName = regexp.MustCompile(`(?m)^name\s*=\s*"([^"]+)"`)
-	reTomlVer  = regexp.MustCompile(`(?m)^version\s*=\s*"([^"]+)"`)
+	reTomlName = lazyRx(`(?m)^name\s*=\s*"([^"]+)"`)
+	reTomlVer  = lazyRx(`(?m)^version\s*=\s*"([^"]+)"`)
 )
 
 // sgParseLock maps package name -> version(s) for one lockfile.

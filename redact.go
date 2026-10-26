@@ -144,7 +144,7 @@ type rdRule struct {
 	kind  string
 	trig  []string // lowercase literals searched in the lowered text
 	trigC []string // case-sensitive literals searched in the original text
-	re    *regexp.Regexp
+	re    *lazyRe
 	grp   int                        // submatch holding the secret (0 = whole match)
 	conf  rdConf                     // confidence when check is nil
 	check func(key, v string) rdConf // optional: confidence of a candidate
@@ -166,69 +166,69 @@ func rdHighIf(min int) func(string, string) rdConf {
 
 var rdRules = []rdRule{
 	{kind: "chave-privada", trig: []string{"private key"}, pem: true, prio: 9, conf: rdHigh,
-		re: regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----|\z)`)},
+		re: lazyRx(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----|\z)`)},
 	{kind: "gcp-sa-key", trig: []string{"private_key_id"}, prio: 8, conf: rdHigh, grp: 1,
-		re: regexp.MustCompile(`"private_key_id"\s*:\s*"([0-9a-f]{40})"`)},
+		re: lazyRx(`"private_key_id"\s*:\s*"([0-9a-f]{40})"`)},
 	{kind: "aws-key", trigC: []string{"AKIA", "ASIA", "ABIA", "ACCA"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\b(?:AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b`)},
+		re: lazyRx(`\b(?:AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b`)},
 	{kind: "aws-secret", trig: []string{"aws", "secret_access_key", "secretaccesskey"}, prio: 7, grp: 1, check: rdRandom(40), low: true, kv: true,
-		re: regexp.MustCompile(`(?:aws|secret_?access)[A-Za-z0-9_.-]{0,30}?(?:secret|key)[A-Za-z0-9_.-]{0,20}["']?\s*(?:=|:|=>)\s*["']?([A-Za-z0-9/+]{40})(?:[^A-Za-z0-9/+=]|\z)`)},
+		re: lazyRx(`(?:aws|secret_?access)[A-Za-z0-9_.-]{0,30}?(?:secret|key)[A-Za-z0-9_.-]{0,20}["']?\s*(?:=|:|=>)\s*["']?([A-Za-z0-9/+]{40})(?:[^A-Za-z0-9/+=]|\z)`)},
 	{kind: "anthropic-key", trig: []string{"sk-ant-"}, prio: 8, check: rdHighIf(20),
-		re: regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{20,}`)},
+		re: lazyRx(`\bsk-ant-[A-Za-z0-9_-]{20,}`)},
 	{kind: "openrouter-key", trig: []string{"sk-or-"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bsk-or-v1-[0-9a-f]{48,}\b`)},
+		re: lazyRx(`\bsk-or-v1-[0-9a-f]{48,}\b`)},
 	{kind: "openai-key", trig: []string{"sk-"}, prio: 6, check: rdOpenAI,
-		re: regexp.MustCompile(`\bsk-(?:proj-|svcacct-|admin-|None-)?[A-Za-z0-9_-]{20,}`)},
+		re: lazyRx(`\bsk-(?:proj-|svcacct-|admin-|None-)?[A-Za-z0-9_-]{20,}`)},
 	{kind: "github-token", trig: []string{"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b`)},
+		re: lazyRx(`\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b`)},
 	{kind: "gitlab-token", trig: []string{"glpat-", "gldt-", "glptt-", "glrt-", "glsoat-"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bgl(?:pat|dt|ptt|rt|soat)-[A-Za-z0-9_-]{20,}\b`)},
+		re: lazyRx(`\bgl(?:pat|dt|ptt|rt|soat)-[A-Za-z0-9_-]{20,}\b`)},
 	{kind: "slack-token", trig: []string{"xox"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bxox[abposr]-[A-Za-z0-9-]{10,}\b`)},
+		re: lazyRx(`\bxox[abposr]-[A-Za-z0-9-]{10,}\b`)},
 	{kind: "slack-webhook", trig: []string{"hooks.slack.com"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]{20,}`)},
+		re: lazyRx(`https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]{20,}`)},
 	{kind: "discord-webhook", trig: []string{"/api/webhooks/"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`https://(?:\w+\.)?discord(?:app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]{20,}`)},
+		re: lazyRx(`https://(?:\w+\.)?discord(?:app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]{20,}`)},
 	{kind: "stripe-key", trig: []string{"_live_", "_test_", "whsec_"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\b(?:(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{20,})\b`)},
+		re: lazyRx(`\b(?:(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{20,})\b`)},
 	{kind: "twilio-key", trigC: []string{"SK"}, prio: 7, check: rdTwilio,
-		re: regexp.MustCompile(`\bSK[0-9a-fA-F]{32}\b`)},
+		re: lazyRx(`\bSK[0-9a-fA-F]{32}\b`)},
 	{kind: "sendgrid-key", trigC: []string{"SG."}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b`)},
+		re: lazyRx(`\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b`)},
 	{kind: "google-api-key", trigC: []string{"AIza"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`)},
+		re: lazyRx(`\bAIza[0-9A-Za-z_-]{35}\b`)},
 	{kind: "google-oauth", trig: []string{"ya29."}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bya29\.[0-9A-Za-z_-]{20,}`)},
+		re: lazyRx(`\bya29\.[0-9A-Za-z_-]{20,}`)},
 	{kind: "groq-key", trig: []string{"gsk_"}, prio: 8, conf: rdHigh,
-		re: regexp.MustCompile(`\bgsk_[A-Za-z0-9]{40,}\b`)},
+		re: lazyRx(`\bgsk_[A-Za-z0-9]{40,}\b`)},
 	{kind: "hf-token", trig: []string{"hf_"}, prio: 7, check: rdRandom(30),
-		re: regexp.MustCompile(`\bhf_[A-Za-z]{30,}\b`)},
+		re: lazyRx(`\bhf_[A-Za-z]{30,}\b`)},
 	{kind: "npm-token", trig: []string{"npm_"}, prio: 8, check: rdRandom(36),
-		re: regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`)},
+		re: lazyRx(`\bnpm_[A-Za-z0-9]{36}\b`)},
 	{kind: "xai-key", trig: []string{"xai-"}, prio: 8, check: rdRandom(40),
-		re: regexp.MustCompile(`\bxai-[A-Za-z0-9]{40,}\b`)},
+		re: lazyRx(`\bxai-[A-Za-z0-9]{40,}\b`)},
 	{kind: "azure-key", trig: []string{"accountkey=", "sharedaccesskey="}, prio: 8, grp: 1, check: rdRandom(40), low: true,
-		re: regexp.MustCompile(`(?:accountkey|sharedaccesskey)=([A-Za-z0-9+/]{40,}={0,2})`)},
+		re: lazyRx(`(?:accountkey|sharedaccesskey)=([A-Za-z0-9+/]{40,}={0,2})`)},
 	{kind: "azure-sas", trig: []string{"sig="}, prio: 7, grp: 1, check: rdRandom(30),
-		re: regexp.MustCompile(`[?&]sig=([A-Za-z0-9%+/]{30,}(?:={0,2}|(?:%3D){0,2}))`)},
+		re: lazyRx(`[?&]sig=([A-Za-z0-9%+/]{30,}(?:={0,2}|(?:%3D){0,2}))`)},
 	{kind: "azure-key", trig: []string{"q~"}, prio: 7, check: rdRandom(30),
-		re: regexp.MustCompile(`\b[A-Za-z0-9_~.]{3}\dQ~[A-Za-z0-9_~.-]{31,34}\b`)},
+		re: lazyRx(`\b[A-Za-z0-9_~.]{3}\dQ~[A-Za-z0-9_~.-]{31,34}\b`)},
 	{kind: "jwt", trig: []string{"eyj"}, prio: 7, conf: rdHigh,
-		re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)},
+		re: lazyRx(`\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)},
 	{kind: "basic-auth", trig: []string{"basic "}, prio: 6, grp: 1, check: rdBasic, low: true,
-		re: regexp.MustCompile(`\bauthorization["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{8,}={0,2})`)},
+		re: lazyRx(`\bauthorization["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{8,}={0,2})`)},
 	{kind: "bearer", trig: []string{"bearer "}, prio: 5, grp: 1, check: rdBearer, low: true,
-		re: regexp.MustCompile(`\bbearer\s+([A-Za-z0-9\-._~+/]{8,}=*)`)},
+		re: lazyRx(`\bbearer\s+([A-Za-z0-9\-._~+/]{8,}=*)`)},
 	{kind: "url-credencial", trig: []string{"://"}, prio: 6, grp: 3, keyG: 1, check: rdURLPass, low: true,
-		re: regexp.MustCompile(`\b([a-z][a-z0-9+.-]{1,20})://([^/\s:@'"<>]{1,128}):([^@\s/'"<>]{1,256})@`)},
+		re: lazyRx(`\b([a-z][a-z0-9+.-]{1,20})://([^/\s:@'"<>]{1,128}):([^@\s/'"<>]{1,256})@`)},
 	{kind: "db-conexao", trig: []string{"password=", "pwd="}, prio: 6, grp: 1, check: rdKV, low: true,
-		re: regexp.MustCompile(`(?:^|[;"'\s])(?:password|pwd)\s*=\s*([^;'"\s]{4,})\s*;`)},
+		re: lazyRx(`(?:^|[;"'\s])(?:password|pwd)\s*=\s*([^;'"\s]{4,})\s*;`)},
 	{kind: "env-secret", trig: []string{"key", "secret", "token", "pass", "pwd", "auth", "credential"}, prio: 4, grp: 2, keyG: 1, check: rdEnv,
-		re: regexp.MustCompile(`(?m)^[ \t]*(?:export[ \t]+)?([A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASS|PWD|AUTH|CREDENTIALS?))[ \t]*=[ \t]*["']?([^\s"'#]+)`)},
+		re: lazyRx(`(?m)^[ \t]*(?:export[ \t]+)?([A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASS|PWD|AUTH|CREDENTIALS?))[ \t]*=[ \t]*["']?([^\s"'#]+)`)},
 	{kind: "senha", trig: []string{"pass", "pwd", "senha"}, prio: 3, grp: 2, keyG: 1, check: rdPass, low: true, kv: true,
-		re: regexp.MustCompile(`([a-z0-9_.-]*(?:password|passwd|passphrase|pwd|senha)[A-Za-z0-9_.-]*)["']?\s*(?:=|:|=>|:=)\s*["']?([^\s"'` + "`" + `,;&<>(){}\[\]]+)`)},
+		re: lazyRx(`([a-z0-9_.-]*(?:password|passwd|passphrase|pwd|senha)[A-Za-z0-9_.-]*)["']?\s*(?:=|:|=>|:=)\s*["']?([^\s"'` + "`" + `,;&<>(){}\[\]]+)`)},
 	{kind: "segredo", trig: []string{"secret", "token", "api_key", "apikey", "api-key", "access_key", "access-key", "accesskey", "private_key", "privatekey", "credential"}, prio: 2, grp: 2, keyG: 1, check: rdKV, low: true, kv: true,
-		re: regexp.MustCompile(`([a-z0-9_.-]*(?:secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[A-Za-z0-9_.-]*)["']?\s*(?:=|:|=>|:=)\s*["']?([^\s"'` + "`" + `,;&<>(){}\[\]]+)`)},
+		re: lazyRx(`([a-z0-9_.-]*(?:secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[A-Za-z0-9_.-]*)["']?\s*(?:=|:|=>|:=)\s*["']?([^\s"'` + "`" + `,;&<>(){}\[\]]+)`)},
 }
 
 // ---------- value checks ----------
@@ -261,11 +261,11 @@ func rdFake(v string) bool {
 }
 
 var (
-	rdUUID   = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-	rdDotted = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*|\[[^\]]*\])+$`)
-	rdWord   = regexp.MustCompile(`^[a-z][a-z_.-]*$`)
-	rdIdent  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rdNum    = regexp.MustCompile(`^[0-9][0-9_.,]*$`)
+	rdUUID   = lazyRx(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	rdDotted = lazyRx(`^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*|\[[^\]]*\])+$`)
+	rdWord   = lazyRx(`^[a-z][a-z_.-]*$`)
+	rdIdent  = lazyRx(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rdNum    = lazyRx(`^[0-9][0-9_.,]*$`)
 )
 
 // rdVarRef: the value is a reference, not a literal (shell/template/env/code).
@@ -770,7 +770,7 @@ type Redactor struct {
 
 var rdSess = &Redactor{}
 
-var rdPHRe = regexp.MustCompile(`(?:<|\\u003c)secreto:[a-z0-9-]+#[0-9]+(?:>|\\u003e)`)
+var rdPHRe = lazyRx(`(?:<|\\u003c)secreto:[a-z0-9-]+#[0-9]+(?:>|\\u003e)`)
 
 func (r *Redactor) init() {
 	if r.byVal == nil {

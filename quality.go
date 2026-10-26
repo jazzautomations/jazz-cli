@@ -244,9 +244,16 @@ func qgAddedLines(old, new string) map[int]bool {
 	return out
 }
 
-var qgTestFileRE = regexp.MustCompile(`(?i)(_test\.go|(^|/)test_[^/]*\.py|_test\.py|\.(test|spec)\.[cm]?[jt]sx?|_spec\.rb|(^|/)(tests?|__tests__|spec)/|Tests?\.(java|kt|cs|swift))$|(^|/)(tests?|__tests__|spec)/`)
+var qgTestFileRE = lazyRx(`(?i)(_test\.go|(^|/)test_[^/]*\.py|_test\.py|\.(test|spec)\.[cm]?[jt]sx?|_spec\.rb|(^|/)(tests?|__tests__|spec)/|Tests?\.(java|kt|cs|swift))$|(^|/)(tests?|__tests__|spec)/`)
 
-func qgIsTestFile(rel string) bool { return qgTestFileRE.MatchString(filepath.ToSlash(rel)) }
+func qgIsTestFile(rel string) bool {
+	// every alternative needs "test" or "spec": ASCII names without them skip
+	// the regexp (non-ASCII may case-fold into them, so it still runs there)
+	if fzIsASCII(rel) && !niHasTestWord(rel) {
+		return false
+	}
+	return qgTestFileRE.MatchString(filepath.ToSlash(rel))
+}
 
 // ---------- the checklist ----------
 
@@ -262,17 +269,17 @@ type qgEnv struct {
 }
 
 var (
-	qgDebugAllRE = regexp.MustCompile(`\[DBG-jz\]|\bbreakpoint\(\)|\bpdb\.set_trace\(|\bipdb\.set_trace\(|^\s*debugger;?\s*$|\bconsole\.(debug|trace)\(|\bdbg!\(|\b(fmt|log)\.Print(ln|f)?\(\s*"(DEBUG|DBG|debug)|\bprintln!\(\s*"(DEBUG|DBG)|\bvar_dump\(|\bprint_r\(|\bputs\s+["']DEBUG|\bSystem\.out\.println\(\s*"(DEBUG|DBG)`)
-	qgDebugStdRE = regexp.MustCompile(`\b(print|console\.log)\(\s*(f?["'\x60]\s*(DEBUG|DBG|debug|here|HERE|>>>|xxx|XXX|---)|f["'][^"']*=\})`)
-	qgDebugStrRE = regexp.MustCompile(`^\s*(print\(|console\.log\()`)
-	qgTodoRE     = regexp.MustCompile(`\b(TODO|FIXME|XXX|HACK)\b`)
-	qgCommentRE  = regexp.MustCompile(`^\s*(//|#|--|/\*|\*)\s?(.*)$`)
+	qgDebugAllRE = lazyRx(`\[DBG-jz\]|\bbreakpoint\(\)|\bpdb\.set_trace\(|\bipdb\.set_trace\(|^\s*debugger;?\s*$|\bconsole\.(debug|trace)\(|\bdbg!\(|\b(fmt|log)\.Print(ln|f)?\(\s*"(DEBUG|DBG|debug)|\bprintln!\(\s*"(DEBUG|DBG)|\bvar_dump\(|\bprint_r\(|\bputs\s+["']DEBUG|\bSystem\.out\.println\(\s*"(DEBUG|DBG)`)
+	qgDebugStdRE = lazyRx(`\b(print|console\.log)\(\s*(f?["'\x60]\s*(DEBUG|DBG|debug|here|HERE|>>>|xxx|XXX|---)|f["'][^"']*=\})`)
+	qgDebugStrRE = lazyRx(`^\s*(print\(|console\.log\()`)
+	qgTodoRE     = lazyRx(`\b(TODO|FIXME|XXX|HACK)\b`)
+	qgCommentRE  = lazyRx(`^\s*(//|#|--|/\*|\*)\s?(.*)$`)
 	// a comment body that is code, not prose: statement punctuation at the
 	// end, an assignment, a call on its own, or a keyword followed by code
-	qgCodeishRE  = regexp.MustCompile(`[;{}]\s*$|^\s*[\w.\[\]]+\s*(:=|\+=|-=|=[^=])\s*\S|^\s*[\w.]+\(.*\)\s*;?\s*$|^\s*(if|elif|while|for|switch|case|else|def|class)\b.*[:{]\s*$|^\s*(return|import|from|func|var|let|const)\b.*[(=;"'{]|^\s*(print|fmt\.\w+|console\.\w+)\(|^\s*(return|break|continue|pass)\s*;?\s*$`)
-	qgLogicRE    = regexp.MustCompile(`^\s*(\}\s*)?(if|for|while|switch|case|elif|else\s+if|match|catch|except|select)\b|\bfor\s*\(|\bwhile\s*\(`)
-	qgNameRE     = regexp.MustCompile(`\b(tmp|temp|foo|bar|baz|data[0-9]|x[0-9]|thing|stuff|asdf)\b\s*(:=|=[^=]|,\s*\w+\s*:=)`)
-	qgTestFuncRE = regexp.MustCompile(`^func Test|^\s*(async\s+)?def test_|\b(it|test)\(\s*["'\x60]|#\[test\]|@Test\b`)
+	qgCodeishRE  = lazyRx(`[;{}]\s*$|^\s*[\w.\[\]]+\s*(:=|\+=|-=|=[^=])\s*\S|^\s*[\w.]+\(.*\)\s*;?\s*$|^\s*(if|elif|while|for|switch|case|else|def|class)\b.*[:{]\s*$|^\s*(return|import|from|func|var|let|const)\b.*[(=;"'{]|^\s*(print|fmt\.\w+|console\.\w+)\(|^\s*(return|break|continue|pass)\s*;?\s*$`)
+	qgLogicRE    = lazyRx(`^\s*(\}\s*)?(if|for|while|switch|case|elif|else\s+if|match|catch|except|select)\b|\bfor\s*\(|\bwhile\s*\(`)
+	qgNameRE     = lazyRx(`\b(tmp|temp|foo|bar|baz|data[0-9]|x[0-9]|thing|stuff|asdf)\b\s*(:=|=[^=]|,\s*\w+\s*:=)`)
+	qgTestFuncRE = lazyRx(`^func Test|^\s*(async\s+)?def test_|\b(it|test)\(\s*["'\x60]|#\[test\]|@Test\b`)
 )
 
 // qgCheck runs the checklist; issues come back in file order.
@@ -287,8 +294,8 @@ func qgCheck(ctx context.Context, env qgEnv, files []qgFile) []qgIssue {
 		anyCode = anyCode || f.Code
 		anyTest = anyTest || (f.Test && f.Code)
 		if f.Test {
-			testsBefore += len(qgMatchLines(f.Old, qgTestFuncRE))
-			testsNow += len(qgMatchLines(f.New, qgTestFuncRE))
+			testsBefore += len(qgMatchLines(f.Old, qgTestFuncRE.R()))
+			testsNow += len(qgMatchLines(f.New, qgTestFuncRE.R()))
 		}
 		if !f.Code {
 			continue
@@ -404,7 +411,7 @@ func qgHasSeam(root string, files []qgFile) bool {
 	return false
 }
 
-var qgLiteralRE = regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\b\d+(?:\.\d+)?\b`)
+var qgLiteralRE = lazyRx(`"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\b\d+(?:\.\d+)?\b`)
 
 // qgRetunedLines: added lines that only change literals of a removed line
 // (`if pct > 50:` -> `if pct > 30:`). Retuning a constant adds no branch, so it
@@ -477,18 +484,18 @@ type qgFunc struct {
 }
 
 var (
-	qgGoFuncRE = regexp.MustCompile(`^func\s+(\([^)]*\)\s*)?(\w+)`)
-	qgPyFuncRE = regexp.MustCompile(`^(\s*)(async\s+)?def\s+(\w+)`)
+	qgGoFuncRE = lazyRx(`^func\s+(\([^)]*\)\s*)?(\w+)`)
+	qgPyFuncRE = lazyRx(`^(\s*)(async\s+)?def\s+(\w+)`)
 	// brace languages: one regexp per shape, group 1 = the name
-	qgBraceFuncREs = []*regexp.Regexp{
-		regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\*?\s*(\w*)`),
-		regexp.MustCompile(`^\s*(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)`),
-		regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>\s*\{\s*$`),
-		regexp.MustCompile(`^\s*(?:(?:public|private|protected|static|final|override|async|virtual|inline)\s+)*[\w<>\[\],.*&:]+\s+(\w+)\s*\([^;]*\)\s*(?:const\s*)?(?:throws\s+[\w., ]+)?\{\s*$`),
-		regexp.MustCompile(`^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{\s*$`),
+	qgBraceFuncREs = []*lazyRe{
+		lazyRx(`^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\*?\s*(\w*)`),
+		lazyRx(`^\s*(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)`),
+		lazyRx(`^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>\s*\{\s*$`),
+		lazyRx(`^\s*(?:(?:public|private|protected|static|final|override|async|virtual|inline)\s+)*[\w<>\[\],.*&:]+\s+(\w+)\s*\([^;]*\)\s*(?:const\s*)?(?:throws\s+[\w., ]+)?\{\s*$`),
+		lazyRx(`^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{\s*$`),
 	}
-	qgNotFuncRE  = regexp.MustCompile(`^\s*(\}\s*)?(if|for|while|switch|catch|else|do|try|return|with|new)\b`)
-	qgMakeTestRE = regexp.MustCompile(`(?m)^(test|check):`)
+	qgNotFuncRE  = lazyRx(`^\s*(\}\s*)?(if|for|while|switch|catch|else|do|try|return|with|new)\b`)
+	qgMakeTestRE = lazyRx(`(?m)^(test|check):`)
 )
 
 // qgFuncs finds function spans by language: Go (gofmt'd: ends at a lone "}"),
@@ -626,7 +633,7 @@ func qgTestCommand(root string) string {
 // qgLintRun is the lint step (a variable so tests can replace it).
 var qgLintRun = qgLint
 
-var qgLintLineRE = regexp.MustCompile(`^(?:vet: )?(.+?):(\d+):(?:(\d+):)?\s*(.*)$`)
+var qgLintLineRE = lazyRx(`^(?:vet: )?(.+?):(\d+):(?:(\d+):)?\s*(.*)$`)
 
 // qgLint runs the linters available for the changed files and keeps only
 // findings on added lines (so old findings never count as new).

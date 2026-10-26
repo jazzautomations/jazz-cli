@@ -1,0 +1,8 @@
+{"methods": [
+ {"name": "env_status.probe", "intent": "env_status", "priority": 10,
+  "doc": "perfil do ambiente (envprobe, só leitura) + git + projeto",
+  "pre": [],
+  "steps": [{"cap": "env_status", "in": {}, "out": "profile"}],
+  "verify": [{"check": "profile_present", "arg": "$profile"}],
+  "risk": "low", "cost_ms": 50}
+]}

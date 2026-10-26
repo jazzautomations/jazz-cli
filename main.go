@@ -17,9 +17,11 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"jazzcli/internal/early" // GC tuned before this package's init (internal/early)
 )
 
-var version = "0.8.1"
+var version = "0.9.0"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -57,6 +59,8 @@ uso:
   jazz trace [id] [--json]           linha do tempo de uma sessão (requisições, ferramentas, bloqueios, checkpoints)
   jazz audit [--since 24h] [--verify] [--json]   log de auditoria encadeado por hash (e verificação da cadeia)
   jazz changes <arquivo>             quem mudou o arquivo: sessão, passo, modelo e prompt (alias: jazz blame)
+  jazz env [--json] [--refresh]      perfil do ambiente (SO, RAM, ferramentas, hosts SSH, Tailscale, serviços, portas), só leitura
+  jazz eval offline [--out DIR]      suíte de tarefas sem modelo (cérebro offline); grava results/offline-*.json
   jazz improve [--apply] [-n N]      lições das últimas execuções: mostra as propostas (com evidência); --apply grava
   jazz improve --harness [--from D]  relatório de falhas recorrentes do harness em .jazz/improve-report.md (só proposta)
   jazz worktree list | merge <nome> [--yes] | rm <nome> [--force]
@@ -189,8 +193,9 @@ const pfDefaultTimeout = 10 * time.Minute
 var pfHardExitGrace = 15 * time.Second
 
 func main() {
+	pfProfileStart() // JAZZ_CPUPROFILE=path (cpuprofile.go)
+	defer pfProfileStop()
 	defer pfCrashGuard()
-	pfTuneRuntime() // 1 CPU: less GC work (ui_width.go)
 	pfCleanOldExe()
 	fs := flag.NewFlagSet("jazz", flag.ContinueOnError)
 	fs.Usage = usage
@@ -261,7 +266,7 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
-		os.Exit(2)
+		pfQuit(2)
 	}
 	if err := opFl.apply(); err != nil {
 		pfUsageErr(err.Error())
@@ -275,7 +280,9 @@ func main() {
 	if err := ojFl.apply(); err != nil {
 		pfUsageErr(err.Error())
 	}
-	if *showVer {
+	if *showVer || (fs.NArg() > 0 && fs.Arg(0) == "version") {
+		// before config, sandbox probe and the rest: `jazz version` is the
+		// startup-cost probe of the reference machine (low-level study §1)
 		fmt.Println("jazz-cli", version)
 		return
 	}
@@ -360,8 +367,8 @@ func main() {
 		if *dir == "" {
 			root = d
 		}
-		if list := ListSessions(d); len(list) > 0 {
-			lastID = list[0].ID
+		if si, ok := sessNewest(sessionsDir(d)); ok {
+			lastID = si.ID
 		} else {
 			fmt.Fprintln(os.Stderr, "jazz: nenhuma sessão anterior em", d, "— começando uma nova")
 		}
@@ -376,6 +383,9 @@ func main() {
 	}
 	// OS sandbox for every child process (sandbox.go); strict without a
 	// backend refuses to run anything except the diagnostic subcommands
+	if len(rest) > 0 && rest[0] == "doctor" {
+		sbProbeForget() // doctor always probes the sandbox for real (sandbox_probecache.go)
+	}
 	if _, err := sbSetup(cfg, root, *sandboxFlag); err != nil {
 		if errors.Is(err, errSandboxMissing) && len(rest) > 0 && (rest[0] == "doctor" || rest[0] == "version" || rest[0] == "help") {
 			fmt.Fprintln(os.Stderr, "jazz:", err)
@@ -445,9 +455,9 @@ func main() {
 			cmdTrust(root, rest[1:])
 			return
 		case "deps":
-			os.Exit(cmdDeps(root, rest[1:]))
+			pfQuit(cmdDeps(root, rest[1:]))
 		case "sanitize":
-			os.Exit(cmdSanitize(rest[1:], os.Stdout))
+			pfQuit(cmdSanitize(rest[1:], os.Stdout))
 		case "update", "upgrade":
 			cmdUpdate(cfg, rest[1:])
 			return
@@ -455,13 +465,13 @@ func main() {
 			cmdBug(cfg, root)
 			return
 		case "script":
-			os.Exit(cmdScript(root, rest[1:]))
+			pfQuit(cmdScript(root, rest[1:]))
 		case "mcp":
-			os.Exit(cmdMCP(rest[1:], os.Stdout)) // presets (mcp_presets.go)
+			pfQuit(cmdMCP(rest[1:], os.Stdout)) // presets (mcp_presets.go)
 		case "worktree", "worktrees":
-			os.Exit(cmdWorktree(root, rest[1:], os.Stdin, os.Stdout))
+			pfQuit(cmdWorktree(root, rest[1:], os.Stdin, os.Stdout))
 		case "scan":
-			os.Exit(cmdScan(root, rest[1:], os.Stdout)) // diff-review rule engine (diffguard_cmd.go)
+			pfQuit(cmdScan(root, rest[1:], os.Stdout)) // diff-review rule engine (diffguard_cmd.go)
 		case "doctor":
 			cmdDoctor(cfg, root, rest[1:], *verbose || *debugFlag || os.Getenv("JAZZ_DEBUG") == "1")
 			return
@@ -472,15 +482,35 @@ func main() {
 			usage()
 			return
 		case "trace":
-			os.Exit(cmdTrace(root, rest[1:], os.Stdout))
+			pfQuit(cmdTrace(root, rest[1:], os.Stdout))
+		case "setup": // the first-run steps again (ui_onboard.go), then the session
+			if !isTTY(os.Stdin) || !isTTY(os.Stdout) {
+				fmt.Fprintln(os.Stderr, "jazz setup precisa de um terminal; sem terminal use jazz key <provedor> ou jazz login")
+				pfQuit(2)
+			}
+			onbForce, rest = true, nil
 		case "sessions":
-			os.Exit(cmdSessions(root, rest[1:], os.Stdout))
+			if pfSessionsInteractive(rest[1:]) { // the list with ↑↓/nº, then the session (sessions_ui.go)
+				*resume, rest = pfPickResume, nil
+				break
+			}
+			pfQuit(cmdSessions(root, rest[1:], os.Stdout))
+		case "resume":
+			id, full := pfResumeSub(root, rest[1:])
+			*resume, rest = id, nil
+			if full {
+				pfReplayFull = true
+			}
 		case "audit":
-			os.Exit(cmdAudit(rest[1:], os.Stdout))
+			pfQuit(cmdAudit(rest[1:], os.Stdout))
 		case "changes", "blame":
-			os.Exit(cmdChanges(root, rest[1:], os.Stdout))
+			pfQuit(cmdChanges(root, rest[1:], os.Stdout))
 		case "improve":
-			os.Exit(cmdImprove(cfg, root, pfImproveModel(cfg, *model), rest[1:], os.Stdout))
+			pfQuit(cmdImprove(cfg, root, pfImproveModel(cfg, *model), rest[1:], os.Stdout))
+		case "env":
+			pfQuit(cmdEnv(rest[1:], os.Stdout)) // read-only environment profile (envprobe.go)
+		case "eval":
+			pfQuit(cmdEval(root, rest[1:], os.Stdout)) // jazz eval offline (evaloffline.go)
 		}
 	}
 	if *allowOutside {
@@ -566,8 +596,9 @@ func main() {
 		}
 		code := runHeadless(cfg, root, ref, prompt, o)
 		wtExitHint(os.Stderr)
-		os.Exit(code)
+		pfQuit(code)
 	}
+	early.Restore() // interactive session: the GC is back on (internal/early)
 	runInteractive(cfg, root, ref, prompt, o)
 	wtExitHint(os.Stdout)
 }
@@ -575,7 +606,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
@@ -627,23 +658,26 @@ func reorderFlags(a []string) []string {
 
 func fatal(msg string) {
 	fmt.Fprintln(os.Stderr, "jazz:", msg)
-	os.Exit(1)
+	pfQuit(1)
 }
 
 // pfUsageErr reports a usage error (exit 2).
 func pfUsageErr(msg string) {
 	fmt.Fprintln(os.Stderr, "jazz:", msg)
-	os.Exit(2)
+	pfQuit(2)
 }
 
 // pfFindSession picks the session to continue (id == "": newest) in root.
 func pfFindSession(root, id string) (SessionInfo, error) {
+	if id == "" { // -c: only the newest file is read (session.go sessNewest)
+		if si, ok := sessNewest(sessionsDir(root)); ok {
+			return si, nil
+		}
+		return SessionInfo{}, errors.New("nenhuma sessão anterior nesta pasta")
+	}
 	list := ListSessions(root)
 	if len(list) == 0 {
 		return SessionInfo{}, errors.New("nenhuma sessão anterior nesta pasta")
-	}
-	if id == "" {
-		return list[0], nil
 	}
 	for _, s := range list {
 		if s.ID == id || strings.HasPrefix(s.ID, id) {
@@ -791,6 +825,7 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	var stop StopReason
 	var err error
 	if fp == nil {
+		early.Restore()                           // the model loop is long-lived: GC back on (internal/early)
 		stop, err = ag.qRunHeadless(ctx, mprompt) // + --follow-up turns, JAZZ_STEER_FILE (queue.go)
 		if err != nil && ctx.Err() == nil {
 			fp = olHeadlessFallback(ctx, ag, tools, ui, err, prompt)
@@ -873,7 +908,7 @@ func pfDeadline(d time.Duration, onTimeout func()) (timedOut func() bool, stop f
 		mu.Lock()
 		hard = time.AfterFunc(pfHardExitGrace, func() {
 			fmt.Fprintln(os.Stderr, "jazz:", pfTimeoutMsg(d), "(encerrado à força)")
-			os.Exit(StopTimeout.ExitCode())
+			pfQuit(StopTimeout.ExitCode())
 		})
 		mu.Unlock()
 	})
@@ -983,6 +1018,14 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGHUP)
 	keys := NewKeyReader()
 	ui := NewTermUI(cfg, keys)
+	// first run (no config, no key) or `jazz setup`: three steps (ui_onboard.go)
+	if onbForce || !o.modelPinned && onbFirstRun(cfg) {
+		if r := runOnboarding(cfg, ui, ref); r != "" {
+			if rr, err := cfg.ResolveModel(r); err == nil {
+				ref = rr
+			}
+		}
+	}
 	// the trust question (a menu) runs before anything project-level starts
 	pfTrustGateUI(root, cfg, ui)
 	untrusted := !pfFolderTrusted(root)
@@ -1042,7 +1085,7 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 		case <-time.After(4 * time.Second):
 			restoreTerm()
 		}
-		os.Exit(130)
+		pfQuit(130)
 	})
 	defer cleanup()
 
@@ -1187,6 +1230,14 @@ func (a *App) footer() string {
 		t := a.ui.T
 		return "  " + t.fg(cGold, 33) + t.G().warn + " " + off + t.fg(cGray, 90) + " " + t.G().dot + " " + uiModeTag(t, a.cfg.EffMode()) + t.fg(cGray, 90) + " " + t.G().dot + " ? atalhos" + t.sgr("0")
 	}
+	price := ""
+	switch {
+	case a.agent.Usage.Cost > 0:
+		price = fmtCost(a.agent.Usage.Cost)
+	case a.cfg.pvIsFreeish(a.agent.Model):
+		price = "grátis"
+	}
+	a.ui.SetPrice(price)
 	return a.ui.Footer(a.agent.Model, ctxTok, a.agent.Window(), ready, len(a.mcp.Servers))
 }
 
@@ -1428,9 +1479,9 @@ func (a *App) confirmJobs(exiting bool) bool {
 
 var slashCommands = []struct{ name, help string }{
 	{"/help", "esta ajuda"},
-	{"/model", "mostra ou troca o modelo: /model anthropic/claude-sonnet-5-5"},
+	{"/model", "escolhe o modelo numa lista (↑↓ ou nº, digite filtra) · /model anthropic/claude-sonnet-5-5"},
 	{"/models", "lista modelos de um provedor: /models openrouter"},
-	{"/omni", "roteamento entre provedores: /omni [on|off|strategy free-first|weighted|ordered]"},
+	{"/omni", "roteamento entre provedores: menu (liga/desliga, modelo por papel) · /omni [on|off|status|strategy …]"},
 	{"/key", "salva uma chave de API (escondida): /key openrouter"},
 	{"/login", "login com a conta do ChatGPT (--browser pra fluxo no navegador)"},
 	{"/logout", "remove credencial: /logout openai"},
@@ -1533,6 +1584,10 @@ func (a *App) command(line string) {
 			a.quit = true
 		}
 	case "/model":
+		if len(args) == 0 && a.pickerOn() {
+			a.modelPick() // ui_models.go
+			return
+		}
 		if len(args) == 0 {
 			ui.Notice("modelo atual: " + a.agent.Model)
 			var have []string
@@ -1546,25 +1601,7 @@ func (a *App) command(line string) {
 			ui.print(t.fg(cGray, 90) + "    " + strings.Join(have, "\n    ") + t.sgr("0") + "\n")
 			return
 		}
-		ref, err := a.cfg.ResolveModel(args[0])
-		if err != nil {
-			ui.Error(err.Error())
-			return
-		}
-		a.agent.SetModel(ref)
-		a.cfg.Model = ref
-		safeGo(func() { // per-model window lands in the models cache (providers), never in the global config (bug 42)
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			_, _ = DetectWindow(ctx, a.cfg, ref)
-		})
-		if err := a.cfg.Save(); err != nil {
-			ui.Warn("não salvei como padrão: " + err.Error())
-		}
-		ui.Notice("modelo: " + ref + " (salvo como padrão)")
-		if !a.cfg.HasCreds(mustProvider(ref)) {
-			ui.Warn("sem credencial pra " + mustProvider(ref) + " — /key " + mustProvider(ref))
-		}
+		a.setModel(args[0])
 	case "/models":
 		p := mustProvider(a.agent.Model)
 		if len(args) > 0 {
@@ -1574,6 +1611,10 @@ func (a *App) command(line string) {
 		cmdModels(a.cfg, p, &b, t)
 		ui.print(b.String())
 	case "/omni":
+		if a.pickerOn() && (len(args) == 0 || args[0] == "roles" || args[0] == "papeis" || args[0] == "papéis") {
+			a.omniMenu() // ui_models.go
+			return
+		}
 		out, err := pfOmniCommand(a.cfg, a.agent.Model, args)
 		if err != nil {
 			ui.Error(err.Error())
@@ -2068,6 +2109,32 @@ func pfMaskKey(key string) string {
 	return strings.Repeat("•", 8)
 }
 
+// storeKey checks and saves an API key for provider (auth.json) and makes it
+// redacted from tool output from now on. warns are format/account notes.
+func storeKey(cfg *Config, provider, key string) (warns []string, err error) {
+	pc := cfg.Providers[provider]
+	if pc == nil {
+		return nil, fmt.Errorf("provedor desconhecido: %s", provider)
+	}
+	if w := KeyFormatWarning(cfg, provider, key); w != "" {
+		warns = append(warns, w)
+	}
+	cred := &Cred{Type: "api", Key: key}
+	if pc.Account && pc.AccountEnv != "" {
+		// Cloudflare-style URLs need an account id too: keep it with the key
+		if id := strings.TrimSpace(os.Getenv(pc.AccountEnv)); id != "" {
+			cred.AccountID = id
+		} else if cfg.AccountID(provider) == "" {
+			warns = append(warns, provider+" também precisa do id da conta: exporte "+pc.AccountEnv+" e rode jazz key "+provider+" de novo")
+		}
+	}
+	if err := SaveCred(provider, cred); err != nil {
+		return warns, err
+	}
+	refreshSecrets() // the new key is redacted from tool output from now on
+	return warns, nil
+}
+
 // cmdKey reads an API key without echo (or from stdin if piped) and stores it.
 func cmdKey(cfg *Config, provider string, app *App) {
 	pc, ok := cfg.Providers[provider]
@@ -2089,33 +2156,13 @@ func cmdKey(cfg *Config, provider string, app *App) {
 	}
 	var key string
 	if app != nil {
-		// cbreak mode is active and echo is off: read keys, show bullets
-		app.ui.print(fmt.Sprintf("  cole a chave de %s (fica escondida) %s ", provider, app.ui.T.G().prompt))
-		var buf []rune
-	loop:
-		for k := range app.ui.keys.Keys {
-			switch k.Code {
-			case KEnter:
-				break loop
-			case KEsc, KCtrlC:
-				app.ui.print("\n")
-				app.ui.Notice("cancelado")
-				return
-			case KBackspace:
-				if len(buf) > 0 {
-					buf = buf[:len(buf)-1]
-					app.ui.print("\b \b")
-				}
-			case KRune:
-				buf = append(buf, k.R)
-				app.ui.print("•")
-			case KPaste:
-				buf = append(buf, []rune(k.Text)...)
-				app.ui.print(strings.Repeat("•", len([]rune(k.Text))))
-			}
+		// cbreak mode is active and echo is off: read keys, show bullets (ui_onboard.go)
+		k, ok := app.ui.readSecret(fmt.Sprintf("  cole a chave de %s (fica escondida) %s ", provider, app.ui.T.G().prompt))
+		if !ok {
+			app.ui.Notice("cancelado")
+			return
 		}
-		app.ui.print("\n")
-		key = string(buf)
+		key = k
 	} else if isTTY(os.Stdin) {
 		fmt.Printf("cole a chave de %s (fica escondida): ", provider)
 		restore, err := enterCbreak(int(os.Stdin.Fd()))
@@ -2130,7 +2177,7 @@ func cmdKey(cfg *Config, provider string, app *App) {
 				if c == 0x03 {
 					restore()
 					fmt.Println()
-					os.Exit(130)
+					pfQuit(130)
 				}
 				if c == 0x7f || c == 0x08 {
 					if len(b) > 0 {
@@ -2158,35 +2205,21 @@ func cmdKey(cfg *Config, provider string, app *App) {
 		}
 		fatal("nenhuma chave recebida")
 	}
-	if w := KeyFormatWarning(cfg, provider, key); w != "" {
+	warns, err := storeKey(cfg, provider, key)
+	for _, w := range warns {
 		if app != nil {
 			app.ui.Warn(w)
 		} else {
 			fmt.Fprintln(os.Stderr, "  aviso:", w)
 		}
 	}
-	cred := &Cred{Type: "api", Key: key}
-	if pc.Account && pc.AccountEnv != "" {
-		// Cloudflare-style URLs need an account id too: keep it with the key
-		if id := strings.TrimSpace(os.Getenv(pc.AccountEnv)); id != "" {
-			cred.AccountID = id
-		} else if cfg.AccountID(provider) == "" {
-			msg := provider + " também precisa do id da conta: exporte " + pc.AccountEnv + " e rode jazz key " + provider + " de novo"
-			if app != nil {
-				app.ui.Warn(msg)
-			} else {
-				fmt.Fprintln(os.Stderr, "  aviso:", msg)
-			}
-		}
-	}
-	if err := SaveCred(provider, cred); err != nil {
+	if err != nil {
 		if app != nil {
 			app.ui.Error(err.Error())
 			return
 		}
 		fatal(err.Error())
 	}
-	refreshSecrets() // the new key is redacted from tool output from now on
 	msg := fmt.Sprintf("chave de %s salva (%s) em %s", provider, pfMaskKey(key), authPath())
 	if app != nil {
 		app.ui.Notice(msg)
@@ -2380,10 +2413,10 @@ func cmdDoctor(cfg *Config, root string, args []string, verbose bool) {
 			if i+1 >= len(args) {
 				pfUsageErr("uso: jazz doctor --provider <provedor>[/modelo]   (ex.: anthropic, anthropic/claude-sonnet-5-5)")
 			}
-			os.Exit(pfDoctorProvider(cfg, args[i+1], os.Stdout))
+			pfQuit(pfDoctorProvider(cfg, args[i+1], os.Stdout))
 		}
 		if v, ok := strings.CutPrefix(a, "--provider="); ok {
-			os.Exit(pfDoctorProvider(cfg, v, os.Stdout))
+			pfQuit(pfDoctorProvider(cfg, v, os.Stdout))
 		}
 	}
 	t := DetectTheme()

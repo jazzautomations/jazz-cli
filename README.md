@@ -152,8 +152,9 @@ recusa versão mais velha ou diferente da anunciada e troca o binário em uso.
 ## Primeiro uso
 
 ```sh
+jazz                      # modo interativo; na primeira vez (sem chave) abre 3 passos: como rodar, chave, teste
+jazz setup                # os mesmos 3 passos quando quiser (grátis, Anthropic, OpenAI, ChatGPT, Ollama)
 jazz doctor               # diagnóstico: provedores com credencial, shell, sandbox, terminal
-jazz                      # modo interativo na pasta atual
 jazz omni setup           # mostra seus provedores, liga o roteamento e sugere chaves grátis
 jazz login                # entra com a conta do ChatGPT (código de dispositivo, sem navegador)
 jazz key openrouter       # salva uma chave (lida escondida); vale pra qualquer provedor
@@ -174,7 +175,9 @@ jazz key openrouter       # salva uma chave (lida escondida); vale pra qualquer 
   (`--browser` abre o navegador). Os tokens ficam em `~/.config/jazz-cli/auth.json` (0600).
 - **Modelos locais:** `jazz provider add local --url http://127.0.0.1:8080/v1 --no-key` (llama.cpp,
   LM Studio, qualquer URL compatível com OpenAI) ou `--ollama`.
-- Troque de modelo com `-m provedor/modelo` ou `/model` dentro da sessão; `jazz models` lista.
+- Troque de modelo com `-m provedor/modelo` ou `/model` dentro da sessão: sem argumento abre a lista
+  por provedor (↑↓ ou o número, digite pra filtrar; grátis/pago, latência medida, "sem chave" pede a
+  chave ali mesmo). `jazz models` lista.
 
 ## Modos de permissão
 
@@ -502,6 +505,9 @@ Leia antes de usar em repositório de terceiros (resumo na seção [Segurança](
 | `jazz [prompt]` | modo interativo (prompt inicial opcional) |
 | `jazz -p "prompt"` | headless: roda até o fim e imprime só a resposta |
 | `jazz -c` / `jazz -r [id]` | continua a última sessão da pasta / retoma uma sessão: sem id abre a lista (↑↓, digite pra filtrar); com id também no `-p` |
+| `jazz sessions` | no terminal: a lista de sessões (↑↓ ou nº) e retoma a escolhida; `--list`/`--json` ou sem terminal: a tabela |
+| `jazz resume [n\|id] [--full]` | retoma a n-ésima mais nova (ou pelo id) mostrando a conversa, paginada (espaço, enter, q); sem terminal imprime a conversa |
+| `jazz setup` | os três passos da primeira execução (como rodar, chave escondida, teste real) |
 | `jazz login [chatgpt] [--browser]` | login com a conta do ChatGPT |
 | `jazz key <provedor>` | salva uma chave de API |
 | `jazz logout <provedor>` | apaga a credencial |
@@ -532,8 +538,8 @@ com `-p`), `--output-format text|json|stream-json`, `--max-steps N`, `--timeout 
 | Comando | O que faz |
 |---|---|
 | `/help` | ajuda |
-| `/model [ref]` · `/models [provedor]` | mostra/troca o modelo · lista modelos |
-| `/omni [on\|off\|strategy …]` | roteamento entre provedores |
+| `/model [ref]` · `/models [provedor]` | lista de modelos por provedor (↑↓/nº/filtro) ou troca direto · lista modelos |
+| `/omni [on\|off\|strategy …]` | roteamento entre provedores; sozinho abre o menu (liga/desliga, modelo por papel) |
 | `/key` · `/login` · `/logout` | credenciais |
 | `/mode auto\|turbo\|smart\|ask\|yolo\|plan` | modo de permissão (Shift+Tab ou Ctrl+T alterna turbo → auto → plan → ask nesta sessão) |
 | `/approvals [clear]` | aprovações "sempre" deste projeto (host de egress, pasta fora, git destrutivo) |
@@ -732,7 +738,48 @@ credencial), o jazz não sai: mostra o aviso de modo offline e continua com atal
 `!comando` (rg/fd), `/undo` e sessões. A cada 60 s (ou com `/online`) testa a conexão com os
 provedores e volta pro modelo quando um responder. `JAZZ_OFFLINE=1` ou `--offline` força o modo
 (um modelo local, como llama.cpp, continua valendo se for o modelo da sessão). No `-p`, um
-pedido que é atalho termina com 0 mesmo sem rede; o resto sai com 1 e uma mensagem clara.
+pedido que é atalho termina com 0 mesmo sem rede; o resto passa pelo cérebro offline (abaixo) e,
+se ele também não der conta, sai com 1 e uma mensagem clara.
+
+**Cérebro offline** (desde a 0.9; contrato em `docs/design/offline-brain.md`; medidas em `results/dell-0.9-progress.md`). Sem modelo, um
+pedido que não é atalho passa por um interpretador clássico (`nlu.go`, dados em `nlu/*.json`):
+normaliza (minúsculas, sem acento, gírias como "dale", "bora", "roda aí", "mete marcha"), marca
+conceitos, acha entidades do projeto e da máquina (Aho-Corasick + Damerau/Jaro-Winkler: "talscle"
+vira o binário `tailscale`, "labbx" o host SSH `labbox`), aplica as regras de 47 intenções com slots e usa
+um naive Bayes de n-gramas de caracteres só para desempatar. Confiança abaixo de 0,6 = não age
+(vai pro modelo, ou diz o que sabe fazer). Entendido, vira uma tarefa com estado explícito
+(`task.go`: new → investigating → planning → ready → running → verifying → succeeded/unverified/failed,
+cada transição gravada na sessão e visível no `jazz trace`) executada por métodos com pré-condições
+e verificador (`methods/*.json`): `open_file` (nome impreciso → até 5 candidatos numerados se
+ambíguo → abre → caminho, tamanho, mtime, sha256, símbolos), `run_tests` (detecta o comando, roda,
+lê a saída com `outparse`, mostra arquivo:linha das falhas), `git_status`, `env_status`, `tool_info`,
+`tool_status` ("talscle status" roda `tailscale status`, só-leitura, até em pasta não confiável) e `connect_host` (só diz o comando: não conecta sozinho, então termina "não verificado"). "Pronto"
+só com evidência; sem verificador é "não verificado". Falhas seguem uma tabela por categoria
+observável (`recover.go`: nome não encontrado, comando inexistente, teste falhou, tempo, permissão,
+plano impossível…) e três olhadas seguidas sem fato novo param e perguntam. No `-p`, as perguntas
+saem com o menu numerado e a execução termina "preciso de uma resposta" (exit 1), a não ser com
+`--ask-stdin`. Mesmo com modelo, no `-p`, um pedido claro só de leitura ("abre o README.md",
+"git status", "como está o ambiente", "tenho o docker?", confiança ≥ 0,85) é respondido pelo cérebro
+sem nenhuma requisição; se o método não termina, o pedido vai pro modelo como antes
+(`JAZZ_BRAIN=off` desliga).
+
+**Perfil do ambiente** (`jazz env [--json] [--refresh]`, só leitura): SO/arquitetura, núcleos, RAM,
+Termux/WSL/contêiner, ferramentas e versões, binários do PATH, hosts do `~/.ssh/config`, máquinas do
+Tailscale (`tailscale status --json`, só se o binário existir, 2 s), serviços (systemd/runit/launchd,
+só listagem), contêineres (`docker`/`podman ps`), portas em escuta (`/proc/net/tcp`) e rede. Fica em
+cache 10 min (refeito quando o PATH muda) e alimenta o cérebro offline.
+
+**Menor intervenção.** Em qualquer modo, `yolo` e `turbo` inclusive, escrever em `/etc`, mexer no
+kernel (`modprobe`, `sysctl -w`), em binários do sistema, em `~/.config/containers` ou na configuração
+do Docker/Podman/WSL (`wsl --shutdown`, `podman system reset`, `systemctl restart docker`) é bloqueado
+como CRÍTICO; numa tarefa de contêiner, remover/reinstalar o motor ou apagar o armazenamento dele
+também, com a explicação de que é desproporcional ao objetivo. Ler esses arquivos continua livre.
+Um modelo sem visão recebe a imagem? Não: o jazz avisa e sugere um modelo configurado que veja.
+
+**`jazz eval offline`** roda 39 tarefas com o modelo desligado (atalhos, nomes imprecisos,
+ambiguidade, falhas recuperáveis, pedidos impossíveis, segurança, composta) em projetos de teste
+temporários e grava `results/offline-*.json` (sucesso verificado, falso sucesso, perguntas feitas vs
+necessárias, comandos por tarefa, latência p50/p95, RAM pico).
 
 ## Perguntas e worktrees
 
@@ -969,6 +1016,9 @@ LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provedor/modelo]
 # red-team: 14 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixos…]
 ```
+
+O resumo do v2 traz `prompts=N` por tarefa (vezes que alguém teria de responder: confirmações,
+`ask_user`, turno que termina em pergunta), lido do `--metrics-out` (`"prompts"`).
 
 O red-team cria um HOME falso com segredos canário e sobe um sumidouro HTTP local; mesmo assim,
 **rode só numa máquina de desenvolvimento descartável ou numa VM**, nunca onde há credenciais reais.

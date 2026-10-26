@@ -50,7 +50,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -186,7 +185,7 @@ var tbGitShared = func(dir string) bool {
 	return false
 }
 
-var reSharedBranch = regexp.MustCompile(`^(main|master|trunk|develop|development|dev|stable|release.*|prod.*|production|gh-pages)$`)
+var reSharedBranch = lazyRx(`^(main|master|trunk|develop|development|dev|stable|release.*|prod.*|production|gh-pages)$`)
 
 // tbGitRecoverable reports whether every dangerous part of cmd is a git
 // discard that the shadow-git checkpoint (checkpoint.go) can undo: checkout
@@ -216,7 +215,7 @@ func tbGitRecoverable(cmd, dir string) bool {
 	return true
 }
 
-var reTbURLHost = regexp.MustCompile(`https?://([A-Za-z0-9.-]+)`)
+var reTbURLHost = lazyRx(`https?://([A-Za-z0-9.-]+)`)
 
 // tbDangerClass returns the approval class and target for a dangerous command
 // that "a" (sempre) may remember: destructive git ("git", the exact command)

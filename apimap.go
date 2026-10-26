@@ -12,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -128,7 +127,7 @@ func amRender(ms []amMatch) string {
 	return "APIs do projeto relacionadas ao pedido (mapa por regex, assinaturas reais; confira antes de usar):\n" + strings.Join(lines, "\n")
 }
 
-var amCodeRE = regexp.MustCompile("`[^`]+`|\\b[a-z0-9]+_[a-z0-9_]+\\b|\\b[a-z]+[A-Z]\\w*|\\b[A-Z][a-z0-9]+[A-Z]\\w*|\\b\\w+\\.(py|go|js|ts|tsx|jsx|rs|rb|java)\\b|\\b\\w+\\(\\)")
+var amCodeRE = lazyRx("`[^`]+`|\\b[a-z0-9]+_[a-z0-9_]+\\b|\\b[a-z]+[A-Z]\\w*|\\b[A-Z][a-z0-9]+[A-Z]\\w*|\\b\\w+\\.(py|go|js|ts|tsx|jsx|rs|rb|java)\\b|\\b\\w+\\(\\)")
 
 // amCodeShaped: the request names code (snake_case, camelCase, a source
 // file, `backticks`, f()).

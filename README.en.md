@@ -310,6 +310,12 @@ HOME and a local exfiltration sink; details and caveats in
 - **Scripts:** a `script` tool with 19 built-in Python/sh scripts that answer in short JSON
   (`detect_project`, `run_tests`, `parse_test_output`, `git_state`, `ui_lint`…); `jazz script` runs
   them without a model. Plus model-free shortcuts ("run the tests", "git status") and an offline mode.
+- **Offline brain (0.9):** with no model (or in `-p` for clear read-only requests), a classical interpreter
+  (47 intents, typo-tolerant project and machine entities: "talscle status" runs `tailscale status`)
+  turns the request into an explicit task state executed by methods with preconditions and verifiers
+  (`open_file`, `run_tests`, `git_status`, `env_status`, `tool_status`…); "done" only with evidence,
+  otherwise "unverified". `jazz env` profiles the machine, `jazz eval offline` runs 39 model-free tasks
+  (39/39 on the 2005 reference laptop, 120–139 ms for "open README.md" versus 15–21 s and 32k tokens before).
 
 The full reference (all commands, slash commands, configuration files, how omni routes, output
 parsing, budgets, `--recover`, plan cache, troubleshooting) is in the [Portuguese README](README.md).

@@ -198,6 +198,11 @@ func TestSandboxBwrapDellScenario(t *testing.T) {
 // The exact argv for the Dell eval scenario, so a regression in order or
 // flags is visible in the diff (paths relative to the fake home).
 func TestSandboxBwrapDellArgv(t *testing.T) {
+	// O binário de teste cruzado no Dell não termina em ".test"; sem o stub
+	// ele entraria no argv como --ro-bind-try de si mesmo.
+	oldExe := sbSelfExe
+	sbSelfExe = func() string { return "" }
+	defer func() { sbSelfExe = oldExe }()
 	home := sbDellHome(t)
 	proj := filepath.Join(home, "jazz-eval-v2/tasks/t01")
 	sb := sbNew("strict", sbBwrap, "/usr/bin/bwrap", false, []string{proj})
@@ -365,4 +370,49 @@ func sbOnlyWrites(items []sbProbeItem) (out []sbProbeItem) {
 		}
 	}
 	return
+}
+
+// A command whose cwd is under /tmp but outside the project (the offline
+// eval fixtures) is bound on top of the /tmp tmpfs, and /tmp stays read-only.
+func TestSandboxBwrapBindsCwdUnderTmp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-only")
+	}
+	sb, _, _, _ := sbTestPolicy(t, "auto", sbBwrap, false)
+	sb.Tmp = sbReal(t.TempDir())
+	fix := filepath.Join(sbDellHome(t), "..", "..", "x", "fixture")
+	if err := os.MkdirAll(fix, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fix = sbReal(fix)
+	// make it look like it is under /tmp: the temp dir of sbDellHome is /tmp/jzsbx-dell-*
+	if !strings.HasPrefix(fix, "/tmp/") {
+		t.Skip("temp dir is not under /tmp")
+	}
+	a := strings.Join(sbBwrapArgs(sb, fix), " ")
+	tm, bind := strings.Index(a, "--tmpfs /tmp "), strings.Index(a, "--bind "+fix+" "+fix)
+	if tm < 0 || bind < tm {
+		t.Fatalf("cwd must be bound after the /tmp tmpfs: %s", a)
+	}
+	if !strings.Contains(a, "--remount-ro /tmp") {
+		t.Errorf("/tmp must stay remounted read-only: %s", a)
+	}
+	if b := strings.Join(sbBwrapArgs(sb, "/tmp"), " "); strings.Contains(b, "--bind /tmp /tmp") {
+		t.Error("/tmp itself must never be bound")
+	}
+	if b := strings.Join(sbBwrapArgs(sb, "/usr/lib"), " "); strings.Contains(b, "--bind /usr/lib") {
+		t.Error("a visible cwd needs no bind")
+	}
+}
+
+// The jazz binary is given back read-only wherever it lives.
+func TestSandboxBwrapBindsSelfExe(t *testing.T) {
+	sb, _, _, _ := sbTestPolicy(t, "auto", sbBwrap, false)
+	sb.Tmp = sbReal(t.TempDir())
+	old := sbSelfExe
+	sbSelfExe = func() string { return "/home/u/jazz-09" }
+	defer func() { sbSelfExe = old }()
+	if a := strings.Join(sbBwrapArgs(sb, ""), " "); !strings.Contains(a, "--ro-bind-try /home/u/jazz-09 /home/u/jazz-09") {
+		t.Fatalf("exe not bound: %s", a)
+	}
 }

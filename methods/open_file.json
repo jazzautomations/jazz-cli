@@ -1,0 +1,21 @@
+{"methods": [
+ {"name": "open_file.by_name", "intent": "open_file", "priority": 10,
+  "doc": "resolve o nome impreciso (nameindex) → até 5 candidatos numerados se ambíguo → abre → trecho + evidência",
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [
+   {"cap": "resolve_name", "in": {"q": "$slot.target", "kinds": "file,test,dir", "hint": "$hint"}, "out": "cands"},
+   {"cap": "choose", "in": {"options": "$cands", "max": "5", "what": "arquivo"}, "out": "target"},
+   {"cap": "read_file", "in": {"path": "$target"}, "out": "content"}],
+  "verify": [{"check": "file_exists", "arg": "$target"}, {"check": "read_ok", "arg": "$content"}],
+  "risk": "low", "cost_ms": 60},
+ {"name": "open_file.ask", "intent": "open_file", "priority": 1,
+  "doc": "sem nome no pedido: pergunta qual arquivo e segue igual",
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Qual arquivo?"}, "out": "slot.target"},
+   {"cap": "resolve_name", "in": {"q": "$slot.target", "kinds": "file,test,dir", "hint": "$hint"}, "out": "cands"},
+   {"cap": "choose", "in": {"options": "$cands", "max": "5", "what": "arquivo"}, "out": "target"},
+   {"cap": "read_file", "in": {"path": "$target"}, "out": "content"}],
+  "verify": [{"check": "file_exists", "arg": "$target"}, {"check": "read_ok", "arg": "$content"}],
+  "risk": "low", "cost_ms": 60}
+]}

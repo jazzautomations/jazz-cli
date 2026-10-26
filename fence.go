@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -57,11 +56,20 @@ func fenceGitTop(root string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--show-toplevel").Output()
-	if err != nil {
+	raw, ok := gitRootMemo(root) // shared with gitRoot (prompt.go): same question, same answer
+	if !ok {
+		out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--show-toplevel").Output()
+		if err != nil {
+			gitRootStore(root, "")
+			return ""
+		}
+		raw = strings.TrimSpace(string(out))
+		gitRootStore(root, raw)
+	}
+	if raw == "" {
 		return ""
 	}
-	top := filepath.Clean(strings.TrimSpace(string(out)))
+	top := filepath.Clean(raw)
 	if top == "" || top == "." {
 		return ""
 	}
@@ -268,10 +276,10 @@ func (a *Agent) fenceBash(cmd string) string {
 }
 
 // reFenceRedir is a redirection glued to its target ("2>/dev/null", ">out").
-var reFenceRedir = regexp.MustCompile(`^(?:[0-9]*[<>]+[|&]?|&>+)`)
+var reFenceRedir = lazyRx(`^(?:[0-9]*[<>]+[|&]?|&>+)`)
 
 // reFencePath finds absolute and ~/ paths in free text (task prompts).
-var reFencePath = regexp.MustCompile("(?:^|[\\s\"'`(=:,])((?:/|~/)[^\\s\"'`),;:]+)")
+var reFencePath = lazyRx("(?:^|[\\s\"'`(=:,])((?:/|~/)[^\\s\"'`),;:]+)")
 
 // fenceText returns the first existing path in s outside the fence.
 func (a *Agent) fenceText(s string) string {

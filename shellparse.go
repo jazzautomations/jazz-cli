@@ -13,7 +13,6 @@ package main
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -391,7 +390,7 @@ func (p *shParser) substOnly(s string, d int) {
 }
 
 // reInterp: interpreters whose inline code (-c/-e) is scanned for danger.
-var reInterp = regexp.MustCompile(`^(python[0-9.]*|pypy[0-9.]*|node|nodejs|deno|bun|ruby|perl|php|lua[0-9.]*|Rscript|osascript|tclsh|awk|gawk|mawk|nawk)$`)
+var reInterp = lazyRx(`^(python[0-9.]*|pypy[0-9.]*|node|nodejs|deno|bun|ruby|perl|php|lua[0-9.]*|Rscript|osascript|tclsh|awk|gawk|mawk|nawk)$`)
 
 // finish records one simple command and descends into what it runs:
 // eval words, `sh -c` bodies, find -exec commands and interpreter code.

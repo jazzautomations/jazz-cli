@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -185,7 +184,7 @@ func imNewCall(tc ToolCall) imCall {
 	return c
 }
 
-var imExitRE = regexp.MustCompile(`\[exit code (-?\d+)\]`)
+var imExitRE = lazyRx(`\[exit code (-?\d+)\]`)
 
 // imExit is the bash exit code printed near the end of a result (-1 = none);
 // a "[cwd: …]" note may follow it.
@@ -203,7 +202,7 @@ func imExit(s string) int {
 // imErrPrefix: how jazz's tools start an error result (tools.go, edit.go,
 // budget.go, guard_honest.go, blockux.go). Used for sessions written before
 // the write-ahead log recorded is_err.
-var imErrPrefix = regexp.MustCompile(`^(Error|error:|Cannot |Could not find|Refused|Validation failed|TOOL_NOT_EXECUTED|TOOL_NOT_STARTED|TOOL_OUTCOME_UNKNOWN|Tool "[^"]*" not found|BLOCKED|Blocked|Denied|denied|old_string must|No changes made|Found \d+ occurrences|edits\[\d+\]|offset \d+ is past|\S+ (does not exist|changed since you last read|already exists\. Read it first|is a directory))`)
+var imErrPrefix = lazyRx(`^(Error|error:|Cannot |Could not find|Refused|Validation failed|TOOL_NOT_EXECUTED|TOOL_NOT_STARTED|TOOL_OUTCOME_UNKNOWN|Tool "[^"]*" not found|BLOCKED|Blocked|Denied|denied|old_string must|No changes made|Found \d+ occurrences|edits\[\d+\]|offset \d+ is past|\S+ (does not exist|changed since you last read|already exists\. Read it first|is a directory))`)
 
 func imLooksErr(tool, s string) bool {
 	if tool == "bash" {
@@ -222,8 +221,8 @@ func imClip(s string, n int) string {
 // ---------- eval runner output ----------
 
 var (
-	imSumHeadRE = regexp.MustCompile(`^jazz:\s*(.*?)\s+modelo:\s*(\S+)`)
-	imSumLineRE = regexp.MustCompile(`^(\S+)\s+(PASS|FAIL)\s+(\d+)s\s+tools=(\S+)\s+rc=(\S+)`)
+	imSumHeadRE = lazyRx(`^jazz:\s*(.*?)\s+modelo:\s*(\S+)`)
+	imSumLineRE = lazyRx(`^(\S+)\s+(PASS|FAIL)\s+(\d+)s\s+tools=(\S+)\s+rc=(\S+)`)
 )
 
 // imParseSummary reads an eval summary.txt.
@@ -254,14 +253,14 @@ func imParseSummary(path string) []imEvalTask {
 }
 
 var (
-	imLogSessRE  = regexp.MustCompile(`^· sessão (\S+) · (\S+)`)
-	imLogCallRE  = regexp.MustCompile(`^● (\S+)\s?(.*)$`)
-	imLogOKRE    = regexp.MustCompile(`^\s+⎿ (\S+)\s?(.*)$`)
-	imLogErrRE   = regexp.MustCompile(`^\s+✗ (\S+)\s?(.*)$`)
-	imLog429RE   = regexp.MustCompile(`^· (\S+): HTTP 429`)
-	imLogDoneRE  = regexp.MustCompile(`^· (\S+) · (\d+) requisiç`)
-	imLogBashRE  = regexp.MustCompile(`^bash exit (-?\d+)`)
-	imLogTimeRE  = regexp.MustCompile(`\s*\(\d+(\.\d+)?(ms|s|µs|m\d*s?)\)\s*$`)
+	imLogSessRE  = lazyRx(`^· sessão (\S+) · (\S+)`)
+	imLogCallRE  = lazyRx(`^● (\S+)\s?(.*)$`)
+	imLogOKRE    = lazyRx(`^\s+⎿ (\S+)\s?(.*)$`)
+	imLogErrRE   = lazyRx(`^\s+✗ (\S+)\s?(.*)$`)
+	imLog429RE   = lazyRx(`^· (\S+): HTTP 429`)
+	imLogDoneRE  = lazyRx(`^· (\S+) · (\d+) requisiç`)
+	imLogBashRE  = lazyRx(`^bash exit (-?\d+)`)
+	imLogTimeRE  = lazyRx(`\s*\(\d+(\.\d+)?(ms|s|µs|m\d*s?)\)\s*$`)
 	imLogTimeout = "tempo esgotado"
 )
 

@@ -80,7 +80,7 @@ var sbStatus atomic.Value // string
 func sbCurrent() *Sandbox { return sbActive.Load() }
 
 // sbProbe finds the backend for this OS; tests replace it.
-var sbProbe = sbProbeOS
+var sbProbe = sbProbeCached // sbProbeOS behind the verdict cache (sandbox_probecache.go)
 
 // sbResolveMode: --sandbox wins over JAZZ_SANDBOX, then config "sandbox";
 // default auto.
@@ -573,6 +573,16 @@ func sbSeatbeltProfile(s *Sandbox) (string, []string) {
 
 // ---------- Linux: bubblewrap ----------
 
+// sbSelfExe is the resolved path of the running jazz binary ("" for a test
+// binary); tests replace it.
+var sbSelfExe = func() string {
+	exe, err := os.Executable()
+	if err != nil || strings.HasSuffix(exe, ".test") {
+		return ""
+	}
+	return sbReal(exe)
+}
+
 // sbBwrapArgs are the bwrap options (before "--") for a child starting in dir.
 // Mount order matters: later binds go on top of earlier ones.
 func sbBwrapArgs(s *Sandbox, dir string) []string {
@@ -612,6 +622,19 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	a = append(a, "--bind", s.Tmp, s.Tmp)
 	for _, r := range s.Roots {
 		a = append(a, "--bind", r, r)
+	}
+	// the jazz binary stays executable wherever it lives (HOME is a tmpfs
+	// and only ~/.local/bin is given back otherwise)
+	if exe := sbSelfExe(); exe != "" && !sbUnder(exe, s.Hide) {
+		a = append(a, "--ro-bind-try", exe, exe)
+	}
+	// a working directory under /tmp but outside the project: the tmpfs on
+	// /tmp hides it ("Can't chdir"), so it is bound (rw) on top of the
+	// tmpfs. /tmp itself and anything else already visible are left alone.
+	if dir != "" && dir != "/tmp" && pathIn(dir, "/tmp") && !sbUnder(dir, s.Roots, []string{s.Tmp}, s.Hide) {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			a = append(a, "--bind", dir, dir)
+		}
 	}
 	for _, p := range s.Hide {
 		fi, err := os.Stat(p)

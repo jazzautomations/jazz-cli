@@ -25,7 +25,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,7 +164,7 @@ func (a *Agent) rcEnabled() bool {
 	return !a.sub && a.mode() != "plan" && a.rcMode() != "off"
 }
 
-var rcExitRE = regexp.MustCompile(`\[exit code (-?\d+)\]`)
+var rcExitRE = lazyRx(`\[exit code (-?\d+)\]`)
 
 // rcExitCode reads the last "[exit code N]" marker of a bash result (-1 = none).
 func rcExitCode(text string) int {
@@ -181,11 +180,11 @@ func rcExitCode(text string) int {
 }
 
 // rcFailRE counts failure markers in test/build output (Shepherd discard rule).
-var rcFailRE = regexp.MustCompile(`--- FAIL|\bFAIL(ED)?\b|\bfailed\b|\bError\b|\bERROR\b|\berror:`)
+var rcFailRE = lazyRx(`--- FAIL|\bFAIL(ED)?\b|\bfailed\b|\bError\b|\bERROR\b|\berror:`)
 
 func rcCountFails(out string) int { return len(rcFailRE.FindAllStringIndex(out, -1)) }
 
-var rcDigitsRE = regexp.MustCompile(`[0-9]+(\.[0-9]+)?`)
+var rcDigitsRE = lazyRx(`[0-9]+(\.[0-9]+)?`)
 
 // rcUntilSig is the failure signature of a --until run: its failure lines
 // (or its tail) with numbers masked, so timings and addresses do not count.
@@ -221,7 +220,7 @@ func rcErrLine(text string) string {
 }
 
 // rcVerifyRE: bash commands that check work (build, test, lint, type-check).
-var rcVerifyRE = regexp.MustCompile(`\b(go (test|build|vet)|cargo (test|build|check|clippy)|pytest|py\.test|python[0-9.]* -m (pytest|unittest)|unittest|npm (test|run (test|build|lint|check|typecheck))|pnpm (test|run|build|lint)|yarn (test|build|lint)|bun test|tsc\b|eslint|ruff|mypy|make( |$)|ctest|mvn (test|verify|package)|gradle(w)? (test|build|check)|rspec|phpunit|dotnet (test|build)|zig build|mix test|deno test|jest|vitest)`)
+var rcVerifyRE = lazyRx(`\b(go (test|build|vet)|cargo (test|build|check|clippy)|pytest|py\.test|python[0-9.]* -m (pytest|unittest)|unittest|npm (test|run (test|build|lint|check|typecheck))|pnpm (test|run|build|lint)|yarn (test|build|lint)|bun test|tsc\b|eslint|ruff|mypy|make( |$)|ctest|mvn (test|verify|package)|gradle(w)? (test|build|check)|rspec|phpunit|dotnet (test|build)|zig build|mix test|deno test|jest|vitest)`)
 
 func rcIsVerifyCmd(cmd string) bool { return rcVerifyRE.MatchString(cmd) }
 

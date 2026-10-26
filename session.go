@@ -45,7 +45,7 @@ type Session struct {
 }
 
 type sessEntry struct {
-	T        string   `json:"t"` // meta | msg | compact | model | rewind | goal | recover | branch | tool_start | tool_result | end | title
+	T        string   `json:"t"` // meta | msg | compact | model | rewind | goal | recover | branch | tool_start | tool_result | end | title | task
 	ID       string   `json:"id,omitempty"`
 	ParentID string   `json:"parentId,omitempty"` // "" = root
 	TS       int64    `json:"ts,omitempty"`       // unix ms when the entry was written
@@ -71,6 +71,7 @@ type sessEntry struct {
 	Tool      *sessTool `json:"tool,omitempty"`   // tool_start / tool_result (write-ahead)
 	End       *sessEnd  `json:"end,omitempty"`    // end of a headless run (obs.go)
 	Title     string    `json:"title,omitempty"`  // title: the session's name (auto from the first prompt, or /rename)
+	Task      *tkEvent  `json:"task,omitempty"`   // task: one transition of an offline-brain task (task.go)
 	// hardening2.go: set on read only. Tampered = the line failed its HMAC (or
 	// was unsigned after signed ones); Legacy = written before signing existed.
 	Tampered bool `json:"-"`
@@ -426,68 +427,154 @@ func ListAllSessions() []SessionInfo {
 }
 
 func sessListDir(d string) []SessionInfo {
-	ents, _ := os.ReadDir(d)
 	var out []SessionInfo
-	for _, e := range ents {
-		if !strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), obEventsSuffix) {
-			continue
-		}
-		p := filepath.Join(d, e.Name())
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		info := SessionInfo{ID: strings.TrimSuffix(e.Name(), ".jsonl"), Path: p, Mod: fi.ModTime()}
-		f, err := os.Open(p)
-		if err != nil {
-			continue
-		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 1<<20), 64<<20)
-		first, named := "", ""
-		for sc.Scan() {
-			var se sessEntry
-			if json.Unmarshal(sc.Bytes(), &se) != nil {
-				continue
-			}
-			if se.T == "meta" || se.T == "model" {
-				info.Model = se.Model
-			}
-			if se.T == "meta" && info.Cwd == "" {
-				info.Cwd = se.Cwd
-			}
-			if se.T == "title" && strings.TrimSpace(se.Title) != "" {
-				named = se.Title // the newest one wins (/rename)
-			}
-			if se.T == "rewind" {
-				info.Msgs = min(info.Msgs, se.N)
-			}
-			if se.T == "msg" && se.Msg != nil {
-				info.Msgs++
-				info.Tools += len(se.Msg.ToolCalls)
-				if se.Usage != nil {
-					info.Usage.Add(*se.Usage)
-				}
-				if first == "" && se.Msg.Role == "user" && !strings.HasPrefix(se.Msg.Content, "<summary>") {
-					// harness reminders lead the first message: the title is the user's text
-					first = se.Msg.Content
-				}
-				if se.Msg.Role == "assistant" && strings.TrimSpace(se.Msg.Content) != "" {
-					info.Last = oneLine(se.Msg.Content, 100)
-				}
-			}
-		}
-		f.Close()
-		info.Title = oneLine(sanitizeTerm(named), 70)
-		if info.Title == "" {
-			info.Title = sessAutoTitle(first) // sessions from before titles: same rule, never stored
-		}
-		if info.Msgs > 0 {
+	for _, c := range sessFiles(d) {
+		if info, ok := sessSummary(c); ok {
 			out = append(out, info)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Mod.After(out[j].Mod) })
 	return out
+}
+
+// sessNewest is the newest session of d with at least one message, by file
+// mtime: `jazz -c` and --resume-last-in only need that one, so the other
+// files are never opened (low-level study §12.1, item 4).
+func sessNewest(d string) (SessionInfo, bool) {
+	for _, c := range sessFiles(d) {
+		if info, ok := sessSummary(c); ok {
+			return info, true
+		}
+	}
+	return SessionInfo{}, false
+}
+
+// sessFile is one session file of a directory, as stat saw it.
+type sessFile struct {
+	path string
+	fi   os.FileInfo
+}
+
+// sessFiles are the session files of d, newest mtime first (directory order
+// on ties).
+func sessFiles(d string) []sessFile {
+	ents, _ := os.ReadDir(d)
+	var out []sessFile
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), obEventsSuffix) {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, sessFile{filepath.Join(d, e.Name()), fi})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].fi.ModTime().After(out[j].fi.ModTime()) })
+	return out
+}
+
+// sessMetaExt is the side file caching a session's list summary.
+const sessMetaExt = ".meta"
+
+// sessMeta is the cached summary of one session file, valid while the file
+// keeps the recorded size and mtime. It is a cache only: resuming always
+// reads (and HMAC-checks) the session file itself.
+type sessMeta struct {
+	V     int    `json:"v"`
+	Size  int64  `json:"size"`
+	ModNS int64  `json:"mod_ns"`
+	Title string `json:"title,omitempty"`
+	Model string `json:"model,omitempty"`
+	Last  string `json:"last,omitempty"`
+	Cwd   string `json:"cwd,omitempty"`
+	Msgs  int    `json:"msgs"`
+	Tools int    `json:"tools,omitempty"`
+	Usage Usage  `json:"usage"`
+}
+
+const sessMetaV = 1
+
+func sessMetaPath(sessPath string) string {
+	return strings.TrimSuffix(sessPath, ".jsonl") + sessMetaExt
+}
+
+// sessSummary is the list entry of one session file (ok=false: no messages
+// or unreadable), from the .meta side file when it is current, else parsed
+// and the side file rewritten.
+func sessSummary(c sessFile) (SessionInfo, bool) {
+	p, fi := c.path, c.fi
+	info := SessionInfo{ID: strings.TrimSuffix(filepath.Base(p), ".jsonl"), Path: p, Mod: fi.ModTime()}
+	mp := sessMetaPath(p)
+	if b, err := os.ReadFile(mp); err == nil && len(b) < 64<<10 {
+		var m sessMeta
+		if json.Unmarshal(b, &m) == nil && m.V == sessMetaV && m.Size == fi.Size() && m.ModNS == fi.ModTime().UnixNano() {
+			info.Title, info.Model, info.Last, info.Cwd = oneLine(sanitizeTerm(m.Title), 70), m.Model, m.Last, m.Cwd
+			info.Msgs, info.Tools, info.Usage = m.Msgs, m.Tools, m.Usage
+			return info, info.Msgs > 0
+		}
+	}
+	if !sessParseSummary(p, &info) {
+		return info, false
+	}
+	m := sessMeta{V: sessMetaV, Size: fi.Size(), ModNS: fi.ModTime().UnixNano(), Title: info.Title, Model: info.Model,
+		Last: info.Last, Cwd: info.Cwd, Msgs: info.Msgs, Tools: info.Tools, Usage: info.Usage}
+	if b, err := json.Marshal(m); err == nil {
+		tmp := mp + ".tmp"
+		if os.WriteFile(tmp, b, 0o600) == nil && os.Rename(tmp, mp) != nil {
+			os.Remove(tmp)
+		}
+	}
+	return info, info.Msgs > 0
+}
+
+// sessParseSummary reads the whole session file into info (false: unreadable).
+func sessParseSummary(p string, info *SessionInfo) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1<<20), 64<<20)
+	first, named := "", ""
+	for sc.Scan() {
+		var se sessEntry
+		if json.Unmarshal(sc.Bytes(), &se) != nil {
+			continue
+		}
+		if se.T == "meta" || se.T == "model" {
+			info.Model = se.Model
+		}
+		if se.T == "meta" && info.Cwd == "" {
+			info.Cwd = se.Cwd
+		}
+		if se.T == "title" && strings.TrimSpace(se.Title) != "" {
+			named = se.Title // the newest one wins (/rename)
+		}
+		if se.T == "rewind" {
+			info.Msgs = min(info.Msgs, se.N)
+		}
+		if se.T == "msg" && se.Msg != nil {
+			info.Msgs++
+			info.Tools += len(se.Msg.ToolCalls)
+			if se.Usage != nil {
+				info.Usage.Add(*se.Usage)
+			}
+			if first == "" && se.Msg.Role == "user" && !strings.HasPrefix(se.Msg.Content, "<summary>") {
+				// harness reminders lead the first message: the title is the user's text
+				first = se.Msg.Content
+			}
+			if se.Msg.Role == "assistant" && strings.TrimSpace(se.Msg.Content) != "" {
+				info.Last = oneLine(se.Msg.Content, 100)
+			}
+		}
+	}
+	info.Title = oneLine(sanitizeTerm(named), 70)
+	if info.Title == "" {
+		info.Title = sessAutoTitle(first) // sessions from before titles: same rule, never stored
+	}
+	return true
 }
 
 // sessReadEntries parses a session file, tolerating a torn last line, and

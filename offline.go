@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -334,7 +333,7 @@ func (a *App) olLeave(why string) {
 }
 
 // olSummaryRe: "resumo do projeto" and friends (answered by scripts offline).
-var olSummaryRe = regexp.MustCompile(`(?i)^(?:(?:me )?(?:da|de|faz|faca|mostra|mostre)(?: um| o)? )?(?:resumo|resuma|visao geral|overview|sumario)(?: (?:do|o|deste|desse|of the|of this))? ?(?:projeto|repo|repositorio|codigo|project|codebase)?$`)
+var olSummaryRe = lazyRx(`(?i)^(?:(?:me )?(?:da|de|faz|faca|mostra|mostre)(?: um| o)? )?(?:resumo|resuma|visao geral|overview|sumario)(?: (?:do|o|deste|desse|of the|of this))? ?(?:projeto|repo|repositorio|codigo|project|codebase)?$`)
 
 // olBefore runs before a message goes to the model: a fast path may answer
 // it, and offline mode keeps it away from unreachable providers.
@@ -371,6 +370,9 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 	}
 	if olIsLocalRef(a.cfg, a.agent.Model) {
 		return false, text // a local model needs no network
+	}
+	if a.brInteractive(ctx, text) { // offline brain: interpreter + methods + evidence (brain.go)
+		return true, text
 	}
 	if a.ol.forced {
 		a.olOffer("offline (forçado): sem modelo — o que dá pra fazer agora:", olMenu(a.olMenuState(text, true, false)))
@@ -560,12 +562,19 @@ func cmdScript(root string, args []string) int {
 func olHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, cfg *Config, prompt string, o pfOpts) (*RunResult, string) {
 	offline := (o.offline || olForcedEnv()) && !olIsLocalRef(cfg, ag.Model) // a local model is allowed offline
 	if !offline && !o.fastPath {
+		// level 0: a clear read-only request needs no model (brain.go)
+		if r := brHeadlessLevel0(ctx, ag, tools, ui, prompt); r != nil {
+			return r, prompt
+		}
 		return nil, prompt
 	}
 	m, ok := fpIntents(tools.Root).Match(prompt, fpDetect(tools.Root), tools.hasRg)
 	if !ok {
 		if !offline {
 			return nil, prompt
+		}
+		if r := brHeadless(ctx, ag, tools, ui, prompt, o); r != nil { // offline brain (brain.go)
+			return r, prompt
 		}
 		return &RunResult{Status: StopError, Model: "offline",
 			Err: "modo offline: nenhum atalho casa com o pedido e não há modelo (rode sem JAZZ_OFFLINE/--offline, ou use um modelo local com -m)"}, prompt

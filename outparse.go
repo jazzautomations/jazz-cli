@@ -1534,8 +1534,8 @@ type opParserDef struct {
 }
 
 var (
-	opSniffLocRx  = regexp.MustCompile(`^\S*\.\w+:\d+:\d+$`)
-	opSniffLineRx = regexp.MustCompile(`^\S+:\d+$`)
+	opSniffLocRx  = lazyRx(`^\S*\.\w+:\d+:\d+$`)
+	opSniffLineRx = lazyRx(`^\S+:\d+$`)
 )
 
 // opSniffBuild looks for one compiler diagnostic line. It is line-based with

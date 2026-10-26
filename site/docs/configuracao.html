@@ -221,7 +221,12 @@ hook appends findings (gradient text, default violet palette, emoji as icons, mi
 skills go in <code>~/.config/jazz-cli/skills</code>, <code>.jazz/skills</code> or <code>.claude/skills</code>; <code>/skill</code> lists them.</li><li><strong>Steering:</strong> conditional rules in Kiro format (<code>.jazz/steering/*.md</code>, <code>.kiro/steering/*.md</code>) and
 Cursor format (<code>.cursor/rules/**/*.mdc</code>): <code>always</code>, <code>fileMatch</code>, <code>auto</code>, <code>manual</code>.</li><li><strong>Scripts:</strong> a <code>script</code> tool with 19 built-in Python/sh scripts that answer in short JSON
 (<code>detect_project</code>, <code>run_tests</code>, <code>parse_test_output</code>, <code>git_state</code>, <code>ui_lint</code>…); <code>jazz script</code> runs
-them without a model. Plus model-free shortcuts ("run the tests", "git status") and an offline mode.</li></ul>
+them without a model. Plus model-free shortcuts ("run the tests", "git status") and an offline mode.</li><li><strong>Offline brain (0.9):</strong> with no model (or in <code>-p</code> for clear read-only requests), a classical interpreter
+(47 intents, typo-tolerant project and machine entities: "talscle status" runs <code>tailscale status</code>)
+turns the request into an explicit task state executed by methods with preconditions and verifiers
+(<code>open_file</code>, <code>run_tests</code>, <code>git_status</code>, <code>env_status</code>, <code>tool_status</code>…); "done" only with evidence,
+otherwise "unverified". <code>jazz env</code> profiles the machine, <code>jazz eval offline</code> runs 39 model-free tasks
+(39/39 on the 2005 reference laptop, 120–139 ms for "open README.md" versus 15–21 s and 32k tokens before).</li></ul>
 <p>The full reference (all commands, slash commands, configuration files, how omni routes, output
 parsing, budgets, <code>--recover</code>, plan cache, troubleshooting) is in the <a href="/docs/sobre">Portuguese README</a>.</p></div>
 <p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>

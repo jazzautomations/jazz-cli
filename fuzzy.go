@@ -10,14 +10,47 @@ package main
 // the offline fast paths (intents.go) and the task classifier (route_task.go).
 
 import (
+	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
 )
 
 // fzFold lowercases and strips accents ("Ação" -> "acao").
+//
+// ASCII input (most names and commands) skips the NFD pass: NFD is the
+// identity there and only A-Z change, so an already-lowercase ASCII string
+// is returned as is (no allocation) and anything else costs one buffer.
 func fzFold(s string) string {
+	if i := fzASCIIUpperOrHigh(s); i < 0 {
+		return s
+	} else if fzIsASCII(s[i:]) {
+		b := []byte(s)
+		for j := i; j < len(b); j++ {
+			if c := b[j]; c >= 'A' && c <= 'Z' {
+				b[j] = c + 'a' - 'A'
+			}
+		}
+		return string(b)
+	}
+	return fzFoldUnicode(s)
+}
+
+// fzASCIIUpperOrHigh is the index of the first byte that fzFold may
+// change (A-Z or non-ASCII), -1 when there is none.
+func fzASCIIUpperOrHigh(s string) int {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= 0x80 || c >= 'A' && c <= 'Z' {
+			return i
+		}
+	}
+	return -1
+}
+
+// fzFoldUnicode is the general path of fzFold.
+func fzFoldUnicode(s string) string {
 	var b strings.Builder
 	for _, r := range norm.NFD.String(s) {
 		if unicode.Is(unicode.Mn, r) {
@@ -32,6 +65,31 @@ func fzFold(s string) string {
 // and "test_calculo.py" share the key "testcalculopy"; camelCase keys equal
 // their snake_case form.
 func fzKey(s string) string {
+	if fzIsASCII(s) {
+		// one pass: lowercase and drop separators; unchanged input is
+		// returned without allocating
+		k := 0
+		for ; k < len(s); k++ {
+			if c := s[k]; c >= 'A' && c <= 'Z' || c == '_' || c == '-' || c == '.' || c == ' ' {
+				break
+			}
+		}
+		if k == len(s) {
+			return s
+		}
+		b := make([]byte, k, len(s))
+		copy(b, s[:k])
+		for ; k < len(s); k++ {
+			switch c := s[k]; {
+			case c == '_' || c == '-' || c == '.' || c == ' ':
+			case c >= 'A' && c <= 'Z':
+				b = append(b, c+'a'-'A')
+			default:
+				b = append(b, c)
+			}
+		}
+		return string(b)
+	}
 	var b strings.Builder
 	for _, r := range fzFold(s) {
 		switch r {
@@ -82,7 +140,100 @@ func fzNeighbour(a, b rune) bool {
 
 // fzDist is the weighted optimal-string-alignment distance of two already
 // folded strings, in fzEdit units (stops early past max; returns max+1).
+//
+// ASCII strings (folded keys almost always are) with b of at most fzRowMax
+// bytes take an allocation-free path: the three DP rows live in stack arrays
+// and the keyboard-neighbour test is a bitset lookup instead of two map
+// probes (low-level study §4.1: 15x faster, 0 allocs; on the 386 target the
+// map hash has no AES-NI). Anything else falls back to fzDistRunes; both give
+// the same result (TestFzDistASCIIEqualsRunes, FuzzFzDist).
 func fzDist(a, b string, max int) int {
+	if len(b) <= fzRowMax && max >= 0 && max <= 1<<30 && fzIsASCII(a) && fzIsASCII(b) {
+		return fzDistASCII(a, b, max)
+	}
+	return fzDistRunes(a, b, max)
+}
+
+// fzRowMax is the longest b the stack rows of fzDistASCII hold.
+const fzRowMax = 64
+
+func fzIsASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+// fzNb[x] is the set of ASCII bytes adjacent to x on the keyboard (bit y of
+// word y>>6), the same relation as fzNeighbour. 2 KB: fits in L1.
+var fzNb = func() (t [128][2]uint64) {
+	for x := 0; x < 128; x++ {
+		for y := 0; y < 128; y++ {
+			if fzNeighbour(rune(x), rune(y)) {
+				t[x][y>>6] |= 1 << (y & 63)
+			}
+		}
+	}
+	return t
+}()
+
+func fzDistASCII(a, b string, max int) int {
+	if d := len(a) - len(b); d > max/fzEdit+1 || -d > max/fzEdit+1 {
+		return max + 1
+	}
+	var r0, r1, r2 [fzRowMax + 1]int32
+	n := len(b)
+	prev2, prev, cur := r0[:n+1], r1[:n+1], r2[:n+1]
+	for j := range prev {
+		prev[j] = int32(j * fzEdit)
+	}
+	m := int32(max)
+	for i := 1; i <= len(a); i++ {
+		ca := a[i-1]
+		cur[0] = int32(i * fzEdit)
+		lo := cur[0]
+		nb := &fzNb[ca&0x7f]
+		for j := 1; j <= n; j++ {
+			cb := b[j-1]
+			var sub int32
+			if ca != cb {
+				sub = fzEdit
+				if nb[cb>>6]>>(cb&63)&1 != 0 {
+					sub = fzSlip
+				}
+			}
+			v := prev[j-1] + sub
+			if x := prev[j] + fzEdit; x < v {
+				v = x
+			}
+			if x := cur[j-1] + fzEdit; x < v {
+				v = x
+			}
+			if i > 1 && j > 1 && ca == b[j-2] && a[i-2] == cb {
+				if x := prev2[j-2] + fzSlip; x < v {
+					v = x
+				}
+			}
+			cur[j] = v
+			if v < lo {
+				lo = v
+			}
+		}
+		if lo > m {
+			return max + 1
+		}
+		prev2, prev, cur = prev, cur, prev2
+	}
+	if prev[n] > m {
+		return max + 1
+	}
+	return int(prev[n])
+}
+
+// fzDistRunes is the general (Unicode) path of fzDist.
+func fzDistRunes(a, b string, max int) int {
 	ra, rb := []rune(a), []rune(b)
 	if d := len(ra) - len(rb); d > max/fzEdit+1 || -d > max/fzEdit+1 {
 		return max + 1
@@ -177,6 +328,23 @@ var fzVerbs = map[string]string{
 	"testa": "test", "teste": "test", "testar": "test", "test": "test",
 }
 
+// fzVerbEnt is one fzVerbs entry with its rune length.
+type fzVerbEnt struct {
+	k, v string
+	n    int
+}
+
+// fzVerbList is fzVerbs as a slice sorted by key (built once; the result of
+// fzIntent does not depend on the order, the slice only avoids the map walk).
+var fzVerbList = sync.OnceValue(func() []fzVerbEnt {
+	out := make([]fzVerbEnt, 0, len(fzVerbs))
+	for k, v := range fzVerbs {
+		out = append(out, fzVerbEnt{k, v, len([]rune(k))})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].k < out[j].k })
+	return out
+})
+
 // fzIntent resolves a (possibly misspelled) verb to its canonical intent.
 func fzIntent(w string) string {
 	w = fzFold(w)
@@ -187,11 +355,17 @@ func fzIntent(w string) string {
 		return ""
 	}
 	best, bd, tie := "", 1<<30, false
-	for k, v := range fzVerbs {
-		if len([]rune(k)) < 4 {
+	n := len([]rune(w))
+	lim := fzLimit(n)
+	for _, e := range fzVerbList() {
+		if e.n < 4 {
 			continue
 		}
-		if d, ok := fzNearWord(w, k); ok && (len([]rune(w)) >= 5 || d <= fzSlip) {
+		if dl := e.n - n; dl*fzEdit > lim || -dl*fzEdit > lim {
+			continue // lower bound: each length unit is an insertion or deletion
+		}
+		k, v := e.k, e.v
+		if d, ok := fzNearWord(w, k); ok && (n >= 5 || d <= fzSlip) {
 			switch {
 			case d < bd:
 				best, bd, tie = v, d, false
@@ -219,7 +393,12 @@ func fzRepairLine(s string, vocab map[string]bool) (string, bool) {
 			continue
 		}
 		best, bd, tie := "", 1<<30, false
+		n := len([]rune(f))
+		lim := fzLimit(n)
 		for v := range vocab {
+			if dl := len(v) - n; (dl*fzEdit > lim || -dl*fzEdit > lim) && fzIsASCII(v) {
+				continue // lower bound (ASCII v: bytes = runes): one edit per length unit
+			}
 			if d, ok := fzNearWord(f, v); ok {
 				switch {
 				case d < bd:

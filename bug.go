@@ -12,14 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
 
 // pfRedactJSONValues masks values of header/env maps and anything secret-shaped.
-var pfSecretKeyRe = regexp.MustCompile(`(?i)(key|token|secret|password|authorization|cookie)`)
+var pfSecretKeyRe = lazyRx(`(?i)(key|token|secret|password|authorization|cookie)`)
 
 func pfRedactConfigJSON(b []byte) []byte {
 	var v any

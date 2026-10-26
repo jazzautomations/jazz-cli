@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 )
 
@@ -220,7 +219,7 @@ func ccDegenerate(s string) bool {
 	return len(seen) < 4
 }
 
-var ccPartialEscRE = regexp.MustCompile(`\\(u[0-9a-fA-F]{0,3})?$`)
+var ccPartialEscRE = lazyRx(`\\(u[0-9a-fA-F]{0,3})?$`)
 
 // ccDecodePartial decodes the body of a JSON string cut before its closing
 // quote, dropping an escape sequence cut in half.
@@ -269,7 +268,7 @@ func ccLines(s string) []string {
 	return l
 }
 
-var ccFenceRE = regexp.MustCompile("^\\s*```[\\w.+-]*\\s*$")
+var ccFenceRE = lazyRx("^\\s*```[\\w.+-]*\\s*$")
 
 // ccClean strips what models add around a continuation: a fenced block (with
 // at most two lines of prose before it) and the lines of kept repeated at

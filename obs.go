@@ -347,8 +347,33 @@ func (a *Agent) obStep(step int, model string) {
 
 func (a *Agent) obTurnEnd(stop StopReason, steps, tools int, d time.Duration) {
 	u := a.turnUsage
-	a.obEv("turn.end", map[string]any{"stop": string(stop), "steps": steps, "tools": tools, "dur_ms": d.Milliseconds(),
-		"in": u.In, "out": u.Out, "cache_read": u.CacheRead, "cache_write": u.CacheWrite, "cost": u.Cost, "ctx_tokens": a.estTokens()})
+	f := map[string]any{"stop": string(stop), "steps": steps, "tools": tools, "dur_ms": d.Milliseconds(),
+		"in": u.In, "out": u.Out, "cache_read": u.CacheRead, "cache_write": u.CacheWrite, "cost": u.Cost, "ctx_tokens": a.estTokens()}
+	if obEndsWithQuestion(a.Msgs) {
+		f["asks"] = true // the turn ended asking the user something (prompts per task)
+	}
+	a.obEv("turn.end", f)
+}
+
+// obEndsWithQuestion: the last assistant text of the conversation ends with
+// a question to the user ("Quer que eu rode os testes?").
+func obEndsWithQuestion(msgs []Message) bool {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		if m.Role == "user" && !strings.HasPrefix(strings.TrimSpace(m.Content), "<system-reminder>") {
+			return false
+		}
+		if m.Role != "assistant" || strings.TrimSpace(m.Content) == "" {
+			continue
+		}
+		txt := strings.TrimSpace(m.Content)
+		if j := strings.LastIndex(txt, "\n"); j >= 0 {
+			txt = strings.TrimSpace(txt[j+1:])
+		}
+		txt = strings.TrimRight(txt, "*_ ")
+		return strings.HasSuffix(txt, "?")
+	}
+	return false
 }
 
 func (a *Agent) obReqStart(ref string, cand, attempt int) {
@@ -606,6 +631,9 @@ func (a *Agent) obApproval(tool, detail, reason string, ap Approval) {
 		ans = "allow_always"
 	}
 	f := map[string]any{"tool": tool, "target": oneLine(redactSecrets(detail), 200), "reason": reason, "answer": ans}
+	if a.apb != nil && a.apb.answering {
+		f["batch"] = true // answered in a merged confirmation (approve_batch.go): no prompt of its own
+	}
 	a.obEv("approval", f)
 	auditRec("approval", f)
 }
@@ -928,6 +956,12 @@ type obSummary struct {
 	Handoff     string         `json:"handoff,omitempty"`
 	Checkpoint  string         `json:"checkpoint,omitempty"`
 	Events      int            `json:"events"`
+	// Prompts is how many times the user had to answer something (prompts
+	// per task): single confirmations, merged ones (one each), ask_user
+	// questions shown, and turns that ended with a question. AutoAnswered
+	// counts ask_user questions the project answered instead (askfacts.go).
+	Prompts      int `json:"prompts"`
+	AutoAnswered int `json:"auto_answered,omitempty"`
 }
 
 func obSummarize(evs []obEvent) obSummary {
@@ -949,7 +983,18 @@ func obSummarize(evs []obEvent) obSummary {
 			if m := e.str("mode"); m != "" {
 				s.Mode = m
 			}
+		case "approval":
+			if !e.flag("batch") {
+				s.Prompts++
+			}
+		case "approval.batch", "ask.user":
+			s.Prompts++
+		case "ask.auto":
+			s.AutoAnswered++
 		case "turn.end":
+			if e.flag("asks") {
+				s.Prompts++
+			}
 			s.ActiveMS += int64(e.num("dur_ms"))
 			s.Status = e.str("stop")
 			s.Outcome = obOutcome(StopReason(s.Status))
@@ -1111,6 +1156,8 @@ func obTraceText(w io.Writer, evs []obEvent) {
 			}
 		case "queue.add", "queue.edit", "queue.consume", "queue.drop":
 			line = qTraceLine(e) // queue.go
+		case "task":
+			line = tkTraceLine(e) // task.go
 		default:
 			line = e.str("kind") + " " + obCompact(e, "src")
 		}

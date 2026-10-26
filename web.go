@@ -209,15 +209,15 @@ func isBinary(b []byte) bool {
 
 var (
 	reDropBlocks = dropBlockRes("script", "style", "noscript", "svg", "template", "iframe", "nav", "footer", "aside", "head")
-	reComments   = regexp.MustCompile(`(?s)<!--.*?-->`)
-	reHeading    = regexp.MustCompile(`(?is)<h([1-6])\b[^>]*>(.*?)</h[1-6]\s*>`)
-	reAnchor     = regexp.MustCompile(`(?is)<a\b[^>]*?href\s*=\s*["']([^"'#][^"']*)["'][^>]*>(.*?)</a\s*>`)
-	reLi         = regexp.MustCompile(`(?is)<li\b[^>]*>`)
-	reBlock      = regexp.MustCompile(`(?is)<(/?)(p|div|br|hr|tr|section|article|header|main|ul|ol|table|blockquote|pre|h[1-6]|dt|dd|figcaption|summary|details|form)\b[^>]*>`)
-	reCell       = regexp.MustCompile(`(?is)</t[dh]\s*>`)
-	reTag        = regexp.MustCompile(`(?s)<[^>]+>`)
-	reBlankRuns  = regexp.MustCompile(`\n[ \t]*(\n[ \t]*)+`)
-	reSpaces     = regexp.MustCompile(`[ \t\x{00a0}]{2,}`)
+	reComments   = lazyRx(`(?s)<!--.*?-->`)
+	reHeading    = lazyRx(`(?is)<h([1-6])\b[^>]*>(.*?)</h[1-6]\s*>`)
+	reAnchor     = lazyRx(`(?is)<a\b[^>]*?href\s*=\s*["']([^"'#][^"']*)["'][^>]*>(.*?)</a\s*>`)
+	reLi         = lazyRx(`(?is)<li\b[^>]*>`)
+	reBlock      = lazyRx(`(?is)<(/?)(p|div|br|hr|tr|section|article|header|main|ul|ol|table|blockquote|pre|h[1-6]|dt|dd|figcaption|summary|details|form)\b[^>]*>`)
+	reCell       = lazyRx(`(?is)</t[dh]\s*>`)
+	reTag        = lazyRx(`(?s)<[^>]+>`)
+	reBlankRuns  = lazyRx(`\n[ \t]*(\n[ \t]*)+`)
+	reSpaces     = lazyRx(`[ \t\x{00a0}]{2,}`)
 )
 
 // dropBlockRes builds one regexp per tag (RE2 has no backreferences like </\1>).
@@ -266,8 +266,8 @@ func htmlToText(s string) string {
 }
 
 var (
-	reDDGLink    = regexp.MustCompile(`(?is)<a[^>]+class=["']result-link["'][^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>|<a[^>]+href=["']([^"']+)["'][^>]*class=["']result-link["'][^>]*>(.*?)</a>`)
-	reDDGSnippet = regexp.MustCompile(`(?is)<td[^>]+class=["']result-snippet["'][^>]*>(.*?)</td>`)
+	reDDGLink    = lazyRx(`(?is)<a[^>]+class=["']result-link["'][^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>|<a[^>]+href=["']([^"']+)["'][^>]*class=["']result-link["'][^>]*>(.*?)</a>`)
+	reDDGSnippet = lazyRx(`(?is)<td[^>]+class=["']result-snippet["'][^>]*>(.*?)</td>`)
 )
 
 func webSearch(ctx context.Context, q string, max int) ToolOutput {

@@ -429,6 +429,32 @@ Dois cuidados importam. **Cache**: as lições entram no prompt **uma vez**, na 
 
 ---
 
+## 9. Cérebro offline (0.9, em construção)
+
+Contrato: [`design/offline-brain.md`](design/offline-brain.md). Sem modelo, o pedido que não é atalho
+(`intents.go` continua na frente) passa por cinco peças, todas Go stdlib e sem rede:
+
+```mermaid
+flowchart LR
+    P["pedido"] --> N["nlu.go<br/>normaliza · conceitos · entidades (Aho-Corasick)<br/>regras + naive Bayes"]
+    E["envprobe.go<br/>perfil do ambiente"] --> N
+    I["nameindex.go<br/>arquivos · símbolos · entidades do ambiente"] --> N
+    N -->|"conf ≥ 0,6"| T["task.go<br/>TaskState + máquina de estados"]
+    N -->|"conf < 0,6"| L["modelo (se houver) ou pergunta"]
+    T --> M["methods.go + methods/*.json<br/>Pyhop: 1º método com pré-condições"]
+    M --> C["caps.go<br/>capacidades: risco, needs, verificador"]
+    C --> V["verificação por evidência<br/>succeeded só com evidência"]
+    M -->|"passo falhou"| R["recover.go<br/>categoria → ação · limite de exploração"]
+    R --> M
+    T --> S["sessão (t: task) + eventos (jazz trace)"]
+```
+
+`caps.go` também guarda duas regras que valem fora do cérebro: a de **menor intervenção** (chamada em
+`permit`, antes até do `yolo`: `/etc`, kernel, binários do sistema e configuração de contêiner/WSL são
+CRÍTICOS em todo modo) e a de **capacidade do modelo** (imagem para modelo sem visão: aviso
+determinístico com um modelo que vê; `acStripImages` mantém a imagem fora do pedido). `jazz eval
+offline` (`evaloffline.go`, tarefas em `evals/offline/tasks.json`) mede tudo isso sem modelo.
+
 ## Glossário
 
 | Termo | Significado no jazz |

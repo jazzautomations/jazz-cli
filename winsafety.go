@@ -85,7 +85,7 @@ func SecretReason(cmd string) string {
 func winSlashes(cmd string) string { return strings.ReplaceAll(cmd, `\`, "/") }
 
 // winSplit cuts a PowerShell/cmd line into pipeline/statement segments.
-var winSplit = regexp.MustCompile("\r?\n|;|&&|\\|\\||\\|")
+var winSplit = lazyRx("\r?\n|;|&&|\\|\\||\\|")
 
 // winFields splits a segment on blanks, dropping quotes around words and the
 // call operators (& and .) in front of a command.
@@ -146,18 +146,18 @@ func winSwitch(args []string, sw string) bool {
 // winBroadTarget: drive roots, the home and system folders, and wildcards or
 // the current directory, as written in PowerShell or cmd (slashes already
 // normalized).
-var winBroadTarget = regexp.MustCompile(`(?i)^([a-z]:/?\*?|/|/\*|~|~/\*?|\$home/?\*?|\$env:(userprofile|homepath|systemroot|windir|programfiles|programdata|appdata|localappdata|systemdrive)(/\*?)?|%(userprofile|systemroot|windir|programfiles|programdata|appdata|localappdata|systemdrive)%(/\*?)?|[a-z]:/(windows|users|program files|program files \(x86\)|programdata)(/\*?)?|\.|\./\*?|\.\.|\.\./.*|\*|\$pwd|\(get-location\)|\$env:homedrive\$env:homepath)$`)
+var winBroadTarget = lazyRx(`(?i)^([a-z]:/?\*?|/|/\*|~|~/\*?|\$home/?\*?|\$env:(userprofile|homepath|systemroot|windir|programfiles|programdata|appdata|localappdata|systemdrive)(/\*?)?|%(userprofile|systemroot|windir|programfiles|programdata|appdata|localappdata|systemdrive)%(/\*?)?|[a-z]:/(windows|users|program files|program files \(x86\)|programdata)(/\*?)?|\.|\./\*?|\.\.|\.\./.*|\*|\$pwd|\(get-location\)|\$env:homedrive\$env:homepath)$`)
 
 var (
-	winDownload = regexp.MustCompile(`(?i)\b(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget|start-bitstransfer|downloadstring|downloadfile|downloaddata|net\.webclient|frombase64string|certutil)\b`)
-	winIEX      = regexp.MustCompile(`(?i)(\b(iex|invoke-expression)\b|\[scriptblock\]::create)`)
-	winEncoded  = regexp.MustCompile(`(?i)\b(powershell|pwsh)(\.exe)?\b[^;|&\n]*\s-(e|ec|en|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|encodedcomma|encodedcomman|encodedcommand)\s`)
-	winHive     = regexp.MustCompile(`(?i)\b(hklm|hkcu|hkcr|hku|hkcc|hkey_[a-z_]+)(:|/)|registry::`)
-	winStartup  = regexp.MustCompile(`(?i)start menu/programs/startup|shell:(common )?startup`)
-	winWriteVb  = regexp.MustCompile(`(?i)(>|\b(copy|move|xcopy|robocopy|cp|mv|copy-item|move-item|new-item|ni|set-content|sc|add-content|ac|out-file|tee-object|mklink)\b)`)
-	winProfile  = regexp.MustCompile(`(?i)(>|\b(set-content|sc|add-content|ac|out-file|tee-object|new-item|copy-item|cp|move-item|mv)\b)[^;|\n]*\$profile\b`)
-	winExfil    = regexp.MustCompile(`(?i)\b(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget|scp|sftp|ftp|copy-item|cp|xcopy|robocopy|set-content|out-file|send-mailmessage)\b|>`)
-	winSecret   = regexp.MustCompile(`(?i)auth\.json|\.ssh/|authorized_keys|\.gnupg|\.aws/credentials|\.netrc|\.git-credentials|jazz-cli/(config|mcp|trusted)\.json|microsoft/(credentials|protect)/|\$env:[a-z_]*(key|token|secret|password)`)
+	winDownload = lazyRx(`(?i)\b(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget|start-bitstransfer|downloadstring|downloadfile|downloaddata|net\.webclient|frombase64string|certutil)\b`)
+	winIEX      = lazyRx(`(?i)(\b(iex|invoke-expression)\b|\[scriptblock\]::create)`)
+	winEncoded  = lazyRx(`(?i)\b(powershell|pwsh)(\.exe)?\b[^;|&\n]*\s-(e|ec|en|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|encodedcomma|encodedcomman|encodedcommand)\s`)
+	winHive     = lazyRx(`(?i)\b(hklm|hkcu|hkcr|hku|hkcc|hkey_[a-z_]+)(:|/)|registry::`)
+	winStartup  = lazyRx(`(?i)start menu/programs/startup|shell:(common )?startup`)
+	winWriteVb  = lazyRx(`(?i)(>|\b(copy|move|xcopy|robocopy|cp|mv|copy-item|move-item|new-item|ni|set-content|sc|add-content|ac|out-file|tee-object|mklink)\b)`)
+	winProfile  = lazyRx(`(?i)(>|\b(set-content|sc|add-content|ac|out-file|tee-object|new-item|copy-item|cp|move-item|mv)\b)[^;|\n]*\$profile\b`)
+	winExfil    = lazyRx(`(?i)\b(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget|scp|sftp|ftp|copy-item|cp|xcopy|robocopy|set-content|out-file|send-mailmessage)\b|>`)
+	winSecret   = lazyRx(`(?i)auth\.json|\.ssh/|authorized_keys|\.gnupg|\.aws/credentials|\.netrc|\.git-credentials|jazz-cli/(config|mcp|trusted)\.json|microsoft/(credentials|protect)/|\$env:[a-z_]*(key|token|secret|password)`)
 )
 
 // winDangerReason flags destructive or hijacking PowerShell/cmd commands.
@@ -338,7 +338,7 @@ var winReadOnlyCmd = map[string]bool{
 }
 
 // winBadArg: parameters of allowlisted cmdlets that write or run something.
-var winBadArg = regexp.MustCompile(`(?i)(^|\s)-(outf|outfi|outfil|outfile|outv|outvar|outvari|outvaria|outvariab|outvariabl|outvariable|pv|pipelinevariable|ev|errorvariable|iv|informationvariable|wv|warningvariable|filepath|literalpath:?\$)`)
+var winBadArg = lazyRx(`(?i)(^|\s)-(outf|outfi|outfil|outfile|outv|outvar|outvari|outvaria|outvariab|outvariabl|outvariable|pv|pipelinevariable|ev|errorvariable|iv|informationvariable|wv|warningvariable|filepath|literalpath:?\$)`)
 
 // winReadOnly is true for a PowerShell/cmd line built only from read-only
 // cmdlets, with no expressions, redirections or secret files.

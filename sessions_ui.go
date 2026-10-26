@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,9 +29,9 @@ import (
 // ---------- titles ----------
 
 // sessMentionRe matches the blocks ExpandMentions puts before the typed text.
-var sessMentionRe = regexp.MustCompile(`(?s)<(file|dir|image) path="[^"]*">.*?</(file|dir|image)>`)
+var sessMentionRe = lazyRx(`(?s)<(file|dir|image) path="[^"]*">.*?</(file|dir|image)>`)
 
-var sessFenceRe = regexp.MustCompile("(?s)```.*?(```|$)")
+var sessFenceRe = lazyRx("(?s)```.*?(```|$)")
 
 // sessTitleLead are filler phrases dropped from the start of a title (folded).
 var sessTitleLead = [][]string{
@@ -221,6 +220,7 @@ type pkState struct {
 	sp     *pkSpec
 	query  []rune
 	typing bool  // "/" or a letter started the filter: j/k and digits are text
+	num    int   // digits typed so far (two-digit entry: 1 then 2 = row 12)
 	view   []int // items shown, in order
 	sel    int   // position in view
 	top    int   // first position on screen
@@ -352,6 +352,11 @@ func (st *pkState) current() int {
 
 // key applies one key. done: the picker closes, with pick (-1 = cancelled).
 func (st *pkState) key(k Key) (done bool, pick int) {
+	if k.Code != KRune || k.R < '0' || k.R > '9' || st.typing || len(st.query) > 0 {
+		if k.Code != KEnter {
+			st.num = 0
+		}
+	}
 	switch k.Code {
 	case KUp:
 		st.move(-1)
@@ -425,11 +430,8 @@ func (st *pkState) key(k Key) (done bool, pick int) {
 			case r == '/':
 				st.typing = true
 				return false, 0
-			case r >= '1' && r <= '9':
-				if p := int(r - '1'); p < len(st.view) && !st.sp.Items[st.view[p]].Off {
-					return true, st.view[p]
-				}
-				return false, 0
+			case r >= '0' && r <= '9':
+				return st.digit(int(r - '0'))
 			}
 		}
 		if unicode.IsPrint(r) {
@@ -438,6 +440,35 @@ func (st *pkState) key(k Key) (done bool, pick int) {
 			st.refilter()
 		}
 	}
+	return false, 0
+}
+
+// digit is a number key on the list: rows are numbered 1..N. With up to 9
+// rows a digit picks at once; with more, the first digit highlights its row
+// and waits while a second digit could still name a row (1 then 2 = 12),
+// and Enter takes the highlighted one. A number that cannot grow picks.
+func (st *pkState) digit(d int) (done bool, pick int) {
+	n := st.num*10 + d
+	if n == 0 {
+		return false, 0
+	}
+	if n > len(st.view) { // "4" "7" on a 20-row list: start over with the 7
+		st.num, n = 0, d
+		if n == 0 || n > len(st.view) {
+			return false, 0
+		}
+	}
+	p := n - 1
+	if st.sp.Items[st.view[p]].Off {
+		st.num = 0
+		return false, 0
+	}
+	st.sel = p
+	if n*10 > len(st.view) {
+		st.num = 0
+		return true, st.view[p]
+	}
+	st.num = n
 	return false, 0
 }
 
@@ -504,8 +535,15 @@ func (st *pkState) lines(t Theme, w, h int) []string {
 			out = append(out, clipVisible("  "+dim+bold+sanitizeTerm(it.Group)+reset, w))
 		}
 		num := "  "
-		if p < 9 && !it.Off {
-			num = dim + strconv.Itoa(p+1) + reset + " "
+		if len(st.view) > 9 {
+			num = "   "
+		}
+		if p < 99 && !it.Off {
+			n := strconv.Itoa(p + 1)
+			if len(st.view) > 9 && p < 9 {
+				n = " " + n
+			}
+			num = dim + n + reset + " "
 		}
 		right := ""
 		if it.Right != "" {
@@ -543,6 +581,9 @@ func (st *pkState) lines(t Theme, w, h int) []string {
 	pos := ""
 	if len(st.view) > 0 {
 		pos = fmt.Sprintf("%d/%d", st.sel+1, len(st.view))
+		if st.num > 0 {
+			pos = fmt.Sprintf("nº %d_ (outro dígito ou enter)", st.num)
+		}
 		if more := len(st.view) - 1 - last; more > 0 {
 			pos += fmt.Sprintf(" %s +%d", g.ell, more)
 		}
@@ -553,7 +594,7 @@ func (st *pkState) lines(t Theme, w, h int) []string {
 }
 
 // pkHint is the key help under every list.
-const pkHint = "↑↓ jk move · enter abre · esc cancela · digite filtra"
+const pkHint = "↑↓ ou nº escolhe · enter abre · esc cancela · digite filtra"
 
 // Pick shows the list and returns the chosen item (an index into sp.Items,
 // which Tab may have replaced) or -1. The list is drawn in place and erased.
@@ -566,8 +607,16 @@ func (e *Editor) Pick(sp *pkSpec) int {
 	e.ui.ensureLine()
 	e.ui.mu.Unlock()
 	st := newPkState(sp)
+	printed := false
 	draw := func() {
 		h := max(min(termHeight()-2, 26), 6)
+		if e.ui.T.dumb { // no cursor movement: the list once, answered by number
+			if !printed {
+				printed = true
+				uiWrite(strings.Join(st.lines(e.ui.T, termWidth()-1, max(len(sp.Items)*2+4, h)), "\n") + "\n")
+			}
+			return
+		}
 		lines := st.lines(e.ui.T, termWidth()-1, h)
 		var b strings.Builder
 		b.WriteString("\x1b[?25l\r")
@@ -584,7 +633,9 @@ func (e *Editor) Pick(sp *pkSpec) int {
 		uiWrite(b.String())
 	}
 	draw()
-	defer uiWrite("\r\x1b[J\x1b[?25h")
+	if !e.ui.T.dumb {
+		defer uiWrite("\r\x1b[J\x1b[?25h")
+	}
 	winch := uiWinch()
 	for {
 		select {
@@ -936,22 +987,105 @@ func replayTotals(t Theme, si SessionInfo, msgs int) string {
 
 // Replay prints a resumed conversation in one write (after committing the
 // live region): one syscall for the whole transcript, cheap on one core.
+// A transcript taller than the screen goes through the pager (ui_pager.go):
+// space pages, q jumps to the end; /expand then shows what was skipped.
 func (u *TermUI) Replay(msgs []Message, errs map[string]bool, n int, totals string) {
+	if pfReplayFull {
+		n = -1
+	}
 	view, hidden, nh := u.replayView(msgs, errs, n, termWidth()-1)
 	if view == "" {
 		return
 	}
 	u.mu.Lock()
-	defer u.mu.Unlock()
 	u.endText()
 	u.gap()
+	u.liveCommit()
+	u.mu.Unlock()
 	if totals != "" {
 		view += "\n" + totals
 	}
-	u.rawWrite(view)
-	if nh > 0 {
+	skipped := u.pageOut(view)
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	switch {
+	case skipped:
+		all := rpPlain(view)
+		if hidden != "" {
+			all = hidden + "\n" + all
+		}
+		u.lastOut = uiLastOut{label: "conversa anterior", text: all}
+	case nh > 0:
 		u.lastOut = uiLastOut{label: fmt.Sprintf("conversa anterior (%d entradas)", nh), text: hidden}
 	}
+}
+
+// ---------- `jazz sessions`, `jazz resume` ----------
+
+// pfSessionsInteractive: `jazz sessions` on a terminal with no listing flag
+// opens the list with ↑↓/numbers and resumes the pick; flags (--json, -n,
+// --all) and pipes keep the table.
+func pfSessionsInteractive(args []string) bool {
+	return len(args) == 0 && isTTY(os.Stdin) && isTTY(os.Stdout) || len(args) == 1 && (args[0] == "-i" || args[0] == "--pick")
+}
+
+// pfResumeSub parses `jazz resume [n|id] [--full]`: n is the number in
+// `jazz sessions` (1 = the newest), no argument opens the list. Without a
+// terminal it prints the transcript and exits (headless never prompts).
+func pfResumeSub(root string, args []string) (id string, full bool) {
+	var pos []string
+	for _, a := range args {
+		switch a {
+		case "--full", "-full", "--tudo":
+			full = true
+		default:
+			pos = append(pos, a)
+		}
+	}
+	list := ListSessions(root)
+	if len(pos) == 0 {
+		id = pfPickResume
+	} else {
+		id = pos[0]
+		if n, err := strconv.Atoi(id); err == nil && n >= 1 && n < 1000 {
+			if n > len(list) {
+				fmt.Fprintf(os.Stderr, "jazz: só há %d %s nesta pasta (jazz sessions lista)\n", len(list), uiPl(len(list), "sessão", "sessões"))
+				os.Exit(2)
+			}
+			id = list[n-1].ID
+		}
+	}
+	if isTTY(os.Stdin) && isTTY(os.Stdout) {
+		return id, full
+	}
+	// no terminal: the transcript as plain text
+	pick := ""
+	if id != pfPickResume {
+		pick = id
+	}
+	si, err := pfFindSession(root, pick)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "jazz:", err)
+		os.Exit(1)
+	}
+	sess, msgs, _, _, err := LoadSession(si.Path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "jazz:", err)
+		os.Exit(1)
+	}
+	sess.Close()
+	u := NewTermUI(&Config{}, nil)
+	u.T = Theme{}
+	n := replayDefault
+	if full {
+		n = -1
+	}
+	view, _, _ := u.replayView(msgs, sessToolErrs(si.Path), n, 100)
+	fmt.Print(rpPlain(view))
+	fmt.Print(rpPlain(replayTotals(u.T, si, len(msgs))))
+	fmt.Printf("  · sessão %s (%s) · continue com: jazz resume %s\n", si.ID, sanitizeTerm(si.Title), si.ID)
+	os.Exit(0)
+	return "", false
 }
 
 // ---------- App: /resume, /sessions, /tree, /rename ----------

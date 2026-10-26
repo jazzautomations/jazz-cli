@@ -402,6 +402,9 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 	m := newMenuState(sp)
 	drawn := 0
 	draw := func() {
+		if t.dumb && drawn > 0 {
+			return // no cursor movement: printed once, answered by number
+		}
 		w, h := io.size()
 		lines := m.render(t, w-1, max(h-1, 6))
 		var b strings.Builder
@@ -410,12 +413,21 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 		} else {
 			b.WriteString("\x1b[?25l")
 		}
+		if t.dumb {
+			io.write(strings.Join(lines, "\n") + "\n")
+			drawn = len(lines)
+			return
+		}
 		b.WriteString(strings.Join(lines, "\n"))
 		fmt.Fprintf(&b, "\n\x1b[%dA", len(lines))
 		drawn = len(lines)
 		io.write(b.String())
 	}
-	erase := func() { io.write("\r\x1b[J\x1b[?25h") }
+	erase := func() {
+		if !t.dumb {
+			io.write("\r\x1b[J\x1b[?25h")
+		}
+	}
 	draw()
 	since := time.Now()
 	prev := sp.Since

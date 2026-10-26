@@ -1,0 +1,2231 @@
+{
+ "version": 1,
+ "comment": "Gramática semântica do interpretador offline (nlu.go). Cada intenção tem regras (conceitos de nlu/lexicon.json; 'a|b' = qualquer um; '@kind' = entidade do mundo achada no texto), slots tipados e exemplos. Os exemplos treinam o classificador de apoio e são o teste de aceitação (>= 95%). 'world' é o mundo fixo usado pelo teste.",
+ "world": {
+  "files": [
+   "parser.go",
+   "parser_test.go",
+   "lexer.go",
+   "lexer_test.go",
+   "main.go",
+   "README.md",
+   "config.yaml",
+   "Makefile",
+   "package.json",
+   "server.js",
+   "src/app.py",
+   "tests/test_app.py",
+   "docs/guia.md",
+   "internal/db/conn.go"
+  ],
+  "symbols": [
+   "ParseArgs",
+   "NewServer",
+   "handleLogin",
+   "Tokenize"
+  ],
+  "services": [
+   "nginx",
+   "postgresql",
+   "ssh",
+   "tailscaled",
+   "cron"
+  ],
+  "ssh_hosts": [
+   "labbox",
+   "vps",
+   "media01"
+  ],
+  "ts_peers": [
+   "labbox",
+   "macbook",
+   "fono"
+  ],
+  "containers": [
+   "web",
+   "db",
+   "redis"
+  ],
+  "toolchains": [
+   "go",
+   "python3",
+   "node",
+   "npm",
+   "docker",
+   "podman",
+   "git",
+   "make",
+   "rg",
+   "tailscale",
+   "ssh",
+   "cargo"
+  ],
+  "bins": [
+   "ls",
+   "grep",
+   "curl",
+   "wget",
+   "htop",
+   "vim",
+   "nano",
+   "jq",
+   "tailscale",
+   "ffmpeg",
+   "gcc",
+   "systemctl"
+  ],
+  "ports": [
+   22,
+   3000,
+   5432,
+   8080
+  ]
+ },
+ "intents": [
+  {
+   "name": "open_file",
+   "desc": "abrir/mostrar um arquivo",
+   "rules": [
+    {
+     "all": [
+      "open"
+     ]
+    },
+    {
+     "all": [
+      "filenoun",
+      "@file"
+     ],
+     "none": [
+      "explain",
+      "undo",
+      "delete",
+      "rename",
+      "create",
+      "fix",
+      "find",
+      "diff",
+      "commit",
+      "run",
+      "install",
+      "format",
+      "lint",
+      "test",
+      "logs"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file",
+      "test",
+      "dir"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "abre o parser.go",
+    "abre o teste do parser",
+    "mostra o main.go",
+    "abre o README",
+    "abra o arquivo config.yaml",
+    "me mostra o lexer",
+    "ve o arquivo server.js",
+    "cat main.go",
+    "open parser.go",
+    "show me lexer_test.go",
+    "abre o parsr",
+    "mostra o teste do lexer",
+    "le o docs/guia.md",
+    "da uma olhada no app.py",
+    "abre aí o conn.go",
+    "exibe o package.json",
+    "abre o makefile",
+    "quero ver o parser_test.go",
+    "visualiza o readme",
+    "abre o arquivo do servidor web",
+    "open the parser test",
+    "mostra o codigo do lexer.go",
+    "olha o main.go pra mim",
+    "abri o parser",
+    "abre o tests/test_app.py"
+   ],
+   "negatives": [
+    "abre um terminal no labbox",
+    "mostra os logs do nginx",
+    "mostra o git status",
+    "mostra as portas abertas",
+    "mostra o diff"
+   ]
+  },
+  {
+   "name": "explain",
+   "desc": "explicar arquivo ou símbolo",
+   "rules": [
+    {
+     "all": [
+      "explain"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file",
+      "symbol"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "explica o parser.go",
+    "o que faz a função ParseArgs",
+    "explica o handleLogin",
+    "pra que serve o lexer.go",
+    "como funciona o Tokenize",
+    "explain parser.go",
+    "what does NewServer do",
+    "me explica o main.go",
+    "descreve o que o conn.go faz",
+    "o que e o config.yaml",
+    "explica esse arquivo server.js",
+    "explica a classe NewServer",
+    "como funciona o lexer",
+    "me ajuda a entender o parser"
+   ],
+   "negatives": [
+    "resumo do projeto",
+    "explica o projeto"
+   ]
+  },
+  {
+   "name": "find",
+   "desc": "achar símbolo ou texto no código",
+   "rules": [
+    {
+     "all": [
+      "find"
+     ]
+    }
+   ],
+   "slots": {
+    "query": {
+     "kinds": [
+      "symbol",
+      "text"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "procura parseArgs",
+    "onde está a função ParseArgs",
+    "acha o handleLogin",
+    "busca TODO no código",
+    "onde fica o NewServer",
+    "cadê o Tokenize",
+    "find ParseArgs",
+    "where is handleLogin defined",
+    "grep NewServer",
+    "procura onde usa o Tokenize",
+    "quem chama o ParseArgs",
+    "encontra a string 'connection refused'",
+    "localiza o arquivo que tem handleLogin",
+    "procura \"timeout\" no projeto",
+    "busca referencias de NewServer",
+    "onde ta definido o ParseArgs",
+    "acha onde tem fmt.Println",
+    "search for TODO",
+    "procure o simbolo Tokenize"
+   ],
+   "negatives": [
+    "onde estão os logs do nginx"
+   ]
+  },
+  {
+   "name": "run_tests",
+   "desc": "rodar testes (alvo opcional)",
+   "rules": [
+    {
+     "all": [
+      "run",
+      "test"
+     ]
+    },
+    {
+     "all": [
+      "run",
+      "@test"
+     ]
+    },
+    {
+     "all": [
+      "test"
+     ],
+     "none": [
+      "open",
+      "explain",
+      "find",
+      "create",
+      "fix",
+      "delete",
+      "error",
+      "rename"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "test",
+      "file",
+      "text"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "roda os testes",
+    "rode os testes",
+    "roda o teste do parser",
+    "executa os testes",
+    "run the tests",
+    "run tests",
+    "testa o parser",
+    "roda aí os testes",
+    "dale nos testes",
+    "mete marcha nos testes",
+    "bora rodar os testes",
+    "manda ver nos testes",
+    "go test",
+    "npm test",
+    "pytest",
+    "roda os testes do lexer",
+    "executa a suite",
+    "testa tudo",
+    "roda os testes que estão falhando",
+    "roda o parser_test.go",
+    "rerun the failing tests",
+    "roda os testes de novo",
+    "rodar testes",
+    "testa ai",
+    "toca os testes"
+   ],
+   "negatives": [
+    "abre o teste do parser",
+    "corrige o teste do parser",
+    "cria um teste pro lexer",
+    "o teste do parser ta falhando"
+   ]
+  },
+  {
+   "name": "build",
+   "desc": "compilar",
+   "rules": [
+    {
+     "all": [
+      "build"
+     ],
+     "none": [
+      "error",
+      "fix"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "compila",
+    "compila o projeto",
+    "roda o build",
+    "faz o build",
+    "builda aí",
+    "build",
+    "go build",
+    "npm run build",
+    "cargo build",
+    "compile the project",
+    "gera o binário",
+    "dale no build",
+    "faz a compilação",
+    "build it"
+   ],
+   "negatives": [
+    "o build quebrou",
+    "conserta o build"
+   ]
+  },
+  {
+   "name": "lint",
+   "desc": "rodar o lint",
+   "rules": [
+    {
+     "all": [
+      "lint"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "roda o lint",
+    "lint",
+    "roda o linter",
+    "go vet",
+    "roda o vet",
+    "run the linter",
+    "passa o lint",
+    "roda o eslint",
+    "linta o código",
+    "run lint",
+    "checa o lint"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "format",
+   "desc": "checar/aplicar formatação",
+   "rules": [
+    {
+     "all": [
+      "format"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "formata o código",
+    "checa a formatação",
+    "roda o gofmt",
+    "format the code",
+    "fmt",
+    "roda o prettier",
+    "arruma a formatação",
+    "formatar",
+    "verifica a formatação do projeto",
+    "indenta o código"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "git_status",
+   "desc": "status do git",
+   "rules": [
+    {
+     "all": [
+      "git",
+      "status"
+     ]
+    },
+    {
+     "all": [
+      "status"
+     ],
+     "none": [
+      "service",
+      "@service",
+      "host",
+      "@host",
+      "container",
+      "@container",
+      "env",
+      "net",
+      "online",
+      "branch",
+      "@tool"
+     ]
+    },
+    {
+     "all": [
+      "git"
+     ],
+     "any": [
+      "open"
+     ],
+     "none": [
+      "commit",
+      "push",
+      "pull",
+      "stash",
+      "history",
+      "diff",
+      "branch",
+      "checkout",
+      "undo",
+      "install",
+      "update"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "git status",
+    "status",
+    "status do git",
+    "status do repo",
+    "mostra o git status",
+    "como está o repositório",
+    "git st",
+    "qual o status do git",
+    "status do repositório",
+    "what's the git status",
+    "show git status",
+    "me dá o status",
+    "estado do git",
+    "situação do repo",
+    "como ta o git",
+    "como ta o repo"
+   ],
+   "negatives": [
+    "status do nginx",
+    "status do labbox",
+    "status do ambiente",
+    "status do tailscale",
+    "talscle status"
+   ]
+  },
+  {
+   "name": "git_diff",
+   "desc": "o que mudou",
+   "rules": [
+    {
+     "all": [
+      "diff"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "o que mudou",
+    "o que eu mudei",
+    "mostra o diff",
+    "git diff",
+    "diff",
+    "what changed",
+    "o que foi alterado",
+    "quais arquivos mudaram",
+    "mostra as mudanças",
+    "o que mudou no parser.go",
+    "diferenças desde o último commit",
+    "show me the changes",
+    "o que eu alterei",
+    "lista as alterações"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "git_log",
+   "desc": "histórico de commits",
+   "rules": [
+    {
+     "all": [
+      "history"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "últimos commits",
+    "git log",
+    "histórico de commits",
+    "mostra os commits",
+    "recent commits",
+    "last commits",
+    "histórico do git",
+    "quais foram os últimos commits",
+    "show history",
+    "lista os commits",
+    "historico"
+   ],
+   "negatives": [
+    "faz um commit"
+   ]
+  },
+  {
+   "name": "git_commit",
+   "desc": "commitar (mensagem opcional)",
+   "rules": [
+    {
+     "all": [
+      "commit"
+     ],
+     "none": [
+      "history",
+      "undo"
+     ]
+    }
+   ],
+   "slots": {
+    "msg": {
+     "kinds": [
+      "message"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "commita",
+    "faz um commit",
+    "commit",
+    "commita tudo",
+    "commita com a mensagem 'corrige parser'",
+    "git commit",
+    "faz commit das mudanças",
+    "bora commitar",
+    "commit with message \"fix lexer\"",
+    "comita isso aí",
+    "commitar as alterações",
+    "salva um commit",
+    "commit everything",
+    "commita: ajusta o readme"
+   ],
+   "negatives": [
+    "últimos commits",
+    "desfaz o último commit"
+   ]
+  },
+  {
+   "name": "git_push",
+   "desc": "enviar para o remoto",
+   "rules": [
+    {
+     "all": [
+      "push"
+     ]
+    },
+    {
+     "all": [
+      "start",
+      "remote"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "git push",
+    "push",
+    "manda pro github",
+    "sobe pro github",
+    "pusha",
+    "envia pro remoto",
+    "push to origin",
+    "faz o push",
+    "pushar a branch",
+    "manda pro remoto",
+    "sobe as mudanças pro github",
+    "push it"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "git_pull",
+   "desc": "trazer do remoto",
+   "rules": [
+    {
+     "all": [
+      "pull"
+     ]
+    },
+    {
+     "all": [
+      "update",
+      "git"
+     ]
+    },
+    {
+     "all": [
+      "update",
+      "remote"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "git pull",
+    "pull",
+    "puxa as mudanças",
+    "atualiza o repo",
+    "baixa as mudanças",
+    "puxa do remoto",
+    "pull from origin",
+    "sincroniza com o github",
+    "faz um pull",
+    "atualiza do github",
+    "fetch"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "git_branch",
+   "desc": "listar/criar branch, ver a atual",
+   "rules": [
+    {
+     "all": [
+      "branch"
+     ],
+     "none": [
+      "checkout",
+      "push",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "name": {
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "em que branch eu tô",
+    "qual branch",
+    "lista as branches",
+    "cria uma branch nova chamada feature-x",
+    "branches",
+    "git branch",
+    "list branches",
+    "qual a branch atual",
+    "cria a branch fix-parser",
+    "mostra as branches",
+    "new branch dev"
+   ],
+   "negatives": [
+    "troca pra branch main"
+   ]
+  },
+  {
+   "name": "git_checkout",
+   "desc": "trocar de branch",
+   "rules": [
+    {
+     "all": [
+      "checkout"
+     ],
+     "none": [
+      "rename"
+     ]
+    }
+   ],
+   "slots": {
+    "name": {
+     "kinds": [
+      "text"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "troca pra branch main",
+    "checkout main",
+    "vai pra branch dev",
+    "muda pra main",
+    "switch to dev",
+    "git checkout feature-x",
+    "troca pra dev",
+    "volta pra main",
+    "checkout na branch fix-parser",
+    "troca de branch pra develop"
+   ],
+   "negatives": [
+    "troca o nome do parser.go"
+   ]
+  },
+  {
+   "name": "git_stash",
+   "desc": "guardar mudanças",
+   "rules": [
+    {
+     "all": [
+      "stash"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "git stash",
+    "stash",
+    "guarda as mudanças",
+    "esconde as alterações",
+    "stash my changes",
+    "faz um stash",
+    "guarda isso no stash",
+    "stash everything"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "undo",
+   "desc": "desfazer a última mudança",
+   "rules": [
+    {
+     "all": [
+      "undo"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "desfaz",
+    "desfaz isso",
+    "undo",
+    "desfaz a última mudança",
+    "reverte",
+    "volta como estava",
+    "ctrl z",
+    "reverte o último commit",
+    "desfazer",
+    "rollback",
+    "undo the last change",
+    "desfaz o que você fez",
+    "reverta o arquivo parser.go"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "rename",
+   "desc": "renomear a para b",
+   "rules": [
+    {
+     "all": [
+      "rename"
+     ]
+    }
+   ],
+   "slots": {
+    "from": {
+     "kinds": [
+      "file",
+      "symbol"
+     ],
+     "required": true,
+     "from": "rename_from"
+    },
+    "to": {
+     "kinds": [
+      "text"
+     ],
+     "required": true,
+     "from": "rename_to"
+    }
+   },
+   "examples": [
+    "renomeia parser.go para parse.go",
+    "renomeia ParseArgs para parseArgs",
+    "rename lexer.go to scanner.go",
+    "muda o nome do main.go pra app.go",
+    "troca o nome de handleLogin para onLogin",
+    "renomear config.yaml para settings.yaml",
+    "renomeia a função Tokenize pra Lex",
+    "rename NewServer to MakeServer"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "create",
+   "desc": "criar arquivo ou teste",
+   "rules": [
+    {
+     "all": [
+      "create"
+     ],
+     "none": [
+      "branch",
+      "commit",
+      "container"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file",
+      "test",
+      "text"
+     ],
+     "required": true,
+     "shape": "name"
+    }
+   },
+   "examples": [
+    "cria um arquivo utils.go",
+    "cria um teste pro parser",
+    "cria o arquivo docs/notas.md",
+    "create a file hello.py",
+    "cria um teste para o lexer",
+    "novo arquivo main_test.go",
+    "adiciona um teste pro ParseArgs",
+    "escreve um teste pro handleLogin",
+    "gera um teste do Tokenize",
+    "cria um script deploy.sh",
+    "create a test for parser.go",
+    "faz um arquivo novo chamado todo.txt"
+   ],
+   "negatives": [
+    "cria uma branch nova chamada x",
+    "faz um commit"
+   ]
+  },
+  {
+   "name": "delete_file",
+   "desc": "apagar arquivo",
+   "rules": [
+    {
+     "all": [
+      "delete"
+     ],
+     "none": [
+      "container",
+      "branch"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file",
+      "dir"
+     ],
+     "required": true,
+     "shape": "name"
+    }
+   },
+   "examples": [
+    "apaga o arquivo old.go",
+    "deleta o tmp.txt",
+    "remove o parser_old.go",
+    "delete build.log",
+    "apaga a pasta dist",
+    "exclui o arquivo notas.md",
+    "rm debug.log",
+    "remove esse arquivo config.bak",
+    "apagar o lexer_old.go"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "fix",
+   "desc": "corrigir erro ou teste",
+   "rules": [
+    {
+     "all": [
+      "fix"
+     ]
+    },
+    {
+     "all": [
+      "error"
+     ],
+     "none": [
+      "run",
+      "find",
+      "logs",
+      "open"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "test",
+      "file",
+      "text"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "corrige o teste do parser",
+    "conserta o erro",
+    "conserta o build",
+    "fix the failing test",
+    "arruma o parser.go",
+    "o teste do parser ta falhando",
+    "deu pau no build",
+    "corrige esse bug",
+    "o build quebrou",
+    "resolve o erro de compilação",
+    "concerta o lexer",
+    "tá dando erro no main.go",
+    "fix the build",
+    "não compila",
+    "ajeita o teste que falhou",
+    "arruma os testes quebrados",
+    "da um jeito nesse erro",
+    "deu ruim nos testes",
+    "conserta isso aí"
+   ],
+   "negatives": [
+    "roda os testes que estão falhando"
+   ]
+  },
+  {
+   "name": "install_dep",
+   "desc": "instalar dependência ou ferramenta",
+   "rules": [
+    {
+     "all": [
+      "install"
+     ],
+     "none": [
+      "update"
+     ]
+    },
+    {
+     "all": [
+      "create",
+      "dep"
+     ]
+    }
+   ],
+   "slots": {
+    "dep": {
+     "kinds": [
+      "text"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "instala o requests",
+    "instala o lodash",
+    "install express",
+    "instala a lib pytest",
+    "adiciona a dependência cobra",
+    "instala o tailscale",
+    "npm install axios",
+    "pip install flask",
+    "instala o pacote left-pad",
+    "instalar o ripgrep",
+    "go get github.com/spf13/cobra",
+    "bota o jq na máquina",
+    "install the requests package"
+   ],
+   "negatives": [
+    "o docker está instalado?"
+   ]
+  },
+  {
+   "name": "update_dep",
+   "desc": "atualizar dependências",
+   "rules": [
+    {
+     "all": [
+      "update",
+      "dep"
+     ]
+    },
+    {
+     "all": [
+      "update"
+     ],
+     "none": [
+      "jazz",
+      "git",
+      "remote"
+     ]
+    }
+   ],
+   "slots": {
+    "dep": {
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "atualiza as dependências",
+    "update the dependencies",
+    "atualiza o pacote lodash",
+    "upgrade requests",
+    "atualiza as libs",
+    "atualiza o cobra",
+    "npm update",
+    "update deps",
+    "atualizar pacotes",
+    "atualiza as dependências do projeto"
+   ],
+   "negatives": [
+    "atualiza o jazz",
+    "atualiza o repo"
+   ]
+  },
+  {
+   "name": "update_jazz",
+   "desc": "atualizar o próprio jazz",
+   "rules": [
+    {
+     "all": [
+      "update",
+      "jazz"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "atualiza o jazz",
+    "update jazz",
+    "jazz update",
+    "atualizar o jazz-cli",
+    "tem versão nova do jazz? atualiza",
+    "upgrade jazz",
+    "atualiza o jazz pra última versão",
+    "update jazz-cli"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "env_status",
+   "desc": "perfil do ambiente",
+   "rules": [
+    {
+     "all": [
+      "env"
+     ],
+     "none": [
+      "list",
+      "host",
+      "connect"
+     ]
+    },
+    {
+     "all": [
+      "status",
+      "env"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "status do ambiente",
+    "como está o ambiente",
+    "info do sistema",
+    "mostra o ambiente",
+    "environment info",
+    "qual meu sistema",
+    "que máquina é essa",
+    "status da máquina",
+    "perfil do ambiente",
+    "show me the environment",
+    "jazz env",
+    "como tá o sistema",
+    "o que tem nessa máquina",
+    "system info"
+   ],
+   "negatives": [
+    "quais máquinas eu tenho"
+   ]
+  },
+  {
+   "name": "tool_info",
+   "desc": "versão/presença de uma ferramenta",
+   "rules": [
+    {
+     "all": [
+      "version"
+     ],
+     "none": [
+      "update",
+      "jazz"
+     ]
+    },
+    {
+     "all": [
+      "have",
+      "@tool"
+     ]
+    },
+    {
+     "all": [
+      "have",
+      "tonoun"
+     ]
+    },
+    {
+     "all": [
+      "have"
+     ],
+     "none": [
+      "net",
+      "memory",
+      "disk",
+      "container",
+      "list",
+      "port",
+      "process",
+      "service",
+      "host",
+      "files",
+      "dep",
+      "test",
+      "install",
+      "update",
+      "error",
+      "help"
+     ]
+    }
+   ],
+   "slots": {
+    "tool": {
+     "kinds": [
+      "toolchain",
+      "bin"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "qual a versão do node",
+    "versão do go",
+    "tenho docker?",
+    "o docker está instalado?",
+    "python3 --version",
+    "which version of node",
+    "tem o talscle instalado?",
+    "qual versão do python",
+    "o git está instalado?",
+    "tenho o podman?",
+    "versão do make",
+    "is docker installed",
+    "tem ffmpeg?",
+    "qual a versão do rg",
+    "o jq tá instalado?",
+    "do i have cargo",
+    "tenho o kubectl instalado?",
+    "existe o terraform aqui?"
+   ],
+   "negatives": [
+    "instala o docker",
+    "atualiza o node"
+   ]
+  },
+  {
+   "name": "tool_status",
+   "desc": "status/estado de uma ferramenta instalada",
+   "rules": [
+    {
+     "all": [
+      "status",
+      "@tool"
+     ],
+     "none": [
+      "git",
+      "service",
+      "@service",
+      "host",
+      "@host",
+      "container",
+      "@container",
+      "env",
+      "net",
+      "online",
+      "branch",
+      "port",
+      "process",
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "test",
+      "install",
+      "update"
+     ]
+    },
+    {
+     "all": [
+      "running",
+      "@tool"
+     ],
+     "none": [
+      "git",
+      "service",
+      "@service",
+      "host",
+      "@host",
+      "container",
+      "@container",
+      "env",
+      "net",
+      "online",
+      "branch",
+      "port",
+      "process",
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "test",
+      "install",
+      "update"
+     ]
+    },
+    {
+     "all": [
+      "howis",
+      "@tool"
+     ],
+     "none": [
+      "git",
+      "service",
+      "@service",
+      "host",
+      "@host",
+      "container",
+      "@container",
+      "env",
+      "net",
+      "online",
+      "branch",
+      "port",
+      "process",
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "test",
+      "install",
+      "update"
+     ]
+    }
+   ],
+   "slots": {
+    "tool": {
+     "kinds": [
+      "toolchain",
+      "bin"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "talscle status",
+    "status do tailscale",
+    "tailscale status",
+    "tailscale ta rodando?",
+    "tailscale tá no ar?",
+    "docker ta de pé?",
+    "o docker está rodando?",
+    "como ta o podman",
+    "como está o docker",
+    "status do docker",
+    "status do podman",
+    "podman status",
+    "is docker running",
+    "docker status",
+    "how is tailscale",
+    "o tailscale tá ativo?",
+    "status do talscle",
+    "tailscle ta rodando",
+    "status do tailscal",
+    "how's podman",
+    "docker tá funcionando?",
+    "status do rg"
+   ],
+   "negatives": [
+    "status",
+    "git status",
+    "status do git",
+    "status do nginx",
+    "status do labbox",
+    "instala o docker",
+    "reinicia o tailscale"
+   ]
+  },
+  {
+   "name": "connect_host",
+   "desc": "conectar num host",
+   "rules": [
+    {
+     "all": [
+      "connect"
+     ],
+     "none": [
+      "list",
+      "net"
+     ]
+    }
+   ],
+   "slots": {
+    "host": {
+     "kinds": [
+      "ssh_host",
+      "ts_peer"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "conecta no labbox",
+    "ssh no labbox",
+    "entra no vps",
+    "conecta no media01",
+    "connect to labbox",
+    "ssh into vps",
+    "abre um terminal no labbox",
+    "loga no vps",
+    "acessa o labbox",
+    "conecta na fono",
+    "entra na macbook",
+    "conecta no labbx",
+    "ssh labbox"
+   ],
+   "negatives": [
+    "conecta no wifi"
+   ]
+  },
+  {
+   "name": "host_status",
+   "desc": "host está online?",
+   "rules": [
+    {
+     "all": [
+      "online",
+      "@host"
+     ]
+    },
+    {
+     "all": [
+      "status",
+      "@host"
+     ]
+    },
+    {
+     "all": [
+      "online",
+      "host"
+     ]
+    },
+    {
+     "all": [
+      "@host"
+     ],
+     "any": [
+      "running"
+     ],
+     "none": [
+      "connect",
+      "list",
+      "open"
+     ]
+    }
+   ],
+   "slots": {
+    "host": {
+     "kinds": [
+      "ssh_host",
+      "ts_peer"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "o labbox está online?",
+    "o vps tá respondendo?",
+    "pinga o labbox",
+    "ping vps",
+    "status do labbox",
+    "is labbox online",
+    "o media01 tá vivo?",
+    "a fono tá online?",
+    "o labbox tá de pé?",
+    "o macbook responde?",
+    "o servidor vps está no ar?",
+    "checa se o labbox tá online"
+   ],
+   "negatives": [
+    "conecta no labbox",
+    "estou online?"
+   ]
+  },
+  {
+   "name": "list_hosts",
+   "desc": "listar hosts SSH/Tailscale",
+   "rules": [
+    {
+     "all": [
+      "list",
+      "host"
+     ]
+    },
+    {
+     "all": [
+      "list",
+      "env"
+     ]
+    },
+    {
+     "all": [
+      "host"
+     ],
+     "none": [
+      "connect",
+      "online",
+      "status",
+      "@host"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais máquinas eu tenho",
+    "lista os hosts",
+    "quais hosts ssh eu tenho",
+    "list hosts",
+    "peers do tailscale",
+    "quais máquinas estão no tailscale",
+    "mostra meus servidores",
+    "lista as máquinas",
+    "hosts",
+    "list tailscale peers",
+    "minhas máquinas remotas"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "service_status",
+   "desc": "status de um serviço",
+   "rules": [
+    {
+     "all": [
+      "status",
+      "service|@service"
+     ]
+    },
+    {
+     "all": [
+      "@service",
+      "running"
+     ]
+    },
+    {
+     "all": [
+      "service"
+     ],
+     "any": [
+      "running",
+      "list"
+     ],
+     "none": [
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "container"
+     ]
+    }
+   ],
+   "slots": {
+    "service": {
+     "kinds": [
+      "service"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "status do nginx",
+    "o nginx está rodando?",
+    "o postgresql tá ativo?",
+    "status do serviço cron",
+    "is nginx running",
+    "quais serviços estão rodando",
+    "lista os serviços",
+    "o ssh está ativo?",
+    "service status nginx",
+    "o tailscaled tá rodando?",
+    "o cron tá funcionando?",
+    "status do ngnix",
+    "serviços ativos"
+   ],
+   "negatives": [
+    "reinicia o nginx",
+    "sobe o nginx"
+   ]
+  },
+  {
+   "name": "service_start",
+   "desc": "subir/iniciar serviço",
+   "rules": [
+    {
+     "all": [
+      "start",
+      "service|@service"
+     ],
+     "w": 2
+    },
+    {
+     "all": [
+      "start"
+     ],
+     "none": [
+      "container",
+      "@container",
+      "remote",
+      "push"
+     ]
+    }
+   ],
+   "slots": {
+    "service": {
+     "kinds": [
+      "service"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "sobe o nginx",
+    "inicia o postgresql",
+    "start nginx",
+    "liga o serviço cron",
+    "levanta o nginx",
+    "sobe o servidor",
+    "start the postgresql service",
+    "inicia o serviço ssh",
+    "bota o nginx no ar",
+    "starta o cron",
+    "sobe o ngnix"
+   ],
+   "negatives": [
+    "sobe o container web",
+    "sobe pro github"
+   ]
+  },
+  {
+   "name": "service_stop",
+   "desc": "parar serviço",
+   "rules": [
+    {
+     "all": [
+      "stop",
+      "service|@service"
+     ]
+    }
+   ],
+   "slots": {
+    "service": {
+     "kinds": [
+      "service"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "para o nginx",
+    "stop nginx",
+    "desliga o postgresql",
+    "para o serviço cron",
+    "derruba o nginx",
+    "stop the postgresql service",
+    "desliga o serviço ssh",
+    "encerra o nginx"
+   ],
+   "negatives": [
+    "para o container web"
+   ]
+  },
+  {
+   "name": "service_restart",
+   "desc": "reiniciar serviço",
+   "rules": [
+    {
+     "all": [
+      "restart"
+     ],
+     "none": [
+      "container",
+      "@container"
+     ]
+    }
+   ],
+   "slots": {
+    "service": {
+     "kinds": [
+      "service"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "reinicia o nginx",
+    "restart nginx",
+    "reinicia o postgresql",
+    "dá um restart no cron",
+    "reload nginx",
+    "restart the ssh service",
+    "reinicia o serviço tailscaled",
+    "restarta o nginx"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "service_logs",
+   "desc": "logs de serviço/contêiner/arquivo",
+   "rules": [
+    {
+     "all": [
+      "logs"
+     ],
+     "none": [
+      "history"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "service",
+      "container",
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "mostra os logs do nginx",
+    "logs do postgresql",
+    "logs do container web",
+    "show nginx logs",
+    "journalctl do cron",
+    "logs",
+    "ver os logs do serviço ssh",
+    "o que tem nos logs do db",
+    "me mostra o log do redis",
+    "tail nos logs do nginx",
+    "logs do web"
+   ],
+   "negatives": [
+    "git log"
+   ]
+  },
+  {
+   "name": "container_up",
+   "desc": "subir contêiner",
+   "rules": [
+    {
+     "all": [
+      "start",
+      "container|@container"
+     ]
+    },
+    {
+     "all": [
+      "run",
+      "container|@container"
+     ],
+     "none": [
+      "list",
+      "running"
+     ]
+    }
+   ],
+   "slots": {
+    "container": {
+     "kinds": [
+      "container",
+      "text"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "sobe o container web",
+    "docker compose up",
+    "sobe os containers",
+    "start the db container",
+    "levanta o redis",
+    "inicia o container db",
+    "roda o container web",
+    "compose up",
+    "sobe o docker",
+    "liga o container redis",
+    "sobe o podman do projeto"
+   ],
+   "negatives": [
+    "quais containers estão rodando"
+   ]
+  },
+  {
+   "name": "container_list",
+   "desc": "listar contêineres",
+   "rules": [
+    {
+     "all": [
+      "container",
+      "list"
+     ],
+     "none": [
+      "start",
+      "stop"
+     ]
+    },
+    {
+     "all": [
+      "container",
+      "running"
+     ],
+     "none": [
+      "start",
+      "stop"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais containers estão rodando",
+    "docker ps",
+    "lista os containers",
+    "list containers",
+    "podman ps",
+    "containers rodando",
+    "quais contêineres tem",
+    "mostra os containers ativos",
+    "what containers are running"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "container_stop",
+   "desc": "parar contêiner",
+   "rules": [
+    {
+     "all": [
+      "stop",
+      "container|@container"
+     ]
+    },
+    {
+     "all": [
+      "delete",
+      "container|@container"
+     ]
+    }
+   ],
+   "slots": {
+    "container": {
+     "kinds": [
+      "container",
+      "text"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "para o container web",
+    "stop the db container",
+    "derruba o redis",
+    "docker stop web",
+    "para os containers",
+    "desliga o container db",
+    "remove o container web",
+    "stop redis container"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "list_ports",
+   "desc": "portas abertas",
+   "rules": [
+    {
+     "all": [
+      "port"
+     ],
+     "none": [
+      "who",
+      "kill"
+     ]
+    },
+    {
+     "all": [
+      "listen"
+     ],
+     "none": [
+      "who"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "portas abertas",
+    "quais portas estão abertas",
+    "mostra as portas",
+    "o que está escutando",
+    "list open ports",
+    "portas em uso",
+    "listening ports",
+    "lista as portas",
+    "que portas tão abertas",
+    "show ports"
+   ],
+   "negatives": [
+    "quem está usando a porta 3000"
+   ]
+  },
+  {
+   "name": "port_owner",
+   "desc": "quem usa uma porta",
+   "rules": [
+    {
+     "all": [
+      "port",
+      "who"
+     ],
+     "none": [
+      "kill"
+     ]
+    },
+    {
+     "all": [
+      "who",
+      "@number"
+     ],
+     "none": [
+      "kill"
+     ]
+    }
+   ],
+   "slots": {
+    "port": {
+     "kinds": [
+      "port",
+      "number"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "quem está usando a porta 3000",
+    "o que está rodando na porta 8080",
+    "quem tá na 5432",
+    "what is using port 3000",
+    "a porta 22 está ocupada?",
+    "qual processo usa a porta 8080",
+    "who is using port 5432",
+    "quem ocupa a porta 3000",
+    "o que ta usando a 8080",
+    "port 3000 owner"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "kill_process",
+   "desc": "matar processo",
+   "rules": [
+    {
+     "all": [
+      "kill"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "text",
+      "number"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "mata o processo node",
+    "kill 1234",
+    "mata o pid 4321",
+    "kill the node process",
+    "mata quem está na porta 3000",
+    "finaliza o processo python3",
+    "mata o servidor de dev",
+    "pkill node",
+    "killa o processo 999"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "list_processes",
+   "desc": "listar processos",
+   "rules": [
+    {
+     "all": [
+      "process"
+     ],
+     "none": [
+      "kill"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais processos estão rodando",
+    "lista os processos",
+    "ps aux",
+    "list processes",
+    "mostra os processos",
+    "processos ativos",
+    "o que tá rodando na máquina",
+    "top processes"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "disk_usage",
+   "desc": "espaço em disco",
+   "rules": [
+    {
+     "all": [
+      "disk"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "espaço em disco",
+    "quanto espaço livre eu tenho",
+    "df -h",
+    "disk space",
+    "o disco tá cheio?",
+    "uso do disco",
+    "how much disk is free",
+    "quanto sobra no hd",
+    "espaço livre"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "mem_usage",
+   "desc": "memória/RAM",
+   "rules": [
+    {
+     "all": [
+      "memory"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quanta memória livre",
+    "uso de ram",
+    "free -m",
+    "memory usage",
+    "quanta ram tem",
+    "a memória tá cheia?",
+    "how much ram is free",
+    "uso de memória",
+    "tem swap?"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "net_status",
+   "desc": "tem rede?",
+   "rules": [
+    {
+     "all": [
+      "net"
+     ],
+     "none": [
+      "connect",
+      "host",
+      "@host"
+     ]
+    },
+    {
+     "all": [
+      "online"
+     ],
+     "none": [
+      "@host",
+      "host"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "tem internet?",
+    "estou online?",
+    "to offline?",
+    "a rede tá funcionando?",
+    "am i online",
+    "status da rede",
+    "tô sem internet?",
+    "network status",
+    "a internet caiu?",
+    "checa a conexão"
+   ],
+   "negatives": [
+    "o labbox está online?"
+   ]
+  },
+  {
+   "name": "project_summary",
+   "desc": "resumo do projeto",
+   "rules": [
+    {
+     "all": [
+      "summary"
+     ]
+    },
+    {
+     "all": [
+      "explain",
+      "project"
+     ]
+    },
+    {
+     "all": [
+      "project"
+     ],
+     "any": [
+      "open"
+     ],
+     "none": [
+      "find",
+      "format",
+      "lint",
+      "build",
+      "test",
+      "run",
+      "fix",
+      "create",
+      "delete",
+      "@file"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "resumo do projeto",
+    "visão geral do projeto",
+    "me dá um resumo",
+    "overview",
+    "summarize the project",
+    "do que se trata esse repo",
+    "explica o projeto",
+    "sumário do código",
+    "resume o projeto",
+    "project overview",
+    "me fala sobre esse projeto",
+    "explica o repositório",
+    "explain this repo"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "list_files",
+   "desc": "listar arquivos",
+   "rules": [
+    {
+     "all": [
+      "list",
+      "files"
+     ],
+     "none": [
+      "diff"
+     ]
+    },
+    {
+     "all": [
+      "files"
+     ],
+     "any": [
+      "open"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "diff"
+     ]
+    }
+   ],
+   "slots": {
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "lista os arquivos",
+    "ls",
+    "mostra os arquivos",
+    "list files",
+    "quais arquivos tem aqui",
+    "lista a pasta src",
+    "ls -la",
+    "arquivos do projeto",
+    "show files",
+    "o que tem na pasta docs"
+   ],
+   "negatives": [
+    "quais arquivos mudaram"
+   ]
+  },
+  {
+   "name": "help",
+   "desc": "o que o jazz faz",
+   "rules": [
+    {
+     "all": [
+      "help"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "ajuda",
+    "help",
+    "o que você sabe fazer",
+    "o que da pra fazer",
+    "what can you do",
+    "comandos",
+    "como usa isso",
+    "socorro",
+    "me ajuda",
+    "quais comandos tem"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "none",
+   "desc": "fora do domínio (vai pro modelo ou vira pergunta)",
+   "rules": [],
+   "slots": {},
+   "examples": [
+    "oi",
+    "tudo bem?",
+    "valeu",
+    "obrigado",
+    "bom dia",
+    "kkkk",
+    "me conta uma piada",
+    "qual a capital da frança",
+    "escreve um poema sobre o mar",
+    "quem é você",
+    "thanks",
+    "hello",
+    "good morning",
+    "boa noite",
+    "que dia é hoje",
+    "legal",
+    "show de bola",
+    "massa",
+    "entendi",
+    "beleza então",
+    "refatora o módulo de pagamento para usar injeção de dependência",
+    "implementa autenticação jwt na api",
+    "me sugere um nome pro projeto",
+    "traduz isso pro inglês",
+    "faz um site de portfólio com react"
+   ],
+   "negatives": []
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{"methods": [
+ {"name": "tool_info.resolve", "intent": "tool_info", "priority": 10,
+  "doc": "nome impreciso de ferramenta → binário do PATH (talscle → tailscale) → versão do perfil; nada parecido = não instalado",
+  "pre": [{"fact": "slot.tool", "op": "set"}],
+  "steps": [
+   {"cap": "resolve_name", "in": {"q": "$slot.tool", "kinds": "toolchain,bin", "empty": "ok"}, "out": "cands"},
+   {"cap": "choose", "in": {"options": "$cands", "max": "5", "what": "ferramenta", "empty": "ok"}, "out": "target"},
+   {"cap": "tool_report", "in": {"name": "$target", "asked": "$slot.tool"}, "out": "report"}],
+  "verify": [{"check": "profile_present", "arg": "$report"}],
+  "risk": "low", "cost_ms": 30}
+]}

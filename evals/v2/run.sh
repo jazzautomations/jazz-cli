@@ -40,7 +40,7 @@ copy_task() { # $1 = pasta da tarefa, $2 = pasta de trabalho
   done
 }
 
-pass=0; n=0
+pass=0; n=0; prompts_total=0
 echo "jazz: $("$JAZZ" --version 2>&1 | head -1)  modelo: ${MODEL:-padrão}  prazo: ${LIMIT}s  lanes: $LANES${JAZZ_ARGS:+  args: $JAZZ_ARGS}" | tee "$RUN/summary.txt"
 
 names=()
@@ -62,20 +62,23 @@ run_agent() {
     home="$RUN/homes/$name"; mkdir -p "$RUN/homes"; cp -R "$JAZZ_HOME" "$home"
   fi
   # shellcheck disable=SC2086
-  ( cd "$w" && JAZZ_HOME="$home" tmo 10 $((LIMIT + 60)) "$JAZZ" -p --yolo -v --timeout "${LIMIT}s" ${MODEL:+-m "$MODEL"} $JAZZ_ARGS "$prompt" \
+  ( cd "$w" && JAZZ_HOME="$home" tmo 10 $((LIMIT + 60)) "$JAZZ" -p --yolo -v --timeout "${LIMIT}s" --metrics-out "$RUN/$name.metrics.json" ${MODEL:+-m "$MODEL"} $JAZZ_ARGS "$prompt" \
       </dev/null >"$RUN/$name.log" 2>&1 ); rc=$?
   echo "$rc" > "$RUN/$name.rc"; echo $(( $(date +%s) - s )) > "$RUN/$name.dt"
 }
 
 # check_task NAME: hidden checker + cleanup, one summary line
 check_task() {
-  local name=$1 t="$EV/tasks/$1" w="$RUN/work/$1" res tools rc dt
+  local name=$1 t="$EV/tasks/$1" w="$RUN/work/$1" res tools rc dt prompts
   rc=$(cat "$RUN/$name.rc" 2>/dev/null || echo "?"); dt=$(cat "$RUN/$name.dt" 2>/dev/null || echo "?")
   tools=$(grep -oE "[0-9]+ ferramentas?" "$RUN/$name.log" | tail -1 | grep -oE "^[0-9]+")
+  # prompts: vezes que o usuário teria de responder (confirmações, ask_user, turno que termina em pergunta)
+  prompts=$(grep -oE '"prompts": *[0-9]+' "$RUN/$name.metrics.json" 2>/dev/null | grep -oE "[0-9]+$")
+  [ -n "$prompts" ] && prompts_total=$((prompts_total + prompts))
   if ( cd "$w" && TASK="$t" bash "$t/CHECK" ) >"$RUN/$name.check" 2>&1; then res=PASS; pass=$((pass + 1)); else res=FAIL; fi
   if [ -f "$t/CLEANUP" ]; then ( cd "$w" && TASK="$t" bash "$t/CLEANUP" ) >>"$RUN/$name.check" 2>&1; fi
   n=$((n + 1))
-  printf "%-24s %-5s %5ss  tools=%-3s rc=%-3s %s\n" "$name" "$res" "$dt" "${tools:-?}" "$rc" \
+  printf "%-24s %-5s %5ss  tools=%-3s prompts=%-2s rc=%-3s %s\n" "$name" "$res" "$dt" "${tools:-?}" "${prompts:-?}" "$rc" \
     "$(grep -E '^(PASS|FAIL)' "$RUN/$name.check" | tail -1)" | tee -a "$RUN/summary.txt"
 }
 
@@ -104,4 +107,4 @@ else
   unlock
   for name in "${names[@]}"; do check_task "$name"; done
 fi
-echo "TOTAL: $pass/$n  (parede: $(( $(date +%s) - s0 ))s, lanes: $LANES)" | tee -a "$RUN/summary.txt"; echo "resultados: $RUN"
+echo "TOTAL: $pass/$n  (parede: $(( $(date +%s) - s0 ))s, lanes: $LANES, prompts: $prompts_total em $n tarefas)" | tee -a "$RUN/summary.txt"; echo "resultados: $RUN"

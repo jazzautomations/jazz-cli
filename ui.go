@@ -17,6 +17,10 @@ import (
 
 type Theme struct {
 	color, c256, truecolor, ascii bool
+	// dumb: TERM=dumb (an editor's shell buffer, a serial console): no
+	// cursor movement at all, so no live status line, no boxed input, and
+	// menus are printed once and answered with the number
+	dumb bool
 }
 
 func DetectTheme() Theme {
@@ -28,7 +32,8 @@ func DetectTheme() Theme {
 	ct := os.Getenv("COLORTERM")
 	t.truecolor = t.color && (ct == "truecolor" || ct == "24bit")
 	t.c256 = t.color && (t.truecolor || strings.Contains(term, "256color") || strings.Contains(term, "kitty") || strings.Contains(term, "alacritty") || os.Getenv("TERM_PROGRAM") != "")
-	t.ascii = term == "linux" || term == "vt100" || term == "vt220" || os.Getenv("JAZZ_ASCII") == "1"
+	t.dumb = term == "dumb"
+	t.ascii = term == "linux" || term == "vt100" || term == "vt220" || t.dumb || os.Getenv("JAZZ_ASCII") == "1"
 	return t
 }
 
@@ -696,8 +701,9 @@ type TermUI struct {
 	alwaysOffer  string    // what "a" remembers on the next prompt with a reason (ApproveAlways)
 	approveExtra string    // what "v" shows beyond the detail: an edit's diff (ApproveExtra)
 
-	mode string // effective permission mode (SetMode)
-	jobs int    // running background jobs (Jobs)
+	mode  string // effective permission mode (SetMode)
+	jobs  int    // running background jobs (Jobs)
+	price string // footer price tag: "grátis" or the session cost (SetPrice)
 
 	nl         int    // newlines at the end of the output (2 = a blank line is there)
 	toolLine   string // "Name(detail)" of the last ToolStart line
@@ -734,7 +740,7 @@ func NewTermUI(cfg *Config, keys *KeyReader) *TermUI {
 	}
 	u := &TermUI{T: t, keys: keys, cfg: cfg, col0: true, nl: 2, grabCh: make(chan chan Key), menuResize: make(chan struct{}, 1)}
 	u.md = mdRenderer{t: t, lineStart: true, indent: "  "}
-	u.lv.on = uiForceLive || isTTY(os.Stdout)
+	u.lv.on = uiForceLive || isTTY(os.Stdout) && !t.dumb
 	if u.lv.on && !uiForceLive {
 		uiOnResize(u.liveResize)
 		uiOnResize(func() {
@@ -857,6 +863,7 @@ func (u *TermUI) Thinking(label string) {
 	u.spinStart = time.Now()
 	u.reasonN = 0
 	u.lv.phase, u.lv.lastTok, u.lv.toks = "", time.Time{}, 0
+	u.lv.tokInit = false
 	// the status line shows at once (honest feedback within one frame), then
 	// the render goroutine animates it at 8 fps (2 fps in low-power mode)
 	u.liveRender(true)
@@ -870,10 +877,17 @@ func (u *TermUI) spinLine(frame int) string {
 	w := termWidth() - 1
 	info := []string{el.String()}
 	info = append(info, u.livePhaseInfo()...)
-	if tok := u.reasonN / 4; tok > 0 {
+	// the token count moves once a second, with the clock: in between a
+	// frame differs only in the spinner glyph, which liveRender redraws
+	// alone (a few bytes instead of the whole line over SSH)
+	if sec := int(el.Seconds()); !u.lv.tokInit || sec != u.lv.tokSec {
+		u.lv.tokInit, u.lv.tokSec = true, sec
+		u.lv.tokReason, u.lv.tokStream = u.reasonN/4, u.lv.toks
+	}
+	if tok := u.lv.tokReason; tok > 0 {
 		info = append(info, g.down+" "+fmtK(tok)+" tokens")
-	} else if u.lv.toks > 0 {
-		info = append(info, g.down+" "+fmtK(u.lv.toks)+" tokens")
+	} else if u.lv.tokStream > 0 {
+		info = append(info, g.down+" "+fmtK(u.lv.tokStream)+" tokens")
 	}
 	if ol := u.offerLineNow(); ol != "" && u.typed == "" {
 		info = append(info, t.fg(cGold, 33)+ol+t.fg(cGray, 90))
@@ -1017,7 +1031,11 @@ func (u *TermUI) ToolEnd(id, name string, out ToolOutput, d time.Duration) {
 	}
 	if u.toolFresh && u.toolLineID == id && u.toolLine != "" {
 		// the call line is right above: repaint its dot with the outcome
-		u.rawWrite("\x1b[1A\r" + clipVisible(dot+g.tool+reset+" "+u.toolLine, w) + "\x1b[K\n")
+		dur := ""
+		if d >= time.Second { // slow calls say how long they took: "● Bash(go test ./...) 2.1s"
+			dur = " " + dim + obFmtDur(float64(d.Milliseconds())) + reset
+		}
+		u.rawWrite("\x1b[1A\r" + clipVisible(dot+g.tool+reset+" "+u.toolLine+dur, w) + "\x1b[K\n")
 	} else if id != "" && id != u.lastTool { // another call started since: say which one ended
 		sum = uiToolLabel(name) + ": " + sum
 	}
@@ -2198,6 +2216,12 @@ func (u *TermUI) Footer(model string, ctxTok, win, mcpReady, mcpTotal int) strin
 		drop int
 	}
 	parts := []part{{uiModeTag(t, mode) + gray, 0}, {model, 3}}
+	u.mu.Lock()
+	price := u.price
+	u.mu.Unlock()
+	if price != "" {
+		parts = append(parts, part{price, 6})
+	}
 	if ctxTok > 0 && win > 0 {
 		pct := ctxTok * 100 / win
 		c, d := fmt.Sprintf("ctx %d%%", pct), 4
@@ -2239,6 +2263,13 @@ func (u *TermUI) Footer(model string, ctxTok, win, mcpReady, mcpTotal int) strin
 		parts = append(parts[:worst], parts[worst+1:]...)
 	}
 	return join()
+}
+
+// SetPrice sets the footer's price tag ("" = none).
+func (u *TermUI) SetPrice(tag string) {
+	u.mu.Lock()
+	u.price = tag
+	u.mu.Unlock()
 }
 
 // uiSpinWords rotate while the model is thinking.

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -526,7 +525,7 @@ func (c *Config) MarkTextTools(ref string) {
 
 // ---------- window detection (G2) ----------
 
-var pvNumCtxRE = regexp.MustCompile(`(?m)^\s*num_ctx\s+(\d+)`)
+var pvNumCtxRE = lazyRx(`(?m)^\s*num_ctx\s+(\d+)`)
 
 // DetectWindow probes the context window of ref and caches it. Order: the
 // provider catalog (OpenRouter, Kilo, Groq, Gemini…); for local/self-hosted
@@ -769,7 +768,7 @@ func ProbeProvider(ctx context.Context, cfg *Config, name string) (reachable boo
 	return reachable, win, err
 }
 
-var pvProvNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,31}$`)
+var pvProvNameRE = lazyRx(`^[a-z0-9][a-z0-9_.-]{0,31}$`)
 
 // AddProvider probes base_url/models, saves the provider to config.json and returns the models found.
 // Private/LAN/tailnet hosts become Local (+NoKey when no key env is given); port 11434 is Ollama.

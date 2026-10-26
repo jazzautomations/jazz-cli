@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -199,7 +198,7 @@ func (m *MCPManager) Poisoned(tool string) (bool, string) {
 	return false, ""
 }
 
-var envRef = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}`)
+var envRef = lazyRx(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}`)
 
 // expandEnv resolves ${VAR} and ${VAR:-default} (used for user-level config).
 func expandEnv(s string) string {
@@ -363,7 +362,7 @@ func (m *MCPManager) Done() bool {
 	}
 }
 
-var badName = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+var badName = lazyRx(`[^a-zA-Z0-9_-]`)
 
 func mcpToolName(server, tool string) string {
 	n := "mcp__" + badName.ReplaceAllString(server, "_") + "__" + badName.ReplaceAllString(tool, "_")
@@ -827,7 +826,7 @@ func (s *MCPServer) startStdio(expand func(string) string) error {
 	return nil
 }
 
-var pfRPCIDRe = regexp.MustCompile(`"id"\s*:\s*(\d+)`)
+var pfRPCIDRe = lazyRx(`"id"\s*:\s*(\d+)`)
 
 func (s *MCPServer) readLoop(r io.Reader) {
 	br := bufio.NewReaderSize(r, 64<<10)

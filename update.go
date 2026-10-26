@@ -36,7 +36,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -58,7 +57,7 @@ const pfManifestHeader = "jazz-cli release manifest v1"
 
 // pfVersionRe bounds what an update source may call a version: it is printed
 // and cached, so it must not carry escapes or a page of text.
-var pfVersionRe = regexp.MustCompile(`^v?[0-9]{1,9}(\.[0-9]{1,9}){0,3}([-+][0-9A-Za-z.-]{1,32})?$`)
+var pfVersionRe = lazyRx(`^v?[0-9]{1,9}(\.[0-9]{1,9}){0,3}([-+][0-9A-Za-z.-]{1,32})?$`)
 
 var pfTailnet = &net.IPNet{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)}
 

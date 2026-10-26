@@ -518,8 +518,8 @@ func dgDetSecret(_ dgFile, line string) (bool, string) {
 }
 
 var (
-	dgRegistryLine = regexp.MustCompile(`(?i)(registry|index[-_]url|^\s*url\s*=|^\s*source\s)`)
-	dgURLHost      = regexp.MustCompile(`(?i)\bhttps?://(?:[^/@\s"']*@)?([^/:\s"'?#]+)`)
+	dgRegistryLine = lazyRx(`(?i)(registry|index[-_]url|^\s*url\s*=|^\s*source\s)`)
+	dgURLHost      = lazyRx(`(?i)\bhttps?://(?:[^/@\s"']*@)?([^/:\s"'?#]+)`)
 	dgRegistryOK   = map[string]bool{"registry.npmjs.org": true, "registry.yarnpkg.com": true, "pypi.org": true, "pypi.python.org": true,
 		"files.pythonhosted.org": true, "crates.io": true, "index.crates.io": true, "static.crates.io": true, "rubygems.org": true,
 		"packagist.org": true, "repo.packagist.org": true, "proxy.golang.org": true, "repo.maven.apache.org": true,
@@ -540,15 +540,15 @@ func dgDetRegistry(_ dgFile, line string) (bool, string) {
 }
 
 var (
-	dgNpmDep      = regexp.MustCompile(`^\s*"(@?[a-z0-9][a-z0-9._~/-]*)"\s*:\s*"([^"]*)"\s*,?\s*$`)
-	dgNpmVer      = regexp.MustCompile(`^([\^~<>=*]|\d|latest$|[a-z]+:)`)
+	dgNpmDep      = lazyRx(`^\s*"(@?[a-z0-9][a-z0-9._~/-]*)"\s*:\s*"([^"]*)"\s*,?\s*$`)
+	dgNpmVer      = lazyRx(`^([\^~<>=*]|\d|latest$|[a-z]+:)`)
 	dgNpmSkip     = map[string]bool{"name": true, "version": true, "description": true, "main": true, "license": true, "type": true, "author": true, "homepage": true, "module": true, "types": true, "typings": true, "node": true, "npm": true, "yarn": true, "pnpm": true, "private": true}
-	dgPyReq       = regexp.MustCompile(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:==|>=|<=|~=|!=|<|>|;|$)`)
-	dgTomlDep     = regexp.MustCompile(`^\s*"?([A-Za-z0-9][A-Za-z0-9_.-]*)"?\s*=\s*(?:"[\^~*<>=0-9][^"]*"|\{[^}]*\b(?:version|git|path)\s*=)`)
+	dgPyReq       = lazyRx(`^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:==|>=|<=|~=|!=|<|>|;|$)`)
+	dgTomlDep     = lazyRx(`^\s*"?([A-Za-z0-9][A-Za-z0-9_.-]*)"?\s*=\s*(?:"[\^~*<>=0-9][^"]*"|\{[^}]*\b(?:version|git|path)\s*=)`)
 	dgTomlSkip    = map[string]bool{"name": true, "version": true, "edition": true, "authors": true, "description": true, "license": true, "readme": true, "repository": true, "homepage": true, "rust-version": true, "requires-python": true, "python_version": true, "python": true, "url": true}
-	dgGoReq       = regexp.MustCompile(`^\s*(?:require\s+)?([a-z0-9][^\s]*\.[^\s/]*/[^\s]+)\s+v[0-9]`)
-	dgGemDep      = regexp.MustCompile(`^\s*gem\s+['"]([^'"]+)['"]`)
-	dgComposerDep = regexp.MustCompile(`^\s*"([a-z0-9._-]+/[a-z0-9._-]+)"\s*:\s*"`)
+	dgGoReq       = lazyRx(`^\s*(?:require\s+)?([a-z0-9][^\s]*\.[^\s/]*/[^\s]+)\s+v[0-9]`)
+	dgGemDep      = lazyRx(`^\s*gem\s+['"]([^'"]+)['"]`)
+	dgComposerDep = lazyRx(`^\s*"([a-z0-9._-]+/[a-z0-9._-]+)"\s*:\s*"`)
 )
 
 // dgDepName pulls the package name out of an added manifest line.
@@ -566,22 +566,22 @@ func dgDepName(base, line string) (eco, name string) {
 		}
 	case strings.HasPrefix(base, "requirements") && strings.HasSuffix(base, ".txt") || strings.HasPrefix(base, "constraints"):
 		if t := strings.TrimSpace(line); t != "" && t[0] != '#' && t[0] != '-' && !strings.Contains(t, "://") {
-			return pick(dgPyReq, "pypi")
+			return pick(dgPyReq.R(), "pypi")
 		}
 	case base == "Pipfile":
-		if e, n := pick(dgTomlDep, "pypi"); n != "" && !dgTomlSkip[n] {
+		if e, n := pick(dgTomlDep.R(), "pypi"); n != "" && !dgTomlSkip[n] {
 			return e, n
 		}
 	case base == "Cargo.toml":
-		if e, n := pick(dgTomlDep, "crates"); n != "" && !dgTomlSkip[n] {
+		if e, n := pick(dgTomlDep.R(), "crates"); n != "" && !dgTomlSkip[n] {
 			return e, n
 		}
 	case base == "go.mod":
-		return pick(dgGoReq, "go")
+		return pick(dgGoReq.R(), "go")
 	case base == "Gemfile":
-		return pick(dgGemDep, "gems")
+		return pick(dgGemDep.R(), "gems")
 	case base == "composer.json":
-		return pick(dgComposerDep, "composer")
+		return pick(dgComposerDep.R(), "composer")
 	}
 	return "", ""
 }

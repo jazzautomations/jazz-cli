@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // The live region: the bottom of the transcript that is still changing, i.e.
@@ -42,6 +43,34 @@ type uiLive struct {
 	phase    string // conectando | aguardando 1º token | gerando | ...
 	model    string // model of the request in flight
 	writes   int    // frames written (tests, benchmarks)
+	tailRows int    // rows of tail in the last frame (fast paths)
+	// token count shown in the status line, refreshed once a second (spinLine)
+	tokInit              bool
+	tokSec               int
+	tokReason, tokStream int
+}
+
+// uiGlyphOnly reports whether status lines a and b differ only in their
+// first visible rune (the spinner glyph); seq redraws that rune with the
+// escapes before it.
+func uiGlyphOnly(a, b string) (seq string, ok bool) {
+	skip := func(s string) int {
+		i := 0
+		for i < len(s) && s[i] == 0x1b {
+			i = uiEscEnd(s, i)
+		}
+		return i
+	}
+	ia, ib := skip(a), skip(b)
+	if a[:ia] != b[:ib] || ia >= len(a) || ib >= len(b) {
+		return "", false
+	}
+	_, na := utf8.DecodeRuneInString(a[ia:])
+	rb, nb := utf8.DecodeRuneInString(b[ib:])
+	if a[ia+na:] != b[ib+nb:] || uiRuneW(rb) != 1 {
+		return "", false
+	}
+	return b[:ib+nb], true
 }
 
 // uiForceLive turns live rendering on without a terminal (tests, benchmarks).
@@ -198,6 +227,10 @@ func (u *TermUI) liveRender(force bool) {
 	if lv.pend.Len() == 0 && status == lv.status && (lv.rows > 0 || status == "") {
 		return // nothing changed
 	}
+	if u.liveFast(status, w) {
+		lv.last = now
+		return
+	}
 	p := lv.pend.String()
 	lv.pend.Reset()
 	full := lv.tail + p
@@ -251,7 +284,56 @@ func (u *TermUI) liveRender(force bool) {
 	}
 	uiWrite(b.String())
 	lv.writes++
-	lv.tail, lv.rows, lv.status, lv.last = tail, rows, status, now
+	lv.tail, lv.rows, lv.status, lv.last, lv.tailRows = tail, rows, status, now, tailRows
+}
+
+// liveFast draws a frame that changes little without rewriting the region:
+// the spinner glyph alone, and/or stream text that stays on the tail's row
+// (written at the end of the tail). It reports whether it drew the frame.
+// u.mu held; the cursor stays parked at column 0 of the region's first row.
+func (u *TermUI) liveFast(status string, w int) bool {
+	lv := &u.lv
+	if lv.rows == 0 || status == "" || lv.status == "" || lv.tailRows > 1 {
+		return false
+	}
+	glyph := ""
+	if status != lv.status {
+		seq, ok := uiGlyphOnly(lv.status, status)
+		if !ok {
+			return false
+		}
+		glyph = seq
+	}
+	p := lv.pend.String()
+	if p != "" && (lv.tailRows != 1 || strings.ContainsAny(p, "\n\r") || uiStrW(lv.tail)+uiStrW(p) >= w) {
+		return false
+	}
+	var b strings.Builder
+	if p != "" {
+		b.WriteString("\r\x1b[0m" + sgrTrack(lv.sgr, lv.tail))
+		if tw := uiStrW(lv.tail); tw > 0 {
+			b.WriteString("\x1b[" + itoa(tw) + "C")
+		}
+		b.WriteString(p)
+		lv.tail += p
+		lv.pend.Reset()
+	}
+	if glyph != "" {
+		b.WriteString("\x1b[0m\r")
+		if lv.tailRows > 0 {
+			b.WriteString("\x1b[" + itoa(lv.tailRows) + "B")
+		}
+		b.WriteString(glyph + "\x1b[0m\r")
+		if lv.tailRows > 0 {
+			b.WriteString("\x1b[" + itoa(lv.tailRows) + "A")
+		}
+		lv.status = status
+	} else {
+		b.WriteString("\x1b[0m\r")
+	}
+	uiWrite(b.String())
+	lv.writes++
+	return true
 }
 
 // liveKick makes sure the render goroutine runs (u.mu held).

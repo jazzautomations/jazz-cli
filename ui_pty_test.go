@@ -104,6 +104,15 @@ func ptyModel(t *testing.T) *httptest.Server {
 			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c4", "type": "function",
 				"function": map[string]any{"name": "ask_user", "arguments": string(args)}}}}, "tool_calls")
 			fmt.Fprint(w, "data: [DONE]\n\n")
+		case strings.Contains(content, "rode dois perigosos"): // two confirmations in one response (approve_batch.go)
+			var calls []any
+			for i, b := range []string{"jazz-pty-a", "jazz-pty-b"} {
+				args, _ := json.Marshal(map[string]any{"command": "git branch -D " + b})
+				calls = append(calls, map[string]any{"index": i, "id": fmt.Sprintf("d%d", i), "type": "function",
+					"function": map[string]any{"name": "bash", "arguments": string(args)}})
+			}
+			send(map[string]any{"tool_calls": calls}, "tool_calls")
+			fmt.Fprint(w, "data: [DONE]\n\n")
 		case strings.Contains(content, "rode perigoso"):
 			args, _ := json.Marshal(map[string]any{"command": "git branch -D jazz-pty-nada"})
 			send(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "c2", "type": "function",
@@ -263,7 +272,7 @@ func ptyStartIn(t *testing.T, term string, cfg map[string]any, home, root string
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPTYChild$")
 	cmd.Env = append(os.Environ(), "JAZZ_PTY_CHILD=1", "JAZZ_PTY_ARGS="+strings.Join(append([]string{"-C", root}, args...), "\x1f"),
-		"JAZZ_HOME="+home, "TERM="+term, "COLORTERM=", "TERM_PROGRAM=", "NO_COLOR=", "JAZZ_NO_UPDATE_CHECK=1", "JAZZ_OFFLINE=")
+		"JAZZ_HOME="+home, "TERM="+term, "COLORTERM=", "TERM_PROGRAM=", "NO_COLOR=", "JAZZ_NO_UPDATE_CHECK=1", "JAZZ_OFFLINE=", "JAZZ_ONBOARD=off")
 	cmd.Env = append(cmd.Env, env...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
@@ -420,6 +429,9 @@ func ptyScript(t *testing.T, term string) {
 	}
 	s.typeSlow("/model")
 	s.write("\r")
+	// /model opens the picker (ui_models.go); Esc keeps the model
+	s.waitFor("the model picker", 15*time.Second, func(sc string) bool { return strings.Contains(sc, pkHint) })
+	s.write("\x1b")
 	s.waitFor("/model", 5*time.Second, func(sc string) bool {
 		return strings.Contains(strings.Join(s.all(), "\n"), "modelo atual: fake/m1") && ptyPrompt(sc)
 	})
@@ -634,7 +646,10 @@ func TestPTYTypoCommand(t *testing.T) {
 	s.typeSlow("/modle")
 	s.write("\r")
 	// the fuzzy palette already highlights /model for the typo, so Enter runs
-	// it straight away (without the palette: the "interpretei" note)
+	// it straight away (without the palette: the "interpretei" note); /model
+	// opens the model picker, Esc keeps the model
+	s.waitFor("the model picker", 15*time.Second, func(sc string) bool { return strings.Contains(sc, pkHint) })
+	s.write("\x1b")
 	s.waitFor("/modle read as /model", 10*time.Second, func(sc string) bool {
 		all := strings.Join(s.all(), "\n")
 		return strings.Contains(all, "modelo atual: fake/m1") && ptyPrompt(sc)

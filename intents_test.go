@@ -288,7 +288,9 @@ func TestFastPathHeadlessNoModelCall(t *testing.T) {
 	if n := len(h.fs.requests()); n != 0 {
 		t.Errorf("%d model requests for a fast path", n)
 	}
-	// without --fast-path nothing happens
+	// without --fast-path the fast path does not fire (the offline brain's
+	// level 0 would answer "git status" itself: switched off here, brain_test.go covers it)
+	t.Setenv("JAZZ_BRAIN", "off")
 	if res, p := olHeadless(ctx, h.ag, h.ag.tools, ui, h.cfg, "git status", pfOpts{}); res != nil || p != "git status" {
 		t.Errorf("fast path fired without the flag: %+v", res)
 	}

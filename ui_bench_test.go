@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // uiBenchAnswer is a realistic streamed answer: prose, a list, bold/code
@@ -107,5 +109,85 @@ func BenchmarkSSEParse2000(b *testing.B) {
 			_ = json.Unmarshal([]byte(data), &c)
 			return nil
 		})
+	}
+}
+
+// uiRedrawRate runs the live region for d with the spinner on (idle wait for
+// the model, or a stream of tps tokens per second when tps > 0) and returns
+// the bytes written per second that are not answer text (the redraw cost).
+func uiRedrawRate(t testing.TB, d time.Duration, tps int) (overhead, total float64) {
+	var mu sync.Mutex
+	n := 0
+	oldW, oldF := uiWrite, uiForceLive
+	uiWrite = func(s string) { mu.Lock(); n += len(s); mu.Unlock() }
+	uiForceLive = true
+	uiWidthOverride.Store(86)
+	defer func() { uiWrite, uiForceLive = oldW, oldF; uiWidthOverride.Store(0) }()
+	u := NewTermUI(&Config{}, nil)
+	u.T = Theme{color: true, c256: true}
+	u.md.t = u.T
+	u.Thinking("pensando")
+	text := 0
+	t0 := time.Now()
+	if tps > 0 {
+		toks := uiBenchTokens(uiBenchAnswer(), int(float64(tps)*d.Seconds()))
+		every := time.Second / time.Duration(tps)
+		for _, tk := range toks {
+			u.StreamText(tk)
+			text += len(tk)
+			time.Sleep(every)
+		}
+	} else {
+		time.Sleep(d)
+	}
+	el := time.Since(t0).Seconds()
+	u.StopThinking()
+	u.mu.Lock()
+	u.endText()
+	u.liveCommit()
+	u.mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
+	// the rendered answer is longer than its source (colour codes, wrapping):
+	// count it once as written by the direct path
+	direct := 0
+	if tps > 0 {
+		m := mdRenderer{t: u.T, lineStart: true, indent: "  "}
+		m.begin(2, 85)
+		direct = len(m.Feed(strings.Join(uiBenchTokens(uiBenchAnswer(), int(float64(tps)*d.Seconds())), ""))) + len(m.Flush())
+	}
+	return float64(n-direct) / el, float64(n) / el
+}
+
+// uiRedrawBudget is the most redraw bytes per second the live region may
+// write: the spinner and status line on a 2005 laptop over SSH (a 56k modem
+// moves ~7 KB/s; this keeps the status line under a tenth of that).
+const (
+	uiRedrawBudgetIdle   = 600  // B/s waiting for the model
+	uiRedrawBudgetStream = 2500 // B/s on top of the answer text at 30 tokens/s
+)
+
+// TestUIRedrawBudget measures the redraw bytes per second of the status
+// line while waiting and while streaming, and keeps them under budget.
+func TestUIRedrawBudget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timed")
+	}
+	idle, _ := uiRedrawRate(t, 2*time.Second, 0)
+	stream, total := uiRedrawRate(t, 2*time.Second, 30)
+	t.Logf("redraw: esperando %.0f B/s (limite %d) · streaming 30 tok/s: %.0f B/s além do texto (limite %d), %.0f B/s no total", idle, uiRedrawBudgetIdle, stream, uiRedrawBudgetStream, total)
+	if idle > uiRedrawBudgetIdle {
+		t.Errorf("idle redraw %.0f B/s > %d", idle, uiRedrawBudgetIdle)
+	}
+	if stream > uiRedrawBudgetStream {
+		t.Errorf("stream redraw %.0f B/s > %d", stream, uiRedrawBudgetStream)
+	}
+}
+
+// BenchmarkUIRedrawIdle reports the idle status-line cost as B/s.
+func BenchmarkUIRedrawIdle(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		idle, _ := uiRedrawRate(b, time.Second, 0)
+		b.ReportMetric(idle, "B/s")
 	}
 }

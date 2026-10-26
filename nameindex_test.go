@@ -163,7 +163,7 @@ func TestNameIndexCapAndTiming(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(root, "node_modules", "x"), 0o755)
 	_ = os.WriteFile(filepath.Join(root, "node_modules", "x", "skip.js"), nil, 0o644)
 	ix := niBuild(root)
-	if _, ok := ix.rels["node_modules/x/skip.js"]; ok {
+	if _, ok := ix.relIndex("node_modules/x/skip.js"); ok {
 		t.Error("node_modules must be skipped")
 	}
 	if len(ix.files) == 0 || ix.buildMS < 0 {

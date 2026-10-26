@@ -168,7 +168,44 @@ credencial), o jazz não sai: mostra o aviso de modo offline e continua com atal
 <code>!comando</code> (rg/fd), <code>/undo</code> e sessões. A cada 60 s (ou com <code>/online</code>) testa a conexão com os
 provedores e volta pro modelo quando um responder. <code>JAZZ_OFFLINE=1</code> ou <code>--offline</code> força o modo
 (um modelo local, como llama.cpp, continua valendo se for o modelo da sessão). No <code>-p</code>, um
-pedido que é atalho termina com 0 mesmo sem rede; o resto sai com 1 e uma mensagem clara.</p></div>
+pedido que é atalho termina com 0 mesmo sem rede; o resto passa pelo cérebro offline (abaixo) e,
+se ele também não der conta, sai com 1 e uma mensagem clara.</p>
+<p><strong>Cérebro offline</strong> (desde a 0.9; contrato em <code>docs/design/offline-brain.md</code>; medidas em <code>results/dell-0.9-progress.md</code>). Sem modelo, um
+pedido que não é atalho passa por um interpretador clássico (<code>nlu.go</code>, dados em <code>nlu/*.json</code>):
+normaliza (minúsculas, sem acento, gírias como "dale", "bora", "roda aí", "mete marcha"), marca
+conceitos, acha entidades do projeto e da máquina (Aho-Corasick + Damerau/Jaro-Winkler: "talscle"
+vira o binário <code>tailscale</code>, "labbx" o host SSH <code>labbox</code>), aplica as regras de 47 intenções com slots e usa
+um naive Bayes de n-gramas de caracteres só para desempatar. Confiança abaixo de 0,6 = não age
+(vai pro modelo, ou diz o que sabe fazer). Entendido, vira uma tarefa com estado explícito
+(<code>task.go</code>: new → investigating → planning → ready → running → verifying → succeeded/unverified/failed,
+cada transição gravada na sessão e visível no <code>jazz trace</code>) executada por métodos com pré-condições
+e verificador (<code>methods/*.json</code>): <code>open_file</code> (nome impreciso → até 5 candidatos numerados se
+ambíguo → abre → caminho, tamanho, mtime, sha256, símbolos), <code>run_tests</code> (detecta o comando, roda,
+lê a saída com <code>outparse</code>, mostra arquivo:linha das falhas), <code>git_status</code>, <code>env_status</code>, <code>tool_info</code>,
+<code>tool_status</code> ("talscle status" roda <code>tailscale status</code>, só-leitura, até em pasta não confiável) e <code>connect_host</code> (só diz o comando: não conecta sozinho, então termina "não verificado"). "Pronto"
+só com evidência; sem verificador é "não verificado". Falhas seguem uma tabela por categoria
+observável (<code>recover.go</code>: nome não encontrado, comando inexistente, teste falhou, tempo, permissão,
+plano impossível…) e três olhadas seguidas sem fato novo param e perguntam. No <code>-p</code>, as perguntas
+saem com o menu numerado e a execução termina "preciso de uma resposta" (exit 1), a não ser com
+<code>--ask-stdin</code>. Mesmo com modelo, no <code>-p</code>, um pedido claro só de leitura ("abre o README.md",
+"git status", "como está o ambiente", "tenho o docker?", confiança ≥ 0,85) é respondido pelo cérebro
+sem nenhuma requisição; se o método não termina, o pedido vai pro modelo como antes
+(<code>JAZZ_BRAIN=off</code> desliga).</p>
+<p><strong>Perfil do ambiente</strong> (<code>jazz env [--json] [--refresh]</code>, só leitura): SO/arquitetura, núcleos, RAM,
+Termux/WSL/contêiner, ferramentas e versões, binários do PATH, hosts do <code>~/.ssh/config</code>, máquinas do
+Tailscale (<code>tailscale status --json</code>, só se o binário existir, 2 s), serviços (systemd/runit/launchd,
+só listagem), contêineres (<code>docker</code>/<code>podman ps</code>), portas em escuta (<code>/proc/net/tcp</code>) e rede. Fica em
+cache 10 min (refeito quando o PATH muda) e alimenta o cérebro offline.</p>
+<p><strong>Menor intervenção.</strong> Em qualquer modo, <code>yolo</code> e <code>turbo</code> inclusive, escrever em <code>/etc</code>, mexer no
+kernel (<code>modprobe</code>, <code>sysctl -w</code>), em binários do sistema, em <code>~/.config/containers</code> ou na configuração
+do Docker/Podman/WSL (<code>wsl --shutdown</code>, <code>podman system reset</code>, <code>systemctl restart docker</code>) é bloqueado
+como CRÍTICO; numa tarefa de contêiner, remover/reinstalar o motor ou apagar o armazenamento dele
+também, com a explicação de que é desproporcional ao objetivo. Ler esses arquivos continua livre.
+Um modelo sem visão recebe a imagem? Não: o jazz avisa e sugere um modelo configurado que veja.</p>
+<p><strong><code>jazz eval offline</code></strong> roda 39 tarefas com o modelo desligado (atalhos, nomes imprecisos,
+ambiguidade, falhas recuperáveis, pedidos impossíveis, segurança, composta) em projetos de teste
+temporários e grava <code>results/offline-*.json</code> (sucesso verificado, falso sucesso, perguntas feitas vs
+necessárias, comandos por tarefa, latência p50/p95, RAM pico).</p></div>
 <p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
 <nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/comandos"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Comandos</span><span data-l="en" lang="en">Commands</span></span></a><a class="next" href="/docs/perguntas-worktrees"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Perguntas e worktrees</span><span data-l="en" lang="en">Questions and worktrees</span></span></a></nav>
   </main>

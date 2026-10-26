@@ -86,9 +86,9 @@ var imClassWeight = map[string]float64{
 // ---------- normalization ----------
 
 var (
-	imPathRE  = regexp.MustCompile(`(^|[\s'"(=:])((?:[A-Za-z]:)?(?:/[^\s'"():,]+)+)`)
-	imNumRE   = regexp.MustCompile(`\d+`)
-	imSpaceRE = regexp.MustCompile(`\s+`)
+	imPathRE  = lazyRx(`(^|[\s'"(=:])((?:[A-Za-z]:)?(?:/[^\s'"():,]+)+)`)
+	imNumRE   = lazyRx(`\d+`)
+	imSpaceRE = lazyRx(`\s+`)
 )
 
 // imNormErr is the comparable signature of an error message: the line that
@@ -105,14 +105,14 @@ func imNormErr(tool, s string) string {
 }
 
 var (
-	imMissingRE = regexp.MustCompile(`(?i)command not found|no module named|not recognized as an internal|executable file not found|: not found\b`)
-	imUsageRE   = regexp.MustCompile(`(?i)\b(illegal|invalid|unknown|unrecognized) (option|flag|argument|command code)|\busage: |requires an argument`)
-	imEnvErrRE  = regexp.MustCompile(`(?i)command not found|no module named|permission denied|operation not permitted|(illegal|invalid|unknown|unrecognized) (option|flag)|address already in use|not recognized as an internal|executable file not found|: not found\b`)
+	imMissingRE = lazyRx(`(?i)command not found|no module named|not recognized as an internal|executable file not found|: not found\b`)
+	imUsageRE   = lazyRx(`(?i)\b(illegal|invalid|unknown|unrecognized) (option|flag|argument|command code)|\busage: |requires an argument`)
+	imEnvErrRE  = lazyRx(`(?i)command not found|no module named|permission denied|operation not permitted|(illegal|invalid|unknown|unrecognized) (option|flag)|address already in use|not recognized as an internal|executable file not found|: not found\b`)
 )
 
-var imCwdRE = regexp.MustCompile(`\[cwd: [^\]]*\]`)
+var imCwdRE = lazyRx(`\[cwd: [^\]]*\]`)
 
-var imErrWordRE = regexp.MustCompile(`(?i)(error|not found|no module|denied|failed|exception|fail:|cannot|could not|no such|refused|invalid|traceback)`)
+var imErrWordRE = lazyRx(`(?i)(error|not found|no module|denied|failed|exception|fail:|cannot|could not|no such|refused|invalid|traceback)`)
 
 // imErrLine picks the line of a result that names the failure.
 func imErrLine(tool, s string) string {
@@ -1076,7 +1076,7 @@ func imAnon(s string) string {
 	return s
 }
 
-var imScratchRE = regexp.MustCompile(`(?:/private)?/(?:tmp|var/folders)/[^\s'"]*?/(?:scratchpad|T)\b`)
+var imScratchRE = lazyRx(`(?:/private)?/(?:tmp|var/folders)/[^\s'"]*?/(?:scratchpad|T)\b`)
 
 // pfImproveModel is the session model jazz improve starts from (its cheap
 // tier is picked from it like smart mode's classifier).

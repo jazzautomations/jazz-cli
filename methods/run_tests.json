@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "run_tests.detected", "intent": "run_tests", "priority": 10,
+  "doc": "comando de teste da detecção do projeto (fpTestCommand) → roda → outparse → falhas com arquivo:linha e o contexto",
+  "pre": [{"fact": "project.test", "op": "set"}],
+  "steps": [
+   {"cap": "run_tests", "in": {"target": "$slot.target", "hint": "$hint"}, "out": "result"},
+   {"cap": "test_context", "in": {"result": "$result"}, "out": "context"}],
+  "verify": [{"check": "tests_passed", "arg": "$result"}],
+  "risk": "med", "cost_ms": 20000},
+ {"name": "run_tests.no_runner", "intent": "run_tests", "priority": 1,
+  "doc": "sem comando de teste detectado: diz o que procurou e para",
+  "pre": [{"fact": "project.test", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "não achei comando de testes neste projeto (procurei go.mod, package.json, Cargo.toml, pyproject/pytest/setup.py, Makefile com alvo test)", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

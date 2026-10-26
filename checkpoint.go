@@ -31,7 +31,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -150,7 +149,7 @@ func (c *cpStore) cleanIndexes() {
 	}
 }
 
-var cpVersionRe = regexp.MustCompile(`(\d+)\.(\d+)`)
+var cpVersionRe = lazyRx(`(\d+)\.(\d+)`)
 
 func cpGitAtLeast(version string, major, minor int) bool {
 	m := cpVersionRe.FindStringSubmatch(version)

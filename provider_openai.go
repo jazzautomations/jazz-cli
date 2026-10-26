@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -192,7 +191,7 @@ func pvOAMessages(system string, msgs []Message, o pvOAOpts) []map[string]any {
 	return out
 }
 
-var pvID9RE = regexp.MustCompile(`^[a-zA-Z0-9]{9}$`)
+var pvID9RE = lazyRx(`^[a-zA-Z0-9]{9}$`)
 
 const pvB62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 

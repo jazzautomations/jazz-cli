@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -191,9 +190,9 @@ func smParseVerdict(s string) (safe, clear bool) {
 }
 
 // smTalksToClassifier: an action that tries to steer the verdict.
-var smTalksToClassifier = regexp.MustCompile(`(?i)\b(answer|reply|respond|say|output|classify|verdict)\b[^\n]{0,30}\b(safe|ask)\b|\b(ignore|disregard)\b[^\n]{0,40}\b(instructions?|rules|above|previous)\b`)
+var smTalksToClassifier = lazyRx(`(?i)\b(answer|reply|respond|say|output|classify|verdict)\b[^\n]{0,30}\b(safe|ask)\b|\b(ignore|disregard)\b[^\n]{0,40}\b(instructions?|rules|above|previous)\b`)
 
-var smThinkRe = regexp.MustCompile(`(?s)<think>.*?</think>`)
+var smThinkRe = lazyRx(`(?s)<think>.*?</think>`)
 
 const smSystemPrompt = `You are a permission classifier for a coding agent that runs on the user's own machine. You get one action the agent wants to take, plus the working directory and the project root. Decide whether it may run without asking the user.
 
@@ -289,7 +288,7 @@ func (a *Agent) smCandidates() []string {
 
 // smExactCmd: commands whose arguments decide everything (network, moves,
 // containers): their verdict is cached for the exact command only.
-var smExactCmd = regexp.MustCompile(`^(curl|wget|http|https|xh|nc|ncat|socat|telnet|ftp|mv|cp|ln|chmod|docker|podman|kubectl|helm|terraform|aws|gcloud|az|make|tee|truncate|patch)$`)
+var smExactCmd = lazyRx(`^(curl|wget|http|https|xh|nc|ncat|socat|telnet|ftp|mv|cp|ln|chmod|docker|podman|kubectl|helm|terraform|aws|gcloud|az|make|tee|truncate|patch)$`)
 
 // smBashKey is the cache key of a bash command: its derived rules, one per
 // segment (Bash(go build:*)). "" (no caching) when a segment has no rule.
@@ -335,16 +334,16 @@ func smBashKey(ps *PermSet, root, cmd string) string {
 
 // smSecretRe: commands or URLs that name dotenv files, private keys or
 // credential stores.
-var smSecretRe = regexp.MustCompile(`(^|[\s'"=:/<>(])\.env(\.[\w.-]+)?($|[\s'";|&)<>/])|\.envrc\b|\.(pem|key|p12|pfx|jks|keystore|kdbx)($|[\s'";|&)])|\bid_(rsa|dsa|ecdsa|ed25519)|\.ssh\b|\.gnupg|\.aws\b|\.kube\b|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass|credentials|\bsecrets?\.(json|ya?ml|toml|env)|auth\.json|\.password-store|\bprintenv\b`)
+var smSecretRe = lazyRx(`(^|[\s'"=:/<>(])\.env(\.[\w.-]+)?($|[\s'";|&)<>/])|\.envrc\b|\.(pem|key|p12|pfx|jks|keystore|kdbx)($|[\s'";|&)])|\bid_(rsa|dsa|ecdsa|ed25519)|\.ssh\b|\.gnupg|\.aws\b|\.kube\b|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass|credentials|\bsecrets?\.(json|ya?ml|toml|env)|auth\.json|\.password-store|\bprintenv\b`)
 
 // smJazzRe: jazz's own configuration (and Claude Code's, which jazz reads).
-var smJazzRe = regexp.MustCompile(`jazz-cli/(auth|config|mcp|trusted|exhausted|update)\.json|\.config/jazz-cli|\.local/share/jazz-cli|(^|[\s'"=:/<>(])\.jazz($|[\s'"/;|&)])|(^|[\s'"=:/<>(])\.claude($|[\s'"/;|&)])|\.mcp\.json|\bJAZZ_[A-Z_]+|\bXDG_(CONFIG|DATA)_HOME\b`)
+var smJazzRe = lazyRx(`jazz-cli/(auth|config|mcp|trusted|exhausted|update)\.json|\.config/jazz-cli|\.local/share/jazz-cli|(^|[\s'"=:/<>(])\.jazz($|[\s'"/;|&)])|(^|[\s'"=:/<>(])\.claude($|[\s'"/;|&)])|\.mcp\.json|\bJAZZ_[A-Z_]+|\bXDG_(CONFIG|DATA)_HOME\b`)
 
 // smAlwaysAsk: deletion, privilege, remote access, processes and system services.
-var smAlwaysAsk = regexp.MustCompile(`^(sudo|doas|su|pkexec|rm|rmdir|shred|unlink|srm|dd|mkfs(\..*)?|fdisk|parted|wipefs|kill|pkill|killall|xkill|shutdown|reboot|halt|poweroff|systemctl|service|launchctl|crontab|at|ssh|scp|sftp|rsync|sshpass|chown|chgrp|mount|umount|iptables|nft|ufw|connmanctl|nmcli|networksetup|defaults|security|osascript|jazz|npx|pnpx|bunx|uvx|pipx)$`)
+var smAlwaysAsk = lazyRx(`^(sudo|doas|su|pkexec|rm|rmdir|shred|unlink|srm|dd|mkfs(\..*)?|fdisk|parted|wipefs|kill|pkill|killall|xkill|shutdown|reboot|halt|poweroff|systemctl|service|launchctl|crontab|at|ssh|scp|sftp|rsync|sshpass|chown|chgrp|mount|umount|iptables|nft|ufw|connmanctl|nmcli|networksetup|defaults|security|osascript|jazz|npx|pnpx|bunx|uvx|pipx)$`)
 
 // smSysPkg: system package managers ask for every subcommand.
-var smSysPkg = regexp.MustCompile(`^(apt|apt-get|aptitude|dpkg|dnf|yum|zypper|pacman|yay|apk|brew|port|snap|flatpak|nix-env|emerge|xbps-install|pkg|winget|choco|scoop)$`)
+var smSysPkg = lazyRx(`^(apt|apt-get|aptitude|dpkg|dnf|yum|zypper|pacman|yay|apk|brew|port|snap|flatpak|nix-env|emerge|xbps-install|pkg|winget|choco|scoop)$`)
 
 // smPkgVerbs: subcommands that install, remove or update dependencies.
 var smPkgVerbs = map[string]map[string]bool{
@@ -379,9 +378,9 @@ func smSet(xs ...string) map[string]bool {
 }
 
 var (
-	smPipName  = regexp.MustCompile(`^pip[0-9.]*$`)
-	smPyName   = regexp.MustCompile(`^python[0-9.]*$`)
-	smGhReadRe = regexp.MustCompile(`^gh(\s+-\S+)*(\s+--version|\s+(auth\s+status|\S+\s+(view|list|status|diff|checks)\b.*))\s*$`)
+	smPipName  = lazyRx(`^pip[0-9.]*$`)
+	smPyName   = lazyRx(`^python[0-9.]*$`)
+	smGhReadRe = lazyRx(`^gh(\s+-\S+)*(\s+--version|\s+(auth\s+status|\S+\s+(view|list|status|diff|checks)\b.*))\s*$`)
 )
 
 // smHardAsk returns why a bash command must always be confirmed in smart mode,
@@ -475,7 +474,7 @@ func smInstalls(w string, args []string) bool {
 }
 
 // smSensitiveName: dotenv files, private keys and credential files.
-var smSensitiveName = regexp.MustCompile(`^(\.env(\..*)?|\.envrc|.*\.(pem|key|p12|pfx|jks|keystore|kdbx)|id_(rsa|dsa|ecdsa|ed25519)(_sk)?(\.pub)?|\.netrc|\.npmrc|\.pypirc|\.pgpass|\.git-credentials|credentials(\.json)?|auth\.json|secrets?\.(json|ya?ml|toml|env))$`)
+var smSensitiveName = lazyRx(`^(\.env(\..*)?|\.envrc|.*\.(pem|key|p12|pfx|jks|keystore|kdbx)|id_(rsa|dsa|ecdsa|ed25519)(_sk)?(\.pub)?|\.netrc|\.npmrc|\.pypirc|\.pgpass|\.git-credentials|credentials(\.json)?|auth\.json|secrets?\.(json|ya?ml|toml|env))$`)
 
 // smWorkspaceEdit reports whether a write/edit of abs is auto-approved in smart
 // mode: inside the project (when the project is not the home or a system root)

@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -30,7 +29,7 @@ import (
 const wtDir = ".jazz/worktrees"
 
 // wtNameRE: a worktree name is also a branch suffix and a directory name.
-var wtNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var wtNameRE = lazyRx(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // wtMeta is <repo>/.jazz/worktrees/<name>.json.
 type wtMeta struct {

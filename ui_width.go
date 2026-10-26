@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -148,19 +147,6 @@ func uiLowPower() bool {
 		}
 	})
 	return uiLow
-}
-
-// pfTuneRuntime lowers GC work on a single-core machine: the collector's
-// background marking competes with the render loop and the SSE parser for
-// the only CPU. GOGC set by the user wins.
-func pfTuneRuntime() {
-	if runtime.NumCPU() != 1 || os.Getenv("GOGC") != "" {
-		return
-	}
-	debug.SetGCPercent(200)
-	if os.Getenv("GOMEMLIMIT") == "" {
-		debug.SetMemoryLimit(384 << 20) // 2 GB box: still collect before swapping
-	}
 }
 
 // uiLowFlag is --low-power: a bare flag means on; =off / =auto also work.

@@ -125,8 +125,9 @@
   </aside>
   <main id="main" class="doc">
 <div class="doc-body" data-l="pt"><h1 id="primeiro-uso">Primeiro uso<a class="anchor" href="#primeiro-uso" aria-label="link">#</a></h1>
-<pre class="code mono"><code>jazz doctor               # diagnóstico: provedores com credencial, shell, sandbox, terminal
-jazz                      # modo interativo na pasta atual
+<pre class="code mono"><code>jazz                      # modo interativo; na primeira vez (sem chave) abre 3 passos: como rodar, chave, teste
+jazz setup                # os mesmos 3 passos quando quiser (grátis, Anthropic, OpenAI, ChatGPT, Ollama)
+jazz doctor               # diagnóstico: provedores com credencial, shell, sandbox, terminal
 jazz omni setup           # mostra seus provedores, liga o roteamento e sugere chaves grátis
 jazz login                # entra com a conta do ChatGPT (código de dispositivo, sem navegador)
 jazz key openrouter       # salva uma chave (lida escondida); vale pra qualquer provedor</code></pre>
@@ -140,7 +141,9 @@ pode registrar ou treinar com seus prompts, o jazz avisa uma vez.</li><li><stron
 <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code>. Modelo pago só entra no omni em emergência
 (<code>omni.paid: never|emergency|always</code>), a não ser que você o escolha com <code>-m</code>.</li><li><strong>ChatGPT (OAuth):</strong> <code>jazz login</code> usa sua conta do ChatGPT pelo fluxo de código de dispositivo
 (<code>--browser</code> abre o navegador). Os tokens ficam em <code>~/.config/jazz-cli/auth.json</code> (0600).</li><li><strong>Modelos locais:</strong> <code>jazz provider add local --url http://127.0.0.1:8080/v1 --no-key</code> (llama.cpp,
-LM Studio, qualquer URL compatível com OpenAI) ou <code>--ollama</code>.</li><li>Troque de modelo com <code>-m provedor/modelo</code> ou <code>/model</code> dentro da sessão; <code>jazz models</code> lista.</li></ul></div>
+LM Studio, qualquer URL compatível com OpenAI) ou <code>--ollama</code>.</li><li>Troque de modelo com <code>-m provedor/modelo</code> ou <code>/model</code> dentro da sessão: sem argumento abre a lista
+por provedor (↑↓ ou o número, digite pra filtrar; grátis/pago, latência medida, "sem chave" pede a
+chave ali mesmo). <code>jazz models</code> lista.</li></ul></div>
 <div class="doc-body" data-l="en" lang="en"><h1 id="first-run">First run<a class="anchor" href="#first-run" aria-label="link">#</a></h1>
 <pre class="code mono"><code>jazz doctor               # diagnostics: providers with credentials, shell, sandbox, terminal
 jazz                      # interactive mode in the current folder

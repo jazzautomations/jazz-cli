@@ -34,7 +34,7 @@ type fpProject struct {
 	PM                     string // npm | pnpm | yarn | bun
 }
 
-var fpMakeTarget = regexp.MustCompile(`(?m)^([A-Za-z][\w-]*)\s*:([^=]|$)`)
+var fpMakeTarget = lazyRx(`(?m)^([A-Za-z][\w-]*)\s*:([^=]|$)`)
 
 // fpDetect inspects marker files at root (a handful of stats, no walk).
 func fpDetect(root string) fpProject {
@@ -167,11 +167,26 @@ func fpDetect(root string) fpProject {
 	return p
 }
 
-var fpSafeArg = regexp.MustCompile(`^[\w./:@=+-]+$`)
+// fpSafeArg: s is non-empty and only [A-Za-z0-9_./:@=+-] (was the regexp
+// ^[\w./:@=+-]+$; a byte loop, low-level study §8.2).
+func fpSafeArg(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '_' || c == '.' || c == '/' || c == ':' || c == '@' || c == '=' || c == '+' || c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 // fpShQuote quotes s for POSIX sh (dash too) when it is not plainly safe.
 func fpShQuote(s string) string {
-	if fpSafeArg.MatchString(s) {
+	if fpSafeArg(s) {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
@@ -329,13 +344,22 @@ type fpMatch struct {
 }
 
 var (
-	fpLead   = regexp.MustCompile(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now)[,:]?\s+)+`)
-	fpTrail  = regexp.MustCompile(`(?i)(?:[,\s]+(?:por favor|pfv|pf|please|pls|pra mim|for me|agora|now))+$`)
-	fpPunct  = regexp.MustCompile(`[\s?!.…;:]+$`)
-	fpWordRE = regexp.MustCompile(`[a-z]{4,}`)
-	fpVar    = regexp.MustCompile(`\{\{(\w+)\}\}`)
-	fpSlotV  = regexp.MustCompile(`^[\w$.:/-]{1,80}$`)
+	fpLead   = lazyRx(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now)[,:]?\s+)+`)
+	fpTrail  = lazyRx(`(?i)(?:[,\s]+(?:por favor|pfv|pf|please|pls|pra mim|for me|agora|now))+$`)
+	fpWordRE = lazyRx(`[a-z]{4,}`)
+	fpVar    = lazyRx(`\{\{(\w+)\}\}`)
+	fpSlotV  = lazyRx(`^[\w$.:/-]{1,80}$`)
 )
+
+// fpPunct: the trailing characters fpNormalize drops (RE2 \s is
+// [\t\n\f\r ]; no \v).
+func fpPunct(r rune) bool {
+	switch r {
+	case '\t', '\n', '\f', '\r', ' ', '?', '!', '.', '…', ';', ':':
+		return true
+	}
+	return false
+}
 
 // fpNormalize strips accents, trailing punctuation and polite filler, and
 // collapses spaces; "" when the input is not a one-line short request.
@@ -344,17 +368,20 @@ func fpNormalize(s string) string {
 	if s == "" || len(s) > 120 || strings.ContainsAny(s, "\n\r`@") || strings.HasPrefix(s, "/") || strings.HasPrefix(s, "!") {
 		return ""
 	}
-	var b strings.Builder
-	for _, r := range norm.NFD.String(s) {
-		if unicode.Is(unicode.Mn, r) {
-			continue // combining accent
+	if !fzIsASCII(s) { // NFD is the identity on ASCII
+		var b strings.Builder
+		for _, r := range norm.NFD.String(s) {
+			if unicode.Is(unicode.Mn, r) {
+				continue // combining accent
+			}
+			b.WriteRune(r)
 		}
-		b.WriteRune(r)
+		s = b.String()
 	}
-	s = strings.Join(strings.Fields(b.String()), " ")
+	s = strings.Join(strings.Fields(s), " ")
 	for i := 0; i < 3; i++ {
 		before := s
-		s = fpPunct.ReplaceAllString(s, "")
+		s = strings.TrimRightFunc(s, fpPunct) // was the regexp [\s?!.…;:]+$
 		s = fpLead.ReplaceAllString(s, "")
 		s = fpTrail.ReplaceAllString(s, "")
 		s = strings.TrimSpace(s)
@@ -430,7 +457,7 @@ func (set *fpSet) matchNorm(n string, p fpProject, hasRg bool, orig map[string]b
 					continue
 				}
 				v := sm[i]
-				chk := fpSlotV
+				chk := fpSlotV.R()
 				if c, ok := it.slots[name]; ok {
 					chk = c
 				}

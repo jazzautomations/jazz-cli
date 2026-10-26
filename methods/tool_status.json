@@ -1,0 +1,11 @@
+{"methods": [
+ {"name": "tool_status.run", "intent": "tool_status", "priority": 10,
+  "doc": "entity-first: nome impreciso de ferramenta (talscle → tailscale) → comando de status só leitura dela (tailscale status, git status, docker/podman ps); sem comando seguro conhecido, responde com caminho e versão e diz isso; ausente do PATH = bloqueado com mensagem clara",
+  "pre": [{"fact": "slot.tool", "op": "set"}],
+  "steps": [
+   {"cap": "resolve_name", "in": {"q": "$slot.tool", "kinds": "toolchain,bin", "empty": "ok"}, "out": "cands"},
+   {"cap": "choose", "in": {"options": "$cands", "max": "5", "what": "ferramenta", "empty": "ok"}, "out": "target"},
+   {"cap": "tool_status", "in": {"name": "$target", "asked": "$slot.tool"}, "out": "status"}],
+  "verify": [{"check": "status_obtained", "arg": "$status"}],
+  "cmds": ["tailscale status", "git status --short --branch", "docker ps", "podman ps", "systemctl is-system-running"], "risk": "low", "cost_ms": 300}
+]}

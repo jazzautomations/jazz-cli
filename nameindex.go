@@ -15,13 +15,14 @@ package main
 // ("arquivo", "teste", "função") are looked up. No good match -> no note.
 
 import (
+	"math/bits"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
@@ -32,20 +33,43 @@ const (
 	niMaxNotes    = 4
 )
 
+// niFile is one file of the index. Its strings are views into the index's
+// single blob (nameindex_idx.go): no allocation per file.
 type niFile struct {
 	Rel, Base, Ext           string
 	StemKey, CoreKey, DirKey string // CoreKey: stem without test affixes
 	Test, Doc                bool
-	dirSegs                  []string // folded dir segments
 }
 
-type niSym struct{ Name, Key, Rel string }
+type niSym struct {
+	Name, Key, Rel string
+	mask           uint32 // niMask(Key)
+	klen           uint8  // rune length of Key (capped)
+}
 
+// niFast is the pointer-free part of a file that the resolver's lower-bound
+// filters read before any distance (low-level study §6, item 5): rune length
+// and letter mask of StemKey and CoreKey. A slice of these is noscan memory.
+type niFast struct {
+	stemMask, coreMask uint32
+	stemLen, coreLen   uint8
+}
+
+// niIndex is the name index of a root. The per-file data lives in a few
+// pointer-free arrays and one byte blob (struct of arrays, low-level study
+// §5.1, item 8): recs/fast/relOrd/baseOrd index into blob and files are
+// string views over it. The same layout is persisted and read back without
+// decoding (nameindex_idx.go).
 type niIndex struct {
 	root     string
 	files    []niFile
-	rels     map[string]int // rel path -> file index
-	bases    map[string]bool
+	fast     []niFast     // parallel to files
+	recs     []niRec      // parallel to files: offsets into blob
+	blob     []byte       // every string of the index
+	relOrd   []uint32     // file indexes sorted by Rel (exact path lookup)
+	baseOrd  []uint32     // file indexes sorted by Base
+	dirs     []niDirState // the directories the listing came from
+	snapNS   int64        // when the listing was taken (unix ns)
 	exts     map[string]int
 	dominant string // most common code extension
 	trunc    bool
@@ -77,66 +101,75 @@ func niGet(root string) *niIndex {
 	return ix
 }
 
-// niBuild walks root (bounded) and keys every file name.
-func niBuild(root string) *niIndex {
-	t0 := time.Now()
-	ix := &niIndex{root: root, rels: map[string]int{}, bases: map[string]bool{}, exts: map[string]int{}}
-	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
+// niMask is the letter bag of a key (bit c-'a' per ASCII letter, either
+// case; bit 26 for any digit) and its rune length capped at 255.
+func niMask(k string) (uint32, uint8) {
+	var m uint32
+	n := 0
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+			m |= 1 << (c - 'a')
+		case c >= 'A' && c <= 'Z':
+			m |= 1 << (c - 'A')
+		case c >= '0' && c <= '9':
+			m |= 1 << 26
 		}
-		name := d.Name()
-		if d.IsDir() {
-			if p != root && (rtSkipDir[name] || (strings.HasPrefix(name, ".") && name != ".github")) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if len(ix.files) >= niMaxFiles {
-			ix.trunc = true
-			return filepath.SkipAll
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		ext := strings.ToLower(filepath.Ext(name))
-		stem := strings.TrimSuffix(name, filepath.Ext(name))
-		f := niFile{Rel: rel, Base: name, Ext: ext, StemKey: fzKey(stem), CoreKey: fzKey(niCore(stem)), Doc: niDocExt[ext]}
-		f.Test = f.StemKey != f.CoreKey || qgIsTestFile(name)
-		if dir := filepath.ToSlash(filepath.Dir(rel)); dir != "." {
-			f.DirKey = fzKey(dir)
-			for _, s := range strings.Split(dir, "/") {
-				f.dirSegs = append(f.dirSegs, fzKey(s))
-			}
-			if strings.Contains("/"+strings.ToLower(dir)+"/", "/test/") || strings.Contains("/"+strings.ToLower(dir)+"/", "/tests/") || strings.Contains(strings.ToLower(dir), "__tests__") {
-				f.Test = true
-			}
-		}
-		ix.rels[rel] = len(ix.files)
-		ix.bases[name] = true
-		if ext != "" {
-			ix.exts[ext]++
-		}
-		ix.files = append(ix.files, f)
-		return nil
-	})
-	best := 0
-	for e, n := range ix.exts {
-		if niCodeExt[e] && (n > best || n == best && e < ix.dominant) {
-			best, ix.dominant = n, e
+		if c < 0x80 || c >= 0xC0 { // count runes: skip UTF-8 continuation bytes
+			n++
 		}
 	}
-	ix.built = time.Now()
-	ix.buildMS = float64(time.Since(t0).Microseconds()) / 1000
-	return ix
+	return m, uint8(min(n, 255))
 }
 
-var niTestAffix = regexp.MustCompile(`(?i)^(?:test[_-]?|spec[_-]?)|(?:[_.-]?(?:tests?|spec|specs))$`)
+func niFastOf(stem, core string) niFast {
+	var f niFast
+	f.stemMask, f.stemLen = niMask(stem)
+	f.coreMask, f.coreLen = niMask(core)
+	return f
+}
+
+// niBound is a lower bound of fzDist(q, k) from rune lengths and letter
+// bags: each unit of length difference needs an insertion or deletion
+// (fzEdit); a substitution flips at most 2 bits of the bag, an insertion or
+// deletion 1, a transposition none, and no edit costs less than fzSlip, so
+// dist >= fzSlip*ceil(bits/2). It never exceeds the real distance, so
+// filtering by it changes no result (TestNiBoundIsLowerBound).
+func niBound(qm uint32, ql uint8, m uint32, l uint8) int {
+	dl := int(ql) - int(l)
+	if dl < 0 {
+		dl = -dl
+	}
+	b := dl * fzEdit
+	if x := fzSlip * ((bits.OnesCount32(qm^m) + 1) / 2); x > b {
+		b = x
+	}
+	return b
+}
+
+var niTestAffix = lazyRx(`(?i)^(?:test[_-]?|spec[_-]?)|(?:[_.-]?(?:tests?|spec|specs))$`)
+
+// niHasTestWord: s contains "test" or "spec", ASCII case-insensitively.
+func niHasTestWord(s string) bool {
+	for i := 0; i+4 <= len(s); i++ {
+		c0 := s[i] | 0x20
+		if c0 != 't' && c0 != 's' {
+			continue
+		}
+		w := [4]byte{c0, s[i+1] | 0x20, s[i+2] | 0x20, s[i+3] | 0x20}
+		if w == [4]byte{'t', 'e', 's', 't'} || w == [4]byte{'s', 'p', 'e', 'c'} {
+			return true
+		}
+	}
+	return false
+}
 
 // niCore strips test affixes: test_calculo, calculo_test, calculo.test -> calculo.
 func niCore(stem string) string {
+	if fzIsASCII(stem) && !niHasTestWord(stem) {
+		return stem // the affix pattern needs "test" or "spec" (non-ASCII may case-fold into them)
+	}
 	for i := 0; i < 2; i++ {
 		s := niTestAffix.ReplaceAllString(stem, "")
 		if s == "" || s == stem {
@@ -147,12 +180,12 @@ func niCore(stem string) string {
 	return stem
 }
 
-var niSymRE = map[string]*regexp.Regexp{
-	"go":   regexp.MustCompile(`(?m)^(?:func (?:\([^)]*\) )?|type |var |const )(\w{4,})`),
-	"py":   regexp.MustCompile(`(?m)^(?:async )?(?:def|class) (\w{4,})`),
-	"js":   regexp.MustCompile(`(?m)^(?:export )?(?:default )?(?:async )?(?:function\*? |class |const |let )(\w{4,})`),
-	"rs":   regexp.MustCompile(`(?m)^\s*(?:pub(?:\([^)]*\))? )?(?:async )?(?:fn|struct|enum|trait) (\w{4,})`),
-	"misc": regexp.MustCompile(`(?m)^\s*(?:(?:public|private|protected|static|final|abstract|async|def|fun|func|function|class|interface|struct)\s+)+(?:[\w<>\[\],.]+\s+)?(\w{4,})`),
+var niSymRE = map[string]*lazyRe{
+	"go":   lazyRx(`(?m)^(?:func (?:\([^)]*\) )?|type |var |const )(\w{4,})`),
+	"py":   lazyRx(`(?m)^(?:async )?(?:def|class) (\w{4,})`),
+	"js":   lazyRx(`(?m)^(?:export )?(?:default )?(?:async )?(?:function\*? |class |const |let )(\w{4,})`),
+	"rs":   lazyRx(`(?m)^\s*(?:pub(?:\([^)]*\))? )?(?:async )?(?:fn|struct|enum|trait) (\w{4,})`),
+	"misc": lazyRx(`(?m)^\s*(?:(?:public|private|protected|static|final|abstract|async|def|fun|func|function|class|interface|struct)\s+)+(?:[\w<>\[\],.]+\s+)?(\w{4,})`),
 }
 
 func niSymLang(ext string) string {
@@ -195,7 +228,9 @@ func (ix *niIndex) symbols() []niSym {
 				name := string(m[1])
 				if !seen[name] {
 					seen[name] = true
-					ix.syms = append(ix.syms, niSym{Name: name, Key: fzKey(name), Rel: f.Rel})
+					k := fzKey(name)
+					m, l := niMask(k)
+					ix.syms = append(ix.syms, niSym{Name: name, Key: k, Rel: f.Rel, mask: m, klen: l})
 				}
 			}
 		}
@@ -266,18 +301,82 @@ var (
 	niFiller = map[string]bool{"o": true, "a": true, "os": true, "as": true, "um": true, "uma": true, "de": true, "do": true, "da": true, "dos": true, "das": true,
 		"no": true, "na": true, "nos": true, "nas": true, "em": true, "pro": true, "pra": true, "para": true, "esse": true, "essa": true, "este": true, "esta": true,
 		"the": true, "this": true, "that": true, "in": true, "of": true, "to": true, "chamado": true, "chamada": true, "named": true, "called": true, "meu": true, "minha": true, "ao": true, "que": true}
-	niExtOK   = regexp.MustCompile(`^[a-z][a-z0-9]{0,5}$`)
-	niNotExt  = map[string]bool{"com": true, "br": true, "org": true, "net": true, "io": true, "dev": true, "app": true, "ai": true, "gov": true, "edu": true, "e": true, "g": true}
-	niLineSx  = regexp.MustCompile(`:\d+(?::\d+)?$`)
-	niCamel   = regexp.MustCompile(`[a-z0-9][A-Z]`)
-	niSnake   = regexp.MustCompile(`[A-Za-z]_[A-Za-z]`)
-	niLetters = regexp.MustCompile(`^\p{L}+$`)
+	niNotExt = map[string]bool{"com": true, "br": true, "org": true, "net": true, "io": true, "dev": true, "app": true, "ai": true, "gov": true, "edu": true, "e": true, "g": true}
 )
+
+// Character tests of the tokenizer as byte loops (they were the regexps
+// ^[a-z][a-z0-9]{0,5}$, :\d+(?::\d+)?$, [a-z0-9][A-Z], [A-Za-z]_[A-Za-z]
+// and ^\p{L}+$; low-level study §8.2, item 9). Same answers, no regexp
+// engine per token. TestNiCharTestsMatchRegexps keeps them equal.
+
+// niExtOK: a plausible file extension (lowercase letter, then up to five
+// lowercase letters or digits).
+func niExtOK(s string) bool {
+	if len(s) == 0 || len(s) > 6 || s[0] < 'a' || s[0] > 'z' {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if c := s[i]; !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// niStripLine drops a trailing :line or :line:col.
+func niStripLine(s string) string {
+	for k := 0; k < 2; k++ {
+		i := len(s)
+		for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
+			i--
+		}
+		if i == len(s) || i == 0 || s[i-1] != ':' {
+			break
+		}
+		s = s[:i-1]
+	}
+	return s
+}
+
+// niCamel: a lowercase letter or digit followed by an uppercase letter.
+func niCamel(s string) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if c, d := s[i], s[i+1]; (c >= 'a' && c <= 'z' || c >= '0' && c <= '9') && d >= 'A' && d <= 'Z' {
+			return true
+		}
+	}
+	return false
+}
+
+// niSnake: an underscore between two ASCII letters.
+func niSnake(s string) bool {
+	for i := 1; i+1 < len(s); i++ {
+		if s[i] == '_' && niIsLetterASCII(s[i-1]) && niIsLetterASCII(s[i+1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func niIsLetterASCII(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
+
+// niLetters: non-empty and every rune a Unicode letter.
+func niLetters(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
 
 func niTrim(s string) string {
 	s = strings.Trim(s, "\"'`“”‘’()[]{}<>,;:!?*")
 	s = strings.TrimRight(s, ".")
-	return niLineSx.ReplaceAllString(s, "")
+	return niStripLine(s)
 }
 
 // niTokens finds the name-like tokens of text with their sentence context.
@@ -309,7 +408,7 @@ func niTokens(text string, known func(ext string) bool) []niTok {
 		}
 		if j := strings.LastIndexByte(base, '.'); j > 0 && j < len(base)-1 {
 			ext := strings.ToLower(base[j:])
-			if niExtOK.MatchString(ext[1:]) && !niNotExt[ext[1:]] && (niCodeExt[ext] || niDocExt[ext] || known(ext)) {
+			if niExtOK(ext[1:]) && !niNotExt[ext[1:]] && (niCodeExt[ext] || niDocExt[ext] || known(ext)) {
 				tk.Ext = ext
 				name = raw[:len(raw)-len(base)] + base[:j]
 			}
@@ -323,11 +422,11 @@ func niTokens(text string, known func(ext string) bool) []niTok {
 			tk.Shape = "path"
 		case tk.Ext != "":
 			tk.Shape = "ext"
-		case strings.Contains(raw, "_") && strings.Trim(raw, "_") != "" && niSnake.MatchString(raw):
+		case strings.Contains(raw, "_") && strings.Trim(raw, "_") != "" && niSnake(raw):
 			tk.Shape = "snake"
-		case niCamel.MatchString(raw):
+		case niCamel(raw):
 			tk.Shape = "camel"
-		case niLetters.MatchString(raw) && len(raw) >= 4:
+		case niLetters(raw) && len(raw) >= 4:
 			tk.Shape = "plain"
 		default:
 			continue
@@ -396,8 +495,13 @@ func (c niCand) Display() string {
 	return c.Rel
 }
 
-// niResolve ranks the candidates for one token (nil = nothing to say).
-func (ix *niIndex) resolve(tk niTok) []niCand {
+// resolve ranks the candidates for one token and keeps the winner or the
+// tied leaders (nil = nothing to say).
+func (ix *niIndex) resolve(tk niTok) []niCand { return niTop(ix.resolveAll(tk)) }
+
+// resolveAll is every candidate within the typo limit, best first (nil when
+// the name exists as written or nothing is close).
+func (ix *niIndex) resolveAll(tk niTok) []niCand {
 	nameKey := fzKey(tk.Name)
 	var dirKey string
 	if j := strings.LastIndexByte(tk.Name, '/'); j >= 0 {
@@ -413,17 +517,19 @@ func (ix *niIndex) resolve(tk niTok) []niCand {
 		wantSym = false
 	}
 	// it exists as written: nothing to fix
-	if _, ok := ix.rels[strings.TrimPrefix(tk.Raw, "./")]; ok {
+	if _, ok := ix.relIndex(strings.TrimPrefix(tk.Raw, "./")); ok {
 		return nil
 	}
-	if tk.Shape == "ext" && ix.bases[tk.Raw] {
+	if tk.Shape == "ext" && ix.hasBase(tk.Raw) {
 		return nil
 	}
 	lim := fzLimit(len([]rune(nameKey)))
+	qm, ql := niMask(nameKey)
 	var cands []niCand
 	if wantFile {
 		for i := range ix.files {
 			f := &ix.files[i]
+			fa := &ix.fast[i]
 			if tk.OpenOnly {
 				if f.StemKey == nameKey && !f.Doc || f.StemKey == nameKey && tk.Raw != f.Base {
 					cands = append(cands, niCand{Rel: f.Rel, Test: f.Test, Ext: f.Ext, d: 0, Score: 0})
@@ -434,9 +540,13 @@ func (ix *niIndex) resolve(tk niTok) []niCand {
 			if tk.Ext == "" && tk.Shape != "path" && f.Base == tk.Raw {
 				return nil // a file with exactly this name exists
 			}
-			d = fzDist(nameKey, f.StemKey, lim)
+			// lower bounds first: most files are rejected without a distance
+			d = lim + 1
+			if niBound(qm, ql, fa.stemMask, fa.stemLen) <= lim {
+				d = fzDist(nameKey, f.StemKey, lim)
+			}
 			viaCore := false
-			if f.CoreKey != f.StemKey {
+			if f.CoreKey != f.StemKey && niBound(qm, ql, fa.coreMask, fa.coreLen) <= lim {
 				if dc := fzDist(nameKey, f.CoreKey, lim); dc < d {
 					d, viaCore = dc, true
 				}
@@ -508,6 +618,9 @@ func (ix *niIndex) resolve(tk niTok) []niCand {
 			if s.Name == tk.Raw {
 				return nil // the symbol exists as written
 			}
+			if niBound(qm, ql, s.mask, s.klen) > lim {
+				continue
+			}
 			d := fzDist(nameKey, s.Key, lim)
 			if d > lim {
 				continue
@@ -529,14 +642,19 @@ func (ix *niIndex) resolve(tk niTok) []niCand {
 		return nil
 	}
 	ix.recency(cands)
-	return niTop(cands)
+	niSort(cands)
+	return cands
 }
 
 // dirDist compares the directory part of a token with the file's trailing dirs.
 func (ix *niIndex) dirDist(f *niFile, dirKey string) int {
-	segs := f.dirSegs
-	if len(segs) == 0 {
+	j := strings.LastIndexByte(f.Rel, '/')
+	if j < 0 {
 		return 1 << 20
+	}
+	segs := strings.Split(f.Rel[:j], "/") // folded dir segments
+	for i := range segs {
+		segs[i] = fzKey(segs[i])
 	}
 	best := 1 << 20
 	for k := 1; k <= len(segs); k++ { // any suffix of the file's dir path
@@ -559,8 +677,8 @@ func (ix *niIndex) recency(c []niCand) {
 	}
 }
 
-// niTop sorts and keeps the winner, or the tied leaders (<= 3).
-func niTop(c []niCand) []niCand {
+// niSort orders candidates: score, then shorter path, then name.
+func niSort(c []niCand) {
 	sort.SliceStable(c, func(i, j int) bool {
 		if c[i].Score != c[j].Score {
 			return c[i].Score < c[j].Score
@@ -570,6 +688,14 @@ func niTop(c []niCand) []niCand {
 		}
 		return c[i].Rel+c[i].Symbol < c[j].Rel+c[j].Symbol
 	})
+}
+
+// niTop sorts and keeps the winner, or the tied leaders (<= 3).
+func niTop(c []niCand) []niCand {
+	if len(c) == 0 {
+		return nil
+	}
+	niSort(c)
 	n := 1
 	for n < len(c) && n < 3 && c[n].Score-c[0].Score < fzSlip {
 		n++
@@ -661,9 +787,10 @@ func (ix *niIndex) uniqueWhy(c niCand, tk niTok) string {
 		nameKey = fzKey(tk.Name[j+1:])
 	}
 	lim := fzLimit(len([]rune(nameKey)))
+	qm, ql := niMask(nameKey)
 	n := 0
 	for i := range ix.files {
-		if ix.files[i].Ext == c.Ext && fzDist(nameKey, ix.files[i].StemKey, lim) <= lim {
+		if ix.files[i].Ext == c.Ext && niBound(qm, ql, ix.fast[i].stemMask, ix.fast[i].stemLen) <= lim && fzDist(nameKey, ix.files[i].StemKey, lim) <= lim {
 			n++
 		}
 	}
@@ -690,7 +817,7 @@ func niSimilarPaths(root, path string, maxD int) []string {
 	}
 	rel = filepath.ToSlash(rel)
 	tk := niTok{Raw: rel, Name: rel, Shape: "path"}
-	if e := strings.ToLower(filepath.Ext(rel)); e != "" && niExtOK.MatchString(e[1:]) {
+	if e := strings.ToLower(filepath.Ext(rel)); e != "" && niExtOK(e[1:]) {
 		tk.Ext = e
 		tk.Name = strings.TrimSuffix(rel, filepath.Ext(rel))
 	}
@@ -717,6 +844,7 @@ func niSimilarSymbols(root, ident string) []string {
 	ix := niGet(root)
 	key := fzKey(ident)
 	lim := fzLimit(len([]rune(key)))
+	qm, ql := niMask(key)
 	type sc struct {
 		s string
 		d int
@@ -725,6 +853,9 @@ func niSimilarSymbols(root, ident string) []string {
 	seen := map[string]bool{}
 	for _, s := range ix.symbols() {
 		if s.Name == ident || seen[s.Name] {
+			continue
+		}
+		if niBound(qm, ql, s.mask, s.klen) > lim {
 			continue
 		}
 		if d := fzDist(key, s.Key, lim); d <= lim {
@@ -756,7 +887,7 @@ func (a *Agent) niInject(input string) string {
 	return "\n\n<system-reminder>\n" + n + "\n</system-reminder>"
 }
 
-var niSearchSym = regexp.MustCompile(`-- ('[^']*'|\S+) \.`)
+var niSearchSym = lazyRx(`-- ('[^']*'|\S+) \.`)
 
 // niEmptySearchHint: a symbol search (fast paths where/search) found nothing;
 // suggest near symbols from the index. "" = nothing to add.
@@ -773,4 +904,309 @@ func niEmptySearchHint(root, intent, cmd, out string, code int) string {
 		return ""
 	}
 	return "sem resultado; parecido: " + strings.Join(sim, ", ")
+}
+
+// ---------- typed entity resolution (offline brain) ----------
+
+// niEntity is one candidate of niResolveEntity: a file, a symbol, or a thing
+// of the environment (envprobe.go: binary, toolchain, SSH host, Tailscale
+// peer, service, container, port).
+type niEntity struct {
+	Kind   string // file | test | dir | symbol | bin | toolchain | ssh_host | ts_peer | service | container | port
+	Name   string // path for files, identifier for symbols, name otherwise
+	Rel    string // file of a symbol
+	Detail string
+	Score  int    // lower is better (x8 fz units, with context bonuses)
+	Dist   int    // edit distance alone (fz units; 0 = exact)
+	Query  string // what was typed
+	Exact  bool
+	Why    []string
+}
+
+// Display is how a candidate is shown in a numbered menu.
+func (e niEntity) Display() string {
+	switch {
+	case e.Kind == "symbol" && e.Rel != "":
+		return e.Name + " (" + e.Rel + ")"
+	case e.Detail != "" && e.Kind != "file" && e.Kind != "test":
+		return e.Name + " — " + niKindPT[e.Kind] + " " + e.Detail
+	}
+	return e.Name
+}
+
+var niKindPT = map[string]string{"file": "arquivo", "test": "teste", "dir": "pasta", "symbol": "símbolo", "bin": "binário",
+	"toolchain": "ferramenta", "ssh_host": "host SSH", "ts_peer": "máquina Tailscale", "service": "serviço", "container": "contêiner", "port": "porta"}
+
+// niEnvKinds are the kinds that come from the environment profile.
+var niEnvKinds = map[string]bool{"bin": true, "toolchain": true, "ssh_host": true, "ts_peer": true, "service": true, "container": true, "port": true}
+
+// fzJaroWinkler is the Jaro-Winkler similarity of two folded strings in
+// thousandths (1000 = equal). Allocation: two small bool slices.
+func fzJaroWinkler(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 || lb == 0 {
+		return 0
+	}
+	if a == b {
+		return 1000
+	}
+	win := max(la, lb)/2 - 1
+	if win < 0 {
+		win = 0
+	}
+	ma := make([]bool, la)
+	mb := make([]bool, lb)
+	m := 0
+	for i := 0; i < la; i++ {
+		lo, hi := max(0, i-win), min(lb-1, i+win)
+		for j := lo; j <= hi; j++ {
+			if !mb[j] && ra[i] == rb[j] {
+				ma[i], mb[j] = true, true
+				m++
+				break
+			}
+		}
+	}
+	if m == 0 {
+		return 0
+	}
+	t, k := 0, 0
+	for i := 0; i < la; i++ {
+		if !ma[i] {
+			continue
+		}
+		for !mb[k] {
+			k++
+		}
+		if ra[i] != rb[k] {
+			t++
+		}
+		k++
+	}
+	// jaro*3000 = m/la + m/lb + (m-t/2)/m, all scaled by 1000
+	jaro := (1000*m/la + 1000*m/lb + 1000*(2*m-t)/(2*m)) / 3
+	p := 0
+	for p < 4 && p < la && p < lb && ra[p] == rb[p] {
+		p++
+	}
+	return jaro + p*(1000-jaro)/10
+}
+
+// niEnvScore: distance of q to an environment name; ok=false = too far.
+// Accepts Damerau within the typo limit or Jaro-Winkler >= 0.88.
+func niEnvScore(q, key string) (int, bool) {
+	if q == key {
+		return 0, true
+	}
+	lim := fzLimit(len([]rune(q)))
+	if d := fzDist(q, key, lim); d <= lim {
+		return d, true
+	}
+	if len(q) >= 5 {
+		if jw := fzJaroWinkler(q, key); jw >= 880 {
+			return 2*fzEdit + (1000-jw)/20, true
+		}
+	}
+	return 0, false
+}
+
+// niResolveEntity resolves q against the project index and the environment,
+// restricted to kinds (nil = every kind). Exact names win outright; otherwise
+// the fuzzy candidates are ranked by distance, then by the order of kinds
+// (the slot's expected type comes first), then toolchains before plain PATH
+// binaries ("frequency"). Returns the candidates best first (at most max).
+func niResolveEntity(root, q string, kinds []string, hint string, max int) []niEntity {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil
+	}
+	if max <= 0 {
+		max = 5
+	}
+	want := map[string]int{}
+	for i, k := range kinds {
+		if _, ok := want[k]; !ok {
+			want[k] = i
+		}
+	}
+	allow := func(k string) bool {
+		if len(kinds) == 0 {
+			return true
+		}
+		_, ok := want[k]
+		if !ok && k == "test" {
+			_, ok = want["file"]
+		}
+		return ok
+	}
+	rank := func(k string) int {
+		if i, ok := want[k]; ok {
+			return i
+		}
+		return len(kinds)
+	}
+	var out []niEntity
+	key := fzKey(q)
+	// files and symbols of the project
+	if root != "" && (allow("file") || allow("test") || allow("symbol") || allow("dir")) {
+		ix := niGet(root)
+		out = append(out, ix.entityFiles(q, key, hint, allow)...)
+	}
+	// the environment
+	envAllowed := len(kinds) == 0
+	for k := range want {
+		envAllowed = envAllowed || niEnvKinds[k]
+	}
+	if envAllowed {
+		p := epPeek()
+		if p == nil {
+			p = epGet(false)
+		}
+		seen := map[string]int{} // name -> index in out (one entry per name: the best kind)
+		for _, e := range epEntities(p) {
+			if !allow(e.Kind) || len(e.Key) == 0 {
+				continue
+			}
+			d, ok := niEnvScore(key, e.Key)
+			if !ok {
+				continue
+			}
+			c := niEntity{Kind: e.Kind, Name: e.Name, Detail: e.Detail, Score: d*8 + rank(e.Kind), Dist: d, Exact: d == 0}
+			if e.Kind == "toolchain" {
+				c.Score -= 2
+			}
+			if d > 0 {
+				c.Why = append(c.Why, "nome parecido com '"+q+"'")
+			}
+			if i, dup := seen[e.Name]; dup {
+				if c.Score < out[i].Score {
+					out[i] = c
+				}
+				continue
+			}
+			seen[e.Name] = len(out)
+			out = append(out, c)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Exact != out[j].Exact {
+			return out[i].Exact
+		}
+		if out[i].Score != out[j].Score {
+			return out[i].Score < out[j].Score
+		}
+		return out[i].Name < out[j].Name
+	})
+	// exact matches hide the fuzzy ones
+	if len(out) > 0 && out[0].Exact {
+		n := 1
+		for n < len(out) && out[n].Exact {
+			n++
+		}
+		out = out[:n]
+	}
+	if len(out) > max {
+		out = out[:max]
+	}
+	for i := range out {
+		out[i].Query = q
+	}
+	return out
+}
+
+// entityFiles: exact file/stem/symbol matches first, then the context-aware
+// fuzzy ranking of resolveAll. Scores are scaled to the env scale (x8).
+func (ix *niIndex) entityFiles(q, key, hint string, allow func(string) bool) []niEntity {
+	var out []niEntity
+	kindOf := func(f *niFile) string {
+		if f.Test {
+			return "test"
+		}
+		return "file"
+	}
+	if allow("file") || allow("test") {
+		if i, ok := ix.relIndex(strings.TrimPrefix(filepath.ToSlash(q), "./")); ok {
+			f := &ix.files[i]
+			return []niEntity{{Kind: kindOf(f), Name: f.Rel, Exact: true, Why: []string{"caminho exato"}}}
+		}
+		for i := range ix.files {
+			f := &ix.files[i]
+			if f.Base == q || f.StemKey == key && key != "" || hint == "test" && f.Test && f.CoreKey == key && key != "" {
+				if hint == "test" && !f.Test && f.Base != q {
+					continue
+				}
+				why := "nome exato"
+				if f.Base != q {
+					why = "mesmo nome sem extensão"
+				}
+				out = append(out, niEntity{Kind: kindOf(f), Name: f.Rel, Exact: true, Why: []string{why}})
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if allow("symbol") && (hint == "symbol" || niLooksIdent(q)) {
+		for _, s := range ix.symbols() {
+			if s.Name == q {
+				out = append(out, niEntity{Kind: "symbol", Name: s.Name, Rel: s.Rel, Exact: true, Why: []string{"símbolo com esse nome"}})
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	tk := niTok{Raw: q, Name: q, Shape: "plain", Hint: hint}
+	if hint == "" {
+		tk.Hint = "file"
+	}
+	if j := strings.LastIndexByte(q, '.'); j > 0 && j < len(q)-1 && niExtOK(strings.ToLower(q[j+1:])) {
+		tk.Ext, tk.Name, tk.Shape = strings.ToLower(q[j:]), q[:j], "ext"
+	}
+	if strings.Contains(q, "/") {
+		tk.Shape = "path"
+	}
+	if hint == "symbol" || (niLooksIdent(q) && tk.Shape == "plain" && !allow("file")) {
+		tk.Hint, tk.Shape = "symbol", "camel"
+	}
+	for _, c := range ix.resolveAll(tk) {
+		e := niEntity{Name: c.Rel, Score: c.Score * 8, Dist: c.d, Why: c.Why, Kind: "file"}
+		if c.Symbol != "" {
+			if !allow("symbol") {
+				continue
+			}
+			e.Kind, e.Name, e.Rel = "symbol", c.Symbol, c.Rel
+		} else if c.Test {
+			e.Kind = "test"
+		}
+		if !allow(e.Kind) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// niLooksIdent: camelCase, snake_case or CapWord (a code identifier).
+func niLooksIdent(s string) bool {
+	if len(s) < 3 {
+		return false
+	}
+	up, low, us := false, false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+			up = true
+		case c >= 'a' && c <= 'z':
+			low = true
+		case c == '_':
+			us = true
+		case c >= '0' && c <= '9':
+		default:
+			return false
+		}
+	}
+	return (up && low) || (us && low)
 }

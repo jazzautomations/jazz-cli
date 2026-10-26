@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -57,7 +56,7 @@ func toLF(s string) string {
 	return strings.ReplaceAll(s, "\r", "\n")
 }
 
-var lineNumPrefix = regexp.MustCompile(`^\s*\d+\t`)
+var lineNumPrefix = lazyRx(`^\s*\d+\t`)
 
 // stripLineNumbers removes "   12\t" prefixes copied from read output, if every
 // non-empty line has one. Returns ok=false when the text doesn't look like that.
@@ -304,7 +303,7 @@ func buildHunks(base string, ms []match) []editHunk {
 
 // omissionMarker detects "lazy" placeholders that would delete real code
 // (Gemini CLI has a dedicated detector for this failure of weak models).
-var omissionRe = regexp.MustCompile(`(?i)^\s*(//|#|/\*|<!--|--|;|\*)?\s*(\.\.\.|…)?\s*\(?(rest|remainder|remaining|existing|previous|original|other|unchanged|same)\b.*\b(code|implementation|content|contents|methods|functions|logic|file|body|here|above|below|unchanged|same|omitted)\b|^\s*(//|#|/\*|<!--|--)?\s*(\.\.\.|…)\s*(\*/|-->)?\s*$|^\s*(//|#)\s*(TODO:?\s*)?(implement|add|insert|fill in|put)\s+(the\s+)?(rest|remaining|existing|other)\b`)
+var omissionRe = lazyRx(`(?i)^\s*(//|#|/\*|<!--|--|;|\*)?\s*(\.\.\.|…)?\s*\(?(rest|remainder|remaining|existing|previous|original|other|unchanged|same)\b.*\b(code|implementation|content|contents|methods|functions|logic|file|body|here|above|below|unchanged|same|omitted)\b|^\s*(//|#|/\*|<!--|--)?\s*(\.\.\.|…)\s*(\*/|-->)?\s*$|^\s*(//|#)\s*(TODO:?\s*)?(implement|add|insert|fill in|put)\s+(the\s+)?(rest|remaining|existing|other)\b`)
 
 func omissionMarker(newText, oldText string) string {
 	for _, l := range strings.Split(newText, "\n") {
@@ -380,7 +379,7 @@ func similarity(a, b string) float64 {
 
 // ---------- dangling renames ----------
 
-var editIdentRE = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+var editIdentRE = lazyRx(`[A-Za-z_][A-Za-z0-9_]*`)
 
 func editIdentCounts(s string) map[string]int {
 	out := map[string]int{}

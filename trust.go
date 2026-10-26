@@ -40,7 +40,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -196,7 +195,7 @@ func pfSafeRead(p, root string, max int64) ([]byte, bool) {
 
 // reRefFile finds words that name a file: a relative ./ or ../ path, a
 // $CLAUDE_PROJECT_DIR/… path, or anything ending in a script extension.
-var reRefFile = regexp.MustCompile(`(?:\$\{?(?:CLAUDE_PROJECT_DIR|JAZZ_PROJECT_DIR|PWD)\}?/|\.{1,2}/)[A-Za-z0-9_@%+=,.\-/]+|[A-Za-z0-9_@%+=,.\-/]+\.(?:sh|bash|zsh|fish|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|lua|ps1|jar|exe)\b`)
+var reRefFile = lazyRx(`(?:\$\{?(?:CLAUDE_PROJECT_DIR|JAZZ_PROJECT_DIR|PWD)\}?/|\.{1,2}/)[A-Za-z0-9_@%+=,.\-/]+|[A-Za-z0-9_@%+=,.\-/]+\.(?:sh|bash|zsh|fish|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|lua|ps1|jar|exe)\b`)
 
 const pfRefMax = 4 << 20
 

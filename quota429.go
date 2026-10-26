@@ -11,7 +11,6 @@ package main
 // Because it is not Rate, the judge does not count it as a 429 (judge.go).
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,13 +21,13 @@ const pvQuotaDefault = 15 * time.Minute
 
 var (
 	// Deliberately narrow: Groq/OpenRouter per-minute 429s also say "limit reached" and must stay plain rate errors.
-	pvQuotaRE = regexp.MustCompile(`(?-i:[A-Z]+_LIMIT_REACHED)|(?i)quota[ _-]?(exceeded|exhausted)|exceeded your (current )?(quota|free)|free (usage|tier|allowance|promotion) (limit|quota|has|is)|promotion\w* (limit|quota)|out of (free )?(credits|quota)|resource_exhausted`)
+	pvQuotaRE = lazyRx(`(?-i:[A-Z]+_LIMIT_REACHED)|(?i)quota[ _-]?(exceeded|exhausted)|exceeded your (current )?(quota|free)|free (usage|tier|allowance|promotion) (limit|quota|has|is)|promotion\w* (limit|quota)|out of (free )?(credits|quota)|resource_exhausted`)
 	// "resets in 5 minutes", "try again in 2h30m", "retry after 90 seconds", "available again in 3 hours"
-	pvResetInRE = regexp.MustCompile(`(?i)(?:reset[s]?|try again|retry|available again|come[s]? back)[^0-9]{0,24}?(?:in|after)?\s*(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?|d|days?)\b`)
+	pvResetInRE = lazyRx(`(?i)(?:reset[s]?|try again|retry|available again|come[s]? back)[^0-9]{0,24}?(?:in|after)?\s*(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?|d|days?)\b`)
 	// "try again in 1h2m3s" (Go-style compound durations)
-	pvResetCompRE = regexp.MustCompile(`(?i)(?:in|after)\s+((?:\d+(?:\.\d+)?[hms]\s*)+)`)
+	pvResetCompRE = lazyRx(`(?i)(?:in|after)\s+((?:\d+(?:\.\d+)?[hms]\s*)+)`)
 	// "resets_at": "2026-10-27T00:00:00Z" / "reset_at" / "resetsAt" / "resets at 2026-…"
-	pvResetAtRE = regexp.MustCompile(`(?i)reset[s_ ]*(?:at|time)?"?\s*[:=]?\s*"?(\d{4}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:?\d\d)?)`)
+	pvResetAtRE = lazyRx(`(?i)reset[s_ ]*(?:at|time)?"?\s*[:=]?\s*"?(\d{4}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:?\d\d)?)`)
 )
 
 // pvIsQuotaBody reports whether a 429/402/403 body says the free quota is used up.

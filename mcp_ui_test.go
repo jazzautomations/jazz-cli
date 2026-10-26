@@ -1233,7 +1233,7 @@ func TestMcpUiDetectTheme(t *testing.T) {
 		{map[string]string{"TERM": "xterm", "TERM_PROGRAM": "iTerm.app"}, true, true, false, false},
 		{map[string]string{"TERM": "xterm", "COLORTERM": "truecolor"}, true, true, true, false},
 		{map[string]string{"TERM": "xterm", "COLORTERM": "24bit"}, true, true, true, false},
-		{map[string]string{"TERM": "dumb", "COLORTERM": "truecolor"}, false, false, false, false},
+		{map[string]string{"TERM": "dumb", "COLORTERM": "truecolor"}, false, false, false, true}, // dumb: ASCII too (Theme.dumb)
 		{map[string]string{"TERM": "xterm-256color", "NO_COLOR": "1"}, false, false, false, false},
 		{map[string]string{"TERM": "xterm", "JAZZ_ASCII": "1"}, true, false, false, true},
 		{map[string]string{"TERM": "linux", "NO_COLOR": "1"}, false, false, false, true},

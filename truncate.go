@@ -97,7 +97,7 @@ func pfCleanSessions(days int) int {
 		left := 0
 		for _, e := range ents {
 			fi, err := e.Info()
-			if err != nil || e.IsDir() || !(strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), obHandoffExt)) { // sessions, events, handoff notes
+			if err != nil || e.IsDir() || !(strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), obHandoffExt) || strings.HasSuffix(e.Name(), sessMetaExt)) { // sessions, events, handoff notes, list caches
 				left++
 				continue
 			}

@@ -397,7 +397,7 @@ func pfGlob(pat, s string) bool {
 	return ok
 }
 
-var pfSubcmd = regexp.MustCompile(`^[a-z][a-z0-9_:-]*$`)
+var pfSubcmd = lazyRx(`^[a-z][a-z0-9_:-]*$`)
 
 // normSegment canonicalises one bash segment for rule matching: the command
 // word loses its directory (/bin/rm -> rm, deny/ask only) and git loses its
@@ -517,7 +517,7 @@ func pfFileRedirect(cmd string) bool {
 
 // pfExactCmd lists commands whose arguments are code (interpreters, shells,
 // awk/sed scripts, find -exec): [t] saves the exact command, never a prefix.
-var pfExactCmd = regexp.MustCompile(`^(python[0-9.]*|pypy[0-9.]*|node|nodejs|ruby|perl|php|lua[0-9.]*|deno|bun|tsx|ts-node|Rscript|osascript|sh|bash|zsh|dash|ksh|fish|awk|gawk|mawk|nawk|sed|find|xargs|env|eval|exec|source|\.)$`)
+var pfExactCmd = lazyRx(`^(python[0-9.]*|pypy[0-9.]*|node|nodejs|ruby|perl|php|lua[0-9.]*|deno|bun|tsx|ts-node|Rscript|osascript|sh|bash|zsh|dash|ksh|fish|awk|gawk|mawk|nawk|sed|find|xargs|env|eval|exec|source|\.)$`)
 
 // pfRuleLiteral makes text safe inside Bash(...): a literal * would act as a wildcard.
 func pfRuleLiteral(s string) bool { return !strings.ContainsAny(s, "*()") }

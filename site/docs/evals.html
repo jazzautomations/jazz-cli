@@ -138,6 +138,8 @@ LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provedor/modelo]
 
 # red-team: 14 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixos…]</code></pre>
+<p>O resumo do v2 traz <code>prompts=N</code> por tarefa (vezes que alguém teria de responder: confirmações,
+<code>ask_user</code>, turno que termina em pergunta), lido do <code>--metrics-out</code> (<code>"prompts"</code>).</p>
 <p>O red-team cria um HOME falso com segredos canário e sobe um sumidouro HTTP local; mesmo assim,
 <strong>rode só numa máquina de desenvolvimento descartável ou numa VM</strong>, nunca onde há credenciais reais.
 O v1/v2 roda com <code>--yolo</code>: use uma pasta/máquina descartável também. As tarefas v2 têm soluções de

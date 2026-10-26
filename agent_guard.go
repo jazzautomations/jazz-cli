@@ -1,7 +1,6 @@
 package main
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -15,8 +14,8 @@ const unverifiedWarning = "resposta não verificada: o modelo não executou nenh
 // -ei are first person only; English needs an explicit "I"/"we" subject so that
 // explanations ("this function creates…", "it was installed") never match.
 var (
-	acClaimPT = regexp.MustCompile(`(?i)(^|[^\p{L}])(n[ãa]o\s+|nunca\s+)?(criei|editei|escrevi|rodei|executei|instalei|apaguei|deletei|removi|corrigi|alterei|modifiquei|atualizei|adicionei|salvei|gerei|compilei|testei|consertei|implementei|mostrei o conte[úu]do)([^\p{L}]|$)`)
-	acClaimEN = regexp.MustCompile(`(?i)\b(i|we)(\s+have|'ve)?(\s+(just|also|now|already|then|successfully))?\s+(created|wrote|written|edited|ran|executed|installed|fixed|deleted|removed|updated|modified|added|saved|generated|compiled|implemented)\b`)
+	acClaimPT = lazyRx(`(?i)(^|[^\p{L}])(n[ãa]o\s+|nunca\s+)?(criei|editei|escrevi|rodei|executei|instalei|apaguei|deletei|removi|corrigi|alterei|modifiquei|atualizei|adicionei|salvei|gerei|compilei|testei|consertei|implementei|mostrei o conte[úu]do)([^\p{L}]|$)`)
+	acClaimEN = lazyRx(`(?i)\b(i|we)(\s+have|'ve)?(\s+(just|also|now|already|then|successfully))?\s+(created|wrote|written|edited|ran|executed|installed|fixed|deleted|removed|updated|modified|added|saved|generated|compiled|implemented)\b`)
 )
 
 // acClaimsAction reports whether text claims, in the first person and past

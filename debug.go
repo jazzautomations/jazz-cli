@@ -293,7 +293,7 @@ func pfCrashGuard() {
 }
 
 // pfExit is os.Exit, replaceable in tests.
-var pfExit = os.Exit
+var pfExit = func(code int) { pfProfileStop(); os.Exit(code) }
 
 // pfCrash restores the terminal, kills children, writes dataDir()/crash-<ts>.txt
 // and exits with status 70. Only the first crash does the work.

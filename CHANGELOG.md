@@ -1,6 +1,76 @@
 # Changelog
 
-Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.
+Histórico de mudanças. Números de desempenho são medidos no Dell Latitude D610 (Pentium M 1,73 GHz, 2 GB, Linux 386), a máquina de referência; detalhes em `results/`.
+
+## 0.9.0
+
+### Cérebro offline (harness primeiro, modelo opcional)
+
+- Sem modelo (`--offline`, sem rede ou sem credencial), um pedido que não é atalho passa por um interpretador
+  clássico (`nlu.go`, `nlu/*.json`: 47 intenções, 609 exemplos, entidades do projeto e da máquina por
+  Aho-Corasick + distância tolerante a digitação, naive Bayes de n-gramas só para desempate; "talscle status" vira
+  `tailscale status`, "labbx" vira o host `labbox`). Confiança abaixo de 0,6 não age.
+- Tarefa com estado explícito (`task.go`, transições gravadas na sessão e no `jazz trace`, estado "não verificado"
+  quando não há verificador) executada por métodos com pré-condições e verificador (`methods/*.json`): `open_file`,
+  `run_tests`, `git_status`, `env_status`, `tool_info`, `tool_status`, `connect_host`. Recuperação por categoria de
+  falha observável (`recover.go`) e limite de três olhadas sem fato novo antes de perguntar.
+- No `-p`, mesmo com modelo, um pedido claro só de leitura (confiança ≥ 0,85: "abre o README.md", "git status",
+  "como está o ambiente", "tenho o docker?") é respondido sem nenhuma requisição; `JAZZ_BRAIN=off` desliga.
+  Comandos só de leitura do registro de capacidades (`tailscale status`, `docker ps`…) rodam até em pasta não
+  confiável, por lista exata.
+- `jazz env [--json] [--refresh]`: perfil só-leitura da máquina (SO, núcleos, RAM, Termux/WSL/contêiner,
+  ferramentas, hosts SSH, máquinas Tailscale, serviços, contêineres, portas), cache de 10 min; alimenta o cérebro.
+- `jazz eval offline [--out DIR] [--only id,…] [-v]`: 39 tarefas com o modelo desligado. Dell: 39/39 com sucesso
+  verificado, falso sucesso 0, 34/39 sem modelo, p50 14 ms. Contrato em `docs/design/offline-brain.md`.
+- Dell, `jazz -p "abre o README.md"`: 14–21 s e 32k tokens na 0.8.1 → 120–139 ms e 0 tokens; `git status`: 35 s → 133–203 ms.
+
+### Menor intervenção e capacidades de modelo
+
+- Em qualquer modo, `yolo` e `turbo` inclusive, escrever em `/etc`, mexer no kernel, em binários do sistema, em
+  `~/.config/containers` ou na configuração do Docker/Podman/WSL é CRÍTICO (confirmação explícita); numa tarefa de
+  contêiner, remover/reinstalar o motor é bloqueado como desproporcional. Origem: um usuário no WSL teve o Podman
+  quebrado pela 0.7.
+- Registro de capacidades por modelo: imagem ou áudio com um modelo que não vê/ouve pede a troca (`/model`) em
+  vez de inventar. Ações de teclado/mouse são sempre críticas.
+
+### Desempenho (estudo `docs/research/low-level-performance.md`)
+
+- Regexps de pacote preguiçosas: `init main` de 9,5 MB / 59k alocações para 145 KB / 1,6k no 386.
+- GC ajustado antes do `init` em máquina de um núcleo e desligado no caminho curto (`internal/early`);
+  `jazz version` no Dell: 84–100 ms e 2 GCs → 15–16 ms e 0 GC.
+- Distância de edição ASCII sem alocação (13×), filtros de limite inferior antes da distância, caminhos ASCII em
+  normalização e tokenização, laços no lugar de regexps nos pontos quentes.
+- `jazz -c` lê só a sessão mais nova (por mtime) e a lista usa `<id>.meta`; sonda do sandbox em cache por
+  binário/kernel/uid por 7 dias (`jazz doctor` sempre sonda); lista de arquivos a partir do `.git/index`; índice de
+  nomes em arrays sem ponteiro persistido em `.idx` com CRC; `gitRoot` memoizado; ramo lido de `.git/HEAD`.
+- Treino do classificador: um `math.Log` por classe mais um por balde ocupado em vez de 786 mil por partida.
+- `JAZZ_CPUPROFILE=arquivo` e `JAZZ_TRACE=arquivo` perfilam o processo inteiro (gravados em qualquer saída).
+
+### Pool grátis e provedores
+
+- 429 de cota põe o provedor em espera até o reset informado (ou 15 min) sem punir o juiz; `jazz omni status`
+  mostra o pool, as esperas e os limites conhecidos (`docs/FREE-AI.md`, com fontes). GitHub Models aposentado em
+  30/07/2026; Hugging Face só com plano pago.
+
+### Sandbox
+
+- Pasta de trabalho fora da raiz do projeto é montada sob `/tmp` no `bwrap`; o próprio executável do jazz fica
+  visível; `bwrap:` / saídas 126 e 127 viram "ferramenta ausente", não "teste falhou".
+
+### Interface
+
+- Primeira execução sem chave: três passos (como rodar: grátis/Anthropic/OpenAI/ChatGPT/Ollama →
+  chave escondida → pedido de teste com o resultado na tela); `jazz setup` refaz. Sem terminal não pergunta.
+- `/model` abre uma lista por provedor: ↑↓, número (dois dígitos com 10+ linhas), filtro, grátis/pago,
+  latência medida, "sem chave" pede a chave ali. `/omni` sozinho: menu liga/desliga e modelo por papel.
+- Menos idas e voltas: confirmações da mesma resposta numa caixa numerada (Enter pra tudo);
+  `ask_user` sobre branch, comando de teste, gerenciador de pacotes ou "arquivo existe?" é
+  respondida pelo projeto; métrica `prompts` no `--metrics-out` e no resumo do `evals/v2`.
+- `jazz sessions` no terminal é a lista com ↑↓/número; `jazz resume <n|id> [--full]`; conversa
+  retomada maior que a tela é paginada (espaço, enter, q pula pro fim).
+- Status line mais barata no SSH (só o spinner é redesenhado entre segundos): ~800 → ~310 B/s
+  esperando, ~3,0 → ~1,1 KB/s no streaming. Rodapé com grátis/custo; ferramenta lenta mostra a
+  duração; `TERM=dumb` sem movimento de cursor.
 
 ## 0.8.1
 

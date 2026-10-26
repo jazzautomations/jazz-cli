@@ -116,7 +116,7 @@ type dcTarget struct {
 	VerFrom string // file the version came from, "arg", "installed" or ""
 }
 
-var dcEcoPrefix = regexp.MustCompile(`^(go|py|python|pypi|npm|node|js|cargo|rust|crate|gem|ruby|composer|php|mdn|web):(.+)$`)
+var dcEcoPrefix = lazyRx(`^(go|py|python|pypi|npm|node|js|cargo|rust|crate|gem|ruby|composer|php|mdn|web):(.+)$`)
 
 // dcResolve maps the model's library name to an ecosystem and version.
 func dcResolve(root, lib, ver string) dcTarget {
@@ -161,7 +161,7 @@ func dcResolve(root, lib, ver string) dcTarget {
 	return t
 }
 
-var dcGoModRE = regexp.MustCompile(`^[a-z0-9.-]+\.[a-z]{2,}/`)
+var dcGoModRE = lazyRx(`^[a-z0-9.-]+\.[a-z]{2,}/`)
 
 // dcGuessEco: the ecosystem of a library the lockfiles do not list.
 func dcGuessEco(root, lib string) string {
@@ -320,7 +320,7 @@ type dcMeta struct {
 	Fetched time.Time `json:"fetched"`
 }
 
-var dcSafeRE = regexp.MustCompile(`[^A-Za-z0-9._@+-]+`)
+var dcSafeRE = lazyRx(`[^A-Za-z0-9._@+-]+`)
 
 func dcCacheDir(tg dcTarget) string {
 	v := dcOrStr(tg.Version, "latest")
@@ -372,7 +372,7 @@ type dcSection struct {
 	score float64
 }
 
-var dcHeadRE = regexp.MustCompile(`^(#{1,6})\s+\S`)
+var dcHeadRE = lazyRx(`^(#{1,6})\s+\S`)
 
 // dcSplit cuts a doc at markdown headings (HTML pages arrive as text with
 // "#" headings, htmlToText); long sections are cut again at blank lines.
@@ -434,8 +434,8 @@ func dcChunk(s string, n int) []string {
 }
 
 var (
-	dcDefRE   = regexp.MustCompile(`(?i)\b(def|func|function|class|type|struct|fn|method|interface|const|let|var|trait|enum|module)\b`)
-	dcIdentRE = regexp.MustCompile(`[A-Za-z_$][\w$]*(?:[.:]{1,2}[A-Za-z_$][\w$]*)*`)
+	dcDefRE   = lazyRx(`(?i)\b(def|func|function|class|type|struct|fn|method|interface|const|let|var|trait|enum|module)\b`)
+	dcIdentRE = lazyRx(`[A-Za-z_$][\w$]*(?:[.:]{1,2}[A-Za-z_$][\w$]*)*`)
 	dcStop    = map[string]bool{}
 )
 
@@ -622,20 +622,20 @@ func dcNormVer(v string) string {
 // ---------- automatic hints (cache-safe: appended to a tool result) ----------
 
 var (
-	dcErrRE = regexp.MustCompile(`(?m)(AttributeError: |TypeError: |ImportError: cannot import name|has no attribute|unexpected keyword argument|positional argument|is not a function|is not a constructor|has no exported member|does not exist on type|does not provide an export named|undefined: \w+\.\w+|has no field or method|(too many|not enough) arguments in call|error\[E0(425|599|432|061|433)\]|NoMethodError|undefined method)`)
+	dcErrRE = lazyRx(`(?m)(AttributeError: |TypeError: |ImportError: cannot import name|has no attribute|unexpected keyword argument|positional argument|is not a function|is not a constructor|has no exported member|does not exist on type|does not provide an export named|undefined: \w+\.\w+|has no field or method|(too many|not enough) arguments in call|error\[E0(425|599|432|061|433)\]|NoMethodError|undefined method)`)
 	// module names the error itself names
-	dcErrModRE = []*regexp.Regexp{
-		regexp.MustCompile(`module '([\w.]+)' has no attribute`),
-		regexp.MustCompile(`cannot import name '\w+' from '([\w.]+)'`),
-		regexp.MustCompile(`undefined: (\w+)\.\w+`),
-		regexp.MustCompile(`([A-Za-z_$][\w$]*)\.[\w$.]+ is not a (?:function|constructor)`),
-		regexp.MustCompile(`Module '"([^"]+)"' has no exported member`),
-		regexp.MustCompile(`site-packages/([\w.-]+)/`),
-		regexp.MustCompile(`node_modules/((?:@[\w.-]+/)?[\w.-]+)/`),
-		regexp.MustCompile(`pkg/mod/([^@\s]+)@`),
-		regexp.MustCompile(`File "(?:[^"]*/)?(\w+)/__init__\.py"`),
+	dcErrModRE = []*lazyRe{
+		lazyRx(`module '([\w.]+)' has no attribute`),
+		lazyRx(`cannot import name '\w+' from '([\w.]+)'`),
+		lazyRx(`undefined: (\w+)\.\w+`),
+		lazyRx(`([A-Za-z_$][\w$]*)\.[\w$.]+ is not a (?:function|constructor)`),
+		lazyRx(`Module '"([^"]+)"' has no exported member`),
+		lazyRx(`site-packages/([\w.-]+)/`),
+		lazyRx(`node_modules/((?:@[\w.-]+/)?[\w.-]+)/`),
+		lazyRx(`pkg/mod/([^@\s]+)@`),
+		lazyRx(`File "(?:[^"]*/)?(\w+)/__init__\.py"`),
 	}
-	dcImportRE = regexp.MustCompile(`(?m)^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+)(?:\s+as\s+\w+)?\s*$)|require\(\s*['"]([^'"]+)['"]\s*\)|\bfrom\s+['"]([^'"./][^'"]*)['"]|^\s*"([\w.-]+\.[a-z]{2,}/[^"]+)"\s*$|^\s*use\s+(\w+)::`)
+	dcImportRE = lazyRx(`(?m)^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+)(?:\s+as\s+\w+)?\s*$)|require\(\s*['"]([^'"]+)['"]\s*\)|\bfrom\s+['"]([^'"./][^'"]*)['"]|^\s*"([\w.-]+\.[a-z]{2,}/[^"]+)"\s*$|^\s*use\s+(\w+)::`)
 )
 
 const dcHintMark = "docs disponíveis: use docs {library: "
@@ -703,19 +703,19 @@ func dcErrLibs(text string) []string {
 	return out
 }
 
-var dcSymRE = []*regexp.Regexp{
-	regexp.MustCompile(`has no attribute '(\w+)'`),
-	regexp.MustCompile(`cannot import name '(\w+)'`),
-	regexp.MustCompile(`(\w+)\(\) got an unexpected keyword argument '(\w+)'`),
-	regexp.MustCompile(`(\w+)\(\) (?:takes|missing)`),
-	regexp.MustCompile(`([\w$.]+) is not a (?:function|constructor)`),
-	regexp.MustCompile(`has no exported member '(\w+)'`),
-	regexp.MustCompile(`Property '(\w+)' does not exist`),
-	regexp.MustCompile(`undefined: \w+\.(\w+)`),
-	regexp.MustCompile(`\.(\w+) undefined \(type`),
-	regexp.MustCompile(`arguments in call to [\w.]*?(\w+)\b`),
-	regexp.MustCompile(`no method named ` + "`" + `(\w+)` + "`"),
-	regexp.MustCompile(`cannot find (?:function|value) ` + "`" + `(\w+)` + "`"),
+var dcSymRE = []*lazyRe{
+	lazyRx(`has no attribute '(\w+)'`),
+	lazyRx(`cannot import name '(\w+)'`),
+	lazyRx(`(\w+)\(\) got an unexpected keyword argument '(\w+)'`),
+	lazyRx(`(\w+)\(\) (?:takes|missing)`),
+	lazyRx(`([\w$.]+) is not a (?:function|constructor)`),
+	lazyRx(`has no exported member '(\w+)'`),
+	lazyRx(`Property '(\w+)' does not exist`),
+	lazyRx(`undefined: \w+\.(\w+)`),
+	lazyRx(`\.(\w+) undefined \(type`),
+	lazyRx(`arguments in call to [\w.]*?(\w+)\b`),
+	lazyRx(`no method named ` + "`" + `(\w+)` + "`"),
+	lazyRx(`cannot find (?:function|value) ` + "`" + `(\w+)` + "`"),
 }
 
 // dcErrSymbol is the symbol the error is about (the query to suggest).
@@ -834,7 +834,7 @@ func (a *Agent) dcInject(ctx context.Context, input string) string {
 	return "\n\n<system-reminder>\n" + strings.Join(parts, "\n\n") + "\n</system-reminder>"
 }
 
-var dcWordRE = regexp.MustCompile(`[@A-Za-z0-9][\w./@-]*[\w]`)
+var dcWordRE = lazyRx(`[@A-Za-z0-9][\w./@-]*[\w]`)
 
 // dcPrefetch: local/cached docs (never the network) for up to 3 pinned
 // libraries the request names, ~400 tokens each.

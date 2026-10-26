@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -41,7 +40,7 @@ var (
 	scTimeout     = 60 * time.Second // per script run
 	scMaxOut      = 8 << 10          // bytes of JSON that reach the model
 	scMaxRead     = 2 << 20          // stdout read from the script at most
-	scNameRe      = regexp.MustCompile(`^[a-z][a-z0-9_]{0,40}$`)
+	scNameRe      = lazyRx(`^[a-z][a-z0-9_]{0,40}$`)
 	scLookPath    = exec.LookPath
 	scEffects     = map[string]bool{"read": true, "write": true, "exec": true, "git": true, "net": true}
 	scWrapperKeys = map[string]bool{"name": true, "script": true, "tool": true, "args": true, "arguments": true, "params": true, "input": true}
