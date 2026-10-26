@@ -94,9 +94,11 @@ func TestTaskPersistedAndTraced(t *testing.T) {
 	if n := strings.Count(string(b), `"t":"task"`); n != 7 {
 		t.Fatalf("session has %d task entries, want 7:\n%s", n, b)
 	}
-	if _, _, _, _, err := LoadSession(s.Path); err != nil {
+	ls, _, _, _, err := LoadSession(s.Path)
+	if err != nil {
 		t.Fatalf("a session with task entries must still load: %v", err)
 	}
+	ls.Close() // LoadSession reopens the file for append; Windows cannot remove it while open
 	var out bytes.Buffer
 	if code := cmdTrace(root, []string{s.ID}, &out); code != 0 {
 		t.Fatalf("trace exit %d", code)
