@@ -2,6 +2,10 @@
 
 Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; versões anteriores já têm releases públicas.
 
+## 0.8.1
+
+- 0.8.1: correções de CI Linux/Windows e gitleaks
+
 ## 0.8.0 — candidato em validação
 
 ### Android e guardas

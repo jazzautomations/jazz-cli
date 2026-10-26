@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -70,8 +71,16 @@ func (a *Agent) jazzPrivateToolAccess(tool string, args map[string]any, cmd stri
 		return ""
 	}
 	cwd := a.fenceCwd()
+	var segs [][]string
 	for _, seg := range shellParse(cmd).segs {
-		t := stripWrappers(shellFields(seg))
+		segs = append(segs, stripWrappers(shellFields(seg)))
+		if runtime.GOOS == "windows" && strings.Contains(seg, `\`) {
+			// C:\Users\... : cmd/pwsh (and a model that thinks so) keep the
+			// backslash literal, the POSIX split would eat it; check both readings
+			segs = append(segs, stripWrappers(shellFields(strings.ReplaceAll(seg, `\`, `\\`))))
+		}
+	}
+	for _, t := range segs {
 		if len(t) == 0 {
 			continue
 		}

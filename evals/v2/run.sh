@@ -22,6 +22,8 @@ mkdir -p "$RUN/work"
 MODEL="${1:-}"; LIMIT="${LIMIT:-900}"; ONLY="${ONLY:-}"; JAZZ="${JAZZ:-jazz}"; LANES="${LANES:-1}"; JAZZ_ARGS="${JAZZ_ARGS:-}"
 LANE_HOME="${LANE_HOME:-0}"
 command -v "$JAZZ" >/dev/null 2>&1 || JAZZ="$HOME/.local/bin/jazz"
+# timeout portátil: coreutils timeout, gtimeout (Homebrew) ou alarm do perl (sem -k)
+tmo() { local k=$1 secs=$2; shift 2; if command -v timeout >/dev/null 2>&1; then timeout -k "$k" "$secs" "$@"; elif command -v gtimeout >/dev/null 2>&1; then gtimeout -k "$k" "$secs" "$@"; else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi; }
 
 MODO_TASKS=$(stat -c %a "$EV/tasks" 2>/dev/null || stat -f %Lp "$EV/tasks")
 unlock() { chmod "$MODO_TASKS" "$EV/tasks" 2>/dev/null; }
@@ -60,7 +62,7 @@ run_agent() {
     home="$RUN/homes/$name"; mkdir -p "$RUN/homes"; cp -R "$JAZZ_HOME" "$home"
   fi
   # shellcheck disable=SC2086
-  ( cd "$w" && JAZZ_HOME="$home" timeout -k 10 $((LIMIT + 60)) "$JAZZ" -p --yolo -v --timeout "${LIMIT}s" ${MODEL:+-m "$MODEL"} $JAZZ_ARGS "$prompt" \
+  ( cd "$w" && JAZZ_HOME="$home" tmo 10 $((LIMIT + 60)) "$JAZZ" -p --yolo -v --timeout "${LIMIT}s" ${MODEL:+-m "$MODEL"} $JAZZ_ARGS "$prompt" \
       </dev/null >"$RUN/$name.log" 2>&1 ); rc=$?
   echo "$rc" > "$RUN/$name.rc"; echo $(( $(date +%s) - s )) > "$RUN/$name.dt"
 }

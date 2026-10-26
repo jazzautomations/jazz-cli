@@ -1,0 +1,20 @@
+# gitleaks: default rules plus a narrow allowlist for known false positives.
+# Never add a real credential here: rotate it and remove it from history.
+# (single [allowlist] table: gitleaks-action@v2 pins 8.24.x, which predates
+# the [[allowlists]] array syntax)
+[extend]
+useDefault = true
+
+[allowlist]
+description = "synthetic redaction fixtures; xterm modifyOtherKeys escape sequences in term.go"
+# redact tests build fake secrets at run time to exercise redact.go
+paths = [
+  '''(^|/)redact_test\.go$''',
+  '''(^|/)review_fixes_test\.go$''',
+  '''(^|/)debug_log_test\.go$''',
+  # quotes the fake ghp_abcdef... fixture of debug_log_test.go from an old scan
+  '''^docs/research/security-review-oss\.md$''',
+]
+# CSI 27;m;13~ (shift/alt/ctrl+enter) is a key code, not a key
+regexTarget = "line"
+regexes = ['''"27;[0-9];13".*modifyOtherKeys''']

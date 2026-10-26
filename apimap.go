@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -109,7 +110,8 @@ func amRender(ms []amMatch) string {
 		if f := strings.SplitN(sig, " ", 2)[0]; !strings.Contains(" func type fn struct enum trait class def pub export ", " "+f+" ") {
 			sig = m.Kind + " " + sig
 		}
-		l := m.File + ":" + strconv.Itoa(m.Line) + " " + sig
+		// the model and the edit tool speak forward slashes on every OS
+		l := filepath.ToSlash(m.File) + ":" + strconv.Itoa(m.Line) + " " + sig
 		if m.Doc != "" {
 			l += " — " + m.Doc
 		}

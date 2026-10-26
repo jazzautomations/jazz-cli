@@ -36,6 +36,9 @@ func TestIsTermuxDetection(t *testing.T) {
 }
 
 func TestTermuxTempDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Termux is Android; Windows os.TempDir reads TMP/TEMP, not TMPDIR")
+	}
 	px := filepath.Join(t.TempDir(), "usr")
 	t.Setenv("TERMUX_VERSION", "1")
 	t.Setenv("PREFIX", px)
@@ -58,6 +61,9 @@ func TestTermuxTempDir(t *testing.T) {
 }
 
 func TestFallbackShNeverHardcodedOnTermux(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Termux is Android; Windows LookPath needs a PATHEXT extension")
+	}
 	px := t.TempDir()
 	t.Setenv("TERMUX_VERSION", "1")
 	t.Setenv("PREFIX", px)
@@ -113,13 +119,18 @@ func TestInstallShTermuxDryRun(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" || (arch != "amd64" && arch != "arm64" && arch != "386") {
 		t.Skip("no release asset name for this platform")
 	}
-	asset := "jazz-android-arm64"
+	// install.sh names the asset after `uname -m` (jazz-android-amd64 on an
+	// x86_64 CI runner, -arm64 on Apple Silicon): serve every name it can pick
 	bin := []byte("#!/bin/sh\necho jazz-fake 9.9.9\n")
 	sum := sha256.Sum256(bin)
-	files := map[string][]byte{
-		asset:          bin,
-		"manifest.txt": []byte("jazz-cli release manifest v1\nversion 9.9.9\n" + hex.EncodeToString(sum[:]) + "  " + asset + "\n"),
+	manifest := "jazz-cli release manifest v1\nversion 9.9.9\n"
+	files := map[string][]byte{}
+	for _, a := range []string{"386", "amd64", "arm64"} {
+		asset := "jazz-android-" + a
+		files[asset] = bin
+		manifest += hex.EncodeToString(sum[:]) + "  " + asset + "\n"
 	}
+	files["manifest.txt"] = []byte(manifest)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		b, ok := files[strings.TrimPrefix(q.URL.Path, "/")]
 		if !ok {

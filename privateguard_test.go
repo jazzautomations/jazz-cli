@@ -111,8 +111,11 @@ func TestPrivateStateShellExpansionAndAndroidEnv(t *testing.T) {
 	}
 	t.Setenv("JAZZ_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
-	if ok, msg := permitTC(h, "bash", map[string]any{"command": "cat $HOME/.config/jazz-cli/config.json"}); ok || !strings.Contains(strings.ToLower(msg), "blocked") {
-		t.Errorf("HOME-based default config path: expected hard block, got %v %q", ok, msg)
+	// on Windows the default config lives in %APPDATA%, not $HOME/.config
+	if runtime.GOOS != "windows" {
+		if ok, msg := permitTC(h, "bash", map[string]any{"command": "cat $HOME/.config/jazz-cli/config.json"}); ok || !strings.Contains(strings.ToLower(msg), "blocked") {
+			t.Errorf("HOME-based default config path: expected hard block, got %v %q", ok, msg)
+		}
 	}
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg"))
 	if ok, msg := permitTC(h, "bash", map[string]any{"command": "cat $XDG_CONFIG_HOME/jazz-cli/config.json"}); ok || !strings.Contains(strings.ToLower(msg), "blocked") {

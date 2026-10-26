@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestH2DowngradeVerdict(t *testing.T) {
 		t.Fatalf("newer than everything seen: %v", err)
 	}
 	fi, err := os.Stat(h2SeenPath())
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("seen file mode: %v %v", fi, err)
 	}
 	h2NoteSeen("not a version")
@@ -73,7 +74,7 @@ func TestH2SessionSignedAndVerified(t *testing.T) {
 		}
 	}
 	fi, err := os.Stat(h2KeyPath())
-	if err != nil || fi.Mode().Perm() != 0o600 || fi.Size() != 32 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) || fi.Size() != 32 {
 		t.Fatalf("key file: %v %v", fi, err)
 	}
 	ls, msgs, _, system, err := LoadSessionAt(s.Path, "")
