@@ -5,6 +5,8 @@ Histórico de mudanças. A seção 0.8.0 descreve o candidato em validação; ve
 ## 0.8.1
 
 - 0.8.1: correções de CI Linux/Windows e gitleaks
+- Sandbox Linux (`bwrap`): escrita fora do projeto, do temporário privado, de spill/jobs e dos caches agora falha (`$HOME`, `/tmp` e as pastas escondidas são tmpfs remontados só-leitura); antes ia para um tmpfs descartável e sumia. Caches de build ausentes no host vão para o temporário privado. `jazz doctor --sandbox-probe` testa escrita no projeto/tmp privado (deve funcionar) e em `$HOME`/`/tmp` (deve falhar).
+- Guarda do estado privado no Windows: `cat C:\Users\...\trusted.json` passava (o parser POSIX comia as barras invertidas antes da guarda); agora a linha também é lida com `\` como separador, pelo splitter de cmd/PowerShell, com `$env:X`/`%X%` e caminhos entre aspas com espaço.
 
 ## 0.8.0 — candidato em validação
 

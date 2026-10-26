@@ -351,8 +351,43 @@ func (s *Sandbox) prepare() error {
 		// caches are read-only in strict: builds keep a private cache
 		s.Env = append(s.Env, "GOCACHE="+filepath.Join(s.Tmp, "go-build"), "npm_config_cache="+filepath.Join(s.Tmp, "npm"),
 			"PIP_CACHE_DIR="+filepath.Join(s.Tmp, "pip"))
+	} else {
+		s.Env = append(s.Env, s.bwrapCacheEnv(os.Getenv)...)
 	}
 	return nil
+}
+
+// sbBwrapCaches are the default build caches under $HOME that bwrap can give
+// back read-write only when they exist on the host (--bind-try skips a
+// missing source, and the hidden $HOME is read-only).
+var sbBwrapCaches = []struct{ env, rel, tmp string }{
+	{"GOCACHE", ".cache/go-build", "go-build"},
+	{"GOMODCACHE", "go/pkg/mod", "gomod"},
+	{"npm_config_cache", ".npm/_cacache", "npm"},
+	{"PIP_CACHE_DIR", ".cache/pip", "pip"},
+	{"YARN_CACHE_FOLDER", ".cache/yarn", "yarn"},
+}
+
+// bwrapCacheEnv points a cache that does not exist yet on the host (first go
+// build on the machine) at the private temp dir, as strict does, instead of
+// failing with EROFS in the read-only $HOME. A cache moved by env is left
+// alone (it is in CacheRW when it exists).
+func (s *Sandbox) bwrapCacheEnv(getenv func(string) string) []string {
+	if s.Backend != sbBwrap || !s.HideHome || s.Home == "" {
+		return nil
+	}
+	var out []string
+	for _, c := range sbBwrapCaches {
+		if getenv(c.env) != "" || c.env == "GOMODCACHE" && getenv("GOPATH") != "" ||
+			strings.HasPrefix(c.rel, ".cache/") && getenv("XDG_CACHE_HOME") != "" {
+			continue // the cache lives where the user moved it
+		}
+		if _, err := os.Stat(filepath.Join(s.Home, c.rel)); err == nil {
+			continue
+		}
+		out = append(out, c.env+"="+filepath.Join(s.Tmp, c.tmp))
+	}
+	return out
 }
 
 // sbPruneTmp removes private temp dirs left by jazz processes that are gone
@@ -545,14 +580,28 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	if !s.Net {
 		a = append(a, "--unshare-net") // loopback only
 	}
-	a = append(a, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp")
+	// Every --tmpfs below is writable by the sandboxed uid, so a write to
+	// $HOME or /tmp would "succeed" into a throwaway tmpfs and vanish at exit
+	// (the agent believes it saved a file). Each one is remounted read-only
+	// at the end, after bwrap created the mount points of the binds nested
+	// in it (that needs a writable tmpfs): writes outside the project, the
+	// private temp dir and the dirs given back fail with EROFS, like the
+	// seatbelt deny on macOS. --remount-ro is not recursive: the binds keep
+	// their own flags.
+	var ro []string
+	tmpfs := func(p string) {
+		a = append(a, "--tmpfs", p)
+		ro = append(ro, p)
+	}
+	a = append(a, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc")
+	tmpfs("/tmp")
 	if x := os.Getenv("XDG_RUNTIME_DIR"); x != "" {
-		a = append(a, "--tmpfs", sbReal(x)) // session bus, agents, pulse
+		tmpfs(sbReal(x)) // session bus, agents, pulse
 	} else if _, err := os.Stat(fmt.Sprintf("/run/user/%d", os.Getuid())); err == nil {
-		a = append(a, "--tmpfs", fmt.Sprintf("/run/user/%d", os.Getuid()))
+		tmpfs(fmt.Sprintf("/run/user/%d", os.Getuid()))
 	}
 	if s.HideHome {
-		a = append(a, "--tmpfs", s.Home)
+		tmpfs(s.Home)
 		for _, p := range s.CacheRO {
 			a = append(a, "--ro-bind-try", p, p)
 		}
@@ -569,7 +618,7 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 		switch {
 		case err != nil:
 		case fi.IsDir():
-			a = append(a, "--tmpfs", p)
+			tmpfs(p)
 		default:
 			a = append(a, "--ro-bind", "/dev/null", p)
 		}
@@ -580,10 +629,48 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	for _, p := range s.WriteOK {
 		a = append(a, "--bind-try", p, p)
 	}
+	for _, p := range ro {
+		if !sbBwrapCovered(a, p) {
+			a = append(a, "--remount-ro", p)
+		}
+	}
 	if dir != "" {
 		a = append(a, "--chdir", dir)
 	}
 	return a
+}
+
+// sbBwrapCovered reports whether the --tmpfs at p in args is covered by a
+// later mount on p or on a parent of p (XDG_RUNTIME_DIR under the hidden
+// $HOME, a project at /tmp): it is then no longer what p shows, and
+// remounting p would hit the mount on top.
+func sbBwrapCovered(args []string, p string) bool {
+	seen := false
+	for i := 0; i < len(args); i++ {
+		var dest string
+		switch args[i] {
+		case "--ro-bind", "--bind", "--ro-bind-try", "--bind-try":
+			if i+2 < len(args) {
+				dest = args[i+2]
+			}
+			i += 2
+		case "--tmpfs", "--dev", "--proc":
+			if i+1 < len(args) {
+				dest = args[i+1]
+			}
+			i++
+			if !seen && args[i-1] == "--tmpfs" && dest == p {
+				seen = true
+				continue
+			}
+		default:
+			continue
+		}
+		if seen && dest != "" && pathIn(p, dest) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------- doctor ----------
@@ -603,7 +690,7 @@ func sbDoctor(ok func(bool) string, gray func(string) string, verbose, probe boo
 		}
 		items, err := sbLiveProbe(sb)
 		res := sbProbeVerdict(items, err)
-		fmt.Printf("  %s sandbox ao vivo: %s\n", ok(res == ""), map[bool]string{true: "shell isolado ok, config e dados do jazz ilegíveis", false: res}[res == ""])
+		fmt.Printf("  %s sandbox ao vivo: %s\n", ok(res == ""), map[bool]string{true: "shell isolado ok, config e dados do jazz ilegíveis, escrita só no projeto", false: res}[res == ""])
 		if probe {
 			for _, it := range items {
 				fmt.Printf("    %s %s %s\n", ok(it.Got == it.Want), it.Label, it.Path)
@@ -646,7 +733,8 @@ type sbProbeItem struct {
 	Path  string
 	Want  bool // true: must be readable inside
 	Exec  bool // also executable (the jazz binary: child shells call jazz)
-	Got   bool // readable inside
+	Write bool // a write probe: Want/Got mean "can create a file here"
+	Got   bool // readable (Write: writable) inside
 	Note  string
 }
 
@@ -730,6 +818,31 @@ func sbLiveProbe(sb *Sandbox) ([]sbProbeItem, error) {
 			items = append(items, sbProbeItem{Label: "binário do jazz (deve ser executável)", Path: exe, Want: true, Exec: true})
 		}
 	}
+	// writes: only the project, the private temp dir and the dirs given back
+	// succeed; $HOME and /tmp must fail (bwrap: read-only tmpfs, seatbelt:
+	// deny), not land in a throwaway tmpfs. A target inside a writable dir
+	// (project == $HOME, project under /tmp) is legitimately writable: skipped.
+	tag := fmt.Sprintf(".jazz-sbx-probe-%d", os.Getpid())
+	writable := append(append(append(append([]string(nil), sb.Roots...), sb.Tmp, sb.UserTmp), sb.CacheRW...), sb.WriteOK...)
+	for _, w := range []struct {
+		label, dir string
+		want       bool
+	}{
+		{"escrita no projeto (deve funcionar)", sb.Roots[0], true},
+		{"escrita no temporário privado (deve funcionar)", sb.Tmp, true},
+		{"escrita em $HOME (deve falhar)", sb.Home, false},
+		{"escrita em /tmp (deve falhar)", "/tmp", false},
+	} {
+		if w.dir == "" || w.dir == "/" {
+			continue
+		}
+		p := filepath.Join(w.dir, tag)
+		if !w.want && sbUnder(sbReal(p), writable) {
+			continue
+		}
+		defer os.Remove(p) // a leaking backend writes on the host
+		items = append(items, sbProbeItem{Label: w.label, Path: p, Want: w.want, Write: true})
+	}
 	var dirs []string
 	for _, d := range []string{sbReal(configDir()), sbReal(dataDir())} {
 		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
@@ -739,6 +852,11 @@ func sbLiveProbe(sb *Sandbox) ([]sbProbeItem, error) {
 	var sc strings.Builder
 	sc.WriteString("echo SBX-OK\n")
 	for i, it := range items {
+		if it.Write {
+			q := sbShQuote(it.Path)
+			fmt.Fprintf(&sc, "if ( : > %s ) 2>/dev/null; then rm -f %s; echo 'R %d 1'; else echo 'R %d 0'; fi\n", q, q, i, i)
+			continue
+		}
 		x := ""
 		if it.Exec {
 			x = "[ -x " + sbShQuote(it.Path) + " ] && "
@@ -780,6 +898,14 @@ func sbLiveProbe(sb *Sandbox) ([]sbProbeItem, error) {
 	}
 	for i := range items {
 		switch {
+		case items[i].Write && items[i].Got && items[i].Want:
+			items[i].Note = "gravável (esperado)"
+		case items[i].Write && items[i].Got:
+			items[i].Note = "GRAVÁVEL dentro do sandbox — a escrita some ou vaza para fora do projeto"
+		case items[i].Write && items[i].Want:
+			items[i].Note = "não gravável — o trabalho normal falharia"
+		case items[i].Write:
+			items[i].Note = "escrita negada (esperado)"
 		case items[i].Got && items[i].Want:
 			items[i].Note = "legível (esperado)"
 		case items[i].Got:
@@ -826,6 +952,12 @@ func sbProbeVerdict(items []sbProbeItem, err error) string {
 	}
 	for _, it := range items {
 		if it.Got != it.Want {
+			if it.Write && it.Want {
+				return "escrita falhou onde devia funcionar: " + it.Path
+			}
+			if it.Write {
+				return "escrita fora do projeto aceita dentro do sandbox: " + it.Path
+			}
 			if it.Exec {
 				return "binário do jazz inacessível dentro do sandbox: " + it.Path
 			}

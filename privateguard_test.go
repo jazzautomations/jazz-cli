@@ -122,3 +122,110 @@ func TestPrivateStateShellExpansionAndAndroidEnv(t *testing.T) {
 		t.Errorf("XDG config path: expected hard block, got %v %q", ok, msg)
 	}
 }
+
+// Windows-style command lines are analysed with backslashes as separators:
+// the POSIX parser alone turns C:\Users\x into C:Usersx (CI 0.8.1 on
+// windows-latest let `cat C:\...\trusted.json` through in yolo).
+func TestPrivateShellWordsWindowsReadings(t *testing.T) {
+	has := func(r [][][]string, want string) bool {
+		for _, segs := range r {
+			for _, s := range segs {
+				for _, w := range s {
+					if w == want {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	for _, c := range []struct{ cmd, want string }{
+		{`cat C:\Users\RUNNER~1\AppData\Local\Temp\T\001\trusted.json`, `C:/Users/RUNNER~1/AppData/Local/Temp/T/001/trusted.json`},
+		{`type "C:\Users\a b\AppData\Roaming\jazz-cli\config.json"`, `C:/Users/a b/AppData/Roaming/jazz-cli/config.json`},
+		{`Get-Content C:\Users\u\AppData\Roaming\jazz-cli\auth.json | Select-Object -First 1`, `C:/Users/u/AppData/Roaming/jazz-cli/auth.json`},
+		{`echo hi; Get-Content -Path 'C:\Users\u\AppData\Local\jazz-cli\sessions\s.jsonl'`, `C:/Users/u/AppData/Local/jazz-cli/sessions/s.jsonl`},
+		{`cd C:\Users\u\AppData\Roaming\jazz-cli && type trusted.json`, `C:/Users/u/AppData/Roaming/jazz-cli`},
+	} {
+		if !has(jazzPrivateShellWords(c.cmd, true), c.want) {
+			t.Errorf("%s: no reading yields %q: %q", c.cmd, c.want, jazzPrivateShellWords(c.cmd, true))
+		}
+		if has(jazzPrivateShellWords(c.cmd, false), c.want) {
+			t.Errorf("%s: the POSIX-only reading should not reinterpret backslashes", c.cmd)
+		}
+	}
+}
+
+func TestJazzExpandVarsAllDialects(t *testing.T) {
+	env := map[string]string{
+		"JAZZ_HOME":    `C:\J`,
+		"APPDATA":      `C:\Users\u\AppData\Roaming`,
+		"LOCALAPPDATA": `C:\Users\u\AppData\Local`,
+	}
+	get := func(k string) string { return env[k] }
+	for _, c := range []struct{ in, want string }{
+		{"$JAZZ_HOME/config.json", `C:\J/config.json`},
+		{"${JAZZ_HOME}/x", `C:\J/x`},
+		{"$env:JAZZ_HOME/trusted.json", `C:\J/trusted.json`},
+		{"$ENV:jazz_home/trusted.json", `C:\J/trusted.json`},
+		{`$env:APPDATA\jazz-cli\config.json`, `C:\Users\u\AppData\Roaming\jazz-cli\config.json`},
+		{"%APPDATA%/jazz-cli/auth.json", `C:\Users\u\AppData\Roaming/jazz-cli/auth.json`},
+		{"%localappdata%/jazz-cli/sessions", `C:\Users\u\AppData\Local/jazz-cli/sessions`},
+		{"$env:USERPROFILE/.config/jazz-cli", "H/.config/jazz-cli"},
+		{"%USERPROFILE%/x", "H/x"},
+		{"$HOME/.config/jazz-cli", "H/.config/jazz-cli"},
+		{"$HOMEX/a", "$HOMEX/a"},                 // another variable
+		{"$jazz_home/a", "$jazz_home/a"},         // POSIX names are case-sensitive
+		{"$XDG_DATA_HOME/a", "$XDG_DATA_HOME/a"}, // unset: left for the $ refusal
+	} {
+		if got := jazzExpandVars(c.in, "H", get); got != c.want {
+			t.Errorf("jazzExpandVars(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// PowerShell/cmd spellings of Jazz's state are hard-blocked in yolo on every OS
+// (JAZZ_HOME is the test config dir); the backslash forms only mean a path
+// separator on Windows.
+func TestPrivateStateWindowsDialectsBlocked(t *testing.T) {
+	h := newHarness(t, nil, func(c *Config) { c.Mode = "yolo" })
+	cmds := []string{
+		"Get-Content $env:JAZZ_HOME/trusted.json",
+		"type %JAZZ_HOME%/config.json",
+		"Get-Content -Path $env:JAZZ_HOME/data/sessions/s.jsonl",
+	}
+	if runtime.GOOS == "windows" {
+		cfg := configDir()
+		cmds = append(cmds,
+			"cat "+filepath.Join(cfg, "trusted.json"),
+			"cat "+strings.ToUpper(filepath.Join(cfg, "trusted.json")),
+			"Get-Content "+filepath.Join(dataDir(), "sessions", "s.jsonl"),
+			`Get-Content $env:JAZZ_HOME\trusted.json`,
+			`type %JAZZ_HOME%\config.json`,
+			"Get-Content -Path:"+filepath.Join(cfg, "auth.json"),
+			"cd "+cfg+"; type trusted.json",
+			`Set-Location `+cfg+`; Get-Content .\trusted.json`,
+		)
+	}
+	for _, cmd := range cmds {
+		ok, msg := permitTC(h, "bash", map[string]any{"command": cmd})
+		if ok || !strings.Contains(strings.ToLower(msg), "blocked") {
+			t.Errorf("%s: expected private-state hard block in yolo, got %v %q", cmd, ok, msg)
+		}
+	}
+}
+
+// A quoted path with a space stays one word (shellParse re-joins segments
+// without their quotes).
+func TestPrivateStateQuotedPathWithSpace(t *testing.T) {
+	h := newHarness(t, nil, func(c *Config) { c.Mode = "yolo" })
+	home := filepath.Join(t.TempDir(), "John Smith")
+	t.Setenv("JAZZ_HOME", home)
+	for _, cmd := range []string{
+		`cat "` + filepath.Join(home, "trusted.json") + `"`,
+		`echo ok | cat '` + filepath.Join(home, "config.json") + `'`,
+	} {
+		if ok, msg := permitTC(h, "bash", map[string]any{"command": cmd}); ok || !strings.Contains(strings.ToLower(msg), "blocked") {
+			t.Errorf("%s: expected hard block, got %v %q", cmd, ok, msg)
+		}
+	}
+}

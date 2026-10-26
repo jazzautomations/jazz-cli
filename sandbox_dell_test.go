@@ -84,6 +84,52 @@ func sbBwrapView(args []string, p string) string {
 	return ""
 }
 
+// sbBwrapWritable models whether a sandboxed process (no capabilities left)
+// can create a file at p: the topmost mount covering p decides; --bind and
+// --tmpfs are writable, --ro-bind is not, and --remount-ro DEST makes the
+// mount then on top at DEST read-only (not recursive: binds nested under DEST
+// keep their flags).
+func sbBwrapWritable(args []string, p string) bool {
+	type mnt struct {
+		dest string
+		rw   bool
+	}
+	var ms []mnt
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--bind", "--bind-try":
+			ms = append(ms, mnt{args[i+2], args[i+1] != "/dev/null"})
+			i += 2
+		case "--ro-bind", "--ro-bind-try":
+			ms = append(ms, mnt{args[i+2], false})
+			i += 2
+		case "--tmpfs":
+			ms = append(ms, mnt{args[i+1], true})
+			i++
+		case "--dev", "--proc":
+			ms = append(ms, mnt{args[i+1], false})
+			i++
+		case "--remount-ro":
+			for k := len(ms) - 1; k >= 0; k-- {
+				if ms[k].dest == args[i+1] {
+					ms[k].rw = false
+					break
+				}
+			}
+			i++
+		case "--chdir":
+			i++
+		}
+	}
+	for k := len(ms) - 1; k >= 0; k-- {
+		m := ms[k]
+		if p == m.dest || m.dest == "/" || strings.HasPrefix(p, m.dest+"/") {
+			return m.rw
+		}
+	}
+	return false
+}
+
 func TestSandboxBwrapDellScenario(t *testing.T) {
 	home := sbDellHome(t)
 	j := func(rel string) string { return filepath.Join(home, rel) }
@@ -122,6 +168,25 @@ func TestSandboxBwrapDellScenario(t *testing.T) {
 					t.Errorf("%s must be visible from the host, got %q", p, v)
 				}
 			}
+			// writes: only the project, the private temp dir and the dirs
+			// given back; HOME, /tmp and the hidden dirs are read-only (they
+			// used to be writable tmpfs: the write "worked" and vanished)
+			writable := []string{c.proj + "/main.go", sb.Tmp + "/f", j(".local/share/jazz-cli/spill/out.txt"), j(".local/share/jazz-cli/jobs/1.log")}
+			for _, p := range writable {
+				if !sbBwrapWritable(a, p) {
+					t.Errorf("%s must be writable inside the sandbox", p)
+				}
+			}
+			readonly := []string{"/tmp/planted", "/tmp/" + filepath.Base(filepath.Dir(sb.Tmp)) + "/x", "/usr/bin/planted", j(".config/jazz-cli/planted"),
+				j(".config/jazz-cli/skills/x/SKILL.md"), j(".local/share/jazz-cli/planted"), j(".ssh/authorized_keys")}
+			if c.proj != home {
+				readonly = append(readonly, j("planted"), j(".bashrc"), j(".local/bin/jazz"))
+			}
+			for _, p := range readonly {
+				if sbBwrapWritable(a, p) {
+					t.Errorf("%s must NOT be writable inside the sandbox", p)
+				}
+			}
 			// the project must be bound read-write after HOME is hidden
 			if !strings.Contains(" "+strings.Join(a, " ")+" ", " --bind "+c.proj+" "+c.proj+" ") {
 				t.Errorf("project not bound rw: %v", a)
@@ -141,6 +206,7 @@ func TestSandboxBwrapDellArgv(t *testing.T) {
 	got := strings.ReplaceAll(strings.Join(a, " "), home, "~")
 	if _, err := os.Stat("/run/user/" + itoa(os.Getuid())); err == nil {
 		got = strings.Replace(got, " --tmpfs /run/user/"+itoa(os.Getuid()), "", 1)
+		got = strings.Replace(got, " --remount-ro /run/user/"+itoa(os.Getuid()), "", 1)
 	}
 	want := "--die-with-parent --unshare-pid --new-session --unshare-net --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp" +
 		" --tmpfs ~" +
@@ -159,6 +225,7 @@ func TestSandboxBwrapDellArgv(t *testing.T) {
 		" --ro-bind-try ~/.local/share/jazz-cli/scripts ~/.local/share/jazz-cli/scripts" +
 		" --bind-try ~/.local/share/jazz-cli/spill ~/.local/share/jazz-cli/spill" +
 		" --bind-try ~/.local/share/jazz-cli/jobs ~/.local/share/jazz-cli/jobs" +
+		" --remount-ro /tmp --remount-ro ~ --remount-ro ~/.ssh --remount-ro ~/.config/jazz-cli --remount-ro ~/.local/share/jazz-cli" +
 		" --chdir ~/jazz-eval-v2/tasks/t01"
 	if got != want {
 		t.Errorf("argv\n got: %s\nwant: %s", got, want)
@@ -178,12 +245,17 @@ func TestSandboxSelfTestLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var sawAuth, sawCanary, sawControl bool
+	var sawAuth, sawCanary, sawControl, sawWriteOK, sawWriteDenied bool
 	for _, it := range items {
+		sawWriteOK = sawWriteOK || it.Write && it.Want
+		sawWriteDenied = sawWriteDenied || it.Write && !it.Want
 		t.Logf("%v want=%v got=%v %s (%s)", it.Label, it.Want, it.Got, it.Path, it.Note)
 		sawAuth = sawAuth || strings.HasSuffix(it.Path, "auth.json")
 		sawCanary = sawCanary || strings.Contains(it.Path, ".sbx-canary-")
 		sawControl = sawControl || it.Want
+	}
+	if !sawWriteOK || !sawWriteDenied {
+		t.Errorf("probe must try a write in the project and one outside it: %+v", items)
 	}
 	if !sawAuth || !sawCanary || !sawControl {
 		t.Errorf("probe must try auth.json, the canary and the control: %+v", items)
@@ -218,4 +290,79 @@ func TestSandboxSelfTestDetectsLeak(t *testing.T) {
 	if !strings.Contains(v, "legível dentro do sandbox") {
 		t.Errorf("passthrough sandbox not flagged: %q %+v", v, items)
 	}
+	for _, it := range items {
+		if it.Write && !it.Want {
+			if !it.Got {
+				t.Errorf("passthrough: write outside the project not flagged: %+v", it)
+			}
+			if _, err := os.Lstat(it.Path); err == nil {
+				t.Errorf("probe file left on the host: %s", it.Path)
+			}
+		}
+	}
+	if v := sbProbeVerdict(sbOnlyWrites(items), nil); !strings.Contains(v, "escrita fora do projeto") {
+		t.Errorf("write leak verdict: %q", v)
+	}
+}
+
+// A tmpfs covered by a later mount on it or on a parent is not remounted
+// (bwrap would remount the mount on top): XDG_RUNTIME_DIR under the hidden
+// HOME, a project that is /tmp itself. Synthetic paths (no host lookups).
+func TestSandboxBwrapRemountSkipsCovered(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bwrap argv: Unix paths")
+	}
+	home := "/nonexistent-jzsbx/home/u"
+	t.Setenv("XDG_RUNTIME_DIR", home+"/.run")
+	sb := &Sandbox{Backend: sbBwrap, Net: true, Home: home, HideHome: true, Roots: []string{"/tmp"}, Tmp: "/tmp/jazz-sbx-1000/42-x"}
+	args := sbBwrapArgs(sb, "/tmp")
+	a := " " + strings.Join(args, " ") + " "
+	if strings.Contains(a, " --remount-ro "+home+"/.run ") || strings.Contains(a, " --remount-ro /tmp ") {
+		t.Errorf("covered tmpfs remounted: %s", a)
+	}
+	if !strings.Contains(a, " --remount-ro "+home+" ") {
+		t.Errorf("hidden HOME not remounted read-only: %s", a)
+	}
+	if !sbBwrapWritable(args, "/tmp/x") || sbBwrapWritable(args, home+"/x") || sbBwrapWritable(args, home+"/.run/x") {
+		t.Errorf("writability: project /tmp rw, HOME and its runtime dir ro: %s", a)
+	}
+}
+
+// A cache that does not exist yet on the host goes to the private temp dir
+// (the hidden HOME is read-only now; --bind-try skipped the missing source).
+func TestSandboxBwrapMissingCachesGoToTmp(t *testing.T) {
+	home := sbDellHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".cache", "pip"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sb := sbNew("auto", sbBwrap, "/usr/bin/bwrap", true, []string{filepath.Join(home, "jazz-eval-v2")})
+	sb.Tmp = "/tmp/x"
+	env := map[string]string{}
+	got := strings.Join(sb.bwrapCacheEnv(func(k string) string { return env[k] }), " ")
+	for _, want := range []string{"GOCACHE=/tmp/x/go-build", "GOMODCACHE=/tmp/x/gomod", "npm_config_cache=/tmp/x/npm", "YARN_CACHE_FOLDER=/tmp/x/yarn"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "PIP_CACHE_DIR") {
+		t.Errorf("existing pip cache must stay the host one: %q", got)
+	}
+	env["GOPATH"], env["XDG_CACHE_HOME"] = "/opt/go", "/var/cache/u"
+	got = strings.Join(sb.bwrapCacheEnv(func(k string) string { return env[k] }), " ")
+	if strings.Contains(got, "GOMODCACHE") || strings.Contains(got, "GOCACHE") || strings.Contains(got, "YARN") {
+		t.Errorf("caches moved by env must be left alone: %q", got)
+	}
+	sb.Backend = sbSeatbelt
+	if sb.bwrapCacheEnv(func(string) string { return "" }) != nil {
+		t.Error("seatbelt allows writing missing caches: no redirect")
+	}
+}
+
+func sbOnlyWrites(items []sbProbeItem) (out []sbProbeItem) {
+	for _, it := range items {
+		if it.Write {
+			out = append(out, it)
+		}
+	}
+	return
 }
