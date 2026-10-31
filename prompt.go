@@ -203,6 +203,26 @@ func envBlock(root string) string {
 	fmt.Fprintf(&b, "cwd: %s\n", root)
 	fmt.Fprintf(&b, "os: %s (%s/%s)\n", osName(), runtime.GOOS, runtime.GOARCH)
 	fmt.Fprintf(&b, "date: %s\n", time.Now().Format("2006-01-02 (Monday)"))
+	fmt.Fprintf(&b, "jazz: v%s\n", version)
+	if p := epGetLight(); p != nil {
+		var id []string
+		if p.Host != "" {
+			if p.User != "" {
+				id = append(id, p.User+"@"+p.Host)
+			} else {
+				id = append(id, p.Host)
+			}
+		}
+		if p.Machine != "" {
+			id = append(id, p.Machine)
+		}
+		if p.CPUModel != "" {
+			id = append(id, p.CPUModel)
+		}
+		if len(id) > 0 {
+			fmt.Fprintf(&b, "host: %s — tools run on THIS machine; remote hosts are reached only via explicit ssh\n", strings.Join(id, " · "))
+		}
+	}
 	var tools []string
 	for _, t := range []string{"rg", "fd", "fdfind", "git", "python3", "go", "node", "make", "gcc", "jq", "curl"} {
 		if _, err := exec.LookPath(t); err == nil {

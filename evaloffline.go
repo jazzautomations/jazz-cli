@@ -37,6 +37,7 @@ type eoExpect struct {
 	Intent      string   `json:"intent,omitempty"`
 	Category    string   `json:"category,omitempty"`
 	Contains    []string `json:"contains,omitempty"`
+	ContainsAny []string `json:"contains_any,omitempty"` // at least one (answers that legitimately differ per machine)
 	NotContains []string `json:"not_contains,omitempty"`
 	Questions   *int     `json:"questions,omitempty"`
 	Handled     *bool    `json:"handled,omitempty"`
@@ -359,6 +360,15 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 	for _, c := range exp.NotContains {
 		if strings.Contains(r.Text, c) {
 			fail("não devia ter %q", c)
+		}
+	}
+	if len(exp.ContainsAny) > 0 {
+		hit := false
+		for _, c := range exp.ContainsAny {
+			hit = hit || strings.Contains(r.Text, c)
+		}
+		if !hit {
+			fail("falta um de %q", exp.ContainsAny)
 		}
 	}
 	if exp.Questions != nil && r.Questions != *exp.Questions {

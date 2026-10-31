@@ -208,6 +208,26 @@ func TestBrainGitAndEnvStatus(t *testing.T) {
 	}
 }
 
+// "e o lab386?" names the machine the harness is on: the answer is "this
+// machine", never a ping or an ssh hint (labbox session observada).
+func TestBrainHostIsSelf(t *testing.T) {
+	root := brFixture(t)
+	env, rec := brTestEnv(t, root, nil, -1)
+	if env.Profile.Host != "lab386" {
+		t.Fatalf("fake profile hostname: %q", env.Profile.Host)
+	}
+	r := brRun(context.Background(), env, "status do lab386")
+	if r.Status != tkSucceeded || !strings.Contains(r.Text, "lab386 é ESTA máquina") {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if len(rec.cmds) != 0 {
+		t.Fatalf("no command needed: %v", rec.cmds)
+	}
+	if r = brRun(context.Background(), env, "status do labbox"); r.Status != tkSucceeded || !strings.Contains(r.Text, "host SSH labbox") {
+		t.Fatalf("other host unchanged: %s:\n%s", r.Status, r.Text)
+	}
+}
+
 // "tem o talscle instalado?" → the tailscale binary, answered from the profile.
 func TestBrainToolInfoTypo(t *testing.T) {
 	root := brFixture(t)

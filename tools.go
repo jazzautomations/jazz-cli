@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -84,21 +85,22 @@ type Toolbox struct {
 	// UILint runs ui_lint after each write/edit of a UI file (uilint.go).
 	UILint bool
 
-	mu        sync.Mutex
-	readState map[string]fileStamp
-	Todos     []Todo
-	turns     []turnSnap
-	seenInstr map[string]bool
-	specs     []ToolSpec
-	hasRg     bool
-	jobs      map[string]*Job
-	nextJob   int
-	written   int64       // bytes the write tool wrote in the current turn (per-turn cap)
-	cp        *cpStore    // shadow-git checkpoints, created lazily
-	sc        *scRegistry // script tool registry, loaded once (scripts.go)
-	fenceOnce sync.Once   // work-dir fence roots, computed once (fence.go)
-	fenceDirs []string
-	obTrace   obTraceCtx // who is changing files: session, step, model, prompt (checkpoint_trace.go)
+	mu         sync.Mutex
+	readState  map[string]fileStamp
+	Todos      []Todo
+	turns      []turnSnap
+	seenInstr  map[string]bool
+	specs      []ToolSpec
+	hasRg      bool
+	remoteSeen atomic.Bool // a bash command reached a remote host this session (provenance.go)
+	jobs       map[string]*Job
+	nextJob    int
+	written    int64       // bytes the write tool wrote in the current turn (per-turn cap)
+	cp         *cpStore    // shadow-git checkpoints, created lazily
+	sc         *scRegistry // script tool registry, loaded once (scripts.go)
+	fenceOnce  sync.Once   // work-dir fence roots, computed once (fence.go)
+	fenceDirs  []string
+	obTrace    obTraceCtx // who is changing files: session, step, model, prompt (checkpoint_trace.go)
 }
 
 type turnSnap struct {
@@ -1189,6 +1191,12 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	}
 	if r.Note != "" {
 		b.WriteString(r.Note)
+	}
+	if remote := pvRemoteTarget(cmd); remote != "" || t.remoteSeen.Load() { // where it ran (provenance.go)
+		if remote != "" {
+			t.remoteSeen.Store(true)
+		}
+		b.WriteString(pvTag(remote, pvLocalHost(), true))
 	}
 	if !r.Reset && cwd != "" && cwd != t.Root {
 		fmt.Fprintf(&b, " [cwd: %s]", cwd)

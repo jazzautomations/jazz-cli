@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -308,6 +309,7 @@ var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
 	"test_context": brTestContext,
 	"git_status":   brGitStatus,
 	"env_status":   brEnvStatus,
+	"self_info":    brSelfInfo,
 	"tool_report":  brToolReport,
 	"tool_status":  brToolStatus,
 	"host_report":  brHostReport,
@@ -1501,6 +1503,34 @@ func brEnvStatus(cx *brCtx, in map[string]string) brStep {
 	return brStep{val: p, obs: rvNoCmd(), ok: true}
 }
 
+// brSelfInfo is jazz's knowledge about itself: version, where the binary
+// lives, how the request is being answered, and what the deterministic brain
+// covers. Same idea as `jazz version` but inside the brain.
+func brSelfInfo(cx *brCtx, in map[string]string) brStep {
+	exe, _ := os.Executable()
+	cx.say("jazz      v%s · %s/%s · %s", version, runtime.GOOS, runtime.GOARCH, exe)
+	lib, _ := mhLibrary()
+	nMethods := 0
+	for _, ms := range lib {
+		nMethods += len(ms)
+	}
+	cx.say("cérebro   %d intents · %d métodos determinísticos — essa resposta não usou modelo", len(lib), nMethods)
+	if olForcedEnv() {
+		cx.say("modo      offline forçado — modelo nunca é chamado")
+	}
+	cx.say("dados     %s", dataDir())
+	p := cx.env.Profile
+	if p == nil {
+		p = epGet(false)
+	}
+	if p != nil && (p.Host != "" || p.Machine != "") {
+		where := strings.TrimSpace(strings.Join([]string{p.Host, p.Machine}, " · "))
+		cx.say("máquina   %s ('status da máquina' detalha)", where)
+	}
+	cx.task.AddEvidence("self", fmt.Sprintf("jazz %s %s/%s em %s", version, runtime.GOOS, runtime.GOARCH, exe))
+	return brStep{val: version, obs: rvNoCmd(), ok: true}
+}
+
 func brToolReport(cx *brCtx, in map[string]string) brStep {
 	name, asked := cx.str(in, "name"), cx.str(in, "asked")
 	p := cx.env.Profile
@@ -1599,6 +1629,12 @@ func brHostReport(cx *brCtx, in map[string]string) brStep {
 	p := cx.env.Profile
 	if p == nil {
 		p = epGet(false)
+	}
+	if p.Host != "" && strings.EqualFold(name, p.Host) { // asking about the machine we are on
+		cx.say("%s é ESTA máquina — o jazz está rodando nela agora (%s · %s/%s); comandos executam aqui, sem ssh. 'status da máquina' detalha.",
+			name, orDash(strings.Trim(p.Machine+" · "+p.OSName, " ·")), p.OS, p.Arch)
+		cx.task.AddEvidence("env", "hostname local = "+p.Host)
+		return brStep{val: name, obs: rvNoCmd(), ok: true}
 	}
 	for _, h := range p.SSHHosts {
 		if h.Name == name {

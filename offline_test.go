@@ -194,7 +194,13 @@ func TestOfflineInteractiveStateMachine(t *testing.T) {
 	if app.ol.forced || app.ol.on {
 		t.Errorf("/online with a reachable provider: %+v", app.ol)
 	}
+	// online, no git repo: the brain's deterministic "not a git repository"
+	// answer needs no model (level 0)
+	if handled, _ := app.olBefore(ctx, "git status"); !handled {
+		t.Error("online level 0: 'git status' outside a repo is a deterministic answer")
+	}
 	// a fast path the user declines (Esc) goes to the model unchanged when online
+	scGit(t, app.root, "init", "-q")
 	if handled, text := app.olBefore(ctx, "git status"); handled || text != "git status" {
 		t.Errorf("declined fast path: handled=%v text=%q", handled, text)
 	}
@@ -232,5 +238,37 @@ func TestOfflineBannerMentionsTools(t *testing.T) {
 		if !strings.Contains(b, w) {
 			t.Errorf("banner misses %q:\n%s", w, b)
 		}
+	}
+}
+
+// Online + interactive: a clearly understood read-only intent is answered
+// by the deterministic brain without a model call; everything else goes to
+// the model untouched; a declined fast path is respected.
+func TestOnlineInteractiveBrainLevel0(t *testing.T) {
+	app, h := olTestApp(t)
+	app.cfg.FastPaths = "off"
+	ctx := context.Background()
+	if handled, _ := app.olBefore(ctx, "quem é você"); !handled {
+		t.Error("self_info is level-0: the brain must answer online too")
+	}
+	if len(h.ag.pendingNote) == 0 || !strings.Contains(h.ag.pendingNote[len(h.ag.pendingNote)-1], "deterministic brain handled") {
+		t.Errorf("the model must be told what the brain did; notes=%v", h.ag.pendingNote)
+	}
+	for _, p := range []string{"refatora o parser para usar generics", "cria o arquivo x.txt", "apaga o arquivo x.txt"} {
+		if handled, text := app.olBefore(ctx, p); handled || text != p {
+			t.Errorf("%q: handled=%v text=%q — writes/unknown go to the model", p, handled, text)
+		}
+	}
+	// interpretive intents ground the model instead of replacing it
+	h.ag.pendingNote = nil
+	if handled, text := app.olBefore(ctx, "explique o código"); handled || text != "explique o código" {
+		t.Errorf("explain goes to the model: handled=%v text=%q", handled, text)
+	}
+	if len(h.ag.pendingNote) == 0 || !strings.Contains(h.ag.pendingNote[0], "Deterministic facts") {
+		t.Errorf("explain: the brain's facts must reach the model as grounding; notes=%v", h.ag.pendingNote)
+	}
+	t.Setenv("JAZZ_BRAIN", "off")
+	if handled, _ := app.olBefore(ctx, "quem é você"); handled {
+		t.Error("JAZZ_BRAIN=off must send everything to the model")
 	}
 }

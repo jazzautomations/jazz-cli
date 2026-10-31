@@ -1102,6 +1102,17 @@
       "status",
       "env"
      ]
+    },
+    {
+     "all": [
+      "cpu"
+     ],
+     "any": [
+      "env",
+      "status",
+      "version",
+      "list"
+     ]
     }
    ],
    "slots": {},
@@ -1119,7 +1130,18 @@
     "jazz env",
     "como tá o sistema",
     "o que tem nessa máquina",
-    "system info"
+    "system info",
+    "quantos núcleos tem essa máquina",
+    "qual o processador",
+    "que cpu tem",
+    "qual a arquitetura",
+    "que hardware é esse",
+    "quantos cores",
+    "whoami",
+    "quem sou eu aqui",
+    "que usuário sou eu",
+    "em que máquina estamos",
+    "que dispositivo é esse"
    ],
    "negatives": [
     "quais máquinas eu tenho"
@@ -2194,6 +2216,92 @@
    "negatives": []
   },
   {
+   "name": "self_info",
+   "desc": "sobre o próprio jazz: quem é, versão, onde mora, o que sabe",
+   "rules": [
+    {
+     "all": [
+      "version",
+      "jazz"
+     ]
+    },
+    {
+     "all": [
+      "who",
+      "self"
+     ]
+    },
+    {
+     "all": [
+      "explain",
+      "jazz"
+     ]
+    },
+    {
+     "all": [
+      "explain",
+      "self"
+     ]
+    },
+    {
+     "all": [
+      "self",
+      "jazz"
+     ]
+    },
+    {
+     "all": [
+      "self"
+     ],
+     "any": [
+      "who",
+      "explain",
+      "version",
+      "jazz",
+      "status",
+      "help"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quem é você",
+    "quem é vc",
+    "o que é você",
+    "o que é o jazz",
+    "você é o que",
+    "você faz o que",
+    "me fala sobre você",
+    "fala sobre o jazz",
+    "sobre você",
+    "sobre o jazz",
+    "qual a versão do jazz",
+    "versão do jazz",
+    "versão do jazz-cli",
+    "jazz version",
+    "que versão você é",
+    "onde você tá instalado",
+    "who are you",
+    "what are you",
+    "about you",
+    "tell me about jazz",
+    "what is jazz",
+    "your version",
+    "se apresenta",
+    "diz quem é você",
+    "você é o jazz?"
+   ],
+   "negatives": [
+    "atualiza o jazz",
+    "tenho o jazz instalado?",
+    "o jazz está instalado?",
+    "abre o jazz.go",
+    "cria o arquivo jazz.txt",
+    "versão do go",
+    "status do jazz"
+   ]
+  },
+  {
    "name": "none",
    "desc": "fora do domínio (vai pro modelo ou vira pergunta)",
    "rules": [],
@@ -2208,7 +2316,6 @@
     "me conta uma piada",
     "qual a capital da frança",
     "escreve um poema sobre o mar",
-    "quem é você",
     "thanks",
     "hello",
     "good morning",

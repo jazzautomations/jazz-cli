@@ -226,9 +226,22 @@ func TestSandboxRealHomeSSH(t *testing.T) {
 	defer func() { sbActive.Store(nil); sb.Close() }()
 	sh := NewShell(proj)
 	defer sh.Close()
-	r := sh.Run(context.Background(), "cat ~/.ssh/known_hosts | head -c 64; ls ~/.ssh", 20*time.Second, nil)
-	if r.ExitCode == 0 || !strings.Contains(r.Output, "ermi") && !strings.Contains(r.Output, "No such") {
-		t.Errorf("real ~/.ssh readable inside the sandbox: exit %d %q", r.ExitCode, r.Output)
+	// the real ~/.ssh may be masked (empty tmpfs: ls exits 0 with nothing),
+	// denied or absent — what matters is that none of its entries show
+	real, _ := os.ReadDir(filepath.Join(os.Getenv("HOME"), ".ssh"))
+	if len(real) == 0 {
+		t.Skip("no real ~/.ssh on this machine to protect")
+	}
+	r := sh.Run(context.Background(), "cat ~/.ssh/known_hosts | head -c 64; ls -a ~/.ssh", 20*time.Second, nil)
+	for _, e := range real {
+		if strings.Contains(r.Output, e.Name()) && !strings.Contains(r.Output, e.Name()+": No such") {
+			t.Errorf("real ~/.ssh entry %q visible inside the sandbox: exit %d %q", e.Name(), r.ExitCode, r.Output)
+		}
+	}
+	if kh, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")); err == nil && len(kh) > 0 {
+		if head := strings.TrimSpace(string(kh[:min(64, len(kh))])); head != "" && strings.Contains(r.Output, head) {
+			t.Errorf("real known_hosts readable inside the sandbox: %q", r.Output)
+		}
 	}
 	if r := sh.Run(context.Background(), "echo ok", 10*time.Second, nil); strings.TrimSpace(r.Output) != "ok" {
 		t.Errorf("shell broken: %q", r.Output)

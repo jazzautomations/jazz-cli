@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	epSchema      = 1
+	epSchema      = 3
 	epTTL         = 10 * time.Minute
 	epCmdTimeout  = 2 * time.Second
 	epMaxPathBins = 6000
@@ -89,6 +89,13 @@ type epProfile struct {
 	OS         string        `json:"os"`
 	Arch       string        `json:"arch"`
 	CPUs       int           `json:"cpus"`
+	Host       string        `json:"host,omitempty"`      // hostname
+	User       string        `json:"user,omitempty"`      // login running the harness ($USER/$LOGNAME)
+	OSName     string        `json:"os_name,omitempty"`   // /etc/os-release PRETTY_NAME
+	Kernel     string        `json:"kernel,omitempty"`    // /proc/sys/kernel/osrelease
+	CPUModel   string        `json:"cpu_model,omitempty"` // first cpuinfo model name
+	Machine    string        `json:"machine,omitempty"`   // DMI "vendor product" ("Dell Inc. Latitude D610")
+	UpSecs     int64         `json:"up_secs,omitempty"`   // /proc/uptime
 	MemTotalMB int           `json:"mem_total_mb,omitempty"`
 	MemAvailMB int           `json:"mem_avail_mb,omitempty"`
 	Termux     bool          `json:"termux,omitempty"`
@@ -123,6 +130,7 @@ type epSys struct {
 	Run          func(timeout time.Duration, name string, args ...string) (string, error)
 	Dial         func(addr string, d time.Duration) error
 	NumCPU       int
+	Hostname     string
 }
 
 // epRealRun runs a short read-only query: stdout+stderr (64 KB max), timeout.
@@ -162,8 +170,9 @@ func (l *epLimitW) Write(p []byte) (int, error) {
 
 func epRealSys() epSys {
 	h, _ := os.UserHomeDir()
+	hn, _ := os.Hostname()
 	return epSys{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Home: h, PathEnv: os.Getenv("PATH"), Getenv: os.Getenv,
-		ReadFile: os.ReadFile, ReadDir: os.ReadDir, Stat: os.Stat, LookPath: exec.LookPath, Run: epRealRun,
+		ReadFile: os.ReadFile, ReadDir: os.ReadDir, Stat: os.Stat, LookPath: exec.LookPath, Run: epRealRun, Hostname: hn,
 		Dial: func(a string, d time.Duration) error {
 			c, err := net.DialTimeout("tcp", a, d)
 			if err == nil {
@@ -300,7 +309,10 @@ var epToolchains = []struct{ name, flag string }{
 // epProbe builds a profile from sys (sequential, bounded).
 func epProbe(sys epSys) *epProfile {
 	t0 := time.Now()
-	p := &epProfile{V: epSchema, OS: sys.GOOS, Arch: sys.GOARCH, CPUs: sys.NumCPU}
+	p := &epProfile{V: epSchema, OS: sys.GOOS, Arch: sys.GOARCH, CPUs: sys.NumCPU, Host: sys.Hostname}
+	if p.User = sys.Getenv("USER"); p.User == "" {
+		p.User = sys.Getenv("LOGNAME")
+	}
 	p.Termux = sys.Getenv("TERMUX_VERSION") != "" || strings.HasSuffix(filepath.ToSlash(sys.Getenv("PREFIX")), "/com.termux/files/usr")
 	if sys.GOOS == "linux" {
 		if b, err := sys.ReadFile("/proc/sys/kernel/osrelease"); err == nil && strings.Contains(strings.ToLower(string(b)), "microsoft") {
@@ -312,6 +324,14 @@ func epProbe(sys epSys) *epProfile {
 		p.Container = epContainerKind(sys)
 		p.MemTotalMB, p.MemAvailMB = epMeminfo(sys)
 		p.Ports = epListenPorts(sys)
+		p.Kernel = epRead1(sys, "/proc/sys/kernel/osrelease")
+		p.OSName = epOSRelease(sys)
+		p.CPUModel = epCPUModel(sys)
+		p.Machine = epMachineModel(sys)
+		p.UpSecs = epUptimeSecs(sys)
+		if p.Host == "" {
+			p.Host = epRead1(sys, "/proc/sys/kernel/hostname")
+		}
 	} else if sys.GOOS == "darwin" {
 		if out, err := sys.Run(epCmdTimeout, "sysctl", "-n", "hw.memsize"); err == nil {
 			if n, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64); err == nil {
@@ -399,6 +419,108 @@ func epMeminfo(sys epSys) (total, avail int) {
 		}
 	}
 	return total, avail
+}
+
+// epRead1 is the first line of a proc/sys file ("" when absent).
+func epRead1(sys epSys, path string) string {
+	b, err := sys.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	s, _, _ := strings.Cut(string(b), "\n")
+	return strings.TrimSpace(s)
+}
+
+// epOSRelease is PRETTY_NAME of /etc/os-release ("Ubuntu 24.04 LTS").
+func epOSRelease(sys epSys) string {
+	b, err := sys.ReadFile("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	for _, ln := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(ln, "PRETTY_NAME="); ok {
+			return strings.Trim(strings.TrimSpace(v), `"`)
+		}
+	}
+	return ""
+}
+
+// epCPUModel is the first cpuinfo model ("model name"; ARM: "Model"/"Hardware").
+func epCPUModel(sys epSys) string {
+	b, err := sys.ReadFile("/proc/cpuinfo")
+	if err != nil {
+		return ""
+	}
+	fallback := ""
+	for _, ln := range strings.Split(string(b), "\n") {
+		k, v, ok := strings.Cut(ln, ":")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "model name", "Model":
+			return strings.TrimSpace(v)
+		case "Hardware":
+			if fallback == "" {
+				fallback = strings.TrimSpace(v)
+			}
+		}
+	}
+	return fallback
+}
+
+// epDMIJunk: DMI strings vendors leave unfilled (exact match after folding).
+func epDMIJunk(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return true
+	}
+	for _, j := range []string{"to be filled by o.e.m.", "not specified", "not available", "none", "unknown", "system product name", "product name", "default string"} {
+		if s == j {
+			return true
+		}
+	}
+	return false
+}
+
+// epMachineModel is the DMI product ("Dell Inc. Latitude D610").
+func epMachineModel(sys epSys) string {
+	name := epRead1(sys, "/sys/class/dmi/id/product_name")
+	if epDMIJunk(name) {
+		return ""
+	}
+	vendor := epRead1(sys, "/sys/class/dmi/id/sys_vendor")
+	if epDMIJunk(vendor) {
+		return name
+	}
+	if !strings.Contains(strings.ToLower(name), strings.ToLower(vendor)) {
+		return vendor + " " + name
+	}
+	return name
+}
+
+// epUptimeSecs parses the first field of /proc/uptime.
+func epUptimeSecs(sys epSys) int64 {
+	f, _, _ := strings.Cut(epRead1(sys, "/proc/uptime"), " ")
+	d, err := strconv.ParseFloat(f, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(d)
+}
+
+// epUpText renders an uptime: "3d5h", "40m".
+func epUpText(s int64) string {
+	switch {
+	case s >= 86400:
+		return fmt.Sprintf("%dd%dh", s/86400, (s%86400)/3600)
+	case s >= 3600:
+		return fmt.Sprintf("%dh%dm", s/3600, (s%3600)/60)
+	case s >= 60:
+		return fmt.Sprintf("%dm", s/60)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
 
 // epListenPorts parses /proc/net/tcp and tcp6: state 0A = LISTEN.
@@ -740,6 +862,12 @@ type epEntity struct {
 	Detail string
 }
 
+// epGenericHost: hostnames that are also ordinary words in a request
+// ("instala no ubuntu") — never spotted as the local host entity.
+var epGenericHost = map[string]bool{"localhost": true, "ubuntu": true, "debian": true, "linux": true, "arch": true,
+	"fedora": true, "mint": true, "kali": true, "android": true, "termux": true, "server": true, "host": true,
+	"machine": true, "maquina": true, "desktop": true, "laptop": true, "notebook": true, "computer": true}
+
 // epEntities flattens a profile into resolvable names. Toolchains come first
 // (they are the "frequent" names that win ties).
 func epEntities(p *epProfile) []epEntity {
@@ -769,6 +897,9 @@ func epEntities(p *epProfile) []epEntity {
 			st = "online"
 		}
 		add("ts_peer", t.Name, strings.TrimSpace(t.IP+" "+st))
+	}
+	if len(p.Host) >= 3 && !epGenericHost[strings.ToLower(p.Host)] { // the machine itself is a host the user may name ("e o labbox?")
+		add("ts_peer", p.Host, "esta máquina")
 	}
 	for _, s := range p.Services {
 		add("service", s.Name, s.Manager+" "+s.State)
@@ -825,6 +956,31 @@ func epText(p *epProfile) string {
 	}
 	if p.Container != "" {
 		flags = append(flags, "contêiner "+p.Container)
+	}
+	var mi []string
+	if p.Host != "" {
+		mi = append(mi, p.Host)
+	}
+	if p.User != "" {
+		mi = append(mi, "usuário "+p.User)
+	}
+	if p.Machine != "" {
+		mi = append(mi, p.Machine)
+	}
+	if p.OSName != "" {
+		mi = append(mi, p.OSName)
+	}
+	if p.Kernel != "" {
+		mi = append(mi, "kernel "+p.Kernel)
+	}
+	if p.CPUModel != "" {
+		mi = append(mi, p.CPUModel)
+	}
+	if p.UpSecs > 0 {
+		mi = append(mi, "ligada há "+epUpText(p.UpSecs))
+	}
+	if len(mi) > 0 {
+		fmt.Fprintf(&b, "máquina   %s\n", strings.Join(mi, " · "))
 	}
 	fmt.Fprintf(&b, "sistema   %s/%s · %d núcleo(s)", p.OS, p.Arch, p.CPUs)
 	if p.MemTotalMB > 0 {

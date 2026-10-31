@@ -82,6 +82,7 @@ func epFakeProfile() *epProfile {
 		"/proc/meminfo":                 "MemTotal:        2061260 kB\nMemFree:          100000 kB\nMemAvailable:    1024000 kB\n",
 		"/proc/net/tcp":                 epProcTCP,
 		"/proc/sys/kernel/osrelease":    "4.19.0-antix\n",
+		"/proc/sys/kernel/hostname":     "lab386\n",
 		"/run/systemd/system":           "",
 		"/home/u/.ssh/config":           "Host labbox\n  HostName 198.51.100.7\n  User ops\n\nHost vps prod\n  HostName 1.2.3.4\nHost *\n  ServerAliveInterval 30\nInclude extra.conf\n",
 		"/home/u/.ssh/extra.conf":       "Host media01\n  HostName 10.0.0.9\n",

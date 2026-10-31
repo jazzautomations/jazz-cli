@@ -101,6 +101,7 @@ var cbBrainCaps = []Capability{
 		Schema: map[string]any{"target": "string?"}},
 	{Name: "git_status", Desc: "git status/branch", Risk: cbLow, Effects: []string{"read", "git"}, DryRun: true, Verifier: "exit_zero", Timeout: 20 * time.Second, Needs: cbNeeds{Bins: []string{"git"}}},
 	{Name: "env_status", Desc: "perfil do ambiente (envprobe)", Risk: cbLow, Effects: []string{"fact:env"}, DryRun: true, Verifier: "profile_present", Timeout: 20 * time.Second},
+	{Name: "self_info", Desc: "quem é o jazz: versão, binário, modo, cobertura do cérebro", Risk: cbLow, Effects: []string{"fact:self"}, DryRun: true, Verifier: "read_ok", Timeout: 5 * time.Second},
 	{Name: "report", Desc: "relatar ao usuário (sem efeito)", Risk: cbLow, DryRun: true, Timeout: 0},
 }
 

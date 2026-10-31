@@ -2,7 +2,7 @@
  {"name": "help.list", "intent": "help", "priority": 10,
   "doc": "o que o cérebro offline sabe fazer sem modelo",
   "steps": [
-   {"cap": "say", "in": {"text": "sem modelo eu sei: abrir e explicar arquivos ou símbolos, listar arquivos, resumo do projeto, procurar símbolo, git status/log/diff, rodar testes, status do ambiente e de ferramentas, hosts (ssh/tailscale), portas abertas e dono de porta, disco, memória e processos. Ex.: 'explica o app.py', 'últimos commits', 'quem está na porta 8080'."}, "out": "text"}],
+   {"cap": "say", "in": {"text": "sem modelo eu sei: abrir e explicar arquivos ou símbolos, listar, criar, apagar e renomear arquivos (com /undo), resumo do projeto, procurar símbolo, git status/log/diff e git commit/pull/push com confirmação, rodar testes, status do ambiente e de ferramentas, hosts (ssh/tailscale), portas e dono de porta, disco, memória e processos, serviços, containers, dependências — e falar sobre mim e sobre esta máquina. Ex.: 'explica o app.py', 'últimos commits', 'quem está na porta 8080', 'que máquina é essa', 'quem é você'."}, "out": "text"}],
   "verify": [{"check": "read_ok", "arg": "$text"}],
   "risk": "low", "cost_ms": 1}
 ]}

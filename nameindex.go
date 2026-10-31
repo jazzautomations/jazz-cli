@@ -101,6 +101,22 @@ func niGet(root string) *niIndex {
 	return ix
 }
 
+// niGetFresh is niGet for the moment a user opens a listing (the @ picker):
+// a cheap index (built in under niFreshMaxMS) is rebuilt so files that just
+// appeared show up; a slow one keeps the TTL.
+func niGetFresh(root string) *niIndex {
+	niMu.Lock()
+	defer niMu.Unlock()
+	if ix, ok := niCache[root]; ok && ix.buildMS >= niFreshMaxMS {
+		return ix
+	}
+	ix := niBuild(root)
+	niCache[root] = ix
+	return ix
+}
+
+const niFreshMaxMS = 300
+
 // niMask is the letter bag of a key (bit c-'a' per ASCII letter, either
 // case; bit 26 for any digit) and its rune length capped at 255.
 func niMask(k string) (uint32, uint8) {

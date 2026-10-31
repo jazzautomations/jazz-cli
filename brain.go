@@ -547,7 +547,13 @@ var brLevel0Intents = map[string]bool{
 	"disk_usage": true, "mem_usage": true, "list_processes": true, "help": true,
 	"container_list": true, "service_status": true, "service_logs": true,
 	"host_status": true, "list_hosts": true, "net_status": true, "git_branch": true,
+	"self_info": true,
 }
+
+// brGroundIntents are interpretive: online, the brain's facts ground the
+// model instead of replacing it ("explique o código" wants an explanation,
+// not a dump).
+var brGroundIntents = map[string]bool{"explain": true, "project_summary": true}
 
 // brLevel0Min is the confidence a level-0 answer needs.
 const brLevel0Min = 0.85
@@ -597,6 +603,59 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 		rr.Status, rr.Err = StopError, "cérebro offline: "+string(r.Status)
 	}
 	return rr
+}
+
+// brLevel0Interactive gives the deterministic brain first shot at an ONLINE
+// interactive request too: the -p level-0 rule — a clearly understood
+// read-only intent the brain finishes never reaches the model. Anything else
+// (writes, questions, low confidence) goes to the model untouched.
+func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
+	if !brLevel0On() || len(text) > 200 || strings.ContainsAny(text, "\n`") {
+		return false
+	}
+	p := epGetLight()
+	in := nuGet().Parse(text, nuRuntimeWorld(a.root, p))
+	if !in.Understood() || in.Confidence < brLevel0Min || !brLevel0Intents[in.Name] {
+		return false
+	}
+	if in.Name == "env_status" || in.Name == "tool_info" || in.Name == "tool_status" {
+		p = epGet(false) // versions and listings matter here
+	}
+	env := &brEnv{Root: a.root, Shell: a.tools.Shell, Permit: a.agent.PermitCommand, Profile: p, Scripts: a.tools.scRegistry(),
+		BeginTurn: func() { a.tools.BeginTurn(len(a.agent.Msgs)) }, AfterWrite: a.tools.cpAfterBash, Undo: a.tools.Undo, HostRun: brHostExec}
+	if a.agent.sess != nil {
+		env.Sink = tkSessionSink(a.agent.sess)
+	}
+	env.Ask = func(q string, opts []string) int {
+		items := make([]mnItem, 0, len(opts)+1)
+		for _, o := range opts {
+			items = append(items, mnItem{Label: o})
+		}
+		items = append(items, mnItem{Label: "Nenhum desses", Key: 'n'})
+		i := a.ui.Choose(q, items, 0)
+		if i < 0 || i >= len(opts) {
+			return -1
+		}
+		return i
+	}
+	r := brRun(ctx, env, text)
+	ok := r.Handled && (r.Status == tkSucceeded || r.Status == tkBlocked && r.Intent.Name == "git_status" && r.Category != rvPermission || r.Status == tkBlocked && r.Intent.Name == "tool_status" && r.Category == rvCommandMissing)
+	if !ok {
+		return false // nothing shown: the model gets the request clean
+	}
+	if brGroundIntents[in.Name] {
+		// interpretive request: the facts go to the model as grounding, the
+		// model does the explaining (it starts from evidence, not from scratch)
+		a.ui.Notice("cérebro: " + in.Name + " coletado como contexto pro modelo")
+		a.agent.Note(fmt.Sprintf("<system-reminder>Deterministic facts the harness gathered for %q (intent %s, verified): use them as the basis of your answer instead of re-exploring.\n%s</system-reminder>", oneLine(text, 200), in.Name, truncateHeadTail(r.Text, 6000)))
+		return false
+	}
+	if r.Text != "" {
+		a.ui.print(sanitizeTerm(r.Text) + "\n")
+	}
+	a.ui.Notice(strings.TrimPrefix(brStatusLine(r), "· "))
+	a.agent.Note(fmt.Sprintf("<system-reminder>The harness's deterministic brain handled %q as %s: %s — no model call was needed. Output:\n%s</system-reminder>", oneLine(text, 200), r.Intent.Name, r.Status, truncateHeadTail(r.Text, 6000)))
+	return true
 }
 
 // ---------- interactive (offline mode) ----------

@@ -354,18 +354,23 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.olSummary(ctx)
 		return true, text
 	}
+	toModel := false // the user explicitly chose "Mandar pro modelo" on a fast path
 	if offline || fpEnabled(a.cfg) {
 		if m, ok := fpIntents(a.root).Match(text, fpDetect(a.root), a.tools.hasRg); ok {
 			done, note := a.olFastPath(ctx, m, offline)
 			if done {
 				return true, text
 			}
+			toModel = note == ""
 			if note != "" {
 				text += "\n\n" + note
 			}
 		}
 	}
 	if !offline {
+		if !toModel && a.brLevel0Interactive(ctx, text) { // brain level-0: understood read-only intents skip the model online too
+			return true, text
+		}
 		return false, text
 	}
 	if olIsLocalRef(a.cfg, a.agent.Model) {

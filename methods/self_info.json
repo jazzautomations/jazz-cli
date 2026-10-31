@@ -1,0 +1,8 @@
+{"methods": [
+ {"name": "self_info.who", "intent": "self_info", "priority": 10,
+  "doc": "quem é o jazz: versão, binário, modo, cobertura do cérebro",
+  "pre": [],
+  "steps": [{"cap": "self_info", "in": {}, "out": "info"}],
+  "verify": [{"check": "read_ok", "arg": "$info"}],
+  "risk": "low", "cost_ms": 5}
+]}

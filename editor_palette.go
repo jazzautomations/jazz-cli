@@ -162,8 +162,11 @@ type edPath struct {
 	dir         bool
 }
 
-func (p *edPaths) refresh(root string) {
+func (p *edPaths) refresh(root string, opening bool) {
 	ix := niGet(root)
+	if opening { // "@" just typed: a cheap index is rebuilt so new files show up
+		ix = niGetFresh(root)
+	}
 	if ix == p.ix {
 		return
 	}
@@ -289,7 +292,7 @@ func (e *Editor) popup(boxed bool, buf []rune, pos int) edPop {
 		if root == "" {
 			root, _ = os.Getwd()
 		}
-		e.paths.refresh(root)
+		e.paths.refresh(root, tok == "")
 		var items []EdCommand
 		for _, m := range e.paths.match(tok) {
 			if m != tok { // "@src/" itself: picking it would change nothing
