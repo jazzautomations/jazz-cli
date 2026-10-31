@@ -1,0 +1,20 @@
+{"methods": [
+ {"name": "build.parsed", "intent": "build", "priority": 11,
+  "doc": "build pelo parse_build_errors: diagnósticos agrupados por arquivo:linha em vez de saída crua",
+  "pre": [{"fact": "project.build", "op": "set"}],
+  "steps": [{"cap": "script:parse_build_errors", "in": {"cmd": "$fact.project.build"}, "out": "res"}],
+  "verify": [{"check": "script_exit_zero", "arg": "$res"}],
+  "risk": "med", "cost_ms": 120000, "needs": ["bin.python3"]},
+ {"name": "build.detected", "intent": "build", "priority": 10,
+  "doc": "comando de build da detecção do projeto (fpDetect) → roda → saída",
+  "pre": [{"fact": "project.build", "op": "set"}],
+  "steps": [{"cap": "proj_cmd", "in": {"which": "build"}, "out": "res"}],
+  "verify": [{"check": "exit_zero", "arg": "$res"}],
+  "risk": "med", "cost_ms": 30000},
+ {"name": "build.no_cmd", "intent": "build", "priority": 1,
+  "doc": "sem comando de build detectado",
+  "pre": [{"fact": "project.build", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "não detectei comando de build neste projeto (procurei Makefile/build, go.mod, package.json scripts, Cargo.toml, pyproject)", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

@@ -607,8 +607,15 @@ func olHeadlessRun(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, m fpMa
 	ui.ToolEnd("fastpath", "bash", ToolOutput{Text: out, IsErr: r.ExitCode != 0, Display: Display{Summary: fmt.Sprintf("exit %d · atalho %s", r.ExitCode, m.Intent)}}, r.Duration)
 	dbg("fastpath", map[string]any{"intent": m.Intent, "cmd": m.Cmd, "exit": r.ExitCode, "offline": offline, "headless": true})
 	text := strings.TrimRight(out, "\n")
+	// rg/grep exit 1 on no match: for a search intent that is a verified
+	// "0 resultados", not a failure — and a silent empty answer helps nobody.
+	searchMiss := strings.TrimSpace(out) == "" && r.ExitCode == 1 &&
+		(m.Intent == "search" || m.Intent == "search_code" || m.Intent == "where")
 	switch {
-	case r.ExitCode == 0 && !r.Reset:
+	case r.ExitCode == 0 && !r.Reset || searchMiss:
+		if strings.TrimSpace(out) == "" {
+			text = fmt.Sprintf("0 resultados — `%s` não encontrou nada", m.Cmd)
+		}
 		return &RunResult{Status: StopDone, Text: text, Model: "fastpath", Tools: 1}, prompt
 	case ctx.Err() != nil:
 		return &RunResult{Status: StopInterrupted, Text: text, Model: "fastpath", Tools: 1}, prompt

@@ -1,0 +1,15 @@
+{"methods": [
+ {"name": "git_branch.list", "intent": "git_branch", "priority": 10,
+  "doc": "git branch lista as branches e marca a atual (só leitura); criar/mudar de branch pede confirmação e vai pelo modelo",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "cmds": ["git branch"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "git branch"}, "out": "b"}],
+  "verify": [{"check": "cmd_ran", "arg": "$b"}],
+  "risk": "low", "cost_ms": 300},
+ {"name": "git_branch.not_repo", "intent": "git_branch", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

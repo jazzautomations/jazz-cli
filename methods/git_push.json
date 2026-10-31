@@ -1,0 +1,14 @@
+{"methods": [
+ {"name": "git_push.run", "intent": "git_push", "priority": 10,
+  "doc": "git push (rede, pela permissão)",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "steps": [{"cap": "git_op", "in": {"sub": "push"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 30000},
+ {"name": "git_push.not_repo", "intent": "git_push", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

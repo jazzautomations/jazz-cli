@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "update_dep.mgr", "intent": "update_dep", "priority": 10,
+  "doc": "atualiza dependência no gerenciador detectado",
+  "pre": [{"fact": "slot.dep", "op": "set"}],
+  "steps": [{"cap": "pkg_cmd", "in": {"op": "update", "dep": "$slot.dep"}, "out": "r"}],
+  "verify": [{"check": "exit_zero", "arg": "$r"}],
+  "risk": "high", "cost_ms": 60000},
+ {"name": "update_dep.ask", "intent": "update_dep", "priority": 1,
+  "doc": "sem dependência: pergunta qual",
+  "pre": [{"fact": "slot.dep", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "dep", "q": "Atualizar qual dependência?"}, "out": "slot.dep"},
+   {"cap": "pkg_cmd", "in": {"op": "update", "dep": "$slot.dep"}, "out": "r"}],
+  "verify": [{"check": "exit_zero", "arg": "$r"}],
+  "risk": "high", "cost_ms": 60000}
+]}

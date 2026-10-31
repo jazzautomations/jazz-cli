@@ -1,0 +1,15 @@
+{"methods": [
+ {"name": "list_files.tree", "intent": "list_files", "priority": 10,
+  "doc": "visão da pasta por extensão/LOC via script:tree_summary (pula vendor e ocultos); slot.dir vazio = raiz do projeto",
+  "needs": ["bin.python3"],
+  "steps": [
+   {"cap": "script:tree_summary", "in": {"path": "$slot.dir"}, "out": "tree"}],
+  "verify": [{"check": "script_ok", "arg": "$tree"}],
+  "risk": "low", "cost_ms": 400},
+ {"name": "list_files.read", "intent": "list_files", "priority": 5,
+  "doc": "sem python3: lista as entradas da pasta (read_file entende diretório)",
+  "steps": [
+   {"cap": "read_file", "in": {"path": "$slot.dir"}, "out": "listing"}],
+  "verify": [{"check": "read_ok", "arg": "$listing"}],
+  "risk": "low", "cost_ms": 10}
+]}

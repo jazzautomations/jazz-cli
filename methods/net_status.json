@@ -1,0 +1,7 @@
+{"methods": [
+ {"name": "net_status.profile", "intent": "net_status", "priority": 10,
+  "doc": "a conectividade que o perfil de ambiente mediu (sem probe novo)",
+  "steps": [{"cap": "net_status", "in": {}, "out": "p"}],
+  "verify": [{"check": "profile_present", "arg": "$p"}],
+  "risk": "low", "cost_ms": 50}
+]}

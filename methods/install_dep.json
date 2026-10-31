@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "install_dep.mgr", "intent": "install_dep", "priority": 10,
+  "doc": "gerenciador detectado pelos arquivos do projeto (npm/pip/go/cargo) → install, pela permissão",
+  "pre": [{"fact": "slot.dep", "op": "set"}],
+  "steps": [{"cap": "pkg_cmd", "in": {"op": "install", "dep": "$slot.dep"}, "out": "r"}],
+  "verify": [{"check": "exit_zero", "arg": "$r"}],
+  "risk": "high", "cost_ms": 60000},
+ {"name": "install_dep.ask", "intent": "install_dep", "priority": 1,
+  "doc": "sem dependência: pergunta qual",
+  "pre": [{"fact": "slot.dep", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "dep", "q": "Instalar qual dependência?"}, "out": "slot.dep"},
+   {"cap": "pkg_cmd", "in": {"op": "install", "dep": "$slot.dep"}, "out": "r"}],
+  "verify": [{"check": "exit_zero", "arg": "$r"}],
+  "risk": "high", "cost_ms": 60000}
+]}

@@ -1,0 +1,8 @@
+{"methods": [
+ {"name": "help.list", "intent": "help", "priority": 10,
+  "doc": "o que o cérebro offline sabe fazer sem modelo",
+  "steps": [
+   {"cap": "say", "in": {"text": "sem modelo eu sei: abrir e explicar arquivos ou símbolos, listar arquivos, resumo do projeto, procurar símbolo, git status/log/diff, rodar testes, status do ambiente e de ferramentas, hosts (ssh/tailscale), portas abertas e dono de porta, disco, memória e processos. Ex.: 'explica o app.py', 'últimos commits', 'quem está na porta 8080'."}, "out": "text"}],
+  "verify": [{"check": "read_ok", "arg": "$text"}],
+  "risk": "low", "cost_ms": 1}
+]}

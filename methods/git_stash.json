@@ -1,0 +1,15 @@
+{"methods": [
+ {"name": "git_stash.list", "intent": "git_stash", "priority": 10,
+  "doc": "git stash list (só leitura); criar/aplicar stash muda o working tree e vai pelo modelo com confirmação",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "cmds": ["git stash list"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "git stash list"}, "out": "s"}],
+  "verify": [{"check": "cmd_ran", "arg": "$s"}],
+  "risk": "low", "cost_ms": 300},
+ {"name": "git_stash.not_repo", "intent": "git_stash", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

@@ -1,0 +1,24 @@
+{"methods": [
+ {"name": "service_logs.unit", "intent": "service_logs", "priority": 10,
+  "doc": "journalctl -u <unidade> -n 50 (só leitura)",
+  "needs": ["bin.journalctl"],
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [{"cap": "systemd", "in": {"op": "logs", "unit": "$slot.target"}, "out": "lg"}],
+  "verify": [{"check": "cmd_ran", "arg": "$lg"}],
+  "risk": "low", "cost_ms": 500},
+ {"name": "service_logs.ask", "intent": "service_logs", "priority": 5,
+  "doc": "sem alvo: pergunta de qual serviço",
+  "needs": ["bin.journalctl"],
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Logs de qual serviço?"}, "out": "slot.target"},
+   {"cap": "systemd", "in": {"op": "logs", "unit": "$slot.target"}, "out": "lg"}],
+  "verify": [{"check": "cmd_ran", "arg": "$lg"}],
+  "risk": "low", "cost_ms": 500},
+ {"name": "service_logs.no_systemd", "intent": "service_logs", "priority": 1,
+  "doc": "sem journalctl",
+  "pre": [{"fact": "bin.journalctl", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "journalctl não está no PATH — não dá pra ler logs de serviço", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

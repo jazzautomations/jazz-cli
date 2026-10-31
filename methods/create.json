@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "create.file", "intent": "create", "priority": 10,
+  "doc": "file_op create: arquivo novo dentro do projeto (checkpoint → /undo); conteúdo gerado vai pelo modelo",
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [{"cap": "file_op", "in": {"op": "create", "path": "$slot.target"}, "out": "f"}],
+  "verify": [{"check": "file_exists", "arg": "$slot.target"}],
+  "risk": "med", "cost_ms": 50},
+ {"name": "create.ask", "intent": "create", "priority": 1,
+  "doc": "sem alvo: pergunta o caminho",
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Criar qual arquivo?"}, "out": "slot.target"},
+   {"cap": "file_op", "in": {"op": "create", "path": "$slot.target"}, "out": "f"}],
+  "verify": [{"check": "file_exists", "arg": "$slot.target"}],
+  "risk": "med", "cost_ms": 50}
+]}

@@ -1,0 +1,31 @@
+{"methods": [
+ {"name": "git_diff.rich", "intent": "git_diff", "priority": 11,
+  "doc": "diff_quality: checklist do diff (tamanho, funções longas, markers) por cima do diff bruto",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "git diff --stat"}, "out": "stat"},
+   {"cap": "script:diff_quality", "in": {}, "out": "dq"}],
+  "verify": [{"check": "script_ok", "arg": "$dq"}],
+  "risk": "low", "cost_ms": 800, "needs": ["bin.python3"]},
+ {"name": "git_diff.repo", "intent": "git_diff", "priority": 10,
+  "doc": "git diff --stat + git diff truncado (só leitura); diff por arquivo ainda não implementado",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "cmds": ["git diff --stat", "git diff"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "git diff --stat"}, "out": "stat"},
+   {"cap": "read_cmd", "in": {"cmd": "git diff"}, "out": "diff"}],
+  "verify": [{"check": "exit_zero", "arg": "$diff"}],
+  "risk": "low", "cost_ms": 400},
+ {"name": "git_diff.no_git", "intent": "git_diff", "priority": 5,
+  "doc": "repositório git mas git ausente do PATH",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta é um repositório git, mas o git não está no PATH", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1},
+ {"name": "git_diff.not_repo", "intent": "git_diff", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git (nenhum .git até a raiz)", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

@@ -461,6 +461,52 @@ func TestAgentLoopDetectionWarnsThenStops(t *testing.T) {
 	}
 }
 
+func TestAgentLoopDetectionCatchesAlternatingCycle(t *testing.T) {
+	// A-B-A-B ping-pong: each hash only repeats ~3 times, so the identical-
+	// call counter never fires; the tail periodicity has to catch it.
+	h := newHarness(t, func(n int, r recReq) fakeResp {
+		if n%2 == 0 {
+			return fakeResp{Calls: []fakeCall{{Name: "bash", Args: `{"command":"echo A"}`}}}
+		}
+		return fakeResp{Calls: []fakeCall{{Name: "bash", Args: `{"command":"echo B"}`}}}
+	}, func(c *Config) { c.Recover = "off" })
+	if err := h.run(t, "go"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if reqs := h.fs.requests(); len(reqs) > 8 {
+		t.Fatalf("ABAB loop should stop well before the step budget; requests=%d", len(reqs))
+	}
+	lm := lastMsg(h.ag.Msgs)
+	if lm.Role != "user" || !strings.Contains(lm.Content, "stuck repeating") {
+		t.Errorf("last message should be loop reminder: %+v", lm)
+	}
+	if !anyContains(h.ui.warns, "loop") {
+		t.Errorf("loop warning missing: %v", h.ui.warns)
+	}
+}
+
+func TestAcLoopLen(t *testing.T) {
+	for _, tc := range []struct {
+		seq    []string
+		period int
+		cyc    int
+	}{
+		{nil, 0, 0},
+		{[]string{"a"}, 0, 0},
+		{[]string{"a", "b", "c", "d"}, 0, 0},
+		{[]string{"a", "a"}, 1, 2},
+		{[]string{"x", "a", "b", "a", "b"}, 2, 2},
+		{[]string{"a", "b", "a", "b", "a", "b"}, 2, 3},
+		{[]string{"a", "b", "c", "a", "b", "c"}, 3, 2},
+		{[]string{"a", "a", "a", "a"}, 1, 4},
+		{[]string{"a", "b", "b", "a"}, 0, 0},
+	} {
+		if p, c := acLoopLen(tc.seq, 4); p != tc.period || c != tc.cyc {
+			t.Errorf("acLoopLen(%v) = %d,%d; want %d,%d", tc.seq, p, c, tc.period, tc.cyc)
+		}
+	}
+}
+
 func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 	// same args but different results each time (counter file) => no warning
 	h := newHarness(t, func(n int, r recReq) fakeResp {

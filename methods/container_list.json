@@ -1,0 +1,22 @@
+{"methods": [
+ {"name": "container_list.docker", "intent": "container_list", "priority": 10,
+  "doc": "docker ps (só leitura)",
+  "needs": ["bin.docker"],
+  "cmds": ["docker ps"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "docker ps"}, "out": "ps"}],
+  "verify": [{"check": "exit_zero", "arg": "$ps"}],
+  "risk": "low", "cost_ms": 300},
+ {"name": "container_list.podman", "intent": "container_list", "priority": 9,
+  "doc": "podman ps (só leitura)",
+  "needs": ["bin.podman"],
+  "cmds": ["podman ps"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "podman ps"}, "out": "ps"}],
+  "verify": [{"check": "exit_zero", "arg": "$ps"}],
+  "risk": "low", "cost_ms": 300},
+ {"name": "container_list.none", "intent": "container_list", "priority": 1,
+  "doc": "nem docker nem podman no PATH",
+  "pre": [{"fact": "bin.docker", "op": "unset"}, {"fact": "bin.podman", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "nem docker nem podman estão no PATH — não dá pra listar containers", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

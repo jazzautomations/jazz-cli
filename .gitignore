@@ -9,6 +9,7 @@ dist/
 # eval and red-team results (run.sh writes them; v1/v2 write under $HOME/jazz-eval-results)
 evals/redteam/results/
 evals/**/results/
+results/
 evals/calib-v2/
 jazz-eval-results/
 

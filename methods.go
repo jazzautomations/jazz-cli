@@ -17,11 +17,13 @@ package main
 // project.test|build|git, bin.<name>, env.online.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -162,6 +164,20 @@ type brEnv struct {
 	Profile *epProfile                                                // nil = epGet(false)
 	World   *nuWorld                                                  // nil = project + environment
 	Run     func(ctx context.Context, cmd string) (string, int, bool) // nil = Shell (tests)
+	Scripts *scRegistry                                               // nil = scLoad(Root)
+	// shadow-git (checkpoint.go): BeginTurn opens the turn snapshot,
+	// AfterWrite records the paths a command changed, Undo restores the
+	// last writing turn. nil = the brain runs without /undo coverage.
+	BeginTurn  func()
+	AfterWrite func(cmd string)
+	Undo       func() ([]string, error)
+	// HostRun executes one argv OUTSIDE the command sandbox: process ops
+	// (ps/pgrep/kill) only see the sandbox's PID namespace through Shell,
+	// so host ops need a direct exec. The brain builds the argv itself
+	// (validated values only) — there is no shell to inject into. The
+	// permission check on the equivalent command string still applies.
+	// nil = fall back to the sandboxed Shell.
+	HostRun func(ctx context.Context, argv []string) (string, int)
 }
 
 // brCtx is one execution.
@@ -213,6 +229,9 @@ func (cx *brCtx) subst(v string) any {
 	}
 	if k == "hint" {
 		return cx.in.Hint
+	}
+	if strings.HasPrefix(k, "fact.") {
+		return cx.facts[k[5:]]
 	}
 	if x, ok := cx.vars[k]; ok {
 		return x
@@ -268,6 +287,9 @@ func (cx *brCtx) runCmdAs(cmd string, timeout time.Duration, read bool) (out str
 		obs.Output = "sem shell"
 		return "", 127, obs
 	}
+	if cx.env.AfterWrite != nil {
+		cx.env.AfterWrite(cmd) // shadow-git; cpAfterBash skips read-only commands
+	}
 	obs.Exit, obs.Output, obs.TimedOut = exit, truncateHeadTail(out, 4000), timedOut
 	t.AddEvidence("cmd", fmt.Sprintf("`%s` → exit %d", cmd, exit))
 	if cx.explore != nil && cx.explore.Observe(cmd, IsReadOnly(cmd), out) {
@@ -289,7 +311,731 @@ var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
 	"tool_report":  brToolReport,
 	"tool_status":  brToolStatus,
 	"host_report":  brHostReport,
+	"host_list":    brHostList,
+	"systemd":      brSystemd,
+	"net_status":   brNetStatus,
+	"proj_cmd":     brProjCmd,
+	"read_cmd":     brReadCmd,
+	"say":          brSay,
 	"report":       brReport,
+	"file_op":      brFileOp,
+	"git_op":       brGitOp,
+	"proc_kill":    brProcKill,
+	"pkg_cmd":      brPkgCmd,
+	"container_op": brContainerOp,
+	"undo":         brUndo,
+}
+
+// brCap resolves a capability name: the named Go caps above, or `script:<n>`
+// routed to the Toolbox script runner — every script is a registered
+// capability (caps.go cbRegistry), and this is the dispatch the registry
+// expects (docs/design/offline-brain.md §5).
+func brCap(name string) func(cx *brCtx, in map[string]string) brStep {
+	if fn := brCaps[name]; fn != nil {
+		return fn
+	}
+	if n, ok := strings.CutPrefix(name, "script:"); ok && scNameRe.MatchString(n) {
+		return func(cx *brCtx, in map[string]string) brStep { return brScript(cx, n, in) }
+	}
+	return nil
+}
+
+// brReadCmd runs one exact allowlisted read-only registry command
+// (caps.go cbReadCmds) and prints it. The method declares the argv; the
+// exemption never covers model- or user-typed commands.
+func brReadCmd(cx *brCtx, in map[string]string) brStep {
+	cmd := in["cmd"]
+	out, exit, obs := cx.runCmdAs(cmd, 20*time.Second, true)
+	if obs.Exit < 0 || obs.Denied {
+		return brStep{obs: obs, why: obs.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 4000), "\n")
+	if shown == "" {
+		shown = "(sem saída)"
+	}
+	cx.say("$ %s\n%s", cmd, shown)
+	if exit != 0 {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, why: cmd + " falhou"}
+	}
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, ok: true}
+}
+
+// brUnitRe is what may reach a systemd unit name (no flags, no injection).
+var brUnitRe = lazyRx(`^[a-zA-Z0-9_.@-]{1,64}$`)
+
+// brSystemd answers service_status/service_logs: systemctl status or
+// journalctl of ONE validated unit name, through the normal permission
+// check (read-only commands pass in auto).
+func brSystemd(cx *brCtx, in map[string]string) brStep {
+	op, unit := in["op"], cx.str(in, "unit")
+	if !brUnitRe.MatchString(unit) || strings.HasPrefix(unit, "-") {
+		return brStep{obs: rvNoCmd(), why: "nome de serviço inválido: " + unit}
+	}
+	var cmd string
+	switch op {
+	case "logs":
+		cmd = "journalctl -u " + unit + " -n 50 --no-pager --output=short-iso"
+	case "start", "stop", "restart", "reload", "enable", "disable":
+		cmd = "systemctl " + op + " " + unit
+	default:
+		cmd = "systemctl status " + unit + " --no-pager"
+	}
+	out, exit, obs := cx.runCmd(cmd, 30*time.Second)
+	if obs.Denied || obs.Exit < 0 {
+		return brStep{obs: obs, why: obs.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 4000), "\n")
+	if shown == "" {
+		shown = "(sem saída)"
+	}
+	cx.say("$ %s\n%s", cmd, shown)
+	// systemctl status exits 3 on inactive/failed units: that IS the answer
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, ok: true}
+}
+
+// brHostList prints the known hosts (SSH config + Tailscale peers).
+func brHostList(cx *brCtx, in map[string]string) brStep {
+	p := cx.env.Profile
+	if p == nil {
+		p = epGet(false)
+	}
+	if len(p.SSHHosts) == 0 && len(p.Tailscale) == 0 {
+		cx.say("nenhum host conhecido (sem ~/.ssh/config e nenhum peer Tailscale)")
+		cx.task.AddEvidence("env", "0 hosts")
+		return brStep{val: 0, obs: rvNoCmd(), ok: true}
+	}
+	for _, h := range p.SSHHosts {
+		cx.say("SSH:      %s (%s@%s)", h.Name, orDash(h.User), orDash(h.HostName))
+	}
+	for _, t := range p.Tailscale {
+		st := "offline"
+		if t.Online {
+			st = "online"
+		}
+		cx.say("Tailscale: %s (%s, %s)", t.Name, orDash(t.IP), st)
+	}
+	cx.task.AddEvidence("env", fmt.Sprintf("%d hosts ssh, %d peers tailscale", len(p.SSHHosts), len(p.Tailscale)))
+	return brStep{val: len(p.SSHHosts) + len(p.Tailscale), obs: rvNoCmd(), ok: true}
+}
+
+// brNetStatus reports the connectivity the environment profile measured.
+func brNetStatus(cx *brCtx, in map[string]string) brStep {
+	p := cx.env.Profile
+	if p == nil {
+		p = epGet(false)
+	}
+	if p.Online {
+		cx.say("online — o perfil de ambiente confirmou saída pra internet")
+	} else {
+		cx.say("offline — o perfil de ambiente não conseguiu sair pra internet")
+	}
+	cx.task.AddEvidence("env", fmt.Sprintf("online=%v", p.Online))
+	return brStep{val: p, obs: rvNoCmd(), ok: true}
+}
+
+// brProjCmd runs the project's detected build/lint command (fpDetect), like
+// run_tests does for tests: the command itself, then the outcome.
+func brProjCmd(cx *brCtx, in map[string]string) brStep {
+	which := in["which"]
+	var cmd, label string
+	switch which {
+	case "lint":
+		cmd, label = cx.proj.Lint, "lint"
+	case "fmt":
+		cmd, label = cx.proj.Fmt, "format"
+	default:
+		cmd, label = cx.proj.Build, "build"
+	}
+	obs := rvNoCmd()
+	if cmd == "" {
+		return brStep{obs: obs, why: "não detectei comando de " + label + " neste projeto"}
+	}
+	if f := strings.Fields(cmd); len(f) > 0 && cx.env.Run == nil && !strings.ContainsAny(f[0], "/=$") {
+		if _, err := exec.LookPath(f[0]); err != nil {
+			obs.Exit, obs.Output = 127, f[0]+": command not found"
+			return brStep{obs: obs, why: f[0] + " não está no PATH"}
+		}
+	}
+	cx.say("$ %s", cmd)
+	out, exit, obs2 := cx.runCmd(cmd, 10*time.Minute)
+	if obs2.Denied || obs2.BudgetLeft == 0 {
+		return brStep{obs: obs2, why: obs2.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 4000), "\n")
+	if shown != "" {
+		cx.say("%s", shown)
+	}
+	if obs2.TimedOut {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: obs2, why: label + " estourou o tempo"}
+	}
+	cx.task.AddEvidence("cmd", fmt.Sprintf("%s: exit %d", label, exit))
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: obs2, ok: true}
+}
+
+// brSafePath resolves a project-relative path and refuses escapes (absolute
+// paths, ~, ..): the brain only writes inside Root.
+func brSafePath(root, p string) (abs, rel string, err error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "", "", errors.New("sem caminho")
+	}
+	if filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
+		return "", "", errors.New("caminho fora do projeto: " + p)
+	}
+	rel = filepath.Clean(filepath.FromSlash(p))
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", errors.New("caminho fora do projeto: " + p)
+	}
+	rootAbs, _ := filepath.Abs(root)
+	abs, _ = filepath.Abs(filepath.Join(rootAbs, rel))
+	if abs != rootAbs && !strings.HasPrefix(abs, rootAbs+string(filepath.Separator)) {
+		return "", "", errors.New("caminho fora do projeto: " + p)
+	}
+	return abs, rel, nil
+}
+
+// brPermit asks the env's permission for a synthetic command line that
+// describes the write ("write f.go", "rm f.go", "mv a b"): the same
+// classifier that gates bash decides, and the audit shows a real command.
+func (cx *brCtx) brPermit(cmd string) (bool, string) {
+	if cx.env.Permit == nil {
+		return true, ""
+	}
+	return cx.env.Permit(cx.ctx, cmd)
+}
+
+// brFileOp creates/writes/appends/renames/deletes a file inside the project.
+// Writes go through the permission path and then AfterWrite, so the
+// shadow-git checkpoint can undo them (checkpoint.go).
+func brFileOp(cx *brCtx, in map[string]string) brStep {
+	op, obs := in["op"], rvNoCmd()
+	abs, rel, err := brSafePath(cx.env.Root, cx.str(in, "path"))
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	toAbs, toRel := "", ""
+	if op == "rename" {
+		toAbs, toRel, err = brSafePath(cx.env.Root, cx.str(in, "to"))
+		if err != nil {
+			return brStep{obs: obs, why: "destino: " + err.Error()}
+		}
+	}
+	var synth, done string
+	switch op {
+	case "create":
+		synth = "write " + rel
+		if _, e := os.Stat(abs); e == nil {
+			return brStep{obs: obs, why: rel + " já existe (pede pra editar, ou apaga antes)"}
+		}
+		done = "criado"
+	case "write":
+		synth = "write " + rel
+		done = "escrito"
+	case "append":
+		synth = "write " + rel + " (append)"
+		done = "acrescentado"
+	case "mkdir":
+		synth = "mkdir -p " + rel
+		done = "diretório criado"
+	case "delete":
+		synth = "rm " + rel
+		done = "apagado"
+	case "rename":
+		synth = "mv " + rel + " " + toRel
+		done = "renomeado"
+	default:
+		return brStep{obs: obs, why: "file_op desconhecido: " + op}
+	}
+	if ok, why := cx.brPermit(synth); !ok {
+		obs.Denied, obs.Output = true, why
+		return brStep{obs: obs, why: why}
+	}
+	content := []byte(cx.str(in, "content"))
+	switch op {
+	case "create", "write":
+		if err = os.MkdirAll(filepath.Dir(abs), 0o755); err == nil {
+			err = os.WriteFile(abs, content, 0o644)
+		}
+	case "append":
+		var f *os.File
+		if f, err = os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644); err == nil {
+			_, err = f.Write(content)
+			f.Close()
+		}
+	case "mkdir":
+		err = os.MkdirAll(abs, 0o755)
+	case "delete":
+		err = os.Remove(abs)
+	case "rename":
+		err = os.Rename(abs, toAbs)
+	}
+	if err != nil {
+		return brStep{obs: obs, why: op + " " + rel + ": " + err.Error()}
+	}
+	if cx.env.AfterWrite != nil {
+		cx.env.AfterWrite(synth)
+	}
+	shown := rel
+	if op == "rename" {
+		shown = rel + " → " + toRel
+	}
+	if op == "mkdir" || op == "delete" {
+		cx.say("%s: %s", done, shown)
+	} else if fi, e := os.Stat(abs); e == nil {
+		cx.say("%s: %s (%d bytes)", done, shown, fi.Size())
+	}
+	if (op == "create" || op == "write") && len(content) == 0 {
+		// "cria X com o texto Y": the NLU has no content slot — say the file
+		// is empty instead of letting it look like Y was written
+		if g := strings.ToLower(cx.task.Goal); strings.Contains(g, "texto") || strings.Contains(g, "conteúdo") || strings.Contains(g, "dizendo") {
+			cx.say("(criei vazio — o conteúdo em si vai pelo modelo)")
+		}
+	}
+	cx.task.AddEvidence("file", fmt.Sprintf("%s %s", op, shown))
+	if cx.env.AfterWrite != nil {
+		cx.say("(/undo desfaz)")
+	}
+	return brStep{val: rel, obs: obs, ok: true}
+}
+
+// brGitOp runs git write subcommands through the normal permission path:
+// interactive asks, untrusted -p denies (honest), trusted runs.
+func brGitOp(cx *brCtx, in map[string]string) brStep {
+	sub, obs := in["sub"], rvNoCmd()
+	var cmds []string
+	switch sub {
+	case "commit":
+		msg := strings.TrimSpace(cx.str(in, "msg"))
+		if msg == "" || len(msg) > 300 {
+			return brStep{obs: obs, why: "mensagem de commit vazia ou longa demais"}
+		}
+		cmds = []string{"git add -A", "git commit -m " + brShQ(msg)}
+	case "checkout":
+		b := strings.TrimSpace(cx.str(in, "branch"))
+		if !brGitRefRe.MatchString(b) || strings.Contains(b, "..") || strings.HasPrefix(b, "-") {
+			return brStep{obs: obs, why: "branch inválida: " + b}
+		}
+		cmds = []string{"git checkout " + b}
+	case "pull":
+		cmds = []string{"git pull --ff-only"}
+	case "push":
+		cmds = []string{"git push"}
+	case "stash_push":
+		cmds = []string{"git stash push -u"}
+	default:
+		return brStep{obs: obs, why: "git_op desconhecido: " + sub}
+	}
+	var last brCmdRes
+	for _, cmd := range cmds {
+		out, exit, o := cx.runCmd(cmd, 2*time.Minute)
+		last = brCmdRes{cmd, exit, out}
+		if o.Denied || o.Exit < 0 {
+			return brStep{val: last, obs: o, why: o.Output}
+		}
+		shown := strings.TrimRight(truncateHeadTail(out, 2000), "\n")
+		if shown == "" {
+			shown = "(sem saída)"
+		}
+		cx.say("$ %s\n%s", cmd, shown)
+		if exit != 0 {
+			return brStep{val: last, obs: o, why: cmd + " falhou"}
+		}
+	}
+	cx.task.AddEvidence("cmd", "git "+sub+": ok")
+	return brStep{val: last, obs: rvNoCmd(), ok: true}
+}
+
+// brGitRefRe is what may reach a git ref/branch name (no flags, no ..).
+var brGitRefRe = lazyRx(`^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,79}$`)
+
+// brShQ single-quotes s for the shell (the only interpolation the brain does).
+func brShQ(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// brProcKill signals a process (TERM by default): a numeric pid directly, or
+// a process name resolved through pgrep (one match only — ambiguous stays
+// honest). kill goes through the permission path, so -p denies and
+// interactive asks.
+// brHostExec is env.HostRun for production: a direct exec, no shell. The
+// argv comes from capability code after validation, never from raw input.
+func brHostExec(ctx context.Context, argv []string) (string, int) {
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	b, err := c.CombinedOutput()
+	if err == nil {
+		return string(b), 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return string(b), ee.ExitCode()
+	}
+	return err.Error(), 127
+}
+
+// brHostCmd runs a validated argv on the host (env.HostRun) or through the
+// sandboxed shell as a fallback. desc is the command string the permission
+// check and the audit see.
+func brHostCmd(cx *brCtx, desc string, argv []string, timeout time.Duration) (out string, exit int, obs rvObs) {
+	if cx.env.HostRun == nil {
+		return cx.runCmd(desc, timeout) // sandboxed fallback: permit inside
+	}
+	if cx.env.Permit != nil {
+		if ok, why := cx.env.Permit(cx.ctx, desc); !ok {
+			obs = rvNoCmd()
+			obs.Denied, obs.Output = true, why
+			cx.task.AddEvidence("cmd", "negado: "+desc+" ("+why+")")
+			return "", -1, obs
+		}
+	}
+	cx.task.Budget.UsedCmds++
+	cx.commands++
+	out, exit = cx.env.HostRun(cx.ctx, argv)
+	obs = rvNoCmd()
+	obs.Exit, obs.Output = exit, truncateHeadTail(out, 4000)
+	cx.task.AddEvidence("cmd", fmt.Sprintf("`%s` → exit %d", desc, exit))
+	return out, exit, obs
+}
+
+func brProcKill(cx *brCtx, in map[string]string) brStep {
+	pid, obs := cx.str(in, "pid"), rvNoCmd()
+	if !brPidRe.MatchString(pid) {
+		name := strings.TrimSpace(pid)
+		if !brProcNameRe.MatchString(name) || strings.HasPrefix(name, "-") {
+			return brStep{obs: obs, why: "pid inválido (quero o número, ex.: 1234): " + pid}
+		}
+		out, exit, o := brHostCmd(cx, "pgrep -x "+name, []string{"pgrep", "-x", name}, 10*time.Second)
+		if o.Denied || o.Exit < 0 {
+			return brStep{obs: o, why: o.Output}
+		}
+		pids := strings.Fields(strings.TrimSpace(out))
+		switch {
+		case exit != 0 || len(pids) == 0:
+			return brStep{obs: o, why: "nenhum processo '" + name + "' rodando"}
+		case len(pids) > 1:
+			cx.say("'%s' tem %d processos: %s — mata pelo pid", name, len(pids), strings.Join(pids, ", "))
+			return brStep{obs: o, why: "vários pids pra " + name}
+		}
+		pid = pids[0]
+	}
+	sig := strings.ToUpper(strings.TrimPrefix(cx.str(in, "sig"), "-"))
+	if sig == "" {
+		sig = "TERM"
+	}
+	if _, ok := map[string]bool{"TERM": true, "KILL": true, "HUP": true, "INT": true}[sig]; !ok {
+		return brStep{obs: obs, why: "sinal não permitido: " + sig}
+	}
+	cmd := "kill -" + sig + " " + pid
+	out, exit, o := brHostCmd(cx, cmd, []string{"kill", "-" + sig, pid}, 10*time.Second)
+	if o.Denied || o.Exit < 0 {
+		return brStep{obs: o, why: o.Output}
+	}
+	cx.say("$ %s", cmd)
+	if shown := strings.TrimSpace(out); shown != "" {
+		cx.say("%s", shown)
+	}
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: o, ok: true}
+}
+
+var brPidRe = lazyRx(`^[0-9]{1,7}$`)
+
+// brProcNameRe: what may reach pgrep -x (a process name, no flags/injection).
+var brProcNameRe = lazyRx(`^[a-zA-Z0-9_.-]{1,64}$`)
+
+// brPkgCmd installs/updates a dependency with the manager the project files
+// declare (package.json, pyproject/requirements, go.mod, Cargo.toml): the
+// command goes through the permission path like any exec.
+func brPkgCmd(cx *brCtx, in map[string]string) brStep {
+	dep, obs := strings.TrimSpace(cx.str(in, "dep")), rvNoCmd()
+	if !brDepRe.MatchString(dep) {
+		return brStep{obs: obs, why: "dependência inválida: " + dep}
+	}
+	has := func(f string) bool { _, e := os.Stat(filepath.Join(cx.env.Root, f)); return e == nil }
+	update := in["op"] == "update"
+	var cmd string
+	switch {
+	case has("package.json"):
+		if update {
+			cmd = "npm update " + dep
+		} else {
+			cmd = "npm install " + dep
+		}
+	case has("requirements.txt"), has("pyproject.toml"):
+		if update {
+			dep += " --upgrade"
+		}
+		cmd = "pip install " + dep
+	case has("go.mod"):
+		if update {
+			dep += "@latest"
+		}
+		cmd = "go get " + dep
+	case has("Cargo.toml"):
+		if update {
+			cmd = "cargo update -p " + dep
+		} else {
+			cmd = "cargo add " + dep
+		}
+	default:
+		return brStep{obs: obs, why: "não achei gerenciador de pacotes (procurei package.json, requirements.txt/pyproject.toml, go.mod, Cargo.toml)"}
+	}
+	out, exit, o := cx.runCmd(cmd, 5*time.Minute)
+	if o.Denied || o.Exit < 0 {
+		return brStep{obs: o, why: o.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 3000), "\n")
+	if shown == "" {
+		shown = "(sem saída)"
+	}
+	cx.say("$ %s\n%s", cmd, shown)
+	if o.TimedOut {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: o, why: "instalação estourou o tempo"}
+	}
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: o, ok: true}
+}
+
+var brDepRe = lazyRx(`^[a-zA-Z0-9][a-zA-Z0-9._@/+~-]{0,80}$`)
+
+// brContainerOp starts/stops/restarts one validated container on docker or
+// podman (whichever the environment has) through the permission path.
+func brContainerOp(cx *brCtx, in map[string]string) brStep {
+	name, obs := strings.TrimSpace(cx.str(in, "name")), rvNoCmd()
+	if !brUnitRe.MatchString(name) || strings.HasPrefix(name, "-") {
+		return brStep{obs: obs, why: "nome de container inválido: " + name}
+	}
+	op := in["op"]
+	if op != "start" && op != "stop" && op != "restart" {
+		return brStep{obs: obs, why: "container_op desconhecido: " + op}
+	}
+	rt := ""
+	if f := cx.task.Facts; f["bin.docker"] != "" {
+		rt = "docker"
+	} else if f["bin.podman"] != "" {
+		rt = "podman"
+	}
+	if rt == "" {
+		return brStep{obs: obs, why: "nem docker nem podman no PATH"}
+	}
+	cmd := rt + " " + op + " " + name
+	out, exit, o := cx.runCmd(cmd, 60*time.Second)
+	if o.Denied || o.Exit < 0 {
+		return brStep{obs: o, why: o.Output}
+	}
+	shown := strings.TrimSpace(out)
+	cx.say("$ %s\n%s", cmd, orDash(shown))
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: o, ok: true}
+}
+
+// brUndo restores the files of the last writing turn (checkpoint.go): the
+// "desfaz" path of the offline brain.
+func brUndo(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	if cx.env.Undo == nil {
+		return brStep{obs: obs, why: "sem checkpoints nesta sessão — não sei o que desfazer"}
+	}
+	paths, err := cx.env.Undo()
+	if err != nil {
+		return brStep{obs: obs, why: "undo falhou: " + err.Error()}
+	}
+	if len(paths) == 0 {
+		cx.say("nada pra desfazer — nenhuma turn anterior escreveu arquivos")
+		cx.task.AddEvidence("undo", "0 paths")
+		return brStep{val: "nada", obs: obs, ok: true}
+	}
+	cx.say("desfeito: %s", strings.Join(paths, ", "))
+	cx.task.AddEvidence("undo", fmt.Sprintf("%d path(s)", len(paths)))
+	return brStep{val: strings.Join(paths, ", "), obs: obs, ok: true}
+}
+
+// brSay prints a fixed text and returns it: the way for a method to show
+// something verified ("o texto apareceu") without ending the task like
+// report does.
+func brSay(cx *brCtx, in map[string]string) brStep {
+	text := cx.str(in, "text")
+	if text == "" {
+		return brStep{obs: rvNoCmd(), why: "texto vazio"}
+	}
+	cx.say("%s", text)
+	cx.task.AddEvidence("say", fmt.Sprintf("mostrei %d bytes", len(text)))
+	return brStep{val: text, obs: rvNoCmd(), ok: true}
+}
+
+// brScript runs a script:<name> capability through the Toolbox script
+// runner — the same sandboxed, env-scrubbed, timed execution the model
+// gets. `in` keys are the script's own arg names: values go through
+// $-substitution, then the script's schema validates/coerces. Read effects
+// run free like any dry-run capability; other effects still go through the
+// permission hook because a slot may carry user text (a cmd arg).
+func brScript(cx *brCtx, name string, in map[string]string) brStep {
+	obs := rvNoCmd()
+	t := cx.task
+	if t.Budget.Cmds > 0 && t.Budget.UsedCmds >= t.Budget.Cmds {
+		obs.BudgetLeft = 0
+		return brStep{obs: obs, why: "orçamento de comandos esgotado"}
+	}
+	r := cx.env.Scripts
+	if r == nil {
+		r = scLoad(cx.env.Root)
+	}
+	d := r.get(name)
+	if d == nil {
+		return brStep{obs: obs, why: "script desconhecido: " + name}
+	}
+	interp := r.sh
+	if d.Run == "python3" {
+		interp = r.python
+	}
+	if interp == "" {
+		obs.Exit = 127
+		return brStep{obs: obs, why: "sem " + d.Run + " no PATH"}
+	}
+	args := map[string]any{}
+	var kv []string
+	for k, v := range in {
+		x := cx.subst(v)
+		if s, ok := x.(string); ok && s == "" {
+			continue // empty slot: let the schema apply the default or the required error
+		}
+		args[k] = x
+		kv = append(kv, k+"="+oneLine(fmt.Sprint(x), 60))
+	}
+	sort.Strings(kv)
+	args, errs := scValidate(d.Args, args)
+	if len(errs) > 0 {
+		return brStep{obs: obs, why: "args inválidos p/ script:" + name + ": " + strings.Join(errs, "; ")}
+	}
+	effect := d.Effect
+	if op, _ := argStr(args, "op"); op != "" {
+		if e, ok := d.EffectByOp[op]; ok {
+			effect = e
+		}
+	}
+	desc := "script:" + name
+	if len(kv) > 0 {
+		desc += " " + strings.Join(kv, " ")
+	}
+	// the model path's policy (scripts.go scPolicy.readOnly): a read script
+	// that runs a non-read-only cmd, or a net script going remote, is NOT
+	// read-only and needs the same permission check as the tool call
+	cmd, _ := argStr(args, "cmd")
+	cmd = strings.TrimSpace(cmd)
+	remote := d.Name == "http_check" && argBool(args, "allow_remote")
+	readonly := (cmd == "" || IsReadOnly(cmd)) && (effect == "read" || effect == "net" && !remote)
+	if !readonly && cx.env.Permit != nil {
+		if cmd == "" {
+			cmd = desc
+		}
+		if ok, why := cx.env.Permit(cx.ctx, cmd); !ok {
+			obs.Denied, obs.Output = true, why
+			t.AddEvidence("script", "negado: "+desc+" ("+why+")")
+			return brStep{obs: obs, why: "permissão negada: " + why}
+		}
+	}
+	if cmd != "" {
+		cx.say("$ %s", cmd) // echo the command the script runs, like run_tests does
+	}
+	t.Budget.UsedCmds++
+	cx.commands++
+	res := r.scExec(cx.ctx, d, args, cx.env.Root)
+	obs.Exit, obs.TimedOut = res.Exit, res.TimedOut
+	switch {
+	case cx.ctx.Err() == context.Canceled:
+		return brStep{obs: obs, why: "cancelado"}
+	case res.TimedOut:
+		return brStep{obs: obs, why: name + " estourou o tempo (" + scTimeout.String() + ")"}
+	case res.Err != nil:
+		return brStep{obs: obs, why: name + " não iniciou: " + res.Err.Error()}
+	}
+	var v any
+	if err := json.Unmarshal(bytes.TrimSpace(res.Stdout), &v); err != nil {
+		tail := strings.TrimSpace(res.Stderr)
+		if tail == "" {
+			tail = strings.TrimSpace(string(res.Stdout))
+		}
+		obs.Output = truncateHeadTail(redactSecrets(tail), 4000)
+		return brStep{obs: obs, why: fmt.Sprintf("%s não devolveu JSON (exit %d): %s", name, res.Exit, oneLine(tail, 200))}
+	}
+	obs.Output = truncateHeadTail(string(res.Stdout), 4000)
+	ok, conf, errMsg := scStatus(v)
+	t.AddEvidence("script", fmt.Sprintf("%s → exit %d, ok=%v, conf %.2f", desc, res.Exit, ok, conf))
+	if !ok {
+		if errMsg == "" {
+			errMsg = "o script reportou falha"
+		}
+		return brStep{val: v, obs: obs, why: oneLine(errMsg, 300)}
+	}
+	for _, l := range brScriptLines(v, 40) {
+		cx.say("%s", l)
+	}
+	return brStep{val: v, obs: obs, ok: true}
+}
+
+// brScriptLines renders a script's data payload for the terminal: scalars
+// inline, arrays one item per line (≤10), nested maps indented.
+func brScriptLines(v any, max int) []string {
+	data, _ := v.(map[string]any)["data"].(map[string]any)
+	var lines []string
+	var walk func(m map[string]any, pad string)
+	walk = func(m map[string]any, pad string) {
+		var keys []string
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if len(lines) >= max {
+				if len(lines) == 0 || lines[len(lines)-1] != pad+"…" {
+					lines = append(lines, pad+"…")
+				}
+				return
+			}
+			switch x := m[k].(type) {
+			case map[string]any:
+				lines = append(lines, pad+k+":")
+				walk(x, pad+"  ")
+			case []any:
+				lines = append(lines, fmt.Sprintf("%s%s (%d):", pad, k, len(x)))
+				for i, it := range x {
+					if i == 10 || len(lines) >= max {
+						lines = append(lines, pad+"  …")
+						break
+					}
+					if m2, ok := it.(map[string]any); ok {
+						lines = append(lines, pad+"  "+brScriptKV(m2))
+					} else {
+						lines = append(lines, pad+"  "+oneLine(fmt.Sprint(it), 200))
+					}
+				}
+			default:
+				lines = append(lines, pad+k+": "+oneLine(fmt.Sprint(x), 200))
+			}
+		}
+	}
+	walk(data, "")
+	return lines
+}
+
+// brScriptKV flattens a map item to `k=v k=v` (≤5 keys) for array items.
+func brScriptKV(m map[string]any) string {
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var parts []string
+	for i, k := range keys {
+		if i == 5 {
+			parts = append(parts, "…")
+			break
+		}
+		switch x := m[k].(type) {
+		case map[string]any, []any:
+			b, _ := json.Marshal(x)
+			parts = append(parts, k+"="+scCut(string(b), 60))
+		default:
+			parts = append(parts, k+"="+oneLine(fmt.Sprint(x), 60))
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func brResolve(cx *brCtx, in map[string]string) brStep {
@@ -907,6 +1653,14 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if _, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel))); rel == "" || err != nil {
 				return false, false, "o arquivo não existe: " + rel
 			}
+		case "file_gone":
+			rel, _ := arg.(string)
+			if rel == "" {
+				return false, false, "sem caminho pra conferir"
+			}
+			if _, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel))); err == nil {
+				return false, false, "o arquivo ainda existe: " + rel
+			}
 		case "read_ok":
 			if _, isStr := arg.(string); !isStr {
 				return false, false, "o conteúdo não foi lido"
@@ -916,9 +1670,32 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if !isRes || r.Exit != 0 {
 				return false, false, "o comando não terminou com 0"
 			}
+		case "cmd_ran":
+			// "o comando respondeu" — informative answers may exit non-zero
+			// (systemctl status = 3 on inactive units); 126/127 = didn't run
+			r, isRes := arg.(brCmdRes)
+			if !isRes || r.Exit < 0 || r.Exit == 126 || r.Exit == 127 {
+				return false, false, "o comando não rodou"
+			}
 		case "status_obtained":
 			if arg == nil || arg == "" {
 				return false, false, "não consegui o status da ferramenta"
+			}
+		case "script_ok":
+			if ok, _ := arg.(map[string]any)["ok"].(bool); !ok {
+				return false, false, "o script não confirmou sucesso"
+			}
+		case "script_exit_zero":
+			// a script that runs a command reports data.exit_code — parse
+			// scripts emit ok:true even when the command failed, so the
+			// exit code is what separates "ran clean" from "found errors"
+			data, _ := arg.(map[string]any)["data"].(map[string]any)
+			code, has := data["exit_code"].(float64)
+			if !has {
+				return false, true, "o script não informou o exit code do comando"
+			}
+			if code != 0 {
+				return false, false, fmt.Sprintf("o comando saiu com exit %d (diagnóstico acima)", int(code))
 			}
 		case "profile_present":
 			if arg == nil || arg == "" {

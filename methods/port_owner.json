@@ -1,0 +1,28 @@
+{"methods": [
+ {"name": "port_owner.check", "intent": "port_owner", "priority": 10,
+  "doc": "script:port_free diz se a porta está livre e quem está escutando (pid + comando via ss/lsof/netstat)",
+  "needs": ["bin.python3"],
+  "pre": [{"fact": "slot.port", "op": "set"}],
+  "steps": [
+   {"cap": "script:port_free", "in": {"port": "$slot.port"}, "out": "res"}],
+  "verify": [{"check": "script_ok", "arg": "$res"}],
+  "risk": "low", "cost_ms": 500},
+ {"name": "port_owner.ask", "intent": "port_owner", "priority": 5,
+  "doc": "sem porta no pedido: pergunta qual",
+  "needs": ["bin.python3"],
+  "pre": [{"fact": "slot.port", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "port", "q": "Qual porta?"}, "out": "slot.port"},
+   {"cap": "script:port_free", "in": {"port": "$slot.port"}, "out": "res"}],
+  "verify": [{"check": "script_ok", "arg": "$res"}],
+  "risk": "low", "cost_ms": 500},
+ {"name": "port_owner.no_python", "intent": "port_owner", "priority": 1,
+  "doc": "sem python3 não dá pra saber o dono da porta; mostra as portas abertas e explica",
+  "pre": [{"fact": "slot.port", "op": "set"}],
+  "cmds": ["ss -tln"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "ss -tln"}, "out": "ports"},
+   {"cap": "report", "in": {"text": "dizer quem é o dono da porta usa o script port_free, que precisa de python3 — as portas abertas estão acima", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 200}
+]}

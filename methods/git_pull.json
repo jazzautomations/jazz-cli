@@ -1,0 +1,14 @@
+{"methods": [
+ {"name": "git_pull.ff", "intent": "git_pull", "priority": 10,
+  "doc": "git pull --ff-only (rede, pela permissão; recusa merge-surpresa)",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "steps": [{"cap": "git_op", "in": {"sub": "pull"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 30000},
+ {"name": "git_pull.not_repo", "intent": "git_pull", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

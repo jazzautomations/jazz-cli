@@ -1,0 +1,7 @@
+{"methods": [
+ {"name": "undo.last", "intent": "undo", "priority": 10,
+  "doc": "restaura os arquivos da última turn que escreveu (checkpoint.go /undo)",
+  "steps": [{"cap": "undo", "in": {}, "out": "u"}],
+  "verify": [{"check": "read_ok", "arg": "$u"}],
+  "risk": "med", "cost_ms": 100}
+]}

@@ -1,0 +1,22 @@
+{"methods": [
+ {"name": "git_checkout.branch", "intent": "git_checkout", "priority": 10,
+  "doc": "git checkout <branch validada> pela permissão (muda o worktree; o checkpoint cobre /undo de arquivos)",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.name", "op": "set"}],
+  "steps": [{"cap": "git_op", "in": {"sub": "checkout", "branch": "$slot.name"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 2000},
+ {"name": "git_checkout.ask", "intent": "git_checkout", "priority": 5,
+  "doc": "sem branch: pergunta pra qual",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.name", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "name", "q": "Checkout pra qual branch?"}, "out": "slot.name"},
+   {"cap": "git_op", "in": {"sub": "checkout", "branch": "$slot.name"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 2000},
+ {"name": "git_checkout.not_repo", "intent": "git_checkout", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

@@ -1,0 +1,24 @@
+{"methods": [
+ {"name": "find.symbol", "intent": "find", "priority": 10,
+  "doc": "onde o símbolo é definido + contagem de referências via script:find_symbol (0 matches é resposta honesta, não falha)",
+  "needs": ["bin.python3"],
+  "pre": [{"fact": "slot.query", "op": "set"}],
+  "steps": [
+   {"cap": "script:find_symbol", "in": {"symbol": "$slot.query"}, "out": "res"}],
+  "verify": [{"check": "script_ok", "arg": "$res"}],
+  "risk": "low", "cost_ms": 600},
+ {"name": "find.no_python", "intent": "find", "priority": 5,
+  "doc": "sem python3: procurar símbolo depende do find_symbol; diz isso em vez de adivinhar",
+  "pre": [{"fact": "slot.query", "op": "set"}],
+  "steps": [
+   {"cap": "report", "in": {"text": "procurar símbolo no código usa o script find_symbol, que precisa de python3 — e ele não está no PATH", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1},
+ {"name": "find.ask", "intent": "find", "priority": 1,
+  "doc": "sem alvo no pedido: pergunta o quê procurar",
+  "pre": [{"fact": "slot.query", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "query", "q": "Procurar o quê?"}, "out": "slot.query"}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

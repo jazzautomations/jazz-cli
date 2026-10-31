@@ -1,0 +1,26 @@
+{"methods": [
+ {"name": "explain.api_map", "intent": "explain", "priority": 10,
+  "doc": "api_map rankeia símbolos (func/classe/método, assinatura + doc) pelo texto pedido; cobre arquivo e nome de símbolo",
+  "needs": ["bin.python3"],
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [
+   {"cap": "script:api_map", "in": {"query": "$slot.target", "limit": "20"}, "out": "api"}],
+  "verify": [{"check": "script_ok", "arg": "$api"}],
+  "risk": "low", "cost_ms": 800},
+ {"name": "explain.file", "intent": "explain", "priority": 5,
+  "doc": "sem python3: resolve o nome e abre o arquivo como open_file",
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [
+   {"cap": "resolve_name", "in": {"q": "$slot.target", "kinds": "file,test,dir", "hint": "$hint"}, "out": "cands"},
+   {"cap": "choose", "in": {"options": "$cands", "max": "5", "what": "arquivo"}, "out": "target"},
+   {"cap": "read_file", "in": {"path": "$target"}, "out": "content"}],
+  "verify": [{"check": "file_exists", "arg": "$target"}, {"check": "read_ok", "arg": "$content"}],
+  "risk": "low", "cost_ms": 60},
+ {"name": "explain.ask", "intent": "explain", "priority": 1,
+  "doc": "sem alvo no pedido: pergunta o quê explicar",
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Explicar o quê? (arquivo ou função)"}, "out": "slot.target"}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

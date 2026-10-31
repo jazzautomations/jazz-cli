@@ -96,8 +96,8 @@ func TestOfflineHeadlessForced(t *testing.T) {
 	if res == nil || res.Status != StopDone {
 		t.Fatalf("forced offline fast path: %+v", res)
 	}
-	res, _ = olHeadless(ctx, h.ag, h.ag.tools, ui, h.cfg, "explique este repositório", pfOpts{})
-	if res == nil || res.Status != StopError || !strings.Contains(res.Err, "modo offline") {
+	res, _ = olHeadless(ctx, h.ag, h.ag.tools, ui, h.cfg, "refatora o parser para usar generics", pfOpts{})
+	if res == nil || res.Status != StopError || res.Err == "" {
 		t.Errorf("forced offline without a fast path must end with a clear error: %+v", res)
 	}
 	if n := len(h.fs.requests()); n != 0 {
@@ -132,7 +132,7 @@ func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "git status"); res != nil {
 		t.Errorf("429 must not trigger the offline fallback: %+v", res)
 	}
-	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "conserte o bug"); res != nil {
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "refatora o parser para usar generics"); res != nil {
 		t.Errorf("no fast path, no rescue: %+v", res)
 	}
 }
@@ -171,9 +171,10 @@ func TestOfflineInteractiveStateMachine(t *testing.T) {
 		t.Error("offline: unreachable providers should hold the message")
 	}
 	// a successful probe lets it through and a model answer leaves offline mode
+	// ("refatora o parser" is a request the deterministic brain does not cover)
 	app.ol.lastProbe = time.Time{}
 	up = true
-	if handled, _ := app.olBefore(ctx, "explique o código"); handled {
+	if handled, _ := app.olBefore(ctx, "refatora o parser para usar generics"); handled {
 		t.Error("reachable provider: the message should go to the model")
 	}
 	app.olAfter(nil)

@@ -240,7 +240,7 @@ func TestBrainConnectHost(t *testing.T) {
 func TestBrainFallsThrough(t *testing.T) {
 	root := brFixture(t)
 	env, _ := brTestEnv(t, root, nil, -1)
-	for _, s := range []string{"refatora o módulo de pagamento para usar injeção de dependência", "oi tudo bem", "commita tudo"} {
+	for _, s := range []string{"refatora o módulo de pagamento para usar injeção de dependência", "oi tudo bem", "quanto é 2+2?"} {
 		if r := brRun(context.Background(), env, s); r.Handled {
 			t.Errorf("%q handled as %s", s, r.Intent.Name)
 		}
@@ -287,7 +287,7 @@ func TestBrainLevel0NoModelCall(t *testing.T) {
 		t.Fatalf("%d model requests for level-0 phrases", n)
 	}
 	// anything else still goes to the model
-	if res, p := olHeadless(context.Background(), h.ag, h.ag.tools, ui, h.cfg, "explique o projeto", pfOpts{}); res != nil || p != "explique o projeto" {
+	if res, p := olHeadless(context.Background(), h.ag, h.ag.tools, ui, h.cfg, "refatora o parser para usar generics", pfOpts{}); res != nil || p != "refatora o parser para usar generics" {
 		t.Fatalf("not level 0: %+v", res)
 	}
 	t.Setenv("JAZZ_BRAIN", "off")
@@ -360,5 +360,111 @@ func TestBrainConnectHostNeedsSSH(t *testing.T) {
 	r := brRun(context.Background(), env, "conecta no labbox")
 	if r.Status != tkBlocked || !strings.Contains(r.Text, "ssh não está no PATH") {
 		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+}
+
+// ---------- script:<name> dispatch (methods.go brScript, §5 do design) ----------
+
+// Every capability the embedded methods declare must resolve to code:
+// a named Go cap or script:<name> through the Toolbox registry.
+func TestBrainMethodCapsResolve(t *testing.T) {
+	lib, err := mhLibrary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for intent, ms := range lib {
+		for _, m := range ms {
+			for _, st := range m.Steps {
+				if brCap(st.Cap) == nil {
+					t.Errorf("%s (%s): capacidade não resolvida: %s", m.Name, intent, st.Cap)
+				}
+			}
+		}
+	}
+}
+
+// brScript runs a script with $-substituted args, validates against its
+// schema, counts budget, and fails honestly on unknown names/bad args.
+func TestBrainScriptDispatch(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	env, _ := brTestEnv(t, brFixture(t), nil, -1)
+	cx := &brCtx{ctx: context.Background(), env: env,
+		task: newTask("procura ParseArgs", "find", map[string]string{"query": "ParseArgs"}, nil),
+		vars: map[string]any{}, attempts: map[rvCat]int{}}
+	st := brScript(cx, "find_symbol", map[string]string{"symbol": "$slot.query"})
+	if !st.ok {
+		t.Fatalf("find_symbol com slot: %s", st.why)
+	}
+	if v, _ := st.val.(map[string]any); v["ok"] != true {
+		t.Fatalf("envelope não confirmou: %v", st.val)
+	}
+	if cx.task.Budget.UsedCmds != 1 || cx.commands != 1 {
+		t.Errorf("orçamento: used=%d commands=%d", cx.task.Budget.UsedCmds, cx.commands)
+	}
+	if n := len(cx.task.Evidence); n == 0 || !strings.Contains(cx.task.Evidence[n-1].Text, "script:") {
+		t.Errorf("evidência de script ausente: %+v", cx.task.Evidence)
+	}
+	if st = brScript(cx, "nao_existe", nil); st.ok || !strings.Contains(st.why, "desconhecido") {
+		t.Fatalf("script inexistente: %+v", st)
+	}
+	if st = brScript(cx, "find_symbol", map[string]string{}); st.ok || !strings.Contains(st.why, "symbol") {
+		t.Fatalf("arg obrigatório ausente: %+v", st)
+	}
+}
+
+// A script with a non-read effect goes through the permission hook; a
+// denial costs no command budget.
+func TestBrainScriptPermit(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	deny := &brEnv{Root: t.TempDir(),
+		Permit: func(context.Context, string) (bool, string) { return false, "negado" }}
+	cx := &brCtx{ctx: context.Background(), env: deny,
+		task: newTask("x", "run_tests", nil, nil), vars: map[string]any{}, attempts: map[rvCat]int{}}
+	st := brScript(cx, "run_tests", map[string]string{"cmd": "echo hi"})
+	if st.ok || !st.obs.Denied || !strings.Contains(st.why, "negada") {
+		t.Fatalf("efeito exec devia pedir permissão: %+v", st)
+	}
+	if cx.task.Budget.UsedCmds != 0 {
+		t.Errorf("negado não conta comando: %d", cx.task.Budget.UsedCmds)
+	}
+	// read effects never ask: find_symbol with a Permit that denies everything
+	cx2 := &brCtx{ctx: context.Background(), env: deny,
+		task: newTask("x", "find", map[string]string{"query": "x"}, nil),
+		vars: map[string]any{}, attempts: map[rvCat]int{}}
+	if st := brScript(cx2, "find_symbol", map[string]string{"symbol": "$slot.query"}); st.obs.Denied {
+		t.Fatalf("efeito read não deve pedir permissão: %+v", st)
+	}
+}
+
+// brScriptLines renders nested script data deterministically.
+func TestBrainScriptLines(t *testing.T) {
+	v := map[string]any{"ok": true, "data": map[string]any{
+		"name": "x", "items": []any{"a", "b"}, "n": 3.0,
+		"nested": map[string]any{"inner": 1.0}}}
+	got := strings.Join(brScriptLines(v, 40), "\n")
+	for _, want := range []string{"items (2):", "  a", "name: x", "n: 3", "nested:", "inner: 1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("falta %q em:\n%s", want, got)
+		}
+	}
+}
+
+// git_log via read_cmd: repo runs the allowlisted argv; no repo is an
+// honest "blocked", never a fabricated log.
+func TestBrainGitLog(t *testing.T) {
+	env, rec := brTestEnv(t, brFixture(t), map[string]brFakeOut{"git log": {"abc123 init\n", 0}}, -1)
+	r := brRun(context.Background(), env, "últimos commits")
+	if !r.Handled || r.Status != tkSucceeded || !strings.Contains(r.Text, "abc123") ||
+		len(rec.cmds) != 1 || rec.cmds[0] != "git log --oneline -20" {
+		t.Fatalf("%s cmds=%v\n%s", r.Status, rec.cmds, r.Text)
+	}
+	env, _ = brTestEnv(t, t.TempDir(), nil, -1)
+	r = brRun(context.Background(), env, "últimos commits")
+	if r.Status != tkBlocked || !strings.Contains(r.Text, "repositório") {
+		t.Fatalf("%s\n%s", r.Status, r.Text)
 	}
 }

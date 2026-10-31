@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "container_stop.name", "intent": "container_stop", "priority": 10,
+  "doc": "docker|podman stop <container validado> pela permissão",
+  "pre": [{"fact": "slot.container", "op": "set"}],
+  "steps": [{"cap": "container_op", "in": {"op": "stop", "name": "$slot.container"}, "out": "c"}],
+  "verify": [{"check": "cmd_ran", "arg": "$c"}],
+  "risk": "high", "cost_ms": 2000},
+ {"name": "container_stop.ask", "intent": "container_stop", "priority": 1,
+  "doc": "sem container: pergunta qual",
+  "pre": [{"fact": "slot.container", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "container", "q": "Parar qual container?"}, "out": "slot.container"},
+   {"cap": "container_op", "in": {"op": "stop", "name": "$slot.container"}, "out": "c"}],
+  "verify": [{"check": "cmd_ran", "arg": "$c"}],
+  "risk": "high", "cost_ms": 2000}
+]}

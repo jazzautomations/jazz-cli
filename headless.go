@@ -109,7 +109,19 @@ func (h *HeadlessUI) Approve(ctx context.Context, tool, detail, reason string) (
 	if reason != "" {
 		msg += " (" + reason + ")"
 	}
-	fmt.Fprintln(h.stderr(), msg+" — use --allow-tools ou --yolo")
+	// actionable: the exact --allow-tools spec for this call, not just the flag name
+	spec := CanonicalTool(tool)
+	if spec == "bash" {
+		spec = "Bash"
+		if w := strings.Fields(strings.TrimSpace(detail)); len(w) > 0 {
+			prefix := w[0]
+			if len(w) > 1 && !strings.HasPrefix(w[1], "-") && !strings.ContainsAny(w[1], "=/'\"~$") {
+				prefix += " " + w[1]
+			}
+			spec = fmt.Sprintf("Bash(%s:*)", prefix)
+		}
+	}
+	fmt.Fprintln(h.stderr(), msg+" — use --allow-tools '"+spec+"' ou --yolo")
 	return Deny, ""
 }
 

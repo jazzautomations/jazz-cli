@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,83 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 	}
 	in := nuGet().Parse(text, w)
 	res.Intent = in
+	// multi-intent: "lista os arquivos e mostra o git status" — accept the
+	// split only when EVERY part parses to an understood intent; a false
+	// split ("procura por TODO e FIXME") falls back to the single parse
+	if parts := brSplitMulti(text); len(parts) >= 2 && len(parts) <= 4 {
+		var ins []Intent
+		for _, p := range parts {
+			pi := nuGet().Parse(p, w)
+			if !pi.Understood() || pi.Name == "none" {
+				ins = nil
+				break
+			}
+			ins = append(ins, pi)
+		}
+		if len(ins) == len(parts) {
+			return brRunMulti(ctx, env, parts, ins)
+		}
+	}
+	return brRunIntent(ctx, env, text, in, res)
+}
+
+// brSplitMulti splits a request on conjunctions; callers must validate that
+// each part still parses — the split is a candidate, not a commitment.
+var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+)`)
+
+func brSplitMulti(text string) []string {
+	var out []string
+	for _, p := range brMultiRe.Split(text, 5) {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
+}
+
+// brRunMulti runs each understood part in sequence and merges the results;
+// the worst status wins so a denied part never hides behind a green one.
+func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent) brResult {
+	res := brResult{Handled: true, Intent: Intent{Name: "multi", Confidence: 1}}
+	var texts []string
+	for i, in := range ins {
+		r := brRunIntent(ctx, env, parts[i], in, brResult{})
+		res.Handled = res.Handled && r.Handled
+		res.Questions += r.Questions
+		res.Commands += r.Commands
+		if brStatusRank(r.Status) > brStatusRank(res.Status) {
+			res.Status = r.Status
+		}
+		t := r.Text
+		if r.Task != nil && r.Task.Status == tkNeedsInput {
+			t += " (precisa de entrada)"
+		}
+		texts = append(texts, "» "+strings.TrimSpace(parts[i])+"\n"+t)
+	}
+	res.Text = strings.Join(texts, "\n\n")
+	return res
+}
+
+func brStatusRank(s tkStatus) int {
+	switch s {
+	case tkFailed:
+		return 5
+	case tkNeedsInput:
+		return 4
+	case tkBlocked:
+		return 3
+	case tkUnverified:
+		return 2
+	case tkSucceeded:
+		return 1
+	}
+	return 0
+}
+
+func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res brResult) brResult {
 	if !in.Understood() {
 		res.Text = brNotUnderstood(in)
 		return res
@@ -100,7 +178,10 @@ func brNotUnderstood(in Intent) string {
 	if in.Name != "none" && in.Confidence > 0 {
 		return fmt.Sprintf("não tenho certeza do pedido (talvez %s, confiança %.2f)", in.Name, in.Confidence)
 	}
-	return "não entendi o pedido sem o modelo"
+	return "não entendi o pedido sem o modelo. Posso: listar e buscar arquivos, " +
+		"resumir o projeto, status/diff/log do git, rodar testes/build/lint/format, " +
+		"criar/editar/renomear/apagar arquivos (com /undo), processos/portas/disco/memória, " +
+		"serviços, containers, instalar dependências, commit/push/pull com confirmação"
 }
 
 // brFacts are the facts the preconditions read.
@@ -115,6 +196,8 @@ func brFacts(cx *brCtx, p *epProfile) map[string]string {
 	}
 	f["project.test"] = cx.proj.Test
 	f["project.build"] = cx.proj.Build
+	f["project.lint"] = cx.proj.Lint
+	f["project.fmt"] = cx.proj.Fmt
 	if cx.proj.Git {
 		f["project.git"] = "1"
 	}
@@ -122,7 +205,7 @@ func brFacts(cx *brCtx, p *epProfile) map[string]string {
 		if p.Online {
 			f["env.online"] = "1"
 		}
-		for _, b := range []string{"git", "go", "python3", "node", "npm", "make", "cargo", "docker", "podman", "tailscale", "ssh"} {
+		for _, b := range []string{"git", "go", "python3", "node", "npm", "make", "cargo", "docker", "podman", "tailscale", "ssh", "systemctl", "journalctl"} {
 			if epHasBin(p, b) || epHasBin(p, b+".exe") {
 				f["bin."+b] = "1"
 			}
@@ -141,6 +224,9 @@ func brFacts(cx *brCtx, p *epProfile) map[string]string {
 func brExecute(cx *brCtx, methods []mhMethod) {
 	t := cx.task
 	reg := cbRegistry(nil)
+	if cx.env.BeginTurn != nil {
+		cx.env.BeginTurn() // shadow-git: this task's writes become /undo-able
+	}
 	tried := 0
 	for mi := 0; mi < len(methods); mi++ {
 		m := methods[mi]
@@ -171,7 +257,7 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 			st := m.Steps[si]
 			ps := &t.Plan[si]
 			ps.Status = "running"
-			fn := brCaps[st.Cap]
+			fn := brCap(st.Cap)
 			if c, ok := cbFind(reg, st.Cap); ok {
 				if ok2, why := cbAvailable(c, cx.env.Profile); !ok2 {
 					ps.Status = "failed"
@@ -272,11 +358,18 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 		return
 	}
 	if tried > 0 && cx.cat != "" && cx.cat != rvPlanImpossible {
-		// the last failure explains the stop better than "no method"
+		// the last step's reason explains the stop better than the
+		// generic category text ("nenhum processo 'x'" > "falhou")
 		_, _, then := rvDecide(cx.cat, 99)
-		msg := rvTextPT(cx.cat)
+		msg := cx.stopWhy
+		if msg == "" {
+			msg = rvTextPT(cx.cat)
+		}
 		if cx.cat == rvCommandMissing {
 			msg += "; posso oferecer a instalação (capacidade install_tool, com confirmação)"
+		}
+		if cx.cat == rvPermission && !strings.Contains(msg, "--allow-tools") {
+			msg += " (sem permissão — --allow-tools ou --yolo)"
 		}
 		cx.say("%s", msg)
 		t.must(then, msg)
@@ -306,12 +399,14 @@ func brRecover(cx *brCtx, obs rvObs, why string, next *bool) (done bool) {
 	t.must(tkRecovering, string(cat)+": "+why)
 	switch {
 	case act == rvNextMethod && !stop:
+		cx.stopWhy = why // remembered for the exhausted-methods text
 		*next = true
 		return false
 	case act == rvRetrySmaller && !stop:
 		cx.vars["retry_smaller"] = true
 		return false
 	case act == rvNoRetry && !stop:
+		cx.stopWhy = why
 		*next = true
 		return false
 	}
@@ -366,7 +461,8 @@ func brStatusLine(r brResult) string {
 
 // brHeadless answers a -p request offline. nil = the brain did not take it.
 func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt string, o pfOpts) *RunResult {
-	env := &brEnv{Root: tools.Root, Shell: tools.Shell, Permit: ag.PermitCommand}
+	env := &brEnv{Root: tools.Root, Shell: tools.Shell, Permit: ag.PermitCommand, Scripts: tools.scRegistry(),
+		BeginTurn: func() { tools.BeginTurn(len(ag.Msgs)) }, AfterWrite: tools.cpAfterBash, Undo: tools.Undo, HostRun: brHostExec}
 	if ag.sess != nil {
 		env.Sink = tkSessionSink(ag.sess)
 	}
@@ -404,7 +500,14 @@ func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt st
 		if ag.sess != nil {
 			ag.sess.Append(Message{Role: "assistant", Content: r.Text})
 		}
-		return nil
+		if strings.TrimSpace(r.Text) == "" {
+			return nil
+		}
+		// understood-or-not, the brain already wrote the honest answer
+		// ("entendi 'create' mas não tenho método"); it is terminal, not
+		// resumable — Err ends in "blocked" to suppress the resume hint
+		return &RunResult{Status: StopError, Model: "offline-brain", Text: r.Text,
+			Err: "cérebro offline: blocked"}
 	}
 	if ag.sess != nil {
 		ag.sess.Append(Message{Role: "assistant", Content: r.Text + "\n" + brStatusLine(r)})
@@ -436,7 +539,15 @@ func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt st
 // brLevel0Intents are answered without the model even when one is
 // available: read-only, deterministic, and verifiable ("abre o README.md",
 // "git status" went to the model in 0.8.1 for 15–36 s and 32k tokens).
-var brLevel0Intents = map[string]bool{"open_file": true, "git_status": true, "env_status": true, "tool_info": true, "tool_status": true}
+var brLevel0Intents = map[string]bool{
+	"open_file": true, "git_status": true, "env_status": true, "tool_info": true, "tool_status": true,
+	// 0.9.1: the deterministic coverage expanded — all read-only and verified
+	"list_files": true, "project_summary": true, "explain": true, "find": true,
+	"git_log": true, "git_diff": true, "port_owner": true, "list_ports": true,
+	"disk_usage": true, "mem_usage": true, "list_processes": true, "help": true,
+	"container_list": true, "service_status": true, "service_logs": true,
+	"host_status": true, "list_hosts": true, "net_status": true, "git_branch": true,
+}
 
 // brLevel0Min is the confidence a level-0 answer needs.
 const brLevel0Min = 0.85
@@ -461,7 +572,10 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 	}
 	var events []tkEvent
 	env := &brEnv{Root: tools.Root, Shell: tools.Shell, Permit: ag.PermitCommand, Profile: p,
-		Sink: func(e tkEvent) { events = append(events, e) }}
+		Scripts:   tools.scRegistry(),
+		BeginTurn: func() { tools.BeginTurn(len(ag.Msgs)) }, AfterWrite: tools.cpAfterBash, Undo: tools.Undo,
+		HostRun: brHostExec,
+		Sink:    func(e tkEvent) { events = append(events, e) }}
 	r := brRun(ctx, env, prompt)
 	ok := r.Handled && (r.Status == tkSucceeded || r.Status == tkBlocked && r.Intent.Name == "git_status" && r.Category != rvPermission || r.Status == tkBlocked && r.Intent.Name == "tool_status" && r.Category == rvCommandMissing)
 	if !ok {
@@ -489,7 +603,8 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 
 // brInteractive tries the brain on an offline request: true = answered.
 func (a *App) brInteractive(ctx context.Context, text string) bool {
-	env := &brEnv{Root: a.root, Shell: a.tools.Shell, Permit: a.agent.PermitCommand}
+	env := &brEnv{Root: a.root, Shell: a.tools.Shell, Permit: a.agent.PermitCommand, Scripts: a.tools.scRegistry(),
+		BeginTurn: func() { a.tools.BeginTurn(len(a.agent.Msgs)) }, AfterWrite: a.tools.cpAfterBash, Undo: a.tools.Undo, HostRun: brHostExec}
 	if a.agent.sess != nil {
 		env.Sink = tkSessionSink(a.agent.sess)
 	}

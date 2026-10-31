@@ -817,7 +817,10 @@ turnLoop:
 					rep++
 				}
 			}
-			if rep >= 6 {
+			// ABAB…/ABCABC… cycles: identical-call counting never reaches 6
+			// on a ping-pong, so the tail's periodicity is checked too
+			per, cyc := acLoopLen(a.recent, 4)
+			if rep >= 6 || per > 1 && cyc >= 3 {
 				a.append(Message{Role: "tool", ToolCallID: tc.ID, ToolName: tc.Name, Content: out.Text})
 				a.saRefuse(fan, calls[i+1:], "TOOL_NOT_STARTED: turn stopped because of a repetition loop.")
 				flushImgs()
@@ -832,6 +835,8 @@ turnLoop:
 			}
 			if rep >= 3 {
 				out.Text += fmt.Sprintf("\n\n<system-reminder>You have made this exact call %d times with the same result. Stop repeating it: change your approach, or give the final answer.</system-reminder>", rep)
+			} else if per > 1 && cyc >= 2 {
+				out.Text += fmt.Sprintf("\n\n<system-reminder>You are repeating a cycle of %d tool calls (%d times in a row, same results). Stop looping: change your approach, or give the final answer.</system-reminder>", per, cyc)
 			}
 			out.Text += a.acSteeringNote(tc, out)  // fileMatch steering, once per rule
 			out.Text += a.dcHintNote(tc, out)      // API error on a pinned library: point to the docs tool (docs.go)
@@ -930,6 +935,36 @@ func isCodeFile(p string) bool { return codeExt[strings.ToLower(filepath.Ext(p))
 func hashCall(name, args, result string) string {
 	h := sha256.Sum256([]byte(name + "\x00" + args + "\x00" + result))
 	return hex.EncodeToString(h[:8])
+}
+
+// acLoopLen reports the repetition at the tail of a call-hash sequence:
+// period = the cycle length (1 = the same call repeated; 2+ = a cycle like
+// ABAB or ABCABC) and cyc = how many full times it repeated. Identical-call
+// counting only sees one hash — a ping-pong between two calls is the most
+// common stuck pattern and needs periodicity, not frequency.
+func acLoopLen(s []string, maxPeriod int) (period, cyc int) {
+	for p := 1; p <= maxPeriod && 2*p <= len(s); p++ {
+		last := s[len(s)-p:]
+		cyc = 1
+		for len(s)-(cyc+1)*p >= 0 {
+			prev := s[len(s)-(cyc+1)*p : len(s)-cyc*p]
+			same := true
+			for i := range last {
+				if last[i] != prev[i] {
+					same = false
+					break
+				}
+			}
+			if !same {
+				break
+			}
+			cyc++
+		}
+		if cyc >= 2 {
+			return p, cyc
+		}
+	}
+	return 0, 0
 }
 
 func isOverflow(err error) bool {

@@ -21,7 +21,7 @@ import (
 	"jazzcli/internal/early" // GC tuned before this package's init (internal/early)
 )
 
-var version = "0.9.0"
+var version = "0.10.0"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -881,8 +881,14 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		fmt.Fprintln(os.Stderr, "jazz:", res.Err)
 	}
 	if end.Outcome != obCompleted && ag.SessionID != "" {
-		fmt.Fprintf(os.Stderr, "jazz: execução %s (%s) — trabalho salvo: checkpoint %s · nota %s\njazz: retome com: jazz -p -r %s   (ou jazz -p --resume-last-in %s)\n",
-			obOutcomePT(end.Outcome), res.Status, orDash(obShort(end.Checkpoint)), orDash(end.Handoff), ag.SessionID, root)
+		if res.Model == "offline-brain" && strings.HasSuffix(res.Err, "blocked") {
+			// the brain gave a deliberate terminal answer ("não é repo", "sem
+			// método"): resuming changes nothing, so no "retome com" hint
+			fmt.Fprintf(os.Stderr, "jazz: sessão %s registrada — o cérebro offline não conseguiu (resposta acima); com um modelo, rode sem --offline\n", ag.SessionID)
+		} else {
+			fmt.Fprintf(os.Stderr, "jazz: execução %s (%s) — trabalho salvo: checkpoint %s · nota %s\njazz: retome com: jazz -p -r %s   (ou jazz -p --resume-last-in %s)\n",
+				obOutcomePT(end.Outcome), res.Status, orDash(obShort(end.Checkpoint)), orDash(end.Handoff), ag.SessionID, root)
+		}
 	}
 	if n := tools.KillJobs(); n > 0 && o.verbose {
 		fmt.Fprintf(os.Stderr, "· %d job(s) em segundo plano encerrado(s)\n", n)

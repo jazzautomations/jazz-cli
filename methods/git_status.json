@@ -1,4 +1,10 @@
 {"methods": [
+ {"name": "git_status.rich", "intent": "git_status", "priority": 11,
+  "doc": "git_state.sh: branch, staged/unstaged, ahead/behind numa chamada (sh puro)",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
+  "steps": [{"cap": "script:git_state", "in": {}, "out": "st"}],
+  "verify": [{"check": "script_ok", "arg": "$st"}],
+  "risk": "low", "cost_ms": 300},
  {"name": "git_status.repo", "intent": "git_status", "priority": 10, "doc": "git status --short --branch (só leitura)", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}], "cmds": ["git status --short --branch"], "steps": [{"cap": "git_status", "in": {}, "out": "status"}], "verify": [{"check": "exit_zero", "arg": "$status"}], "risk": "low", "cost_ms": 300},
  {"name": "git_status.no_git", "intent": "git_status", "priority": 5, "doc": "git não está instalado", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "esta pasta é um repositório git, mas o git não está no PATH", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1},
  {"name": "git_status.not_repo", "intent": "git_status", "priority": 1, "doc": "fora de um repositório, pedindo git explicitamente", "pre": [{"fact": "project.git", "op": "unset"}, {"fact": "ask.git", "op": "set"}], "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git (nenhum .git até a raiz)", "status": "blocked"}}], "verify": [], "risk": "low", "cost_ms": 1},

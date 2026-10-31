@@ -1,0 +1,7 @@
+{"methods": [
+ {"name": "list_hosts.profile", "intent": "list_hosts", "priority": 10,
+  "doc": "hosts conhecidos do perfil (SSH config + peers Tailscale)",
+  "steps": [{"cap": "host_list", "in": {}, "out": "n"}],
+  "verify": [{"check": "status_obtained", "arg": "$n"}],
+  "risk": "low", "cost_ms": 50}
+]}

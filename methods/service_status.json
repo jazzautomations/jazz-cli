@@ -1,0 +1,25 @@
+{"methods": [
+ {"name": "service_status.unit", "intent": "service_status", "priority": 10,
+  "doc": "systemctl status <unidade> (só leitura; exit 3 = inativo, que é a resposta)",
+  "needs": ["bin.systemctl"],
+  "pre": [{"fact": "slot.service", "op": "set"}],
+  "steps": [{"cap": "systemd", "in": {"op": "status", "unit": "$slot.service"}, "out": "st"}],
+  "verify": [{"check": "cmd_ran", "arg": "$st"}],
+  "risk": "low", "cost_ms": 400},
+ {"name": "service_status.general", "intent": "service_status", "priority": 5,
+  "doc": "sem unidade: estado geral do systemd + serviços rodando",
+  "needs": ["bin.systemctl"],
+  "pre": [{"fact": "slot.service", "op": "unset"}],
+  "cmds": ["systemctl is-system-running", "systemctl list-units --type=service --state=running --no-legend --no-pager --plain"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "systemctl is-system-running"}, "out": "r"},
+   {"cap": "read_cmd", "in": {"cmd": "systemctl list-units --type=service --state=running --no-legend --no-pager --plain"}, "out": "l"}],
+  "verify": [{"check": "cmd_ran", "arg": "$l"}],
+  "risk": "low", "cost_ms": 500},
+ {"name": "service_status.no_systemd", "intent": "service_status", "priority": 1,
+  "doc": "sem systemctl não dá pra saber status de serviço",
+  "pre": [{"fact": "bin.systemctl", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "systemctl não está no PATH — não dá pra ver serviços (tenta 'lista os processos' ou 'portas abertas')", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

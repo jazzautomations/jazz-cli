@@ -548,7 +548,7 @@ func gitDanger(args []string) string {
 // ---------- read-only allowlist (used by "ask" and plan modes) ----------
 
 var (
-	readOnlyCmd    = lazyRx(`^(ls|ll|la|cat|head|tail|wc|pwd|echo|printf|which|type|file|stat|du|df|tree|rg|grep|egrep|fgrep|fd|fdfind|find|sort|uniq|cut|diff|cmp|whoami|uname|id|uptime|free|ps|jq|realpath|readlink|dirname|basename|nproc|true|false|test|\[|sha256sum|md5sum|cksum|column|tr|nl|seq|go\s+(version|env|list|doc|vet)|python3?\s+(--version|-V)|node\s+(--version|-v)|git\s+(status|diff|log|show|rev-parse|ls-files|blame|describe|shortlog|grep|ls-tree|cat-file)|git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes))*|git\s+tag(\s+(-l|--list))?|git\s+remote(\s+(-v|show|get-url)(\s+\S+)?)?)(\s|$)`)
+	readOnlyCmd    = lazyRx(`^(ls|ll|la|cat|head|tail|wc|pwd|echo|printf|which|type|file|stat|du|df|tree|rg|grep|egrep|fgrep|fd|fdfind|find|sort|uniq|cut|diff|cmp|whoami|uname|id|uptime|free|ps|jq|realpath|readlink|dirname|basename|nproc|pgrep|pidof|true|false|test|\[|sha256sum|md5sum|cksum|column|tr|nl|seq|go\s+(version|env|list|doc|vet)|python3?\s+(--version|-V)|node\s+(--version|-v)|git\s+(status|diff|log|show|rev-parse|ls-files|blame|describe|shortlog|grep|ls-tree|cat-file)|git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes))*|git\s+tag(\s+(-l|--list))?|git\s+remote(\s+(-v|show|get-url)(\s+\S+)?)?)(\s|$)`)
 	readOnlyBadArg = lazyRx(`(^|\s)(-o|--output|--output=\S*|-fprint\w*|-fls|-ok\w*|-exec\w*|-delete|--pre(=\S*)?|-toolexec|-vettool\S*|--exec\S*|-w|--write)(\s|$)`)
 )
 

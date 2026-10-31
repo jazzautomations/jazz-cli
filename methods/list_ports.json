@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "list_ports.ss", "intent": "list_ports", "priority": 10,
+  "doc": "ss -tln lista as portas TCP abertas (só leitura)",
+  "cmds": ["ss -tln"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "ss -tln"}, "out": "ports"}],
+  "verify": [{"check": "exit_zero", "arg": "$ports"}],
+  "risk": "low", "cost_ms": 200}
+]}

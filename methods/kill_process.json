@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "kill_process.pid", "intent": "kill_process", "priority": 10,
+  "doc": "kill -TERM <pid> pela permissão (pid numérico validado; nome de processo ainda não vira pid offline)",
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [{"cap": "proc_kill", "in": {"pid": "$slot.target"}, "out": "k"}],
+  "verify": [{"check": "cmd_ran", "arg": "$k"}],
+  "risk": "high", "cost_ms": 200},
+ {"name": "kill_process.ask", "intent": "kill_process", "priority": 1,
+  "doc": "sem alvo: pergunta o pid",
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Matar qual pid? (o número — 'lista os processos' mostra)"}, "out": "slot.target"},
+   {"cap": "proc_kill", "in": {"pid": "$slot.target"}, "out": "k"}],
+  "verify": [{"check": "cmd_ran", "arg": "$k"}],
+  "risk": "high", "cost_ms": 200}
+]}

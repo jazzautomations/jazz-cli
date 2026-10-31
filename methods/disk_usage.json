@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "disk_usage.df", "intent": "disk_usage", "priority": 10,
+  "doc": "df -h: uso de disco por filesystem (só leitura)",
+  "cmds": ["df -h"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "df -h"}, "out": "df"}],
+  "verify": [{"check": "exit_zero", "arg": "$df"}],
+  "risk": "low", "cost_ms": 200}
+]}

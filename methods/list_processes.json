@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "list_processes.ps", "intent": "list_processes", "priority": 10,
+  "doc": "ps -eo pid,comm,%mem,%cpu --sort=-%mem: processos por uso de memória, nome de comando apenas (só leitura)",
+  "cmds": ["ps -eo pid,comm,%mem,%cpu --sort=-%mem"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "ps -eo pid,comm,%mem,%cpu --sort=-%mem"}, "out": "ps"}],
+  "verify": [{"check": "exit_zero", "arg": "$ps"}],
+  "risk": "low", "cost_ms": 200}
+]}

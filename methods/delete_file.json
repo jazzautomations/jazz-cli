@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "delete_file.op", "intent": "delete_file", "priority": 10,
+  "doc": "file_op delete dentro do projeto; a permissão pede confirmação e o checkpoint cobre o /undo",
+  "pre": [{"fact": "slot.target", "op": "set"}],
+  "steps": [{"cap": "file_op", "in": {"op": "delete", "path": "$slot.target"}, "out": "d"}],
+  "verify": [{"check": "file_gone", "arg": "$slot.target"}],
+  "risk": "high", "cost_ms": 50},
+ {"name": "delete_file.ask", "intent": "delete_file", "priority": 1,
+  "doc": "sem alvo: pergunta o que apagar",
+  "pre": [{"fact": "slot.target", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "target", "q": "Apagar qual arquivo?"}, "out": "slot.target"},
+   {"cap": "file_op", "in": {"op": "delete", "path": "$slot.target"}, "out": "d"}],
+  "verify": [{"check": "file_gone", "arg": "$slot.target"}],
+  "risk": "high", "cost_ms": 50}
+]}

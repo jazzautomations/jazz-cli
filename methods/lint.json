@@ -1,0 +1,14 @@
+{"methods": [
+ {"name": "lint.detected", "intent": "lint", "priority": 10,
+  "doc": "comando de lint da detecção do projeto → roda → saída",
+  "pre": [{"fact": "project.lint", "op": "set"}],
+  "steps": [{"cap": "proj_cmd", "in": {"which": "lint"}, "out": "res"}],
+  "verify": [{"check": "exit_zero", "arg": "$res"}],
+  "risk": "med", "cost_ms": 30000},
+ {"name": "lint.no_cmd", "intent": "lint", "priority": 1,
+  "doc": "sem comando de lint detectado",
+  "pre": [{"fact": "project.lint", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "não detectei comando de lint neste projeto (procurei Makefile lint, package.json scripts, .golangci, ruff/eslint config)", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

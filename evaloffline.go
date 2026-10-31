@@ -290,20 +290,31 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 	}
 	tb := NewToolbox(root)
 	defer tb.Shell.Close()
-	testCmd := fpDetect(root).Test
+	det := fpDetect(root)
+	testCmd := det.Test
 	answers := append([]int(nil), tk.Answers...)
 	texts := append([]string(nil), tk.Texts...)
-	env := &brEnv{Root: root, Shell: tb.Shell, Profile: prof,
+	env := &brEnv{Root: root, Shell: tb.Shell, Profile: prof, Scripts: tb.scRegistry(),
+		BeginTurn: func() { tb.BeginTurn(0) }, AfterWrite: tb.cpAfterBash, Undo: tb.Undo,
 		// what auto mode would run without asking: read-only commands and the
 		// project's test command, never a critical one
 		Permit: func(ctx context.Context, cmd string) (bool, string) {
 			if why := cbMinimalIntervention("bash", nil, cmd, tk.Prompt); why != "" {
 				return false, why
 			}
-			if IsReadOnly(cmd) || testCmd != "" && strings.HasPrefix(cmd, eoFirstWords(testCmd, 2)) {
+			// what runs in a trusted session without asking: read-only
+			// commands, the registry's exact allowlist (what read_cmd itself
+			// gates on), and the commands the project detection declares —
+			// the user approves those interactively
+			if IsReadOnly(cmd) || cbReadCmd(cmd) || testCmd != "" && strings.HasPrefix(cmd, eoFirstWords(testCmd, 2)) ||
+				cmd != "" && (cmd == det.Build || cmd == det.Lint || cmd == det.Fmt) ||
+				// file_op synth commands: the cap already validated the path
+				// inside Root — this simulates the user approving the write
+				strings.HasPrefix(cmd, "write ") || strings.HasPrefix(cmd, "mv ") ||
+				strings.HasPrefix(cmd, "mkdir ") || strings.HasPrefix(cmd, "rm ") {
 				return true, ""
 			}
-			return false, "eval: só leitura e o comando de teste"
+			return false, "eval: só leitura, allowlist do registry e comandos do projeto"
 		},
 		Ask: func(q string, opts []string) int {
 			if len(answers) == 0 {

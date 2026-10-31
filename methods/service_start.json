@@ -1,0 +1,24 @@
+{"methods": [
+ {"name": "service_start.unit", "intent": "service_start", "priority": 10,
+  "doc": "systemctl start <unidade validada> pela permissão",
+  "needs": ["bin.systemctl"],
+  "pre": [{"fact": "slot.service", "op": "set"}],
+  "steps": [{"cap": "systemd", "in": {"op": "start", "unit": "$slot.service"}, "out": "s"}],
+  "verify": [{"check": "cmd_ran", "arg": "$s"}],
+  "risk": "high", "cost_ms": 500},
+ {"name": "service_start.ask", "intent": "service_start", "priority": 5,
+  "doc": "sem unidade: pergunta qual serviço",
+  "needs": ["bin.systemctl"],
+  "pre": [{"fact": "slot.service", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "service", "q": "Subir qual serviço?"}, "out": "slot.service"},
+   {"cap": "systemd", "in": {"op": "start", "unit": "$slot.service"}, "out": "s"}],
+  "verify": [{"check": "cmd_ran", "arg": "$s"}],
+  "risk": "high", "cost_ms": 500},
+ {"name": "service_start.no_systemd", "intent": "service_start", "priority": 1,
+  "doc": "sem systemctl",
+  "pre": [{"fact": "bin.systemctl", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "systemctl não está no PATH — não dá pra controlar serviços", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

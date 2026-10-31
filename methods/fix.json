@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "fix.diagnose", "intent": "fix", "priority": 10,
+  "doc": "roda os testes e mostra as falhas com arquivo:linha (o reparo em si vai pelo modelo — reparar código exige raciocínio, não é mecânico)",
+  "steps": [
+   {"cap": "run_tests", "in": {"target": "$slot.target"}, "out": "t"},
+   {"cap": "test_context", "in": {"result": "$result"}}],
+  "verify": [{"check": "tests_passed", "arg": "$t"}],
+  "risk": "med", "cost_ms": 30000}
+]}

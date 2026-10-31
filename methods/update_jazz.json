@@ -1,0 +1,7 @@
+{"methods": [
+ {"name": "update_jazz.how", "intent": "update_jazz", "priority": 10,
+  "doc": "atualizar o próprio binário é decisão do usuário, não do cérebro",
+  "steps": [{"cap": "say", "in": {"text": "o jazz se atualiza com o instalador (ou `jazz update` quando houver); sem modelo eu não reescrevo o próprio binário — rode sem --offline se quiser que eu atualize"}, "out": "text"}],
+  "verify": [{"check": "read_ok", "arg": "$text"}],
+  "risk": "low", "cost_ms": 1}
+]}

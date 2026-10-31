@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "mem_usage.free", "intent": "mem_usage", "priority": 10,
+  "doc": "free -m: memória livre/usada em MB (só leitura)",
+  "cmds": ["free -m"],
+  "steps": [
+   {"cap": "read_cmd", "in": {"cmd": "free -m"}, "out": "mem"}],
+  "verify": [{"check": "exit_zero", "arg": "$mem"}],
+  "risk": "low", "cost_ms": 200}
+]}

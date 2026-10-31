@@ -1,0 +1,15 @@
+{"methods": [
+ {"name": "project_summary.detect", "intent": "project_summary", "priority": 10,
+  "doc": "script:detect_project — linguagens, comandos de build/teste/lint, entry points, contagem de arquivos",
+  "needs": ["bin.python3"],
+  "steps": [
+   {"cap": "script:detect_project", "in": {}, "out": "proj"}],
+  "verify": [{"check": "script_ok", "arg": "$proj"}],
+  "risk": "low", "cost_ms": 400},
+ {"name": "project_summary.env", "intent": "project_summary", "priority": 5,
+  "doc": "sem python3: env_status já traz linguagens e comandos detectados do projeto",
+  "steps": [
+   {"cap": "env_status", "in": {}, "out": "profile"}],
+  "verify": [{"check": "profile_present", "arg": "$profile"}],
+  "risk": "low", "cost_ms": 50}
+]}

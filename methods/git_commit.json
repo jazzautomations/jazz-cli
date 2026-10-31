@@ -1,0 +1,22 @@
+{"methods": [
+ {"name": "git_commit.msg", "intent": "git_commit", "priority": 10,
+  "doc": "git add -A + commit com a mensagem dada — gerar a mensagem vai pelo modelo, commitar com texto dado é mecânico",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.msg", "op": "set"}],
+  "steps": [{"cap": "git_op", "in": {"sub": "commit", "msg": "$slot.msg"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 2000},
+ {"name": "git_commit.ask", "intent": "git_commit", "priority": 5,
+  "doc": "sem mensagem: pergunta",
+  "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.msg", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "msg", "q": "Mensagem do commit?"}, "out": "slot.msg"},
+   {"cap": "git_op", "in": {"sub": "commit", "msg": "$slot.msg"}, "out": "g"}],
+  "verify": [{"check": "cmd_ran", "arg": "$g"}],
+  "risk": "high", "cost_ms": 2000},
+ {"name": "git_commit.not_repo", "intent": "git_commit", "priority": 1,
+  "doc": "fora de um repositório",
+  "pre": [{"fact": "project.git", "op": "unset"}],
+  "steps": [{"cap": "report", "in": {"text": "esta pasta não é um repositório git", "status": "blocked"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

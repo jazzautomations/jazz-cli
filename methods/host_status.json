@@ -1,0 +1,16 @@
+{"methods": [
+ {"name": "host_status.named", "intent": "host_status", "priority": 10,
+  "doc": "o que o perfil sabe do host (SSH config / Tailscale peer + online)",
+  "pre": [{"fact": "slot.host", "op": "set"}],
+  "steps": [{"cap": "host_report", "in": {"name": "$slot.host"}, "out": "h"}],
+  "verify": [{"check": "status_obtained", "arg": "$h"}],
+  "risk": "low", "cost_ms": 50},
+ {"name": "host_status.ask", "intent": "host_status", "priority": 1,
+  "doc": "sem host no pedido: pergunta qual",
+  "pre": [{"fact": "slot.host", "op": "unset"}],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "host", "q": "Qual host?"}, "out": "slot.host"},
+   {"cap": "host_report", "in": {"name": "$slot.host"}, "out": "h"}],
+  "verify": [{"check": "status_obtained", "arg": "$h"}],
+  "risk": "low", "cost_ms": 50}
+]}

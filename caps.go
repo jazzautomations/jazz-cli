@@ -571,10 +571,21 @@ func cbMinimalIntervention(tool string, args map[string]any, cmd, goal string) s
 // command, never to a command typed through a model tool call.
 var cbReadCmds = map[string]bool{
 	"git status --short --branch": true,
+	"git log --oneline -20":       true,
+	"git diff --stat":             true,
+	"git diff":                    true,
+	"git branch":                  true,
+	"git stash list":              true,
 	"tailscale status":            true,
 	"docker ps":                   true,
 	"podman ps":                   true,
 	"systemctl is-system-running": true,
+	"systemctl list-units --type=service --state=running --no-legend --no-pager --plain": true,
+	"df -h":                                  true,
+	"free -m":                                true,
+	"uptime":                                 true,
+	"ss -tln":                                true,
+	"ps -eo pid,comm,%mem,%cpu --sort=-%mem": true,
 }
 
 // cbReadCmd reports whether cmd is an allowlisted read-only registry
