@@ -21,7 +21,7 @@ import (
 	"jazzcli/internal/early" // GC tuned before this package's init (internal/early)
 )
 
-var version = "0.10.0"
+var version = "0.11.0"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal

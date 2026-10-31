@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.11.0
+
+### O agente sabe onde está e onde cada saída nasceu
+
+- `env_probe` identifica a máquina de verdade: hostname, usuário, distro, kernel, modelo da CPU, modelo DMI e
+  uptime (só `ReadFile`, sem processo extra) — `jazz env` e o `env_status` do cérebro mostram
+  `host · usuário · modelo · distro · kernel · CPU · uptime`. Perguntar pela própria máquina
+  ("status do labbox" estando nela) responde "é ESTA máquina", nunca um ssh pra si mesmo.
+- Proveniência de execução: depois que a sessão roda `ssh`/`tailscale ssh`/`scp`/`rsync`, todo resultado de
+  ferramenta declara onde rodou — `[ran on REMOTE host …]` ou `[ran LOCALLY on …]` — para o modelo não atribuir
+  saída local ao host remoto (bug observado numa sessão real).
+- Prompt de sistema carrega `user@host · modelo · CPU` e a regra "tools run on THIS machine; remote hosts are
+  reached only via explicit ssh".
+- `self_info`: "quem é você", "versão do jazz" respondem deterministicamente (versão, binário, modo, cobertura
+  do cérebro), sem modelo.
+- Cérebro level-0 também no modo online interativo: intenções só-leitura entendidas com confiança ≥ 0,85 são
+  respondidas sem chamada de modelo; `explain`/`project_summary` viram grounding (fatos verificados injetados
+  como contexto) em vez de resposta final; "Mandar pro modelo" no atalho é respeitado.
+- Palavrões/interjeições são fillers — "porra" não vira typo de "porta" nem divide em multi-intent.
+- "whoami", "que usuário", "em que máquina estamos" → `env_status`; `dispositivo`/`aparelho`/`hostname` no
+  vocabulário de ambiente.
+- `@` picker usa índice reconstruído na hora quando a construção é barata (arquivos recém-criados aparecem).
+- Eval offline: 75 tarefas, suporte a `contains_any` (a resposta certa depende da máquina onde roda).
+- Privacidade: nomes de máquinas/hosts dos exemplos e testes viram genéricos; o histórico público foi reescrito
+  sem dados de ambiente real.
+
+
 Histórico de mudanças. Números de desempenho são medidos no Dell Latitude D610 (Pentium M 1,73 GHz, 2 GB, Linux 386), a máquina de referência; detalhes em `results/`.
 
 ## 0.9.0
