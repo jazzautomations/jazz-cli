@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -156,11 +157,14 @@ func osvFixture(sev string, fixed bool, id string) string {
 // versions are. OSV is asked about the version that will be installed.
 func TestFPAxiosChalkMALVersionAware(t *testing.T) {
 	pfTestHome(t)
+	var osvMu sync.Mutex
 	var osvBodies []string
 	sgFake(t, func(u string, body []byte) (int, string) {
 		switch {
 		case strings.Contains(u, "osv.dev"):
+			osvMu.Lock()
 			osvBodies = append(osvBodies, string(body))
+			osvMu.Unlock()
 			if strings.Contains(string(body), `"version":"1.14.1"`) {
 				return 200, `{"vulns":[{"id":"MAL-2026-2307"}]}`
 			}
@@ -179,7 +183,10 @@ func TestFPAxiosChalkMALVersionAware(t *testing.T) {
 	if ok, why := grPermit(h, "npm install axios chalk"); !ok || why != "" {
 		t.Fatalf("latest axios/chalk are clean: ok=%v %q", ok, why)
 	}
-	if !strings.Contains(strings.Join(osvBodies, "|"), `"version":"1.20.0"`) {
+	osvMu.Lock()
+	bodies := strings.Join(osvBodies, "|")
+	osvMu.Unlock()
+	if !strings.Contains(bodies, `"version":"1.20.0"`) {
 		t.Errorf("OSV not asked about the resolved version: %v", osvBodies)
 	}
 	if ok, why := grPermit(h, "npm install axios@1.14.1"); ok || !strings.Contains(why, "malicioso") {
@@ -191,9 +198,14 @@ func TestFPAxiosChalkMALVersionAware(t *testing.T) {
 	// no resolvable version: nothing is flagged
 	var v sgVerdict
 	v.Pkg = sgPkg{Eco: "npm", Name: "axios"}
+	osvMu.Lock()
 	osvBodies = nil
+	osvMu.Unlock()
 	sgOSV(context.Background(), &v)
-	if v.Malicious != "" || len(osvBodies) != 0 {
+	osvMu.Lock()
+	nBodies := len(osvBodies)
+	osvMu.Unlock()
+	if v.Malicious != "" || nBodies != 0 {
 		t.Error("without a version OSV must not be asked, nor a MAL record applied")
 	}
 }

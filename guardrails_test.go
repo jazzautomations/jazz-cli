@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -467,10 +468,10 @@ func TestSupplyChainChecks(t *testing.T) {
 		}
 	}
 	// cached: no second registry call for requests
-	calls := 0
-	sgFake(t, func(u string, body []byte) (int, string) { calls++; return 500, "" })
-	if ok, _ := grPermit(h, "pip install requests"); !ok || calls != 0 {
-		t.Errorf("cached verdict must be reused (calls=%d)", calls)
+	var calls atomic.Int32
+	sgFake(t, func(u string, body []byte) (int, string) { calls.Add(1); return 500, "" })
+	if ok, _ := grPermit(h, "pip install requests"); !ok || calls.Load() != 0 {
+		t.Errorf("cached verdict must be reused (calls=%d)", calls.Load())
 	}
 	// offline: ask
 	sgFake(t, func(u string, body []byte) (int, string) { return 0, "" })
