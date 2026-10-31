@@ -209,7 +209,7 @@ func TestBrainGitAndEnvStatus(t *testing.T) {
 }
 
 // "e o lab386?" names the machine the harness is on: the answer is "this
-// machine", never a ping or an ssh hint (labbox session observada).
+// machine", never a ping or an ssh hint (observado numa sessão local).
 func TestBrainHostIsSelf(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, -1)

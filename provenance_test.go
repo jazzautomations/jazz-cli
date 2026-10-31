@@ -7,13 +7,13 @@ import (
 
 func TestPvRemoteTarget(t *testing.T) {
 	cases := map[string]string{
-		"ssh user@homeserver uname -a":                                   "user@homeserver",
+		"ssh user@homeserver uname -a":                                    "user@homeserver",
 		"ssh -p 2222 -i ~/.ssh/k user@203.0.113.10 'cat /etc/os-release'": "user@203.0.113.10",
-		"ssh -o StrictHostKeyChecking=no labbox":                            "labbox",
-		"tailscale ssh user@homeserver":                                  "user@homeserver",
+		"ssh -o StrictHostKeyChecking=no labbox":                          "labbox",
+		"tailscale ssh user@homeserver":                                   "user@homeserver",
 		"cat x.txt | ssh host 'tee y'":                                    "host",
 		"cd /tmp && ssh -- box ls":                                        "box",
-		"scp ./a.bin user@labbox:/tmp/":                                     "user@labbox",
+		"scp ./a.bin user@labbox:/tmp/":                                   "user@labbox",
 		"rsync -a src/ u@h:/dst":                                          "u@h",
 		"ssh ssh://u@h:22/":                                               "u@h",
 		"FOO=1 ssh h":                                                     "h",
@@ -46,7 +46,7 @@ func TestPvTag(t *testing.T) {
 }
 
 // After an ssh command, every bash result says where it ran — the "I am
-// still on the remote box" confusion (labbox session observada).
+// still on the remote box" confusion (observado numa sessão local).
 func TestBashProvenanceTrailer(t *testing.T) {
 	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
 	tb := h.ag.tools

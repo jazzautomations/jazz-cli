@@ -30,3 +30,4 @@ __pycache__/
 
 # never commit release signing keys
 *.key
+HANDOFF.md
