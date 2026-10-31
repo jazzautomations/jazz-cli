@@ -219,10 +219,9 @@ func TestPTYAskUserMenu(t *testing.T) {
 	s.waitFor("the input box", 15*time.Second, ptyPrompt)
 	s.typeSlow("pergunte algo")
 	s.write("\r")
-	s.waitFor("the question", 10*time.Second, func(sc string) bool { return strings.Contains(sc, "Qual banco usar?") })
-	if sc := s.screen(); !strings.Contains(sc, "▸ 1. SQLite  arquivo local") || !strings.Contains(sc, "3. Outra resposta (escrever)") {
-		t.Errorf("ask_user menu:\n%s", sc)
-	}
+	s.waitFor("the question", 10*time.Second, func(sc string) bool {
+		return strings.Contains(sc, "Qual banco usar?") && strings.Contains(sc, "▸ 1. SQLite  arquivo local") && strings.Contains(sc, "3. Outra resposta (escrever)")
+	})
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
 	s.write("\x1b[B\r") // ↓ Enter = Postgres
 	s.waitFor("the turn to end", 15*time.Second, func(sc string) bool {
