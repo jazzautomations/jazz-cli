@@ -82,7 +82,8 @@ type bgState struct {
 	reads map[string]bgRead
 	turn  *bgTurn
 	netMu sync.Mutex
-	netUp int64 // unix nano of the last successful connectivity probe
+	netUp     int64 // unix nano of the last successful connectivity probe
+	netWaited int64 // total ns spent waiting out outages in this run (netwait.go)
 }
 
 func (a *Agent) bg() *bgState {

@@ -2150,6 +2150,14 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 			summary = s
 			break
 		}
+		if errors.Is(err, errEmptySummary) && ctx.Err() == nil {
+			// no text from any candidate: still shrink the context, with a
+			// deterministic digest, instead of failing and retrying every
+			// few steps while the run overflows or runs out of clock
+			summary = acDigestHistory(head)
+			a.ui.Warn("o modelo não resumiu o histórico antigo — fica um resumo automático (pedidos, arquivos e comandos)")
+			break
+		}
 		if !isOverflow(err) || ctx.Err() != nil {
 			return err
 		}
@@ -2201,7 +2209,53 @@ func (a *Agent) summarize(ctx context.Context, prefix []Message) (string, error)
 			return s, nil
 		}
 	}
-	return "", errors.New("o modelo devolveu um resumo vazio")
+	return "", errEmptySummary
+}
+
+// errEmptySummary: the summary model answered with no text (weak or free
+// models do that under load); Compact then falls back to acDigestHistory.
+var errEmptySummary = errors.New("o modelo devolveu um resumo vazio")
+
+// acDigestHistory is the deterministic fallback summary used when no model
+// returns a summary: the user's requests and the files/commands touched, in
+// order, so the agent keeps its bearings after the old history is dropped.
+// Without it the context stayed uncompacted and the run overflowed or burnt
+// the clock (SWE eval 2026-10-20, sympy-16106).
+func acDigestHistory(head []Message) string {
+	const maxTotal, maxItem = 6000, 240
+	var b strings.Builder
+	b.WriteString("(No model summary was available; this is an automatic digest of the dropped history.)\n")
+	b.WriteString("## User requests\n")
+	for _, m := range head {
+		if m.Role != "user" {
+			continue
+		}
+		c := strings.TrimSpace(acStripReminders(m.Content))
+		if c == "" || strings.HasPrefix(c, "<summary>") {
+			continue
+		}
+		b.WriteString("- " + oneLine(c, maxItem) + "\n")
+		if b.Len() > maxTotal/2 {
+			break
+		}
+	}
+	b.WriteString("## Tools called (name: args)\n")
+	seen := map[string]bool{}
+	for _, m := range head {
+		for _, tc := range m.ToolCalls {
+			line := tc.Name + ": " + oneLine(tc.Args, 160)
+			if seen[line] {
+				continue
+			}
+			seen[line] = true
+			b.WriteString("- " + line + "\n")
+			if b.Len() > maxTotal {
+				b.WriteString("- …\n")
+				return b.String()
+			}
+		}
+	}
+	return b.String()
 }
 
 // acShrinkHistory makes a summary prefix smaller after an overflow: round 0

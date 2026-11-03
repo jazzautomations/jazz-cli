@@ -1120,8 +1120,6 @@ func TestAgentCompactFailuresLeaveHistoryUntouched(t *testing.T) {
 		h    func(int, recReq) fakeResp
 	}{
 		{"too short", []Message{{Role: "user", Content: "a"}, {Role: "assistant", Content: "b"}}, seq()},
-		{"empty summary twice", []Message{{Role: "user", Content: "a"}, {Role: "assistant", Content: "b"}, {Role: "user", Content: "c"}, {Role: "assistant", Content: "d"}},
-			func(int, recReq) fakeResp { return fakeResp{} }},
 		{"http error", []Message{{Role: "user", Content: "a"}, {Role: "assistant", Content: "b"}, {Role: "user", Content: "c"}, {Role: "assistant", Content: "d"}},
 			func(int, recReq) fakeResp { return fakeResp{Status: 500, Body: "boom"} }},
 	}
@@ -1137,6 +1135,31 @@ func TestAgentCompactFailuresLeaveHistoryUntouched(t *testing.T) {
 				t.Errorf("history changed on failure: %+v", h.ag.Msgs)
 			}
 		})
+	}
+}
+
+// An empty summary no longer fails Compact: the context still shrinks, with
+// the deterministic digest (acDigestHistory), so a weak or free model cannot
+// leave the run uncompacted until it overflows or runs out of clock.
+func TestAgentCompactEmptySummaryFallsBackToDigest(t *testing.T) {
+	h := newHarness(t, func(int, recReq) fakeResp { return fakeResp{} }, nil)
+	h.ag.EnsureSystem()
+	h.ag.Msgs = []Message{
+		{Role: "user", Content: "conserta o bug do parser"},
+		{Role: "assistant", Content: "b", ToolCalls: []ToolCall{{ID: "1", Name: "read", Args: `{"path":"parser.go"}`}}},
+		{Role: "tool", Content: "x", ToolCallID: "1", ToolName: "read"},
+		{Role: "user", Content: "c"},
+		{Role: "assistant", Content: "d"},
+	}
+	if err := h.ag.Compact(context.Background(), ""); err != nil {
+		t.Fatalf("digest fallback must not fail: %v", err)
+	}
+	if len(h.ag.Msgs) >= 5 {
+		t.Errorf("history not compacted: %d msgs", len(h.ag.Msgs))
+	}
+	got := h.ag.Msgs[0].Content
+	if !strings.Contains(got, "automatic digest") || !strings.Contains(got, "conserta o bug do parser") || !strings.Contains(got, "parser.go") {
+		t.Errorf("digest missing the request or the file touched:\n%s", got)
 	}
 }
 
