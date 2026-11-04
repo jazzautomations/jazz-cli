@@ -48,19 +48,10 @@ func omniHealthProbe(cfg *Config, timeout time.Duration) (string, int) {
 			Messages: []Message{{Role: "user", Content: "Responda apenas: ok"}}}, nil)
 		ms := time.Since(t0).Milliseconds()
 		cancel()
-		var ae *APIError
-		switch {
-		case err == nil:
-			rows = append(rows, res{pm.ref, "✓ vivo", ms})
-		case errors.As(err, &ae) && ae.Status == 404:
-			rows = append(rows, res{pm.ref, "✗ 404 MORTO (id removido do provedor)", ms})
+		kind, label := omniHealthKind(err)
+		rows = append(rows, res{pm.ref, label, ms})
+		if kind == "dead" {
 			dead++
-		case errors.As(err, &ae) && (ae.Status == 401 || ae.Status == 403):
-			rows = append(rows, res{pm.ref, fmt.Sprintf("✗ %d chave recusada", ae.Status), ms})
-		case errors.As(err, &ae) && ae.Status == 429:
-			rows = append(rows, res{pm.ref, "· 429 cota (vivo, só limitado)", ms})
-		default:
-			rows = append(rows, res{pm.ref, "? erro: " + oneLine(err.Error(), 40), ms})
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ref < rows[j].ref })
@@ -79,4 +70,47 @@ func omniHealthProbe(cfg *Config, timeout time.Duration) (string, int) {
 		b.WriteString("\nnenhum modelo free morto (404) entre os que têm credencial\n")
 	}
 	return b.String(), dead
+}
+
+// omniHealthKind reads the provider's answer like a human would — status AND
+// body — and names the cause. Order matters: a bad key is checked before a
+// dead model, because Gemini answers a bad key with HTTP 400 "Please pass a
+// valid API key" and other providers say "model" in auth errors; marking a
+// live model dead because the key expired would rot the catalog for nothing.
+// kinds: alive | key | credit | dead | quota | down | other.
+func omniHealthKind(err error) (kind, label string) {
+	if err == nil {
+		return "alive", "✓ vivo"
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return "down", "? rede/timeout: " + oneLine(err.Error(), 50)
+	}
+	b := strings.ToLower(ae.Body)
+	snip := oneLine(strings.TrimSpace(ae.Body), 70)
+	has := func(ks ...string) bool {
+		for _, k := range ks {
+			if strings.Contains(b, k) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case ae.Status == 401 || ae.Status == 403 ||
+		has("api key", "api_key", "apikey", "invalid key", "valid api key", "credential", "unauthorized", "unauthenticated", "authentication", "invalid_api", "permission denied"):
+		return "key", fmt.Sprintf("✗ %d chave recusada/expirada", ae.Status)
+	case pvClassify(ae) == "credit":
+		return "credit", fmt.Sprintf("✗ %d sem crédito/saldo", ae.Status)
+	case ae.Status == 404 ||
+		has("not_found", "not found", "does not exist", "model:", "unknown model", "no such model", "decommissioned", "deprecated", "no longer available", "no longer supported", "has been retired", "invalid model", "model_not_found"):
+		return "dead", fmt.Sprintf("✗ %d MORTO/descontinuado — %s", ae.Status, snip)
+	case ae.Status == 429:
+		return "quota", "· 429 cota/rate (vivo, só limitado)"
+	case ae.Status >= 500 || ae.Status == 0:
+		return "down", fmt.Sprintf("? %d provedor/rede fora (transitório)", ae.Status)
+	case ae.Status == 400:
+		return "other", "? 400 pedido recusado — " + snip
+	}
+	return "other", fmt.Sprintf("? %d — %s", ae.Status, snip)
 }

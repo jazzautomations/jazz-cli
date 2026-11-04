@@ -169,14 +169,12 @@ var presetModels = []presetModel{
 	{"cloudflare/@cf/moonshotai/kimi-k2.5", ModelConf{Q: 80, Tiers: pvTiers("coder")}},
 	{"mistral/devstral-medium-latest", ModelConf{Q: 78, Tiers: pvTiers("coder")}},
 	{"openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", ModelConf{Q: 75, Context: 1000000, Tiers: pvTiers("smart", "coder", "free", "long")}},
-	{"openrouter/minimax/minimax-m3.1-flash:free", ModelConf{Q: 68, Context: 1000000, Tiers: pvTiers("free", "long")}},
 	{"openrouter/cohere/north-mini-code:free", ModelConf{Q: 70, Context: 256000, Tiers: pvTiers("coder", "free")}},
 	{"openrouter/nvidia/nemotron-3.5-lightning:free", ModelConf{Q: 55, Tiers: pvTiers("fast", "free")}},
 	{"sambanova/DeepSeek-V3.1", ModelConf{Q: 74, Context: 131072, Tiers: pvTiers("coder", "free")}},
 	{"sambanova/gpt-oss-120b", ModelConf{Q: 66, Context: 131072, Tiers: pvTiers("fast", "free")}},
-	{"kilo/" + kiloDefaultModel, ModelConf{Q: 72, MaxOut: 32768, Tiers: pvTiers("coder", "free")}},
+	{"kilo/" + kiloDefaultModel, ModelConf{Q: 70, Context: 256000, MaxOut: 64000, Tiers: pvTiers("coder", "free")}}, // cohere/north-mini-code:free
 	{"kilo/reflection/beam-free", ModelConf{Q: 60, MaxOut: 65536, Tiers: pvTiers("fast", "free")}},
-	{"kilo/cohere/north-mini-code:free", ModelConf{Q: 70, Context: 256000, MaxOut: 64000, Tiers: pvTiers("coder", "free")}},
 	{"kilo/nvidia/nemotron-3-ultra-550b-a55b:free", ModelConf{Q: 75, Context: 1000000, MaxOut: 235929, Tiers: pvTiers("coder", "free", "long")}},
 	{"kilo/nvidia/nemotron-3.5-lightning:free", ModelConf{Q: 55, MaxOut: 65536, Tiers: pvTiers("fast", "free")}},
 	{"kilo/" + pvOldKiloDefault, ModelConf{Q: 60, Context: 256000}}, // manual only: stalls often

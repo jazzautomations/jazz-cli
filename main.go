@@ -443,6 +443,16 @@ func main() {
 				m = cfg.PickDefaultModel()
 			}
 			out, err := pfOmniCommand(cfg, m, rest[1:])
+			if len(rest) > 1 && (rest[1] == "health" || rest[1] == "saude" || rest[1] == "saúde") {
+				// health is a result, not a usage error: always print the
+				// table, and exit 1 when a free model is dead so CI fails.
+				fmt.Print(out)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "jazz:", err)
+					os.Exit(1)
+				}
+				return
+			}
 			if err != nil {
 				pfUsageErr(err.Error())
 			}
