@@ -1,0 +1,9 @@
+{"name": "dotenv_check", "version": 1, "run": "python3", "effect": "read",
+ "description": "Compare a .env with its example and list missing/extra/empty vars (names only, never values)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or .env file (default: .)"},
+     "example": {"type": "string", "description": "example file (default: .env.example/.sample/.template beside it)"},
+     "required": {"type": "array", "items": {"type": "string"}, "description": "extra variable names that must be present"}}},
+ "output": {"data": {"env_file": "str|null", "example_file": "str|null", "missing": ["str"], "extra": ["str"],
+   "empty": ["str"], "duplicated": ["str"], "count": "int", "ok_all": "bool", "text": "str"}}}
