@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "uptime_load.script", "intent": "uptime_load", "priority": 10, "doc": "script:uptime_load: /proc/uptime+loadavg+stat: há quanto tempo, carga e cpu %", "needs": ["bin.python3"], "steps": [{"cap": "script:uptime_load", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
+ {"name": "uptime_load.no_python", "intent": "uptime_load", "priority": 1, "doc": "sem python3 o script uptime_load não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script uptime_load, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

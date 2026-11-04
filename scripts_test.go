@@ -23,7 +23,7 @@ import (
 // 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "config_get", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "mem_top", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "yaml_get"}
+var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "log_errors_recent", "mem_top", "net_ifaces", "parse_build_errors", "parse_log_lines", "parse_test_output", "pkg_installed", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -53,6 +53,9 @@ func scCall(t *testing.T, tb *Toolbox, name string, args map[string]any) (map[st
 	out := tb.Exec(ctx, "script", string(b))
 	var v map[string]any
 	if err := json.Unmarshal([]byte(out.Text), &v); err != nil {
+		if out.IsErr { // refused before the script ran (schema validation): a failure, not JSON
+			return map[string]any{"ok": false, "error": out.Text}, out
+		}
 		t.Fatalf("%s: result is not JSON: %v\n%s", name, err, out.Text)
 	}
 	return v, out
@@ -879,6 +882,43 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		v, _ := scCall(t, tb, "mem_top", map[string]any{"top": 2})
 		if !scOK(v) {
 			t.Errorf("mem_top: %v", v)
+		}
+	})
+	// cardápio v3 (2/2): smoke; deep tests in *_cardapio_test.go
+	for _, n := range []string{"cron_list", "log_errors_recent", "net_ifaces", "pkg_installed"} {
+		n := n
+		run(n, func(t *testing.T) {
+			if runtime.GOOS != "linux" {
+				t.Skip("linux /proc, /sys, journal, crontab")
+			}
+			args := map[string]any{}
+			if n == "pkg_installed" {
+				args["manager"] = "go"
+			}
+			if v, _ := scCall(t, tb, n, args); !scOK(v) {
+				t.Errorf("%s: %v", n, v)
+			}
+		})
+	}
+	run("fs_recent", func(t *testing.T) {
+		scWrite(t, root, "fr.txt", "x\n")
+		defer os.Remove(filepath.Join(root, "fr.txt"))
+		if v, _ := scCall(t, tb, "fs_recent", map[string]any{"minutes": 5}); !scOK(v) {
+			t.Errorf("fs_recent: %v", v)
+		}
+	})
+	run("hash_verify", func(t *testing.T) {
+		scWrite(t, root, "hv.txt", "x\n")
+		defer os.Remove(filepath.Join(root, "hv.txt"))
+		v, _ := scCall(t, tb, "hash_verify", map[string]any{"path": "hv.txt", "expected": "sha256:e6c3bfdb4e4d0a7fe8bfc6c3ba7b4fa1cbbd9e6c5b31e0e1ee35b1b1e0f2a7e0"})
+		if !scOK(v) {
+			t.Errorf("hash_verify: %v", v)
+		}
+	})
+	run("archive_list", func(t *testing.T) {
+		v, _ := scCall(t, tb, "archive_list", map[string]any{"path": "nope.zip"})
+		if scOK(v) {
+			t.Errorf("archive_list on a missing file must fail: %v", v)
 		}
 	})
 	for _, n := range scShipped {

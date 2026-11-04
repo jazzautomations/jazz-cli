@@ -1,0 +1,56 @@
+{
+ "name": "pkg_installed",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "List installed packages per manager (dpkg/rpm, pip, npm global+project, go.mod); listing only",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "manager": {
+    "enum": ["auto", "dpkg", "rpm", "pip", "npm", "go"],
+    "description": "which manager to list (default auto: every one available; npm = global and project)"
+   },
+   "name": {
+    "type": "string",
+    "description": "case-insensitive substring filter on the package name"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 20000,
+    "description": "packages to return, sorted by manager/name (default 300)"
+   },
+   "path": {
+    "type": "string",
+    "description": "project directory for node_modules and go.mod/go.sum (default: project root)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "managers": [
+    {
+     "name": "dpkg|rpm|pip|npm|npm(project)|go",
+     "available": "bool",
+     "count": "int",
+     "ms": "int",
+     "skipped": "bool",
+     "version": "str|null",
+     "source": "str|null"
+    }
+   ],
+   "packages": [
+    {
+     "manager": "str",
+     "name": "str",
+     "version": "str|null"
+    }
+   ],
+   "total": "int",
+   "truncated": "bool",
+   "text": "str"
+  }
+ }
+}

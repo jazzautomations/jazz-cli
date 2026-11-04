@@ -1,0 +1,11 @@
+# synthetic /etc/crontab-style fixture (fixture for cron_list)
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+17 *	* * *	root	cd / && run-parts --report /etc/cron.hourly
+25 6	* * *	root	test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily )
+47 6	* * 7	root	test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.weekly )
+52 6	1 * *	root	test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.monthly )
+30 7-23 * * *   ana	[ -x /opt/httpkit/bin/poll ] && /opt/httpkit/bin/poll
+*/10 8-18 * * 1-5 bruno /opt/httpkit/bin/metrics push
+0 4 15 6 * root /usr/local/sbin/midyear-audit

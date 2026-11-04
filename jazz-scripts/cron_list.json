@@ -1,0 +1,42 @@
+{
+ "name": "cron_list",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "List schedules read-only: user crontab, /etc/crontab + cron.d, cron.{hourly..monthly} names, systemd timers",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+   "user_only": {
+    "type": "boolean",
+    "description": "only the user's crontab (default false: also system cron, periodic dirs and systemd timers)"
+   },
+   "limit": {
+    "type": "integer",
+    "description": "max entries across crontab+system+timers (default 200, max 2000)"
+   },
+   "path": {
+    "type": "string",
+    "description": "parse this crontab-format file instead of querying the system (max 1 MB)"
+   },
+   "format": {
+    "enum": ["user", "system"],
+    "description": "with path: user lines (default) or system lines with a user field like /etc/crontab"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "crontab": [{"schedule": "str", "human": "str", "command": "str", "source": "str"}],
+   "system": [{"schedule": "str", "human": "str", "user": "str|null", "command": "str", "source": "str"}],
+   "timers": [{"unit": "str", "next": "str|null", "left": "str|null", "last": "str|null", "activates": "str|null"}],
+   "periodic": {"hourly": ["str"], "daily": ["str"], "weekly": ["str"], "monthly": ["str"]},
+   "sources": ["str"],
+   "truncated": "bool",
+   "permission_denied": "bool",
+   "text": "str"
+  }
+ }
+}

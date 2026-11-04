@@ -107,7 +107,7 @@
   {"id": "find-symbol", "cat": "atalho", "fixture": "go", "prompt": "procura ParseArgs", "needs": "python3", "expect": {"status": "succeeded", "intent": "find", "contains": ["parser.go"], "questions": 0}},
   {"id": "git-log-nogit", "cat": "atalho", "fixture": "nogit", "prompt": "últimos commits", "expect": {"status": "blocked", "intent": "git_log", "contains": ["repositório"], "questions": 0}},
   {"id": "disk-usage", "cat": "atalho", "fixture": "go", "prompt": "espaço em disco", "expect": {"status": "succeeded", "intent": "disk_usage", "contains": ["%"], "questions": 0}},
-  {"id": "mem-usage", "cat": "atalho", "fixture": "go", "prompt": "quanta memória livre", "expect": {"status": "succeeded", "intent": "mem_usage", "contains": ["Mem"], "questions": 0}},
+  {"id": "mem-usage", "cat": "atalho", "fixture": "go", "prompt": "quanta memória livre", "expect": {"status": "succeeded", "intent": "mem_usage", "contains": ["total"], "questions": 0}},
   {"id": "help", "cat": "atalho", "fixture": "go", "prompt": "ajuda", "expect": {"status": "succeeded", "intent": "help", "contains": ["sem modelo"], "questions": 0}},
   {"id": "port-free", "cat": "atalho", "fixture": "go", "prompt": "quem está na porta 59999", "needs": "python3", "expect": {"status": "succeeded", "intent": "port_owner", "contains": ["59999"], "questions": 0}},
   {"id": "net-status", "cat": "atalho", "fixture": "go", "prompt": "tem internet?", "doc": "0.9.1: cap net_status lê o perfil de ambiente", "expect": {"status": "succeeded", "intent": "net_status", "contains": ["internet"], "questions": 0}},
@@ -175,6 +175,12 @@
   {"id": "card-neg-todos-files", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista todos os arquivos", "doc": "'todos' = list, não é TODO", "expect": {"status": "succeeded", "intent": "list_files", "questions": 0}},
   {"id": "card-neg-env", "cat": "cardápio", "fixture": "cardapio", "prompt": "que sistema é esse", "doc": "env sem dotenv continua env_status", "expect": {"status": "succeeded", "intent": "env_status", "questions": 0}},
   {"id": "card-symbol-refs", "cat": "cardápio", "fixture": "go", "prompt": "quem chama o ParseArgs", "needs": "python3", "doc": "usage+@symbol (2) vence find (1); refs em parser_test.go, definição à parte", "expect": {"status": "succeeded", "intent": "symbol_refs", "contains": ["parser_test.go"], "questions": 0}},
-  {"id": "card-lint-script", "cat": "cardápio", "fixture": "norunner", "prompt": "roda o lint", "needs": "python3", "doc": "sem comando de lint do projeto: lint_run com os linters instalados (0 achados é resposta honesta)", "expect": {"status": "succeeded", "intent": "lint", "contains": ["findings"], "questions": 0}}
+  {"id": "card-lint-script", "cat": "cardápio", "fixture": "norunner", "prompt": "roda o lint", "needs": "python3", "doc": "sem comando de lint do projeto: lint_run com os linters instalados (0 achados é resposta honesta)", "expect": {"status": "succeeded", "intent": "lint", "contains": ["findings"], "questions": 0}},
+  {"id": "card-uptime", "cat": "cardápio", "fixture": "cardapio", "prompt": "há quanto tempo a máquina tá ligada", "needs": "python3", "expect": {"status": "succeeded", "intent": "uptime_load", "contains": ["load"], "questions": 0}},
+  {"id": "card-mem", "cat": "cardápio", "fixture": "cardapio", "prompt": "quem tá comendo memória", "needs": "python3", "expect": {"status": "succeeded", "intent": "mem_usage", "contains": ["GB total"], "questions": 0}},
+  {"id": "card-recent", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais arquivos mudaram recentemente", "needs": "python3", "expect": {"status": "succeeded", "intent": "fs_recent", "contains": ["changed in the last 60 min"], "questions": 0}},
+  {"id": "card-cron", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista o cron", "needs": "python3", "expect": {"status": "succeeded", "intent": "cron_list", "questions": 0}},
+  {"id": "card-ifaces", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais interfaces de rede tenho", "needs": "python3", "expect": {"status": "succeeded", "intent": "net_ifaces", "questions": 0}},
+  {"id": "card-logerr", "cat": "cardápio", "fixture": "cardapio", "prompt": "erros recentes no log", "needs": "python3", "expect": {"status": "succeeded", "intent": "log_errors_recent", "questions": 0}}
  ]
 }

@@ -1,0 +1,11 @@
+# synthetic user crontab (fixture for cron_list)
+SHELL=/bin/sh
+MAILTO=""
+*/5 * * * * /usr/local/bin/sync-queue --quiet
+0 3 * * * /home/ana/bin/backup.sh --full >> /home/ana/backup.log 2>&1
+30 7 * * 1-5 /usr/bin/python3 /home/ana/jobs/report.py
+15 * * * * /usr/bin/find /tmp/cache -mmin +60 -delete
+0 0 1 * * /home/ana/bin/rotate-invoices.sh
+@reboot /home/ana/bin/start-agent.sh
+@daily /usr/bin/httpkit-clean
+45 22 * * 0 /home/ana/bin/weekly-digest.sh --to bruno@example.test --subject "digest of the week for the whole team, long command line that must be cut"

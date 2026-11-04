@@ -1,4 +1,5 @@
 {"methods": [
+ {"name": "mem_usage.script", "intent": "mem_usage", "priority": 20, "doc": "script:mem_top: /proc/meminfo + quem mais come memória (RSS), sem free/ps", "needs": ["bin.python3"], "steps": [{"cap": "script:mem_top", "in": {"top": "8"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
  {"name": "mem_usage.free", "intent": "mem_usage", "priority": 10,
   "doc": "free -m: memória livre/usada em MB (só leitura)",
   "cmds": ["free -m"],

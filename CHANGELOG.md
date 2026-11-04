@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.1
+
+### Cardápio v3 (sistema/ops): 48 scripts, e o cérebro offline usa mais 9 sem modelo
+
+- 10 scripts novos: env_tools, uptime_load, mem_top, net_ifaces, fs_recent, archive_list, hash_verify,
+  pkg_installed, cron_list, log_errors_recent. Só leitura e só consulta: `/proc` e `/sys` em vez de
+  `free`/`ip`/`ps`; o MAC sai mascarado por padrão; `archive_list` marca `..`, caminho absoluto e link
+  que escapa da pasta, e avisa de bomba de descompressão; `hash_verify` nunca diz "ok" sem ter lido o
+  arquivo inteiro.
+- Offline, sem modelo: uptime/carga, quem come memória (`mem_usage` agora usa `mem_top`), arquivos
+  mudados recentemente, conteúdo de zip/tar, checksum, pacotes instalados, cron/timers, erros recentes
+  do log, interfaces e IPs. 8 intents novos e 6 tarefas no eval.
+- Na máquina de desenvolvimento, `jazz eval offline`: 101/101 · falso sucesso 0 · 99/101 sem modelo ·
+  perguntas = necessárias.
+
 ## 0.12.0
 
 ### Cardápio offline: 38 scripts determinísticos, e o cérebro offline usa 26 deles sem modelo

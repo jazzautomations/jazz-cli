@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "fs_recent.script", "intent": "fs_recent", "priority": 10, "doc": "script:fs_recent: arquivos modificados na última hora (walk, sem symlink)", "needs": ["bin.python3"], "steps": [{"cap": "script:fs_recent", "in": {"minutes": "60"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
+ {"name": "fs_recent.no_python", "intent": "fs_recent", "priority": 1, "doc": "sem python3 o script fs_recent não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script fs_recent, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

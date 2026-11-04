@@ -1,0 +1,11 @@
+{"name": "fs_recent", "version": 1, "run": "python3", "effect": "read",
+ "description": "Files modified in the last N minutes under a path, newest first (no git needed); skips .git/node_modules",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "minutes": {"type": "integer", "minimum": 1, "maximum": 10080, "description": "look-back window in minutes (default 60, max 7 days)"},
+     "path": {"type": "string", "description": "directory or file to scan (default: project root)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "max files to return (default 100)"},
+     "include_hidden": {"type": "boolean", "description": "also scan dot-files and dot-dirs (default false)"}}},
+ "output": {"data": {
+   "files": [{"path": "str", "mtime_iso": "str", "age_min": "float", "size": "int"}],
+   "count": "int", "files_scanned": "int", "minutes": "int", "truncated": "bool", "text": "str"}}}

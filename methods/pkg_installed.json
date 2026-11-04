@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "pkg_installed.script", "intent": "pkg_installed", "priority": 10, "doc": "script:pkg_installed: pacotes instalados, só listagem (dpkg/rpm/pip/npm/go)", "needs": ["bin.python3"], "steps": [{"cap": "script:pkg_installed", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
+ {"name": "pkg_installed.no_python", "intent": "pkg_installed", "priority": 1, "doc": "sem python3 o script pkg_installed não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script pkg_installed, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}
