@@ -202,7 +202,7 @@ func envBlock(root string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "cwd: %s\n", root)
 	fmt.Fprintf(&b, "os: %s (%s/%s)\n", osName(), runtime.GOOS, runtime.GOARCH)
-	fmt.Fprintf(&b, "date: %s\n", time.Now().Format("2006-01-02 (Monday)"))
+	fmt.Fprintf(&b, "date: %s (session started at this local time)\n", time.Now().Format("2006-01-02 (Monday) 15:04 MST"))
 	fmt.Fprintf(&b, "jazz: v%s\n", version)
 	if p := epGetLight(); p != nil {
 		var id []string

@@ -1,5 +1,14 @@
 # Changelog
 
+## Não lançado
+
+### Noção de tempo dentro da execução
+
+- O prompt de sistema traz a hora de início da sessão (fixa, o cache do prompt continua valendo).
+- Entre os passos, no máximo a cada 2 min, o modelo recebe `relógio: agora 20:31 · rodando há 7m ·
+  faltam 3m de 10m` (o "faltam" só com `--timeout`). Antes ele sabia a data, mas não a hora, nem quanto
+  tempo já tinha gasto, nem quanto restava até o aviso final de 3/4 do prazo.
+
 ## 0.12.1
 
 ### Cardápio v3 (sistema/ops): 48 scripts, e o cérebro offline usa mais 9 sem modelo

@@ -109,6 +109,8 @@ type Agent struct {
 	RunDeadline time.Time
 	dlWarn      atomic.Bool
 	dlWhy       string
+	runStart    time.Time // first step of the run (clock reminders, runclock.go)
+	clockAt     time.Time // last clock reminder appended
 
 	// parallel tool calls (partools.go): the schedule of the current batch,
 	// the index of the call being executed (-1 = none), the lane it used
@@ -492,6 +494,7 @@ turnLoop:
 			nudgedDeadline = true
 			a.append(Message{Role: "user", Content: deadlineWrapUpReminder})
 		}
+		a.rcClock(time.Now()) // time awareness: now / elapsed / left, appended at most every 2 min (runclock.go)
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
 			nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake = false, false, false, false
