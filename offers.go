@@ -31,13 +31,15 @@ import (
 
 // olAction is one deterministic action of a menu.
 type olAction struct {
-	Key    string // short label for the one-line menu ("testes", "git")
-	Label  string // menu text
-	Kind   string // shell | test | script | summary | online | wait | sudo | slash
-	Cmd    string // shell command (shell, test, sudo)
-	Script string // script name (script)
-	Args   string // script args (JSON)
-	Intent string // for the note and the debug log
+	Key    string  // short label for the one-line menu ("testes", "git")
+	Label  string  // menu text
+	Kind   string  // shell | test | script | summary | online | wait | sudo | slash | brain | edit
+	Cmd    string  // shell command (shell, test, sudo); edit: the suggested request
+	Script string  // script name (script)
+	Args   string  // script args (JSON)
+	Intent string  // for the note and the debug log
+	In     *Intent // brain: the reading to run without parsing again (P2 menu)
+	Text   string  // brain: the request that produced the reading
 }
 
 // olMenuIn is everything the menu is built from (a pure function of it).
@@ -361,6 +363,18 @@ func (a *App) olRun(ctx context.Context, act olAction) bool {
 		return true
 	case "summary":
 		return a.olSummary(ctx)
+	case "brain":
+		if act.In == nil {
+			return false
+		}
+		return a.brRunReading(ctx, act.Text, *act.In) // P2: the picked reading runs, no re-parse
+	case "edit":
+		msg := "edite o pedido e mande de novo"
+		if act.Cmd != "" {
+			msg += " — " + act.Cmd
+		}
+		a.ui.Notice(msg)
+		return true
 	case "script":
 		a.ui.ToolStart("offer", "script", act.Script)
 		t0 := time.Now()

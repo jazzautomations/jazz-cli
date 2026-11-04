@@ -26,6 +26,7 @@ import (
 // brResult is the outcome of one request.
 type brResult struct {
 	Handled   bool // the brain answered (no model needed)
+	Miss      bool // the brain did not understand: Text is the honest miss (P2)
 	Intent    Intent
 	Task      *TaskState
 	Status    tkStatus
@@ -93,8 +94,12 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent) brResult {
 	res := brResult{Handled: true, Intent: Intent{Name: "multi", Confidence: 1}}
 	var texts []string
+	missed := false
 	for i, in := range ins {
 		r := brRunIntent(ctx, env, parts[i], in, brResult{})
+		if !r.Handled && !missed { // the menu of a failed part needs its reading
+			res.Intent, res.Miss, missed = r.Intent, r.Miss, true
+		}
 		res.Handled = res.Handled && r.Handled
 		res.Questions += r.Questions
 		res.Commands += r.Commands
@@ -128,24 +133,15 @@ func brStatusRank(s tkStatus) int {
 }
 
 func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res brResult) brResult {
-	if !in.Understood() {
-		// typo-only reading (nlu.go): the intent stands on a word we repaired
-		// and nothing else. Principle 1 (faz até o fim) says do not hand it
-		// back as homework; principle 2 (não enfraquece guardrail) says do not
-		// act on a spelling guess silently. So when there is interactive UI we
-		// turn the blind drop into a visible one-key confirmation; headless
-		// (-p, env.Ask == nil) falls through to the honest miss below, which
-		// already prints "talvez X, confiança 0.50".
-		if in.TypoOnly && in.Name != "none" && env.Ask != nil {
-			res.Questions++
-			if env.Ask(brTypoConfirm(in), []string{"Rodar agora", "Mandar pro modelo"}) == 0 {
-				in.TypoOnly = false
-				in.Confidence = nuMinConf // the user confirmed our reading
-				r := brRunIntent(ctx, env, text, in, brResult{Intent: in})
-				r.Questions += res.Questions
-				return r
-			}
-		}
+	res.Intent = in
+	// typo-only reading (nlu.go): the intent stands on a word we repaired
+	// and nothing else. Principle 1 (faz até o fim) says do not hand it
+	// back as homework; principle 2 (não enfraquece guardrail) says do not
+	// act on a spelling guess silently. So it enters the same one-key
+	// confirmation as the medium confidence band below; headless
+	// (-p, env.Ask == nil) falls into the honest miss with the top-k menu.
+	if !in.Understood() && !(in.TypoOnly && in.Name != "none") {
+		res.Miss = true
 		res.Text = brNotUnderstood(in)
 		return res
 	}
@@ -154,6 +150,37 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 	if len(methods) == 0 {
 		res.Text = fmt.Sprintf("entendi '%s' (%s), mas ainda não tenho um método offline pra isso", in.Name, nuGet().descOf(in.Name))
 		return res
+	}
+	// P1: the double band — confidence × risk of the method brExecute would
+	// pick. High confidence on a read-only method acts at once (anti-fatigue,
+	// UX-VII); the medium band and every mutant (risk ≥ high) get one key.
+	// Headless without a TTY never acts on the medium band: it becomes the
+	// honest miss. Mutation stays behind the permission guardrail either way
+	// (env.Permit): this confirmation is of the *intention*, not a replacement.
+	risk := brIntentRisk(env, in)
+	if env.Ask == nil {
+		if !in.Understood() || in.Confidence < brLevel0Min {
+			res.Miss = true
+			res.Text = brNotUnderstood(in)
+			return res
+		}
+	} else if brNeedsConfirm(in, risk) {
+		res.Questions++
+		switch env.Ask(brConfirmQuestion(text, in), brConfirmOptions(env, in, risk)) {
+		case 0: // Enter/s: the reading is right, do it
+			in.TypoOnly = false
+			if in.Confidence < nuMinConf {
+				in.Confidence = nuMinConf
+			}
+			res.Intent = in
+		case 1: // e: edit the request — show the reading jazz would send
+			res.Text = "edite o pedido — sugestão: \"" + brSuggestText(text, in) + "\""
+			return res
+		default: // n/Esc: not this — the alternatives menu (P2)
+			res.Miss = true
+			res.Text = brNotUnderstood(in)
+			return res
+		}
 	}
 	res.Handled = true
 	task := newTask(text, in.Name, in.Slots, env.Sink)
@@ -177,7 +204,9 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 		}
 		res.Text += cx.stopWhy
 	}
-	res.Questions, res.Commands, res.Category = cx.questions, cx.commands, cx.cat
+	res.Questions += cx.questions
+	res.Commands = cx.commands
+	res.Category = cx.cat
 	for _, d := range task.Decisions {
 		if f := strings.Fields(d.What); len(f) == 2 && f[0] == "método" {
 			res.Method = f[1] // the last method tried
@@ -192,6 +221,15 @@ func (m *nuModel) descOf(name string) string {
 		return m.data.Intents[i].Desc
 	}
 	return name
+}
+
+// exampleOf is the dataset's first example for an intent — the natural way
+// to ask for it ("roda os testes"), used by the miss menu and the edit hint.
+func (m *nuModel) exampleOf(name string) string {
+	if i, ok := m.byName[name]; ok && len(m.data.Intents[i].Examples) > 0 {
+		return m.data.Intents[i].Examples[0]
+	}
+	return ""
 }
 
 // brTypoConfirm is the one-key prompt for a typo-only reading: it names the
@@ -211,14 +249,296 @@ func brTypoConfirm(in Intent) string {
 	return desc + "?"
 }
 
-func brNotUnderstood(in Intent) string {
-	if in.Name != "none" && in.Confidence > 0 {
-		return fmt.Sprintf("não tenho certeza do pedido (talvez %s, confiança %.2f)", in.Name, in.Confidence)
+// ---------- P1: intention confirmation (confidence × method risk) ----------
+
+// brNeedsConfirm is the P1 matrix: high confidence on a read-only method is
+// the only band that acts without asking. Mutants (risk ≥ high) always ask;
+// the medium confidence band (nuMinConf..brLevel0Min) asks too, and so does
+// any typo-only reading. Anti-fatigue (UX-VII): the confident read-only case
+// never pays a key.
+func brNeedsConfirm(in Intent, risk cbRisk) bool {
+	// Confirm the READING only when it is uncertain: a typo-only repair or a
+	// confidence below the act threshold. A mutating intent understood with
+	// high confidence does NOT get an extra "entendi você?" prompt — the
+	// mutation consent is the permission guardrail at execution (env.Permit).
+	// Asking both is the cried-confirm that kills the offline fast path and
+	// over-asks on blocked/impossible tasks (eval regression 04/11).
+	_ = risk
+	return in.TypoOnly || in.Confidence < brLevel0Min
+}
+
+// brIntentRisk is the risk of the method brExecute would pick first: the
+// first applicable one, in library order (methods/*.json "risk").
+func brIntentRisk(env *brEnv, in Intent) cbRisk {
+	lib, _ := mhLibrary()
+	methods := lib[in.Name]
+	if len(methods) == 0 {
+		return cbLow
 	}
-	return "não entendi o pedido sem o modelo. Posso: listar e buscar arquivos, " +
-		"resumir o projeto, status/diff/log do git, rodar testes/build/lint/format, " +
-		"criar/editar/renomear/apagar arquivos (com /undo), processos/portas/disco/memória, " +
-		"serviços, containers, instalar dependências, commit/push/pull com confirmação"
+	p := env.Profile
+	if p == nil {
+		p = epGet(false)
+	}
+	probe := &brCtx{env: env, in: in, task: &TaskState{Slots: in.Slots, Facts: map[string]string{}}}
+	probe.proj = fpDetect(env.Root)
+	facts := brFacts(probe, p)
+	for _, m := range methods {
+		if mhApplicable(m, facts) {
+			return cbParseRisk(m.Risk)
+		}
+	}
+	return cbLow
+}
+
+// brRiskWord names the risk the way the confirmation box shows it.
+func brRiskWord(r cbRisk) string {
+	switch r {
+	case cbCritical, cbHigh:
+		return "risco alto"
+	case cbMed:
+		return "risco médio"
+	}
+	return "só leitura"
+}
+
+// brConfirmQuestion is the "entendi X como Y" line of the P1 box (UX-III:
+// one key, never a typed word).
+func brConfirmQuestion(text string, in Intent) string {
+	what := brTypoConfirm(in)
+	if in.TypoOnly {
+		what = strings.TrimSuffix(what, "?")
+	} else {
+		what = fmt.Sprintf("entendi '%s' como '%s'", oneLine(text, 60), nuGet().descOf(in.Name))
+	}
+	return what + " — [enter] faz · [e] edita · [n] não"
+}
+
+// brConfirmOptions are the three ways out of the P1 box: [Enter/s] does,
+// [e] edits the request, [n/Esc] shows the alternatives (P2). "Mandar pro
+// modelo" does not exist offline (there is no model to send it to).
+func brConfirmOptions(env *brEnv, in Intent, risk cbRisk) []string {
+	hint := brRiskWord(risk)
+	if env.BeginTurn != nil {
+		hint += " · coberto por /undo" // shadow-git makes the turn reversible (UX-VI)
+	}
+	return []string{
+		brAskOpt("Sim, "+nuGet().descOf(in.Name), "sy", hint),
+		brAskOpt("Editar o pedido", "e", ""),
+		brAskOpt("Não — ver outras opções", "n", ""),
+	}
+}
+
+// brAskKeySep separates an env.Ask option label from its one-key shortcuts
+// and its dim hint ("Sim, apagar\x1fsy\x1frisco alto"). Options that carry it
+// are a complete menu: the App wrapper does not append "Nenhum desses".
+const brAskKeySep = "\x1f"
+
+func brAskOpt(label, keys, hint string) string {
+	return label + brAskKeySep + keys + brAskKeySep + hint
+}
+
+// brAskLabel is the visible label of an env.Ask option (drops the key spec).
+func brAskLabel(o string) string {
+	if i := strings.IndexByte(o, brAskKeySep[0]); i >= 0 {
+		return o[:i]
+	}
+	return o
+}
+
+// brAskItems turns env.Ask options into menu items (label, keys, hint).
+// complete = the caller brought its own exit options.
+func brAskItems(opts []string) (items []mnItem, complete bool) {
+	items = make([]mnItem, 0, len(opts))
+	for _, o := range opts {
+		f := strings.Split(o, brAskKeySep)
+		it := mnItem{Label: f[0]}
+		if len(f) > 1 {
+			complete = true
+			if f[1] != "" {
+				it.Key = rune(f[1][0])
+				it.Keys = f[1][1:]
+			}
+		}
+		if len(f) > 2 {
+			it.Hint = f[2]
+		}
+		items = append(items, it)
+	}
+	return items, complete
+}
+
+// brSuggestText is the reading jazz would send if the user edited the
+// request: the repaired canonical text when there was a repair, else the
+// dataset's own example for the intent.
+func brSuggestText(text string, in Intent) string {
+	m := nuGet()
+	canon := nuCanonText(m.normalize(nuTokenize(text)))
+	if canon != "" && canon != strings.ToLower(strings.TrimSpace(text)) {
+		return canon
+	}
+	if ex := m.exampleOf(in.Name); ex != "" {
+		return ex
+	}
+	return text
+}
+
+// ---------- P2: the honest miss is a menu ----------
+
+// brMissGuesses are the readings worth offering on a miss: the hypothesis
+// (when there is one) followed by the interpreter's runner-ups (in.Alt, which
+// nlu.go already computes and nothing used to read).
+func brMissGuesses(in Intent) []Intent {
+	var out []Intent
+	add := func(name string, conf float64) {
+		if name == "" || name == "none" {
+			return
+		}
+		for _, g := range out {
+			if g.Name == name {
+				return
+			}
+		}
+		out = append(out, Intent{Name: name, Slots: in.Slots, Confidence: conf})
+	}
+	if in.Name != "none" && in.Confidence > 0 {
+		add(in.Name, in.Confidence)
+	}
+	for _, a := range in.Alt {
+		if len(out) >= 3 {
+			break
+		}
+		add(a, 0)
+	}
+	return out
+}
+
+// brSafeGuesses are the requests jazz always knows how to answer: they fill
+// the miss menu when the interpreter has no runner-up at all.
+var brSafeGuessesList = []string{"open_file", "explain", "find", "run_tests", "project_summary"}
+
+func brSafeGuesses() []Intent {
+	out := make([]Intent, 0, len(brSafeGuessesList))
+	for _, n := range brSafeGuessesList {
+		out = append(out, Intent{Name: n, Confidence: nuMinConf})
+	}
+	return out
+}
+
+// brGuessLine is one line of the miss menu: what the intent does and how to
+// ask for it in words.
+func brGuessLine(g Intent) string {
+	m := nuGet()
+	desc := m.descOf(g.Name)
+	if ex := m.exampleOf(g.Name); ex != "" {
+		return desc + " — \"" + ex + "\""
+	}
+	return desc
+}
+
+// brMissLines is the stable numbered list of the miss menu: the same request
+// always prints the same list (headless -p shows exactly this).
+func brMissLines(in Intent) []string {
+	guesses := brMissGuesses(in)
+	var out []string
+	for i, g := range guesses {
+		l := brGuessLine(g)
+		if i == 0 && g.Name == in.Name && in.Confidence > 0 {
+			l += fmt.Sprintf(" (confiança %.2f)", in.Confidence)
+		}
+		out = append(out, l)
+	}
+	for _, g := range brSafeGuesses() {
+		if len(out) >= 3 {
+			break
+		}
+		dup := false
+		for _, x := range guesses {
+			dup = dup || x.Name == g.Name
+		}
+		if !dup {
+			out = append(out, brGuessLine(g))
+		}
+	}
+	return append(out, "digitar de novo (reformule o pedido)")
+}
+
+// brNotUnderstood is the honest miss, now a menu (P2) instead of the dead
+// paragraph: what jazz thinks the request is, the runner-ups the interpreter
+// already computed and, failing those, the safe requests it always knows.
+func brNotUnderstood(in Intent) string {
+	var b strings.Builder
+	if in.Name != "none" && in.Confidence > 0 {
+		fmt.Fprintf(&b, "não tenho certeza do pedido (talvez %s, confiança %.2f)", in.Name, in.Confidence)
+	} else {
+		b.WriteString("não entendi o pedido sem o modelo")
+	}
+	b.WriteString(". você quis:\n")
+	for i, l := range brMissLines(in) {
+		fmt.Fprintf(&b, "  %d %s\n", i+1, l)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// brOfferIntent maps a contextual menu action to the intent it stands for,
+// so the miss menu never offers the same reading twice.
+var brOfferIntent = map[string]string{
+	"read": "open_file", "error_location": "explain", "search": "find", "test": "run_tests",
+	"build": "build", "git_status": "git_status", "log": "git_log", "summary": "project_summary",
+	"manual": "help", "sudo": "sudo",
+}
+
+// brMissActions composes the interactive P2 menu: the readings (hypothesis +
+// in.Alt), the contextual actions of olMenu, "digitar de novo" and /online.
+// When the hypothesis is unsure and mutating, the safe actions come first —
+// item 1 is the safest, never the most likely (UX-II/UX-VII).
+func brMissActions(in Intent, mi olMenuIn) []olAction {
+	text := mi.Text
+	guesses := brMissGuesses(in)
+	seen := map[string]bool{}
+	var reads []olAction
+	for i, g := range guesses {
+		forced := g
+		forced.Confidence = brLevel0Min // the pick *is* the confirmation of the reading
+		forced.TypoOnly = false
+		label := "acho que é: " + brGuessLine(g)
+		if i == 0 && g.Name == in.Name && in.Confidence > 0 {
+			label = fmt.Sprintf("acho que é: %s (confiança %.2f)", brGuessLine(g), in.Confidence)
+		}
+		reads = append(reads, olAction{Key: g.Name, Label: label, Kind: "brain", Intent: g.Name, In: &forced, Text: text})
+		seen[g.Name] = true
+	}
+	var safe []olAction
+	for _, act := range olMenu(mi) {
+		if act.Kind == "online" || act.Kind == "wait" || seen[brOfferIntent[act.Intent]] {
+			continue
+		}
+		safe = append(safe, act)
+		if len(safe) >= 2 {
+			break
+		}
+	}
+	// An unsure guess never takes item 1: below nuMinConf the safe contextual
+	// actions come first (UX-II/UX-VII — item 1 is the safest, not the most
+	// likely), and a mutating guess is never one key away from a low-confidence
+	// reading.
+	unsure := len(guesses) > 0 && in.Confidence < nuMinConf
+	items := make([]olAction, 0, olMenuMax+1)
+	if unsure {
+		items = append(items, safe...)
+		items = append(items, reads...)
+	} else {
+		items = append(items, reads...)
+		items = append(items, safe...)
+	}
+	edit := olAction{Key: "editar", Label: "digitar de novo (editar o pedido)", Kind: "edit", Intent: "edit"}
+	if in.Name != "none" {
+		edit.Cmd = "sugestão: \"" + brSuggestText(text, in) + "\""
+	}
+	items = append(items, edit)
+	if mi.Offline && len(items) < olMenuMax+1 {
+		items = append(items, olAction{Key: "online", Label: "/online — tentar o modelo de novo", Kind: "online", Intent: "online"})
+	}
+	return items
 }
 
 // brFacts are the facts the preconditions read.
@@ -508,7 +828,7 @@ func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt st
 		env.Ask = func(q string, opts []string) int {
 			fmt.Fprintln(os.Stderr, "? "+q)
 			for i, l := range opts {
-				fmt.Fprintf(os.Stderr, "  %d. %s\n", i+1, l)
+				fmt.Fprintf(os.Stderr, "  %d. %s\n", i+1, brAskLabel(l))
 			}
 			line, err := rd.ReadString('\n')
 			if err != nil && line == "" {
@@ -664,11 +984,10 @@ func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
 		env.Sink = tkSessionSink(a.agent.sess)
 	}
 	env.Ask = func(q string, opts []string) int {
-		items := make([]mnItem, 0, len(opts)+1)
-		for _, o := range opts {
-			items = append(items, mnItem{Label: o})
+		items, complete := brAskItems(opts)
+		if !complete {
+			items = append(items, mnItem{Label: "Nenhum desses", Key: 'n'})
 		}
-		items = append(items, mnItem{Label: "Nenhum desses", Key: 'n'})
 		i := a.ui.Choose(q, items, 0)
 		if i < 0 || i >= len(opts) {
 			return -1
@@ -697,28 +1016,63 @@ func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
 
 // ---------- interactive (offline mode) ----------
 
-// brInteractive tries the brain on an offline request: true = answered.
-func (a *App) brInteractive(ctx context.Context, text string) bool {
+// brAppEnv is the interactive brain environment: the same hooks brInteractive
+// always installed, plus the key-aware Ask that turns brConfirmOptions into a
+// one-key menu (Enter/s does · e edits · n/Esc shows the alternatives).
+func (a *App) brAppEnv() *brEnv {
 	env := &brEnv{Root: a.root, Shell: a.tools.Shell, Permit: a.agent.PermitCommand, Scripts: a.tools.scRegistry(),
 		BeginTurn: func() { a.tools.BeginTurn(len(a.agent.Msgs)) }, AfterWrite: a.tools.cpAfterBash, Undo: a.tools.Undo, HostRun: brHostExec}
 	if a.agent.sess != nil {
 		env.Sink = tkSessionSink(a.agent.sess)
 	}
 	env.Ask = func(q string, opts []string) int {
-		items := make([]mnItem, 0, len(opts)+1)
-		for _, o := range opts {
-			items = append(items, mnItem{Label: o})
+		items, complete := brAskItems(opts)
+		if !complete {
+			items = append(items, mnItem{Label: "Nenhum desses", Key: 'n'})
 		}
-		items = append(items, mnItem{Label: "Nenhum desses", Key: 'n'})
 		i := a.ui.Choose(q, items, 0)
 		if i < 0 || i >= len(opts) {
 			return -1
 		}
 		return i
 	}
+	return env
+}
+
+// brInteractive tries the brain on an offline request: true = answered.
+func (a *App) brInteractive(ctx context.Context, text string) bool {
+	env := a.brAppEnv()
 	r := brRun(ctx, env, text)
+	if !r.Handled && !a.brMissNow() {
+		return false // let olBefore probe: a reachable model should answer this
+	}
+	return a.brShow(text, r)
+}
+
+// brMissNow: the P2 menu replaces the generic offline menu only when there is
+// no model to hand the request to — forced offline, or inside the probe
+// window (the last probe failed). Outside it olBefore probes first, so a
+// reachable provider still gets the request.
+func (a *App) brMissNow() bool {
+	return a.ol.forced || a.ol.on && time.Since(a.ol.lastProbe) < olProbeEvery
+}
+
+// brRunReading runs an already-interpreted reading (a pick of the P2 menu)
+// without parsing the text again.
+func (a *App) brRunReading(ctx context.Context, text string, in Intent) bool {
+	env := a.brAppEnv()
+	return a.brShow(text, brRunIntent(ctx, env, text, in, brResult{Intent: in}))
+}
+
+// brShow prints a brain result — or the P2 menu when the brain did not
+// understand — and records the note for the model.
+func (a *App) brShow(text string, r brResult) bool {
 	if !r.Handled {
-		return false
+		if r.Text != "" && !r.Miss {
+			a.ui.print(sanitizeTerm(r.Text) + "\n")
+		}
+		a.brMissOffer(text, r.Intent)
+		return true
 	}
 	if r.Text != "" {
 		a.ui.print(sanitizeTerm(r.Text) + "\n")
@@ -726,6 +1080,13 @@ func (a *App) brInteractive(ctx context.Context, text string) bool {
 	a.ui.Notice(strings.TrimPrefix(brStatusLine(r), "· "))
 	a.agent.Note(fmt.Sprintf("<system-reminder>While offline the harness's deterministic brain handled %q as %s: %s. Output:\n%s</system-reminder>", oneLine(text, 200), r.Intent.Name, r.Status, truncateHeadTail(r.Text, 6000)))
 	return true
+}
+
+// brMissOffer shows the honest-miss menu (P2) above the input and remembers
+// it: the next reply may pick an item (olTakePick, offers.go).
+func (a *App) brMissOffer(text string, in Intent) {
+	items := brMissActions(in, a.olMenuState(text, true, false))
+	a.olOffer("não peguei — você quis:", items)
 }
 
 // brWrite prints a result (used by tests and jazz eval).
