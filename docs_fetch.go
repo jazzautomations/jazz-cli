@@ -457,7 +457,7 @@ func dcLocalNode(dir string) string {
 			continue
 		}
 		for _, m := range dcTSDeclRE.FindAllStringSubmatch(src, 400) {
-			doc := strings.TrimSpace(regexp.MustCompile(`(?m)^\s*/?\*+/?\s?`).ReplaceAllString(m[1], ""))
+			doc := strings.TrimSpace(dcJSDocStripRE.ReplaceAllString(m[1], ""))
 			fmt.Fprintf(&b, "\n## export %s %s%s\n%s\n", m[2], m[3], strings.TrimSpace(m[4]), doc)
 		}
 	}
@@ -472,6 +472,15 @@ func dcIsFile(p string) bool {
 var (
 	dcGoDeclRE = lazyRx(`(?m)((?:^//[^\n]*\n)+)?^(func(?:\s*\([^)]*\))?\s+([A-Z]\w*)[^\n{]*|type\s+([A-Z]\w*)[^\n{]*)`)
 	dcRsDeclRE = lazyRx(`(?m)((?:^[ \t]*///[^\n]*\n)+)(?:[ \t]*#\[[^\n]*\n)*[ \t]*(pub(?:\([^)]*\))?\s+(?:async\s+)?(?:unsafe\s+)?(fn|struct|enum|trait|type|const|mod)\s+(\w+)[^\n{;]*)`)
+)
+
+// Comment-marker strippers of the declaration extractors and the loose
+// semver prefix of dcNpm (package-level: compiled once per process).
+var (
+	dcJSDocStripRE = lazyRx(`(?m)^\s*/?\*+/?\s?`)
+	dcGoDocStripRE = lazyRx(`(?m)^//\s?`)
+	dcRsDocStripRE = lazyRx(`(?m)^[ \t]*///\s?`)
+	dcSemverRE     = lazyRx(`\d+(\.\d+){0,2}`)
 )
 
 // dcLocalGo: README plus exported declarations with their doc comments.
@@ -489,7 +498,7 @@ func dcLocalGo(dir string) string {
 			continue
 		}
 		for _, m := range dcGoDeclRE.FindAllStringSubmatch(src, 600) {
-			doc := strings.TrimSpace(regexp.MustCompile(`(?m)^//\s?`).ReplaceAllString(m[1], ""))
+			doc := strings.TrimSpace(dcGoDocStripRE.ReplaceAllString(m[1], ""))
 			fmt.Fprintf(&b, "\n## %s\n%s\n", strings.TrimSpace(m[2]), doc)
 		}
 	}
@@ -511,7 +520,7 @@ func dcLocalRust(dir string) string {
 			return nil
 		}
 		for _, m := range dcRsDeclRE.FindAllStringSubmatch(src, 400) {
-			doc := strings.TrimSpace(regexp.MustCompile(`(?m)^[ \t]*///\s?`).ReplaceAllString(m[1], ""))
+			doc := strings.TrimSpace(dcRsDocStripRE.ReplaceAllString(m[1], ""))
 			fmt.Fprintf(&b, "\n## %s\n%s\n", strings.TrimSpace(m[2]), doc)
 		}
 		return nil
@@ -731,7 +740,7 @@ func dcNpm(ctx context.Context, tg dcTarget, exact bool, note string) dcResult {
 	ver := "latest"
 	if exact {
 		ver = strings.TrimPrefix(tg.Version, "v")
-	} else if m := regexp.MustCompile(`\d+(\.\d+){0,2}`).FindString(tg.Version); m != "" && strings.Count(m, ".") == 2 && strings.HasPrefix(strings.TrimSpace(tg.Version), "^") {
+	} else if m := dcSemverRE.FindString(tg.Version); m != "" && strings.Count(m, ".") == 2 && strings.HasPrefix(strings.TrimSpace(tg.Version), "^") {
 		ver, note = "latest", "the project gives a range ("+tg.Version+"): docs of the latest release"
 	}
 	name := strings.ReplaceAll(url.PathEscape(tg.Lib), "%40", "@")
@@ -760,7 +769,7 @@ func dcNpm(ctx context.Context, tg dcTarget, exact bool, note string) dcResult {
 	if ty := dcOrStr(p.Types, p.Typings); ty != "" {
 		if t, _, err := dcGetText(ctx, base+strings.TrimPrefix(ty, "./")); err == nil {
 			for _, m := range dcTSDeclRE.FindAllStringSubmatch(t, 400) {
-				doc := strings.TrimSpace(regexp.MustCompile(`(?m)^\s*/?\*+/?\s?`).ReplaceAllString(m[1], ""))
+				doc := strings.TrimSpace(dcJSDocStripRE.ReplaceAllString(m[1], ""))
 				text += fmt.Sprintf("\n## export %s %s%s\n%s\n", m[2], m[3], strings.TrimSpace(m[4]), doc)
 			}
 		}

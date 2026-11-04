@@ -38,7 +38,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -555,10 +554,20 @@ func sgPipSpec(a string) (sgPkg, bool) {
 	return sgPkg{Eco: "pypi", Name: sgNormPyPI(m[1]), Version: ver}, true
 }
 
+// Manifest-parsing patterns of the supply-chain guard (package-level so the
+// hot path never recompiles them).
+var (
+	reSgPyPINorm = lazyRx(`[-_.]+`)
+	reSgGemLine  = lazyRx(`(?m)^\s*gem\s+["']([A-Za-z0-9_.-]+)["']`)
+	reSgQuoted   = lazyRx(`["']([^"']+)["']`)
+	reSgTomlLine = lazyRx(`^([A-Za-z0-9_.-]+)\s*=\s*(.*)$`)
+	reSgTomlVer  = lazyRx(`version\s*=\s*"([^"]+)"`)
+)
+
 // sgNormPyPI applies PEP 503 normalisation (lower case, runs of -_. → -).
 func sgNormPyPI(n string) string {
 	n = strings.ToLower(n)
-	return regexp.MustCompile(`[-_.]+`).ReplaceAllString(n, "-")
+	return reSgPyPINorm.ReplaceAllString(n, "-")
 }
 
 // sgRequirementsFile reads a requirements file (relative to the cwd) for names.
@@ -1848,7 +1857,7 @@ func sgManifestPkgs(dir string) (pkgs []sgPkg, files []string) {
 		pkgs = append(pkgs, sgParseTomlDeps(s, "crates", []string{"dependencies", "dev-dependencies", "build-dependencies"})...)
 	}
 	if s := read("Gemfile"); s != "" {
-		for _, m := range regexp.MustCompile(`(?m)^\s*gem\s+["']([A-Za-z0-9_.-]+)["']`).FindAllStringSubmatch(s, -1) {
+		for _, m := range reSgGemLine.FindAllStringSubmatch(s, -1) {
 			pkgs = append(pkgs, sgPkg{Eco: "gems", Name: m[1]})
 		}
 	}
@@ -1884,7 +1893,7 @@ func sgParsePyproject(s string) []sgPkg {
 		rest := s[i:]
 		if j := strings.Index(rest, "["); j >= 0 {
 			if k := strings.Index(rest[j:], "]"); k > 0 {
-				for _, m := range regexp.MustCompile(`["']([^"']+)["']`).FindAllStringSubmatch(rest[j:j+k], -1) {
+				for _, m := range reSgQuoted.FindAllStringSubmatch(rest[j:j+k], -1) {
 					if p, ok := sgPipSpec(m[1]); ok {
 						out = append(out, p)
 					}
@@ -1908,8 +1917,6 @@ func sgParseTomlDeps(s, eco string, tables []string) []sgPkg {
 		want[t] = true
 	}
 	cur := ""
-	reLine := regexp.MustCompile(`^([A-Za-z0-9_.-]+)\s*=\s*(.*)$`)
-	reVer := regexp.MustCompile(`version\s*=\s*"([^"]+)"`)
 	for _, l := range strings.Split(s, "\n") {
 		l = strings.TrimSpace(l)
 		if strings.HasPrefix(l, "[") {
@@ -1919,7 +1926,7 @@ func sgParseTomlDeps(s, eco string, tables []string) []sgPkg {
 		if !want[cur] {
 			continue
 		}
-		m := reLine.FindStringSubmatch(l)
+		m := reSgTomlLine.FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
@@ -1927,7 +1934,7 @@ func sgParseTomlDeps(s, eco string, tables []string) []sgPkg {
 			continue
 		}
 		ver := strings.Trim(m[2], `" `)
-		if vm := reVer.FindStringSubmatch(m[2]); vm != nil {
+		if vm := reSgTomlVer.FindStringSubmatch(m[2]); vm != nil {
 			ver = vm[1]
 		}
 		ver = strings.TrimLeft(ver, "=")

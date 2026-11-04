@@ -4,7 +4,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -205,6 +204,9 @@ func dangerReasonSh(cmd string) string {
 	return ""
 }
 
+// reFetchTool narrows rePipeShell to pipes fed by a download/decode tool.
+var reFetchTool = lazyRx(`\b(curl|wget|base64|nc)\b`)
+
 // dangerWholeSh runs the detectors that look at the whole command line
 // (pipes into a shell, raw disk writes, dotfile overwrites …) rather than at
 // one simple command. turbo.go uses it to tell those apart from per-segment
@@ -216,7 +218,7 @@ func dangerWholeSh(cmd string) string {
 	if r := h2WholeDanger(cmd); r != "" { // hardening2.go
 		return r
 	}
-	if rePipeShell.MatchString(cmd) && regexp.MustCompile(`\b(curl|wget|base64|nc)\b`).MatchString(cmd) || reShellRemote.MatchString(cmd) || reB64Shell.MatchString(cmd) {
+	if rePipeShell.MatchString(cmd) && reFetchTool.MatchString(cmd) || reShellRemote.MatchString(cmd) || reB64Shell.MatchString(cmd) {
 		return "executa script baixado/decodificado direto no shell"
 	}
 	if reRawDisk.MatchString(cmd) {
@@ -557,13 +559,22 @@ var (
 	reGitTagList    = lazyRx(`^git\s+tag(\s+(-l|--list|-n\d*|--sort=\S+|--contains)(\s+[^-\s]\S*)?)*\s*$`)
 )
 
+// Patterns of isReadOnlySh. Package-level (lazyRx) on purpose: IsReadOnly
+// runs on every bash call and the per-segment ones used to be recompiled
+// inside the pipe loop (guard_bench_test.go, BenchmarkPermitCommandReadOnly).
+var (
+	reSortOutFile = lazyRx(`\bsort\b[^|;&]*\s-o`)
+	reGitMutFlag  = lazyRx(`\s(-d|-D|-m|-M|-f|--delete|--force|add|remove|rm|rename|set-url|prune)(\s|$)`)
+	reUniqTreeOut = lazyRx(`^(uniq\s+\S+\s+\S+|tree\b.*\s-o)`)
+)
+
 // isReadOnlySh is a conservative check: true only for plainly read-only
 // commands (POSIX shell syntax). IsReadOnly (winsafety.go) wraps it.
 func isReadOnlySh(cmd string) bool {
 	if strings.ContainsAny(cmd, "\n\r(){}`$>") || strings.Contains(cmd, "<<") || strings.Contains(cmd, "<(") {
 		return false
 	}
-	if readOnlyBadArg.MatchString(cmd) || regexp.MustCompile(`\bsort\b[^|;&]*\s-o`).MatchString(cmd) {
+	if readOnlyBadArg.MatchString(cmd) || reSortOutFile.MatchString(cmd) {
 		return false
 	}
 	for _, part := range reSplit.Split(cmd, -1) {
@@ -575,7 +586,7 @@ func isReadOnlySh(cmd string) bool {
 			return false
 		}
 		// git subcommands with mutating flags
-		if strings.HasPrefix(p, "git ") && regexp.MustCompile(`\s(-d|-D|-m|-M|-f|--delete|--force|add|remove|rm|rename|set-url|prune)(\s|$)`).MatchString(p) {
+		if strings.HasPrefix(p, "git ") && reGitMutFlag.MatchString(p) {
 			return false
 		}
 		// git branch/tag with a name creates one; only listing forms are read-only
@@ -583,7 +594,7 @@ func isReadOnlySh(cmd string) bool {
 			return false
 		}
 		// uniq/tree with an output file argument
-		if regexp.MustCompile(`^(uniq\s+\S+\s+\S+|tree\b.*\s-o)`).MatchString(p) {
+		if reUniqTreeOut.MatchString(p) {
 			return false
 		}
 		if toks := shellFields(p); roUnsafeArgs(toks) || roSecretArgs(toks) {
@@ -797,7 +808,7 @@ func EgressTarget(cmd string) (host string, isEgress bool) {
 	// interpreter one-liners that POST (python/node/ruby/perl/php -c/-e)
 	pr := shellParse(cmd)
 	for _, code := range pr.code {
-		if reCodeNet.MatchString(code) && regexp.MustCompile(`(?i)\.post\(|method\s*=\s*["']POST["']|urlopen\([^)]*data=|urllib\.request\.Request|requests\.post|http\.request|fetch\([^)]*method|curl_setopt|\.write\(`).MatchString(code) {
+		if reCodeNet.MatchString(code) && reCodePost.MatchString(code) {
 			for _, h := range egURLsIn(code) {
 				if !egLocal(h) {
 					return h, true
@@ -855,9 +866,16 @@ func egIsPort(a string) bool {
 	return true
 }
 
+// reCodePost spots a POST/upload in interpreter one-liners; reCodeURL finds
+// the URLs they talk to.
+var (
+	reCodePost = lazyRx(`(?i)\.post\(|method\s*=\s*["']POST["']|urlopen\([^)]*data=|urllib\.request\.Request|requests\.post|http\.request|fetch\([^)]*method|curl_setopt|\.write\(`)
+	reCodeURL  = lazyRx(`https?://[^\s"')]+`)
+)
+
 func egURLsIn(code string) []string {
 	var out []string
-	for _, m := range regexp.MustCompile(`https?://[^\s"')]+`).FindAllString(code, 8) {
+	for _, m := range reCodeURL.FindAllString(code, 8) {
 		if h := egHostOfURL(m); h != "" {
 			out = append(out, h)
 		}
