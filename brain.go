@@ -266,7 +266,7 @@ func brNeedsConfirm(in Intent, risk cbRisk) bool {
 	// Asking both is the cried-confirm that kills the offline fast path and
 	// over-asks on blocked/impossible tasks (eval regression 04/11).
 	_ = risk
-	return in.TypoOnly || in.Confidence < brLevel0Min
+	return in.TypoOnly || in.Confidence < brActMin(in)
 }
 
 // brIntentRisk is the risk of the method brExecute would pick first: the
@@ -922,6 +922,22 @@ var brGroundIntents = map[string]bool{"explain": true, "project_summary": true}
 // brLevel0Min is the confidence a level-0 answer needs.
 const brLevel0Min = 0.85
 
+// brReadActMin is the (calibrated) probability a READ-ONLY reading needs
+// to run without a confirm question. Chow's rule with asymmetric costs: a
+// wrong read-only answer costs one re-ask and shows its own evidence; a
+// confirm question costs a round-trip every time. Mutations keep
+// brLevel0Min (the permission gate is their consent, not this).
+const brReadActMin = 0.7
+
+// brActMin is the act threshold for a reading: read-only level-0 intents
+// act at brReadActMin, everything else at brLevel0Min.
+func brActMin(in Intent) float64 {
+	if brLevel0Intents[in.Name] && !brGroundIntents[in.Name] {
+		return brReadActMin
+	}
+	return brLevel0Min
+}
+
 // brLevel0On: JAZZ_BRAIN=off sends everything to the model again.
 func brLevel0On() bool { return !olOffWord(os.Getenv("JAZZ_BRAIN")) }
 
@@ -934,7 +950,7 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 	}
 	p := epGetLight()
 	in := nuGet().Parse(prompt, nuRuntimeWorld(tools.Root, p))
-	if !in.Understood() || in.Confidence < brLevel0Min || !brLevel0Intents[in.Name] {
+	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] {
 		return nil
 	}
 	if in.Name == "env_status" || in.Name == "tool_info" || in.Name == "tool_status" {
@@ -979,7 +995,7 @@ func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
 	}
 	p := epGetLight()
 	in := nuGet().Parse(text, nuRuntimeWorld(a.root, p))
-	if !in.Understood() || in.Confidence < brLevel0Min || !brLevel0Intents[in.Name] {
+	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] {
 		return false
 	}
 	if in.Name == "env_status" || in.Name == "tool_info" || in.Name == "tool_status" {
