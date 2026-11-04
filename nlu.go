@@ -51,10 +51,11 @@ type Intent struct {
 	Confidence float64           `json:"confidence"`
 	Evidence   []string          `json:"evidence,omitempty"`
 	Ents       []nuHit           `json:"entities,omitempty"`
-	Missing    []string          `json:"missing,omitempty"` // required slots nobody filled
-	Hint       string            `json:"hint,omitempty"`    // test | symbol | file (cue words)
-	Alt        []string          `json:"alt,omitempty"`     // runner-up intents
-	Git        bool              `json:"git,omitempty"`     // the request names git/repo explicitly
+	Missing    []string          `json:"missing,omitempty"`   // required slots nobody filled
+	Hint       string            `json:"hint,omitempty"`      // test | symbol | file (cue words)
+	Alt        []string          `json:"alt,omitempty"`       // runner-up intents
+	Git        bool              `json:"git,omitempty"`       // the request names git/repo explicitly
+	TypoOnly   bool              `json:"typo_only,omitempty"` // the intent stands only on a typo-repaired word (conf capped ≤ 0.5)
 }
 
 // Understood: a named intent with enough confidence to act on.
@@ -982,6 +983,41 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 	}
 	in.Slots, in.Missing, in.Hint = m.fill(def, toks, hits, used)
+	// typo-only: the rule fired, but every concept/tag it relied on is carried
+	// only by a token we typo-repaired, and no correctly-spelled token names a
+	// real entity (@file/@host/@tool/…) to corroborate it. The intent then
+	// stands on spelling guesses alone, so we cap confidence under nuMinConf
+	// (and under brLevel0Min, so the online path never short-circuits on it)
+	// and let the caller offer a one-key confirmation instead of acting.
+	// Structural, not a token count: a named entity the rule did not formally
+	// consume ("explca o parser.go") still corroborates and keeps the intent.
+	if len(used) > 0 {
+		typoOnly := true
+		for c := range used {
+			for i := range toks {
+				if toks[i].Fixed == "" && toks[i].has(c) {
+					typoOnly = false
+					break
+				}
+			}
+			if !typoOnly {
+				break
+			}
+		}
+		if typoOnly {
+			for i := range toks {
+				if toks[i].Fixed == "" && len(toks[i].Tags) > 0 {
+					typoOnly = false
+					break
+				}
+			}
+		}
+		if typoOnly {
+			in.TypoOnly = true
+			conf = math.Min(conf, 0.5)
+			in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+		}
+	}
 	for name, sd := range def.Slots {
 		if v := in.Slots[name]; sd.Shape == "name" && v != "" && in.Hint == "" && !nuNameShaped(v) {
 			conf *= 0.6 // "escreve um poema": no file name, no cue word

@@ -126,6 +126,23 @@ func brStatusRank(s tkStatus) int {
 
 func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res brResult) brResult {
 	if !in.Understood() {
+		// typo-only reading (nlu.go): the intent stands on a word we repaired
+		// and nothing else. Principle 1 (faz até o fim) says do not hand it
+		// back as homework; principle 2 (não enfraquece guardrail) says do not
+		// act on a spelling guess silently. So when there is interactive UI we
+		// turn the blind drop into a visible one-key confirmation; headless
+		// (-p, env.Ask == nil) falls through to the honest miss below, which
+		// already prints "talvez X, confiança 0.50".
+		if in.TypoOnly && in.Name != "none" && env.Ask != nil {
+			res.Questions++
+			if env.Ask(brTypoConfirm(in), []string{"Rodar agora", "Mandar pro modelo"}) == 0 {
+				in.TypoOnly = false
+				in.Confidence = nuMinConf // the user confirmed our reading
+				r := brRunIntent(ctx, env, text, in, brResult{Intent: in})
+				r.Questions += res.Questions
+				return r
+			}
+		}
 		res.Text = brNotUnderstood(in)
 		return res
 	}
@@ -172,6 +189,23 @@ func (m *nuModel) descOf(name string) string {
 		return m.data.Intents[i].Desc
 	}
 	return name
+}
+
+// brTypoConfirm is the one-key prompt for a typo-only reading: it names the
+// repair and what the intent would do, e.g. "li 'atualzia' como 'atualiza' —
+// atualizar o jazz?". It reuses the typo evidence nlu.go already recorded.
+func brTypoConfirm(in Intent) string {
+	var fixes []string
+	for _, e := range in.Evidence {
+		if s := strings.TrimSuffix(e, " (erro de digitação)"); s != e {
+			fixes = append(fixes, strings.Replace(s, " lido como ", " como ", 1))
+		}
+	}
+	desc := nuGet().descOf(in.Name)
+	if len(fixes) > 0 {
+		return fmt.Sprintf("li %s — %s?", strings.Join(fixes, ", "), desc)
+	}
+	return desc + "?"
 }
 
 func brNotUnderstood(in Intent) string {
