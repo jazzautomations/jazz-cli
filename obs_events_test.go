@@ -297,3 +297,92 @@ func TestObsWriteAheadRecoversResult(t *testing.T) {
 		t.Fatalf("not recovered: %+v", last)
 	}
 }
+
+// TestObSummarizeNetWait: metrics.json derives net_waited_ms / outages /
+// net_down from the netwait events already written to the stream. One outage
+// emits an "err" line then a "back_after_s" line, so it counts once; waited_s
+// (cumulative) is a max, never a sum; a timeout mid-outage stays net_down.
+func TestObSummarizeNetWait(t *testing.T) {
+	ev := func(kv ...any) obEvent {
+		e := obEvent{}
+		for i := 0; i+1 < len(kv); i += 2 {
+			e[kv[i].(string)] = kv[i+1]
+		}
+		return e
+	}
+	omitted := func(t *testing.T, s obSummary) {
+		t.Helper()
+		b, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range []string{"net_waited_ms", "outages", "net_down"} {
+			if bytes.Contains(b, []byte(k)) {
+				t.Fatalf("esperava %q ausente do JSON: %s", k, b)
+			}
+		}
+	}
+
+	t.Run("back_after_then_timeout", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "provider", "src", "netwait", "back_after_s", 180.0),
+			ev("kind", "run.end", "status", "timeout", "exit", 124.0),
+		})
+		if s.NetWaitedMS != 180000 || s.Outages != 1 || !s.NetDown {
+			t.Fatalf("waited=%d outages=%d down=%v; quero 180000/1/true", s.NetWaitedMS, s.Outages, s.NetDown)
+		}
+	})
+
+	t.Run("err_and_back_after_same_outage", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "provider", "src", "netwait", "err", "dial tcp: timeout"),
+			ev("kind", "provider", "src", "netwait", "back_after_s", 180.0),
+			ev("kind", "run.end", "status", "ok", "exit", 0.0),
+		})
+		if s.Outages != 1 {
+			t.Fatalf("outages=%d; a mesma queda deve contar 1", s.Outages)
+		}
+		if s.NetWaitedMS != 180000 {
+			t.Fatalf("waited=%d; quero 180000", s.NetWaitedMS)
+		}
+	})
+
+	t.Run("total_wait_spent", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "provider", "src", "netwait", "skip", "total wait spent", "waited_s", 600.0),
+			ev("kind", "run.end", "status", "ok", "exit", 0.0),
+		})
+		if s.NetWaitedMS != 600000 || !s.NetDown {
+			t.Fatalf("waited=%d down=%v; quero 600000/true", s.NetWaitedMS, s.NetDown)
+		}
+		if s.Outages != 0 {
+			t.Fatalf("outages=%d; desistir de esperar não é uma volta", s.Outages)
+		}
+	})
+
+	t.Run("offline_flag", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "provider", "src", "netwait", "offline", true, "err", "no route"),
+			ev("kind", "run.end", "status", "ok", "exit", 0.0),
+		})
+		if !s.NetDown {
+			t.Fatalf("down=%v; a flag offline deve marcar net_down", s.NetDown)
+		}
+	})
+
+	t.Run("non_netwait_provider_ignored", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "provider", "src", "stall", "back_after_s", 180.0),
+			ev("kind", "run.end", "status", "ok", "exit", 0.0),
+		})
+		omitted(t, s)
+	})
+
+	t.Run("no_netwait_fields_omitted", func(t *testing.T) {
+		s := obSummarize([]obEvent{
+			ev("kind", "turn.start"),
+			ev("kind", "run.end", "status", "ok", "exit", 0.0),
+		})
+		omitted(t, s)
+	})
+}
