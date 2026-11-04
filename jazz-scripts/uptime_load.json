@@ -1,0 +1,12 @@
+{"name": "uptime_load", "version": 1, "run": "python3", "effect": "read",
+ "description": "Uptime, load average and CPU busy % from /proc/uptime, /proc/loadavg and /proc/stat (no uptime/top)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "sample_ms": {"type": "integer", "minimum": 50, "maximum": 1000, "description": "gap between the two /proc/stat samples used for cpu % (default 200)"}}},
+ "output": {"data": {
+   "uptime_s": "int", "uptime_text": "str",
+   "load": {"1": "num", "5": "num", "15": "num"},
+   "cpus": "int|null",
+   "cpu_pct": {"user": "num|null", "system": "num|null", "idle": "num|null", "iowait": "num|null", "busy": "num|null"},
+   "procs": {"running": "int|null", "total": "int|null"},
+   "sample_ms": "int", "ms": "int", "text": "str"}}}
