@@ -1,0 +1,8 @@
+{"name": "service_status", "version": 1, "run": "python3", "effect": "exec",
+ "description": "Verification oracle: observe a service/process state (systemd/runit/docker/process) to prove a start or stop; read-only, never changes state",
+ "args": {"type": "object", "additionalProperties": false, "required": ["name"],
+   "properties": {
+     "name": {"type": "string", "description": "service/unit name, container name, or a substring of the process command line"},
+     "kind": {"enum": ["auto", "systemd", "runit", "docker", "process"], "description": "backend to query (default auto: systemd, runit, docker, then process)"}}},
+ "output": {"data": {"name": "str", "kind_used": "str", "active": "bool|null", "state": "str",
+   "pid": "int|null", "since": "str|null", "raw": "str", "checked": ["str"], "text": "str"}}}
