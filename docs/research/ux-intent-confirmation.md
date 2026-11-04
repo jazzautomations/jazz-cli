@@ -1,12 +1,12 @@
 # Confirmação de intenção e desambiguação: a UX do "entendi X como Y" no modo offline
 
-Pesquisa de 04/11/2026 para a UX offline do jazz (máquina-alvo d610: Linux i686, 1 CPU, 2 GB,
+Pesquisa de 04/11/2026 para a UX offline do jazz (máquina-alvo Dell: Linux i686, 1 CPU, 2 GB,
 TTY possivelmente lento/sem cor). Tema: como o cérebro offline (`brain.go` + `nlu.go` +
 `methods.go`) confirma o que entendeu antes de agir, resolve ambiguidade com a menor pergunta
 possível, e converte o honest-miss em próxima ação — em vez do parágrafo morto de hoje.
 
 Convenções (igual `offline-brain-research.md`): cada afirmação traz fonte primária ou `file:line`
-do código. **(estimativa)** marca número meu, não medido. "Custo" assume o d610: 1 núcleo,
+do código. **(estimativa)** marca número meu, não medido. "Custo" assume o Dell: 1 núcleo,
 stdout com latência de serial/SSH, sem garantia de cor nem de Unicode.
 
 ---
@@ -137,7 +137,7 @@ irreversível, nunca rotina. Fonte: NN/g, "Preventing User Errors: Avoiding Cons
 Mistakes" ([link](https://www.nngroup.com/articles/user-mistakes/)) e "Modal & Nonmodal
 Dialogs: When (& When Not) to Use Them" (modal só para erro crítico/irreversível,
 [nngroup.com/articles/modal-nonmodal-dialog](https://www.nngroup.com/articles/modal-nonmodal-dialog/)).
-Corolário para o d610: opção perigosa longe da benigna e visualmente distinta (NN/g
+Corolário para o Dell: opção perigosa longe da benigna e visualmente distinta (NN/g
 "Dangerous UX: Consequential Options Close to Benign Options",
 [nngroup.com/articles/proximity-consequential-options](https://www.nngroup.com/articles/proximity-consequential-options/))
 — no menu do jazz, `não` nunca deve ser a tecla vizinha de `sim`.
@@ -272,7 +272,7 @@ TTY burro/`TERM=dumb`: imprime uma vez, responde por número (menu.go:405-419 j�
 `env.Ask` com opções rotuladas por modo); `methods.go` (`mhMethod.Risk` já parseado); novo
 `intents.go`-level helper `brConfirmSpec(in, method, online)`; `nlu.go` intacto.
 
-**Custo d610.** Um render de menu ≈ 1–2 KB de escrita (comparável a qualquer `Choose` atual);
+**Custo Dell.** Um render de menu ≈ 1–2 KB de escrita (comparável a qualquer `Choose` atual);
 zero syscalls novos. **(estimativa)** <5 ms.
 
 **Métrica.** `perguntas feitas vs necessárias` (o eval já conta — evaloffline.go:355); taxa
@@ -328,7 +328,7 @@ ou símbolo (conf 0.52). Tente:
 `offline.go` (`olBefore` chama builder em vez de `olMenu` puro); `offers.go` (`olAction.Kind`
 "brain" + caso em `olRun` que invoca `brRunIntent` com `in` forçado — ~30 linhas).
 
-**Custo d610.** Zero syscalls além dos que `olMenuState` já faz (um `git status` com cap de
+**Custo Dell.** Zero syscalls além dos que `olMenuState` já faz (um `git status` com cap de
 2 s — offers.go:320-325; considerar reusar o `fpDetect` já calculado). **(estimativa)** <20 ms
 típico.
 
@@ -400,7 +400,7 @@ E com resposta fora do menu:
 (olBefore: tentativa de slot-fill antes do parse normal); `methods.go` (`brChoose` no
 caminho "nenhum desses" → `AskText` quando houver).
 
-**Custo d610.** Um re-parse por resposta (~ms — `Parse` é Aho-Corasick + regras + Bayes com
+**Custo Dell.** Um re-parse por resposta (~ms — `Parse` é Aho-Corasick + regras + Bayes com
 log inteiro, já medido p50 14–19 ms no Dell — results/dell-0.9-progress.md). RAM: um
 `TaskState` pequeno.
 
@@ -444,7 +444,7 @@ ainda pode Esc/Ctrl+C — mas em geral nem precisa agir (UX-VIII: <100 ms, custo
 `offers.go` (`olRun`: eco do `act.Label`+`act.Cmd` — já tem ToolStart, adicionar só a
 leitura). Reusar `brTypoConfirm` para formatar reparos (brain.go:197-209).
 
-**Custo d610.** 1 linha de saída (~80 B); zero. **(estimativa)** imperceptível até em serial
+**Custo Dell.** 1 linha de saída (~80 B); zero. **(estimativa)** imperceptível até em serial
 9600 (10 ms). Em `t.dumb` sai como texto normal.
 
 **Métrica.** `tempo até primeira saída` (<100 ms garantido); taxa de interrupção logo após o
@@ -478,7 +478,7 @@ ajusta uma palavra e manda — muito mais barato que redigitar (UX-XI). Também 
 retorna código "edit"); editor.go (setter do buffer — já existe para Ctrl+R/palette pick:
 editor_palette.go:327-344 `edPop.pick` é o modelo).
 
-**Custo d610.** Zero (troca de string no buffer).
+**Custo Dell.** Zero (troca de string no buffer).
 
 **Métrica.** `% confirmações respondidas com e` — mede diretamente onde o NLU erra por pouco
 (vale mais que `n`, que não diz o quanto errou); candidatos de dataset: cada `e` + envio é
@@ -500,7 +500,7 @@ redesenho para SSH (docs/UX.md §7: ~310 B/s esperando).
 
 ```
 › roda os testes
-                        ← 8–40 s de silêncio no d610
+                        ← 8–40 s de silêncio no Dell
 · cérebro offline: run_tests · feito e verificado · 3 evidências · 1 comando
 ```
 
@@ -517,7 +517,7 @@ redesenho para SSH (docs/UX.md §7: ~310 B/s esperando).
 **Arquivos.** `methods.go` (`brExecute` chama `cx.env.OnStep` — brain.go:290-336);
 `brain.go` (liga o hook ao `a.ui`); `task.go` intacto (transições já dão o texto).
 
-**Custo d610.** ≤4 linhas por tarefa; nada de redraw contínuo.
+**Custo Dell.** ≤4 linhas por tarefa; nada de redraw contínuo.
 
 **Métrica.** abandono durante tarefa >10 s (Esc/Ctrl+C no meio = frustração por silêncio);
 "tempo percebido" não mede — proxy: reclamação medida por sessões que não interrompem.
@@ -563,7 +563,7 @@ caindo na P3; (c) `v`/`mnSpec.View` mostra os 5 com detalhe completo (path, mtim
 **Arquivos.** `methods.go` (`brChoose`: Hint de `e.Why`, rótulo do item "outro", `AskText`
 no fallback); `nameindex.go` (`niEntity.Why` já populado — só surfacing).
 
-**Custo d610.** Strings já calculadas; zero syscalls.
+**Custo Dell.** Strings já calculadas; zero syscalls.
 
 **Métrica.** `% desambiguações que terminam em needs_input` (hoje: todo "nenhum" vira);
 `turnos até o arquivo certo`; picks por posição (o ranking certo → posição 1 domina).
@@ -607,7 +607,7 @@ e no bloqueio por falta de ferramenta:
 (expõe a ação sugerida — hoje fica em texto, brain.go:397-407); `offers.go` (items do
 bloqueio no mesmo `olOffer`).
 
-**Custo d610.** Zero — strings.
+**Custo Dell.** Zero — strings.
 
 **Métrica.** uso de `/undo` pós-ação (descoberta do recurso — hoje ~0 offline); `blocked →
 ação seguinte` em 1 tecla vs redigitação.
@@ -631,7 +631,7 @@ confirmações respondidas `n`/`e`.
 `evaloffline.go` (métrica nova); análise offline no `jazz improve`/`lessons_reuse.go`
 (já existe infra de lições — lessons.go).
 
-**Custo d610.** 1 linha JSONL por turno (~200 B); análise offline fora do caminho quente.
+**Custo Dell.** 1 linha JSONL por turno (~200 B); análise offline fora do caminho quente.
 
 **Métrica.** É a própria métrica: matriz conf×acerto por intent publicada em `results/`
 (como `dell-0.9-progress.md`).
@@ -700,7 +700,7 @@ Claude Code/Codex offline, porque exige estado) → **P7+P8** (acabamento) → *
     (offline.go:290-295). Um "sim" para "entendi X" nunca é carta branca para `rm -rf`.
 12. **Não buscar "inteligência" em runtime.** Nada de chamar LLM local/remoto para ranquear
     menu ou redigir pergunta — fere a filosofia (inteligência em tempo de compilação) e o
-    d610 não tem nem os ciclos nem a certeza de rede. Todo texto de menu vem de `desc`,
+    Dell não tem nem os ciclos nem a certeza de rede. Todo texto de menu vem de `desc`,
     `Evidence` e templates já embutidos.
 13. **Não transformar o typo em alias silencioso.** Se o usuário confirma a correção uma
     vez, não gravar "atualzia→atualiza" para sempre sem ele saber — aliases implícitos são

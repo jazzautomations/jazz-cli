@@ -206,7 +206,7 @@ func TestBuildTargetArchive(t *testing.T) {
 // blocked as hostile. Sending it over the network, to any host, allow-list or
 // not, or writing into authorized_keys / a shell start-up file stays CRITICAL.
 func TestBuildTargetSecretLocalWriteAsksNotHostile(t *testing.T) {
-	// the real line from the owner's bin/bt audit script (d610)
+	// a realistic audit-script line (reads ~/.ssh metadata, writes locally)
 	const btReal = `m_ssh(){ for f in ~/.ssh/authorized_keys ~/.ssh/config; do [ -f "$f" ] && { echo "$f"; ssh-keygen -lf "$f" 2>/dev/null || sha256sum "$f"; }; done; }`
 	cases := []struct {
 		name  string

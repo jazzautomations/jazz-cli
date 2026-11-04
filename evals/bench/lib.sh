@@ -1,6 +1,6 @@
 #!/bin/bash
 # Helpers compartilhados dos runners de bench público (terminal-tasks, polyglot,
-# swebench-lite puro). Port do ~/bench/common/lib.sh usado no d610, para o d610
+# swebench-lite puro). Port do ~/bench/common/lib.sh usado no Dell, para o Dell
 # adotar depois: record() e bench_finish() com a classificação INFRA?/HANG? de
 # classify_infra.sh (o 5/20 do swebench e o 7/17 do polyglot misturavam falhas
 # reais com janelas sem rede; docs/research/benchmarks.md).

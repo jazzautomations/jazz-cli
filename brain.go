@@ -71,7 +71,7 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 
 // brSplitMulti splits a request on conjunctions; callers must validate that
 // each part still parses — the split is a candidate, not a commitment.
-// Parts with no task evidence ("porra e o d610?" → "porra") are noise, not a
+// Parts with no task evidence ("porra e o zz9?" → "porra") are noise, not a
 // request: they are discarded here so they cannot veto the split or become
 // an action of their own.
 var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+)`)

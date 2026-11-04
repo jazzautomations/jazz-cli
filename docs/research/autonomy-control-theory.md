@@ -4,7 +4,7 @@ Pesquisa de 04/11/2026. Não repete `offline-brain-research.md` (agentes clássi
 entender o projeto — lá já estão Brooks/subsunção, STRIPS/HTN/Pyhop, BT, OTP, systemd, Rete) nem
 `harness-first-offline.md` (tese e mapa). Aqui o tema é outro: **a teoria que dá GARANTIA** —
 terminação, convergência, estabilidade, idempotência — para um laço autônomo
-*sentir → decidir → agir → verificar → replanejar* rodando sem LLM no d610
+*sentir → decidir → agir → verificar → replanejar* rodando sem LLM no Dell
 (Linux i686, 1 núcleo, 2 GB, WiFi instável, binário linux/386, só stdlib do Go).
 
 Convenções: como nos docs irmãos, **(estimativa)** marca números não medidos; `file:line` aponta o
@@ -88,7 +88,7 @@ caps. 11–13 (não-linearidades, anti-windup, robustez).
 
 No laço do jazz: a transição offline↔online é hoje amostra única — um `net.DialTimeout` de 1,5 s
 que responde liga `olBack` e a próxima mensagem já vai pro modelo (`offers.go:603`), e um erro
-classificado como offline entra no modo (`offline.go:403`). Num WiFi instável (o caso do d610)
+classificado como offline entra no modo (`offline.go:403`). Num WiFi instável (o caso do Dell)
 isso flapia por turno: dial ok → tenta modelo → falha → offline → dial ok → … Instrumenta
 **decidir** (transições de modo) e **sentir** (o fato `env.online`, hoje binário e de amostra
 única, `envprobe.go:203`).
@@ -293,7 +293,7 @@ checar (`methods.go:1682`, `rvVerifierUnavailable`); tudo persistido por transi�
 
 ---
 
-## Propostas (ordenadas por impacto esperado no d610)
+## Propostas (ordenadas por impacto esperado no Dell)
 
 ### A1 — Histerese e debounce no sensor de rede (P3, P12-Monitor)
 

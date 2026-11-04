@@ -15,9 +15,9 @@ cérebro que já existe**.
 
 Convenções: `file:line` refere-se a `main` @ `a5ffe0f` (branch `harness/offline-primitives` na escrita).
 **Medido** = número já registrado em `results/` ou contado agora sobre o código. **(estimativa)** = conta
-minha, não medida. "d610" = Dell Latitude D610, Pentium M 1,7 GHz, 1 núcleo, 2 GB, `linux/386`. Vereditos:
+minha, não medida. "Dell" = Dell Latitude D610, Pentium M 1,7 GHz, 1 núcleo, 2 GB, `linux/386`. Vereditos:
 **LOAD-BEARING** = sustenta teorema e vira código/métrica · **METÁFORA** = enquadra mas não decide nada ·
-**VIAGEM** = não compila no d610.
+**VIAGEM** = não compila no Dell.
 
 ---
 
@@ -32,7 +32,7 @@ minha, não medida. "d610" = Dell Latitude D610, Pentium M 1,7 GHz, 1 núcleo, 2
 | 5 | Curry–Howard: método verificado = prova | **LOAD-BEARING na fronteira, fraco no meio** | A leitura honesta é *proof-carrying execution* (Necula): a evidência é o termo de prova, `brVerify` o type-checker. A disciplina que paga de verdade é a da fronteira — **tipar a biblioteca**: o cheque estático achou um bug real hoje (`fix.diagnose` lê `$result` que ninguém produz). |
 | 6 | Tipos: refinamentos, sortes, contratos | **LOAD-BEARING** | `mhCond` já é um refinamento sobre o ambiente (`methods.go:42`); slots já são sorted (`nuSlotDef.Kinds`, `nlu.go:84`); o que falta é o *type-checker* da DSL — 1 bug latente encontrado por 30 linhas de análise (§5). |
 | 7 | STRIPS / operadores de ação (Fikes–Nilsson) | **LOAD-BEARING** | `backchain.go` implementa regressão STRIPS com custo mínimo — e é **código morto**: `Plan` só é chamada em teste. Ou liga (reparo de pré-condição) ou apaga. |
-| 8 | Gramáticas semânticas (SHRDLU→LUNAR→CHAT-80→Phoenix→ATIS→Snips) | **LOAD-BEARING** | `nuRule`/`nuSlotDef` *são* uma gramática semântica com slots tipados — a tradição que provou em hardware pior que o d610: CHAT-80 respondia geografia em <1 s em 1982; Snips rodava SLU em microcontrolador IoT. |
+| 8 | Gramáticas semânticas (SHRDLU→LUNAR→CHAT-80→Phoenix→ATIS→Snips) | **LOAD-BEARING** | `nuRule`/`nuSlotDef` *são* uma gramática semântica com slots tipados — a tradição que provou em hardware pior que o Dell: CHAT-80 respondia geografia em <1 s em 1982; Snips rodava SLU em microcontrolador IoT. |
 | 9 | Semantic parsing executável (Zettlemoyer–Collins, λ-DCS, overnight) | **LOAD-BEARING como forma e métrica · METÁFORA como aprendizado** | O pipeline texto→LF→execução→prova *é* um parser semântico executável. O que falta herdar é a métrica: acurácia de LF exata (intenção+slot+entidade), não só de intenção. Aprendizado por indução de CCG precisa de LF anotado que não temos — a forja é o caminho, não o parser. |
 | 10 | Semântica denotacional plena (domínios, CPOs, pontos fixos) | **METÁFORA ÚTIL** | O DSL de métodos não tem recursão nem laço geral (só `retry_smaller` limitado, `brain.go:348`); não há ponto fixo pra tomar. O resíduo útil: composicionalidade e a ideia de `⟦método⟧ : Estado → Resultado` como especificação. |
 | 11 | Lambda-cálculo e combinadores | **METÁFORA ÚTIL** | `subst` é avaliação por ambiente (`methods.go:220`); o LF é plano (frames, não λ-termos). Combinadores SKI para compor caps seriam um encoding, não um mecanismo. |
@@ -111,7 +111,7 @@ Duas consequências imediatas:
 2. **A biblioteca é o programa; o checker é o compilador.** Na filosofia do projeto (inteligência em tempo
    de compilação), `methods/*.json` + `nlu/*.json` são o asset forjado; a "compilação" desses assets é onde
    a semântica formal paga: validação estática, métrica de LF, auditoria de contratos — tudo O(biblioteca),
-   uma vez, no load ou no CI, **zero custo por pedido no d610**.
+   uma vez, no load ou no CI, **zero custo por pedido no Dell**.
 
 ---
 
@@ -365,13 +365,13 @@ estreitos há 50 anos:
 - **Warren & Pereira, CHAT-80 1982** (Comp. Ling. 8(3-4):110-122, ACL Anthology J82-3002): gramática lógica
   (extraposition grammar) → Prolog → *otimização de consulta* → resposta; "most questions within the English
   subset answered in well under one second" — **em 1982**. É a existência do ponto "NL→forma→execução <1s"
-  que o d610 precisa provar de novo.
+  que o Dell precisa provar de novo.
 - **Fillmore, frame semantics 1982** (*Linguistics in the Morning Calm*, Hanshin): frames com slots —
   a base teórica de intent+slots; **ATIS** (Dahl et al., HLT'94) e o parser Phoenix (Ward & Issar) levaram a
   frames de fala espontânea — a linha que o design doc cita como "estilo Phoenix/Snips"
   (`docs/design/offline-brain.md` §2).
 - **Snips 2018** (Coucke et al., arXiv:1805.10190): NLU embedded de intent+slot em **microcontroladores IoT**
-  — prova de hardware contemporânea de que a arquitetura roda abaixo do d610.
+  — prova de hardware contemporânea de que a arquitetura roda abaixo do Dell.
 - **Semantic parsing moderno:** Zettlemoyer & Collins, UAI 2005 (arXiv:1207.1420) — CCG probabilístico
   induzido de pares sentença→LF (GeoQuery); Kwiatkowski et al., EMNLP 2010 (ACL Anthology D10-1119) — CCG por
   unificação de ordem superior; Liang–Jordan–Klein λ-DCS (arXiv:1109.6841; 1309.4408) — a denotação como
@@ -380,7 +380,7 @@ estreitos há 50 anos:
   e *execução como grounding*; Wang, Berant & Liang, ACL 2015 (doi:10.3115/v1/P15-1129) — *Overnight*:
   gramática-semente gera "utterances canônicas" e crowdsourcing as parafraseia — **`nlu/intents.json` já é
   exatamente isso**: regras + `examples` canônicos + `negatives`, com `blind_test.json` como o teste de
-  paráfrase; Dong & Lapata, ACL 2016 (arXiv:1601.01280) — seq2seq→LF (o que **não** fazer no d610);
+  paráfrase; Dong & Lapata, ACL 2016 (arXiv:1601.01280) — seq2seq→LF (o que **não** fazer no Dell);
   Lin et al., NL2Bash, LREC 2018 (arXiv:1802.08979) — NL→bash via LF intermediário: o primo mais próximo do
   jazz, com a lição amarga de que entidades (flags, paths) são o gargalo, não o predicado.
 - **Zelle & Mooney, AAAI 1996** (*Learning to Parse Database Queries Using ILP*): o benchmark GeoQuery que
@@ -480,7 +480,7 @@ define o formato das propostas: tudo é cheque no load/forja + métrica no eval;
 
 Resumo — detalhes em cada item. Métricas sempre em `evaloffline.go` (`eoSummary`, `evaloffline.go:91-107`)
 + `nlu/blind_test.json` + CI. Escala de impacto 1-5; esforço S/M/L; todos rodam em load-time/forja ou
-eval — **custo por pedido no d610 ≈ 0**.
+eval — **custo por pedido no Dell ≈ 0**.
 
 | # | Proposta | Métrica principal | Impacto | Esforço | Risco |
 |---|---|---|---|---|---|
@@ -526,7 +526,7 @@ escolha do usuário (`methods.go:1197-1209`); (c) `rvVerifierUnavailable` → `v
 faltante em `Extra` (`recover.go:118`); (d) intent entendido sem método → `unknown_intent`
 (`brain.go:154-156`); (e) `false_success`/regressão do eval → `cmd_fixed`. Arquivos: `brain.go`,
 `methods.go`, `recover.go`; ~40 linhas. Custo: 1 append JSONL por evento raro — ~0. Métrica: sinais/dia por
-kind no d610; o denominador de P9. Risco baixo — append-only, mesma disciplina de `scores.go`.
+kind no Dell; o denominador de P9. Risco baixo — append-only, mesma disciplina de `scores.go`.
 
 **P4 — Reparo de pré-condição via backchain.**
 Mecanismo: quando `tried==0` por `mhApplicable` falhar (`brain.go:386-396`), extrair os fatos não
@@ -581,7 +581,7 @@ verde; a prova de terminação da §3.2 vira propriedade testada. Impacto 4 — 
 regressão permanente.
 
 **P9 — Forja de gramática (o LF como asset).**
-Mecanismo: no tempo de forja (amd64, não d610): minerar `signals.jsonl` `miss`/`correction`; para misses com
+Mecanismo: no tempo de forja (amd64, não Dell): minerar `signals.jsonl` `miss`/`correction`; para misses com
 intent alto (`Alt` ou NB p>τ), gerar candidatos — novas `rules`/`examples`/`concepts` para
 `nlu/*.json`; avaliar com `Gate` (`forge_gate.go:143`) sobre o dataset+blind como `EvalFn` (parse accuracy
 held-in/held-out, `FalseSuccess` = entendimento errado executado). Promovido = asset novo; é "Online ensina
@@ -599,7 +599,7 @@ crescimento do LF: **forjado, portado, nunca induzido em runtime**.
 - **CCG ou λ-DCS induzidos em runtime.** Precisam de centenas de pares sentença→LF ou pergunta→resposta
   anotados; temos 644 exemplos sem LF. A forja (P9) é o caminho — com portão, não com parser estatístico.
 - **Seq2seq/Transformer para o LF (Dong–Lapata).** Derrota o propósito: 50 intents × gramática manual já
-  cobre; modelo neural no d610 é a dependência que a filosofia proíbe.
+  cobre; modelo neural no Dell é a dependência que a filosofia proíbe.
 - **Tipos dependentes / provadores (Coq, Lean, Agda) na DSL.** A lógica das pré-condições é conjunção
   *ground* sobre strings — `mhHolds` avalia em O(1); SAT/SMT/provador compra rigor que já existe de graça.
 - **Codificação SKI/λ dos caps, mônadas explícitas em Go.** O `>>=` já é `for st := range m.Steps` —

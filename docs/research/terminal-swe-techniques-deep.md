@@ -2,7 +2,7 @@
 
 ## Localização determinística (arquivo→elemento→linha) e reparo mecânico no jazz offline
 
-**Data:** 2026-11-04 · **Alvo:** d610 (i686, 1 CPU, 2 GB, offline, Go estático linux/386)
+**Data:** 2026-11-04 · **Alvo:** Dell (i686, 1 CPU, 2 GB, offline, Go estático linux/386)
 **Regra de ouro:** LLM no caminho crítico de runtime é dependência, não asset. LLM em tempo de
 compilação forja asset (pesos, receitas, fixtures, exemplos de NLU); o offline reusa sem token.
 
@@ -250,7 +250,7 @@ baseline e gasta 4,5× mais tokens. 1-hop achatado é o ótimo; resumir 1-hop pe
 
 **O que transfere offline.** A expansão 1-hop a partir de uma semente (símbolo/arquivo), com cap
 de ~12 nós, é implementável com `rg` e regex, sem parser. O grafo completo de 26k arestas não é
-viável no d610 (parser + memória), mas o ego-grafo de 1-hop é. O que não transfere: resumo por LLM
+viável no Dell (parser + memória), mas o ego-grafo de 1-hop é. O que não transfere: resumo por LLM
 e construção de grafo em nível de linha.
 
 **Limitação.** Parser Python; o ganho é modesto (+2,3 pp); o resumo por LLM é dependência; 2-hop
@@ -392,7 +392,7 @@ O localizador offline não tem um sinal mágico; tem vários sinais fracos que, 
 abstenção, são úteis. A tabela abaixo é a hipótese de trabalho; os pesos e a ordem serão calibrados
 (§8), não assumidos.
 
-| sinal | fonte no jazz | força esperada | custo d610 | modo de falha |
+| sinal | fonte no jazz | força esperada | custo Dell | modo de falha |
 |---|---|---|---|---|
 | frame de falha (`file:line`) | `outparse.go:1625` → `opTrace.Frames`; `methods.go:1408` | altíssima quando existe | 0 (já parseado) | issue-only não tem frame; teste pode falhar em arquivo de teste |
 | caminho/símbolo exato citado | `nameindex.go:520` `resolveAll`, `:1035` `niResolveEntity` | alta precisão, baixa recall | <1 ms (índice quente) | nome ambíguo; typo; símbolo duplicado |
@@ -464,7 +464,7 @@ avança no que a paper não resolve:
 1. **Uma passada de git para dois sinais.** `git log --no-merges --numstat -z -M --format=...` dá,
    por commit, `added\tdeleted\tpath` e a lista de paths; co-mudança e churn saem da mesma passada.
    Renomeações com `-M` aparecem como registro especial (old/new) no `-z`; parsear. Se o git do
-   d610 não emitir o par como esperado, rodar uma segunda passada `--name-status -z -M` só para o
+   Dell não emitir o par como esperado, rodar uma segunda passada `--name-status -z -M` só para o
    mapa de rename — nunca duas passadas para a mesma coisa.
 2. **Excluir merges e commits gigantes.** `--no-merges`; descartar commits com >50 arquivos
    (ajustar); commits de release/format/lint geram co-ocorrência espúria.
@@ -642,10 +642,10 @@ e o reparo mecânico são assets; a síntese de patch e a expansão semântica s
 
 ---
 
-## 6. Propostas para o d610
+## 6. Propostas para o Dell
 
 Resumo ordenado por impacto/esforço. Todas são Go puro, sem cgo, sem rede; custos são estimativas
-a medir no d610, não números medidos. "Comandos/tarefa" conta comandos do usuário; comandos internos
+a medir no Dell, não números medidos. "Comandos/tarefa" conta comandos do usuário; comandos internos
 do localizador entram em `internal_cmds` (novo) para não mascarar a métrica.
 
 | # | proposta | impacto | esforço | risco | LOC aprox. | RAM extra | p50 alvo (quente) |
@@ -674,7 +674,7 @@ de modelo / N), `internal_cmds_per_task`. `no_llm_rate` continua, mas não é ma
 **Arquivos.** `evaloffline.go` (+~80), `evals/offline/tasks.json` (+ fixtures), `localize_test.go`
 (novo), `evaloffline_test.go` (golden do summary).
 
-**Custo d610.** Só roda no eval (máquina de dev ou d610 quando o dono pedir); 0 no caminho de
+**Custo Dell.** Só roda no eval (máquina de dev ou Dell quando o dono pedir); 0 no caminho de
 produção. Fixtures são JSON embutido (~30 KB).
 
 **Métrica de aceitação.** O runner tem que reproduzir o baseline BM25 de nomes; se o `localize`
@@ -711,7 +711,7 @@ o ranking fundido e manter só o resolvedor. Sem essa comparação, não há ci�
 `brCaps`, `:303`), `methods/fix.json` (step 0), `methods/run_tests.json` (contexto antes da falha),
 `caps.go` (`Capability` read-only), `nameindex.go` (nova `niSymLines`), `gitindex.go` (reuso).
 
-**Custo d610.** Índice quente <1 ms; BM25 de nomes 2–8 ms; `rg` em 20 arquivos 30–200 ms quente,
+**Custo Dell.** Índice quente <1 ms; BM25 de nomes 2–8 ms; `rg` em 20 arquivos 30–200 ms quente,
 0,3–1,5 s frio; git history 0,3–1,5 s frio (cache). Memória transitória <1 MB; sem alocação por
 arquivo no índice (layout existente). Binário +~120 KB. Tudo `int32`/`int16`; offsets `uint32` como
 no índice atual.
@@ -739,7 +739,7 @@ teste é `_test.go`; o frame útil é o primeiro `InProject` que não é `_test.
 **Arquivos.** `methods.go` (`brTestContext`), `localize.go` (seed), `outparse.go` (se faltar
 `InProject` em algum parser), `methods_test.go`.
 
-**Custo d610.** <5 ms; 0 comandos extras; 0 memória. É o maior ganho por LOC do conjunto.
+**Custo Dell.** <5 ms; 0 comandos extras; 0 memória. É o maior ganho por LOC do conjunto.
 
 **Métrica.** `frame_hit@1` (arquivo do frame in-project = arquivo GT) em fixtures com traceback;
 `steps` até o primeiro read relevante; `false_success` (não pode aumentar).
@@ -759,7 +759,7 @@ com `support/confidence/lift`. Sem git ou sem histórico: sinal indisponível, n
 `localize.go` (consumo), `gitindex.go` (helper de execução read-only), `caps.go` (allowlist do
 comando).
 
-**Custo d610.** 400 commits × ~5 arquivos = ~2.000 paths; parse <1 MB; cache ~100–300 KB. Quente
+**Custo Dell.** 400 commits × ~5 arquivos = ~2.000 paths; parse <1 MB; cache ~100–300 KB. Quente
 <5 ms; frio 0,3–1,5 s (HDD), com timeout. 32-bit: usar slices ordenadas, não mapas gigantes; cap
 50k pares.
 
@@ -783,7 +783,7 @@ arquivos, suporte ≥2, confiança ≥0,3, lift ≥1,5, decay; nunca usar co-mud
 **Arquivos.** `churn.go` (~120), `churn_test.go`, `cochange.go` (parser compartilhado),
 `localize.go`.
 
-**Custo d610.** Sem custo extra de git se compartilhado com P4; 20k arquivos × 16 B ≈ 320 KB;
+**Custo Dell.** Sem custo extra de git se compartilhado com P4; 20k arquivos × 16 B ≈ 320 KB;
 cálculo <5 ms.
 
 **Métrica.** Delta em `file_hit@1` com/sem churn; taxa de promoção indevida (arquivo só por churn);
@@ -817,7 +817,7 @@ a distância ≤2; se houver dúvida, não aplica.
 `fix.diagnose` 10), `guard_honest.go` (`hgBrainWrite`), `recover.go` (cadeia
 `rvFixFailingTest` → mecânico → diagnose → blocked), `checkpoint.go` (reuso).
 
-**Custo d610.** 0 tokens; 1 build/teste por tentativa (o mesmo que o diagnóstico já paga); regex +
+**Custo Dell.** 0 tokens; 1 build/teste por tentativa (o mesmo que o diagnóstico já paga); regex +
 índice <10 ms; 1 checkpoint (KB). Binário +~100 KB.
 
 **Métrica.** `no_llm_success_rate` na categoria "bugfix mecânico" (5–8 tarefas novas no eval);
@@ -847,7 +847,7 @@ gerenciador detectado. Não bloquear writes, não bloquear `rm`.
 **Arquivos.** `preflight.go` (~180), `tools.go` (hook antes de `sh.Run`), `methods.go` (`runCmd`),
 `caps.go` (`cbReadCmd`/allowlist), `preflight_test.go`.
 
-**Custo d610.** `LookPath` ~50 µs por comando; 0 processo extra; 0 memória.
+**Custo Dell.** `LookPath` ~50 µs por comando; 0 processo extra; 0 memória.
 
 **Métrica.** `command_failures/task` (deve cair; TB2 24,1% é o teto), `commands/task`, p50,
 `false_blocks` (comando válido bloqueado) **deve ficar 0** em fixtures; taxa de remediação aceita.
@@ -866,7 +866,7 @@ não é grep de identificador, é top-3 com abstenção, frame/co-change e confi
 **Arquivos.** `prefetch.go` (+~60) ou `localize.go` (render), `agent.go` (chamada), `config.go`
 (flag), `prefetch_test.go`.
 
-**Custo d610.** +80 ms no primeiro turno (índice quente), 0 no resto; ≤400 tokens de contexto.
+**Custo Dell.** +80 ms no primeiro turno (índice quente), 0 no resto; ≤400 tokens de contexto.
 
 **Métrica.** `steps` até o primeiro read relevante, `tokens/tarefa`, `file_hit@1` do primeiro read,
 pass rate em terminal-tasks; p50.
@@ -885,7 +885,7 @@ pular.
 **Arquivos.** `localize.go` (+~100), `gitindex.go` (exec read-only), `caps.go` (allowlist),
 `localize_test.go`.
 
-**Custo d610.** 1–2 comandos git; 0,1–1 s frio; 0 memória; cache por HEAD opcional.
+**Custo Dell.** 1–2 comandos git; 0,1–1 s frio; 0 memória; cache por HEAD opcional.
 
 **Métrica.** `file_hit@1` na subcategoria `regressão`; comandos internos; p95.
 
@@ -910,7 +910,7 @@ Mitigação: `-G` fallback, cap, timeout, só quando o léxico de regressão apa
 5. **Geração de teste de reprodução por LLM em runtime.** É o maior ganho do Agentless (+15 fixes),
    mas custa +US$ 0,25/tarefa e é dependência [S4, Tabela 4]. No máximo, fixtures forjadas no build.
 6. **SBFL como padrão.** +3 pp no AutoCodeRover, mas exige a suíte completa do desenvolvedor e
-   instrumentação de cobertura [S7, §6.2]. No d610, ferramentas de cobertura para múltiplas
+   instrumentação de cobertura [S7, §6.2]. No Dell, ferramentas de cobertura para múltiplas
    linguagens são peso morto; deixar como capacidade opcional quando `go test -cover`/`coverage.py`
    já estiverem no projeto.
 7. **Churn como ranking principal.** Nagappan mede densidade de defeitos por binário, não localização
@@ -965,8 +965,8 @@ conjunto.
   McNemar/intervalo. Reportar n e IC.
 - Para A/B pareado (mesma tarefa, dois braços), usar McNemar; para contagem de comandos, mediana e
   bootstrap.
-- p50/p95 com ≥20 repetições no d610; RSS de pico (`eoPeakRSSKB`) antes/depois; tamanho do binário.
-- Toda estimativa deste doc é hipótese até medida no d610; não transformar estimativa em número.
+- p50/p95 com ≥20 repetições no Dell; RSS de pico (`eoPeakRSSKB`) antes/depois; tamanho do binário.
+- Toda estimativa deste doc é hipótese até medida no Dell; não transformar estimativa em número.
 
 ### 8.4 Ablação obrigatória
 
@@ -1050,7 +1050,7 @@ Para o `fix.mechanical`, rodar por classe de erro: se uma receita tem `false_suc
 ### Nota final de honestidade
 
 Os números deste doc medem **outros sistemas, em Python, com LLM**. Nenhum deles foi reproduzido no
-d610. As estimativas de custo são hipóteses de engenharia, marcadas como tal. O que se afirma com
+Dell. As estimativas de custo são hipóteses de engenharia, marcadas como tal. O que se afirma com
 confiança é narrower: (a) BM25 lexical é um piso útil e barato; (b) 1-hop é melhor que 2-hop;
 (c) co-mudança é booster, não substituto; (d) churn é desempate; (e) reparo mecânico é uma fração
 pequena, mas verificável, do espaço de reparo; (f) a maior parte do ganho offline vem de parar cedo,

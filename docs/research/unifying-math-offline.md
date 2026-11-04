@@ -547,7 +547,7 @@ decisões e desligar os que não mudam.
 
 #### O que isso implica para as propostas
 
-Uma proposta "O(log n)" que toque 1,6 MB por pedido pode perder para uma "O(n)" que caiba em 32 KB. No d610, a
+Uma proposta "O(log n)" que toque 1,6 MB por pedido pode perder para uma "O(n)" que caiba em 32 KB. No Dell, a
 métrica que decide é **p50/p95 e RSS**, não a classe assintótica. O `evaloffline.go:94-101` já mede p50/p95/RSS;
 use isso como critério de aceitação, não como relatório.
 
@@ -780,7 +780,7 @@ não é. Exemplos e léxico são dados, não compressão de programa.
 3. **O código contradiz várias das afirmações.** `calib.go` morto; `backchain.go` morto; `p` condicionado e
    temperado; menu não ordenado por frequência; nenhum primo de Mersenne; nenhum `forge.go`. A tese descreve um
    sistema que ainda não é o que está no repo.
-4. **No d610, os ganhos medidos são de engenharia, não de informação.** 200 ms → 90 ms veio de não chamar `math.Log`
+4. **No Dell, os ganhos medidos são de engenharia, não de informação.** 200 ms → 90 ms veio de não chamar `math.Log`
    786 mil vezes; 14,3 s → 120 ms veio de não chamar o modelo. Nenhum desses ganhos veio de um teorema de
    informação. O argumento information-theoretic é útil para *decidir o que medir*, não para *produzir o ganho*.
 5. **Amostra pequena.** 644 exemplos e 75 tarefas. ECE com `n < 10³` é enviesado; um limiar escolhido na curva
@@ -828,7 +828,7 @@ risco–cobertura); o **motor** é cascata + calibração + busca limitada + bib
 
 ---
 
-## 6. O que dá para implementar em Go no d610
+## 6. O que dá para implementar em Go no Dell
 
 Ordenado por valor esperado. Métrica = a que move `jazz eval offline` (`no_llm_rate`, sucesso verificado,
 `false_success`, `false_blocks`, perguntas, comandos/tarefa, p50/p95, RSS). Impacto 1–5; esforço S/M/L; risco

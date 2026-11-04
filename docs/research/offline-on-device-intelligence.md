@@ -9,12 +9,12 @@ prompts": ação como programa instanciado e verificado; (f) destilar um LLM for
 Nada aqui repete o que os outros docs já fundamentaram — quando o tema já tem doc, cito o doc, não o paper.
 
 Convenções: cada afirmação traz a fonte primária. **(estimativa)** marca número meu, não medido. "Custo em
-1 núcleo" vale para o alvo d610 (Pentium M 1,7 GHz, linux/386, 2 GB, HDD), mesma máquina de
+1 núcleo" vale para o alvo Dell (Pentium M 1,7 GHz, linux/386, 2 GB, HDD), mesma máquina de
 `results/dell-0.9-progress.md`. Identificadores do código em inglês.
 
 ---
 
-## 1. A conta: por que offline ganha no d610
+## 1. A conta: por que offline ganha no Dell
 
 **Caminho com LLM (medido, 0.8.1 e baseline de modelo grátis).**
 
@@ -28,7 +28,7 @@ Convenções: cada afirmação traz a fonte primária. **(estimativa)** marca n�
 16 GB, NEON) faz ~4,4 tok/s com Llama-3.2-3B e ~10–11 tok/s com modelos de 1 B
 ([ggml-org/llama.cpp#31103](https://github.com/ggml-org/llama.cpp/discussions/31103);
 [edge bench](https://edgellm-bench.vercel.app/results.csv)). Num Pi 4 de 4 GB o LLaMA-7B sai a ~10 s/token
-([issue #58](https://github.com/ggml-org/llama.cpp/issues/58)). O d610 tem 1 núcleo, FSB 400 MHz
+([issue #58](https://github.com/ggml-org/llama.cpp/issues/58)). O Dell tem 1 núcleo, FSB 400 MHz
 (≤ ~3,2 GB/s teóricos de banda, `low-level-performance.md`) e **sem SIMD útil** (SSE2 apenas):
 
 - Q4_0 3B ≈ 1,8–2,0 GB de pesos: **não cabe** em 2 GB junto com o SO — descartado;
@@ -46,7 +46,7 @@ Convenções: cada afirmação traz a fonte primária. **(estimativa)** marca n�
 | `jazz -p "talscle status"` (typo) | 189–366 ms, `tailscale status` executado |
 | `jazz eval offline` (39 tarefas, época) | 39/39 · falso sucesso 0 · p50 **14 ms** · p95 362 ms · RSS 59 MB |
 
-Diferença: **2–3 ordens de magnitude** de latência, zero tokens, e funciona com o WiFi morto — que no d610
+Diferença: **2–3 ordens de magnitude** de latência, zero tokens, e funciona com o WiFi morto — que no Dell
 é o caso comum, não a exceção. O gargalo deixa de ser "modelo" e vira **cobertura determinística**: quanto
 mais pedidos o interpretador entende e a biblioteca de métodos cobre, mais o agente resolve sem gastar
 nada. Cobertura se constrói em tempo de compilação — a filosofia deste doc.
@@ -122,7 +122,7 @@ verificador (`caps.go:67-187`, `methods.go:1680-1760`); falta síntese por templ
 
 **P8 — Separar planejar de observar economiza a moeda rara.** ReWOO: planner emite o plano com
 placeholders, workers executam sem repensar, solver fecha — 5× eficiência de token e +4% de acurácia
-(arXiv:2305.18323; ~80% menos tokens no relato da IBM). No d610 a moeda rara não é token: é **segundo de
+(arXiv:2305.18323; ~80% menos tokens no relato da IBM). No Dell a moeda rara não é token: é **segundo de
 requisição** e ciclo de CPU. A forma já existe: métodos declaram todos os passos antes de executar
 (`brExecute`, `brain.go:258-421`), então entre passos não há "repensar". A lição é manter essa fronteira:
 observações voltam como fatos, não como novo plano.
@@ -206,7 +206,7 @@ um voto k-NN sobre `examples` custa uma varredura de ~600 docs × n-gramas — <
 
 ## 4. Propostas (ordenadas por impacto esperado)
 
-Todas em Go stdlib, medidas no d610. Métrica = a que a proposta move em `jazz eval offline`
+Todas em Go stdlib, medidas no Dell. Métrica = a que a proposta move em `jazz eval offline`
 (no_llm_rate, sucesso verificado, false_success, false_blocks, perguntas, comandos/tarefa, p50/p95, RSS).
 
 ### A. `jazz forge`: destilar o LLM em assets executáveis (spec §7, ainda não implementada)
@@ -232,7 +232,7 @@ Todas em Go stdlib, medidas no d610. Métrica = a que a proposta move em `jazz e
   reaproveitando a validação por-dir/mtime de `nameindex_idx.go`. Query: extrai trigramas da literal/regex
   (análise conservadora à la `Query{}` do codesearch), intersecta postings, e o `regexp` (RE2) confirma só
   nos candidatos. Alimenta um cap `find_text`/`search` do brain e o investigador — hoje `find` precisa de
-  `rg` (ausência possível no d610) ou `python3` (`find.symbol` tem `needs: bin.python3`).
+  `rg` (ausência possível no Dell) ou `python3` (`find.symbol` tem `needs: bin.python3`).
 - **Arquivos:** novo `trindex.go` (~400–600 ln), `nameindex_idx.go` (persistência), `methods/*.json`
   (find), `brCaps`.
 - **Custo no 386:** índice ~5–15% do corpus (estimativa; trigrama→arquivo sem posições, varint — bem

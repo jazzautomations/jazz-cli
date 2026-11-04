@@ -530,7 +530,7 @@ aproximadamente certo mas não é julgamento semântico.
 
 ---
 
-## 9. O que dá para implementar em Go no d610
+## 9. O que dá para implementar em Go no Dell
 
 Ordenado por valor esperado. Métrica = a que move `jazz eval offline` (`no_llm_rate`, `false_success`,
 `false_blocks`, perguntas, `commands_per_task`, p50/p95, RSS) + os números novos (`NLL_bits`, `ΔL`,

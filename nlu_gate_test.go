@@ -35,12 +35,12 @@ func TestNLUGateNonTask(t *testing.T) {
 }
 
 // The split of a compound request discards parts with no task evidence, so
-// noise cannot veto the split or become an action ("porra e o d610?" is one
+// noise cannot veto the split or become an action ("porra e o zz9?" is one
 // no-evidence part plus a name, not two requests).
 func TestNLUGateSplitDiscardsNoise(t *testing.T) {
 	m, w := nuTestWorld(t)
-	if parts := brSplitMulti("porra e o d610?", m, w); len(parts) != 0 {
-		t.Errorf("porra e o d610? => %#v, esperava split descartado", parts)
+	if parts := brSplitMulti("porra e o zz9?", m, w); len(parts) != 0 {
+		t.Errorf("porra e o zz9? => %#v, esperava split descartado", parts)
 	}
 	parts := brSplitMulti("git status e porra e roda os testes", m, w)
 	if len(parts) != 2 || parts[0] != "git status" || parts[1] != "roda os testes" {

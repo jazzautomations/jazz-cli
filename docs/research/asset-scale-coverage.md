@@ -2,15 +2,15 @@
 
 Pesquisa de 04/11/2026. Continua [math-offline-brain.md](math-offline-brain.md) (calibração, informação,
 orçamentos), [offline-brain-research.md](offline-brain-research.md) (algoritmos), [offline-on-device-intelligence.md](offline-on-device-intelligence.md)
-(a conta do d610 e a proposta `jazz forge`) e [tocomas-plan-reuse.md](tocomas-plan-reuse.md) (reuso de planos).
+(a conta do Dell e a proposta `jazz forge`) e [tocomas-plan-reuse.md](tocomas-plan-reuse.md) (reuso de planos).
 Este documento faz a pergunta que os outros evitam: **quantos assets valem a pena, quais, e como saber** —
 com a matemática da cobertura, os dados de distribuição de pedidos e o custo medido no alvo.
 
 Convenções: `file:line` refere-se a esta árvore. **Medido** = medido nesta sessão ou em `results/`;
-**(estimativa)** = número meu, não medido; **d610 medido** = `results/dell-0.9-progress.md`. As medições de
-escala foram feitas em amd64 (Go 1.27.2) e extrapoladas para o d610 com fator ~3,2 — estimativa de CPU
+**(estimativa)** = número meu, não medido; **Dell medido** = `results/dell-0.9-progress.md`. As medições de
+escala foram feitas em amd64 (Go 1.27.2) e extrapoladas para o Dell com fator ~3,2 — estimativa de CPU
 calibrada pelo cold start medido no Dell (~130 ms), não uma razão limpa; a extrapolação está marcada. Nada
-aqui foi rodado no d610 nesta sessão.
+aqui foi rodado no Dell nesta sessão.
 
 ---
 
@@ -62,10 +62,10 @@ ser por classe, não global.
 
 | Classe | Onde vive | Contagem hoje | Custo unitário medido | O que compra |
 |---|---|---|---|---|
-| Intenção + regras | `nlu/intents.json` | 50 intenções | 32 KB de tabela NB + ~1 ms de treino por classe (amd64; ~3 ms d610) | uma **classe** de pedido |
+| Intenção + regras | `nlu/intents.json` | 50 intenções | 32 KB de tabela NB + ~1 ms de treino por classe (amd64; ~3 ms Dell) | uma **classe** de pedido |
 | Exemplo NLU | `nlu/intents.json` (`examples`) | 644 | ~43 µs de treino (amd64) | uma **superfície** dentro da classe |
 | Entrada de léxico | `nlu/lexicon.json` | 612 palavras de conceito + 159 gírias (16 KB) | desprezível | gíria/sinônimo → conceito |
-| Método | `methods/*.json` | 103 (máx. 5 por intenção, média 2,1) | ~26 µs de parse (amd64), ~0,1 ms d610 | um **plano** para a classe |
+| Método | `methods/*.json` | 103 (máx. 5 por intenção, média 2,1) | ~26 µs de parse (amd64), ~0,1 ms Dell | um **plano** para a classe |
 | Capacidade | `caps.go` (`cbBrainCaps`, `cbToolCaps`) | ~15 + scripts | desprezível | um **passo** componível |
 | Plano em cache | `plancache.go` | ≤100 por projeto (`pcMaxPlans`, `plancache.go:45`) | ~1 KB | um plano **deste** projeto |
 
@@ -132,7 +132,7 @@ há uma resposta única.
 O que isso significa para o jazz: num CLI **single-user**, repetição entre usuários não existe — 100% da
 repetição é local, e o mecanismo certo é o cache (`plancache.go`), não mais assets globais. Numa biblioteca
 distribuída a muitos usuários, a fatia global (9–27%) é o que uma biblioteca de assets captura, e é
-exatamente a fatia que **não** existe no d610 de um usuário. O valor da biblioteca, no d610, não é repetição:
+exatamente a fatia que **não** existe no Dell de um usuário. O valor da biblioteca, no Dell, não é repetição:
 é cobertura de pedidos de primeira vez.
 
 Para não depender de números de segunda mão, medi a curva de cobertura numa amostra real da AOL
@@ -201,7 +201,7 @@ Claude Code + Codex) mostra concentração **extrema no nível de ferramenta**:
 mostra é o contrário do que a pilha sugere: a **cabeça é minúscula** (3 ferramentas = 85%) e a cauda é feita
 de ferramentas especializadas que um planner deve **compor**, não enumerar. E **LOAD-BEARING** para a
 distinção entre as duas fatias de reuso: num CLI single-user, a repetição é 100% local → `plancache.go`; a
-biblioteca global cobre a fatia entre usuários, que no d610 não existe.
+biblioteca global cobre a fatia entre usuários, que no Dell não existe.
 
 ### 2.3 A armadilha dos dois níveis: strings vs planos
 
@@ -303,7 +303,7 @@ a função que o código realmente implementa não é a função de cobertura; �
 submodularidade não sobrevive à inserção. A consequência prática é boa: **anexar é grátis; promover é
 perigoso**. A política (§7) explora exatamente essa assimetria.
 
-### 3.4 O piso de medição: por que "cobertura marginal por asset" não é mensurável no d610
+### 3.4 O piso de medição: por que "cobertura marginal por asset" não é mensurável no Dell
 
 `Δ` é uma probabilidade. Com `n` pedidos no log e `X` novos cobertos, `Δ̂ = X/n` tem erro padrão
 `√(Δ(1−Δ)/n)`. Para detectar `Δ` com 95% de confiança e 20% de erro relativo:
@@ -319,9 +319,9 @@ n ≈ (1,96/0,20)² · (1−Δ)/Δ ≈ 96/Δ
 | 0,5% | ~19.200 |
 | 0,1% | ~96.000 |
 
-Um usuário único no d610 gera, digamos, ~1.000 pedidos/mês (estimativa). O piso de detecção é **~10% de
+Um usuário único no Dell gera, digamos, ~1.000 pedidos/mês (estimativa). O piso de detecção é **~10% de
 cobertura marginal** — nenhum asset individual chega perto. Mesmo agregando 50 classes, o piso por classe é
-~2%. **Conclusão dura: no d610 de um usuário, cobertura marginal por asset é ruído.** O que é mensurável é:
+~2%. **Conclusão dura: no Dell de um usuário, cobertura marginal por asset é ruído.** O que é mensurável é:
 
 1. **win-rate condicional ao disparo** — se o asset disparou `k` vezes, a incerteza é ~`1/√k` (Wilson;
    Brown, Cai & DasGupta 2001), e `k=20` já dá um intervalo utilizável; e
@@ -358,7 +358,7 @@ Com `C_setup` = 30–60 min (estimativa), `L` = 12 meses, `C_manut` = 10 min/mê
 
 | N_mês | Δ* (payback em 12 meses) |
 |---|---|
-| 1.000 (usuário único d610) | **2,5–3,0%** |
+| 1.000 (usuário único Dell) | **2,5–3,0%** |
 | 10.000 (base instalada pequena) | **0,25–0,30%** |
 | 100.000 | **0,03%** |
 
@@ -370,7 +370,7 @@ Agora cruze com as curvas de cobertura:
   Não vale.
 
 Isto é a resposta quantitativa à pergunta "qual o ponto ótimo": **não há um número universal; há um número em
-função do volume de tráfego e do custo de verificação.** No d610 de um usuário, o ótimo é concentrar
+função do volume de tráfego e do custo de verificação.** No Dell de um usuário, o ótimo é concentrar
 profundidade em ~10–20 intenções (3–6 métodos cada, com fallback de ambiente) e deixar as demais com 1–2 —
 total ~100–250 métodos; numa base instalada de 10 mil usuários, ~1.000–3.000 assets passam a pagar. Nunca 10
 mil num alvo de 1 CPU e 2 GB — não por matemática de cobertura, mas por manutenção (§4.7) e boot (§5.2).
@@ -632,9 +632,9 @@ comparações, que em Go é <1 s. É o portão que falta.
 
 ### 5.2 Custo de boot no 32-bit: medido, e é o teto de breadth
 
-Medições desta sessão (amd64) e extrapolação para o d610 (fator ~3,2):
+Medições desta sessão (amd64) e extrapolação para o Dell (fator ~3,2):
 
-| cenário | tabela NB | `nuTrain` amd64 | `nuTrain` d610 (est.) | cold start d610 (est.) |
+| cenário | tabela NB | `nuTrain` amd64 | `nuTrain` Dell (est.) | cold start Dell (est.) |
 |---|---|---|---|---|
 | 50 intenções (hoje) | 1,6 MB | 40 ms | ~130 ms (est.) | ~130 ms (medido) |
 | 100 | 3,2 MB | 99 ms | ~320 ms | ~320 ms |
@@ -642,10 +642,10 @@ Medições desta sessão (amd64) e extrapolação para o d610 (fator ~3,2):
 | 400 | 12,8 MB | 358 ms | ~1,1 s | ~1,1 s |
 | 800 | 25,6 MB | 472–542 ms | ~1,5–1,7 s | ~1,5–1,7 s |
 
-O p50 do eval é **14 ms** (d610 medido). Um boot de 1,1 s é 80× o p50; 1,7 s é 120×. A memória em si não é o
+O p50 do eval é **14 ms** (Dell medido). Um boot de 1,1 s é 80× o p50; 1,7 s é 120×. A memória em si não é o
 problema (25,6 MB num processo de 2 GB, e o binário já usa 59 MB de RSS no eval); o **tempo** é. E o custo é
 por **classe**, não por exemplo nem por método: 250 métodos custam ~7 ms de parse (10.000 custariam ~300 ms),
-100 intenções custam ~99 ms de treino (d610: ~320 ms).
+100 intenções custam ~99 ms de treino (Dell: ~320 ms).
 
 A distinção de Denning (1968) esclarece o que está sendo pago: no **boot**, o custo é o tamanho da biblioteca
 (todo o JSON é parseado); no **runtime**, o custo é o *working set* — os 2–3 métodos da intenção casada. Uma
@@ -710,7 +710,7 @@ qualquer `P(errado)` não trivial. Por isso a regra é **precisão primeiro, cob
    Ignorar a cauda é pior do que superestimá-la.
 2. **Por dobra de investimento, a cobertura de string cresce** (+1,3 → +13,6 pp por dobra). A intuição
    "continuar adicionando paga" não é ingênua; é empiricamente verdadeira no espaço de strings.
-3. **Inteligência em tempo de compilação é a arquitetura certa** para o d610: 0 tokens, 14 ms de p50, funciona
+3. **Inteligência em tempo de compilação é a arquitetura certa** para o Dell: 0 tokens, 14 ms de p50, funciona
    offline. O LLM forte forjando assets e o runtime só interpretando é a única conta que fecha em 1 CPU/2 GB.
 4. **A fábrica é a peça diferenciadora.** Ninguém gera 10 mil métodos que passam num verificador forte; gerar
    10 mil métodos é trivial.
@@ -755,16 +755,16 @@ aceitaria, porque preserva a intuição (mais cobertura) e muda o objeto (compos
 
 ---
 
-## 7. Política concreta para o d610
+## 7. Política concreta para o Dell
 
 ### 7.1 Caps por classe
 
 | Classe | Cap | Hoje | Racional |
 |---|---|---|---|
-| Intenções | **64** (96 com tabela NB pré-computada) | 50 | 32 KB e ~3 ms de boot por classe; 100 intenções ~320 ms no d610 |
+| Intenções | **64** (96 com tabela NB pré-computada) | 50 | 32 KB e ~3 ms de boot por classe; 100 intenções ~320 ms no Dell |
 | Métodos por intenção | **2–3 típico, 6 duro** | 2,1 médio, 5 máx | profundidade é barata; o custo é conflito/teste, não CPU |
 | Métodos totais | **250** | 103 | `M* = B/(h·c) = 400`; 250 deixa folga para reverificação |
-| Exemplos por intenção | **20–40, duro 40** | 12,9 médio | ~43 µs/exemplo; 2.000 exemplos ~280 ms d610 (ou 0 com tabela pré-computada) |
+| Exemplos por intenção | **20–40, duro 40** | 12,9 médio | ~43 µs/exemplo; 2.000 exemplos ~280 ms Dell (ou 0 com tabela pré-computada) |
 | Exemplos totais | **2.000** | 644 | cabe no orçamento de treino e no corpus de teste |
 | Entradas de léxico | ~2.000, podadas por uso | 771 | custo desprezível; podar as que nunca casam em 90 dias |
 | Planos em cache | **100/projeto** (já existe) | `pcMaxPlans` | precedente do repo (`plancache.go:45`) |
@@ -781,7 +781,7 @@ Há **três tipos de asset** com critérios diferentes; misturá-los é o erro q
 quanto a parada cedo demais.
 
 **(a) Plano novo (método que cobre uma intenção ou um shape de slots que ninguém cobria).**
-Parar quando `Δ < Δ*` da §3.5 — **2,5–3%** no d610 single-user, 0,25–0,3% com 10 mil usuários. Como a
+Parar quando `Δ < Δ*` da §3.5 — **2,5–3%** no Dell single-user, 0,25–0,3% com 10 mil usuários. Como a
 distribuição de planos satura (top 10 ≈ 65%), isso naturalmente limita a profundidade a ~10–20 intenções.
 É o critério que responde "quantos assets".
 
@@ -870,7 +870,7 @@ número de exemplos justificar o passo de build.
 - **Embeddings/vetores** para dedup ou retrieval: não cabem no orçamento e o repo já resolve com Jaccard +
   parse (ver [offline-on-device-intelligence.md](offline-on-device-intelligence.md) "não-propostas").
 - **LSH/banding** para MinHash: com `n < 10^5`, força bruta é mais rápida que a estrutura e é **exata**; LSH
-  é aproximada e tem falso negativo. Complexidade para um regime que o d610 não alcança.
+  é aproximada e tem falso negativo. Complexidade para um regime que o Dell não alcança.
 - **10.000 métodos**: manutenção `M·h` inviável (§4.7) e boot desnecessário (§5.2); a cauda de planos se
   ataca por composição (§6).
 - **ADWIN / testes de janela por asset**: amostras insuficientes (§4.7).
@@ -885,7 +885,7 @@ número de exemplos justificar o passo de build.
 **C1. "Um asset que nunca dispara custa quase nada; um asset que falta custa uma chamada de modelo de 20–60 s.
 Logo, o EV é positivo mesmo para cobertura minúscula."**
 Verdade para o **custo de runtime**; falso para o **custo de verificação e manutenção**, que é pago antes e
-depois. A §3.5 mostra que, com 30–60 min de setup e 10 min/mês, a cobertura de equilíbrio é ~2,5–3% no d610.
+depois. A §3.5 mostra que, com 30–60 min de setup e 10 min/mês, a cobertura de equilíbrio é ~2,5–3% no Dell.
 Um asset de 0,1% tem EV negativo em 12 meses, mesmo que o runtime seja grátis. Se o asset for **gerado e
 nunca verificado**, o custo é ainda maior: ele pode disparar errado (assimetria de perdas, §5.5).
 
@@ -908,7 +908,7 @@ design precisa de uma cláusula de **verificador de efeito obrigatório**, não 
 Verdade, e é a única circunstância em que "porrada de assets" faz sentido: com 10 mil usuários, o piso
 econômico cai para ~0,25% e 1.000–3.000 assets pagam. Mas isso exige **verificação centralizada** (o custo de
 setup não é pago 10 mil vezes) e um corpus de fixtures muito maior. É uma decisão de produto, não de código:
-enquanto o jazz for single-user no d610, o teto é ~250 métodos.
+enquanto o jazz for single-user no Dell, o teto é ~250 métodos.
 
 ---
 
@@ -922,8 +922,8 @@ enquanto o jazz for single-user no d610, o teto é ~250 métodos.
   Não é possível medir repetição de pedidos nela.
 - **O colapso 100→55** foi medido num conjunto cego **estratificado** (~2 por intenção), que é o melhor caso
   para não colapsar; o número real de tráfego deve ser maior, mas não foi medido.
-- **As extrapolações para o d610** usam fator ~3,2 calibrado pelo cold start (~130 ms), não uma razão limpa;
-  a variância é grande e o d610 não foi rodado nesta sessão.
+- **As extrapolações para o Dell** usam fator ~3,2 calibrado pelo cold start (~130 ms), não uma razão limpa;
+  a variância é grande e o Dell não foi rodado nesta sessão.
 - **Os custos de setup/manutenção** (30–60 min, 10 min/mês) são estimativas; a §3.5 mostra a sensibilidade
   (o piso vai de ~1,3% a ~5% conforme o custo).
 - **O "~30% repetidos" não foi replicado** em código; o 7% do Transform Code é a melhor evidência direta, e

@@ -1,6 +1,6 @@
 # Determinismo cross-arch e segurança do asset: o `nb.bin` que ainda não existe
 
-**Pesquisa de 04/11/2026.** Alvo: d610 (i686, 1 CPU, 2 GB, `linux/386`), forja em amd64. Continua
+**Pesquisa de 04/11/2026.** Alvo: Dell (i686, 1 CPU, 2 GB, `linux/386`), forja em amd64. Continua
 [unifying-math-offline.md](unifying-math-offline.md) (calibração, MDL, o que é teorema), [math-offline-brain.md](math-offline-brain.md)
 (números, ECE, PAV), [offline-on-device-intelligence.md](offline-on-device-intelligence.md) (asset-forge) e
 [harness-sota-gap.md](harness-sota-gap.md) (portão held-out). Não repete o pipeline NLU nem o layout dos índices.
@@ -44,12 +44,12 @@ comando ao lado. **Conta** = estimativa minha, não medida. "D610" = Pentium M D
 
 ## 1. O que existe hoje (e o que não existe)
 
-O desenho de "forja amd64 → `nb.bin` → d610" **ainda não está no código**. O que existe:
+O desenho de "forja amd64 → `nb.bin` → Dell" **ainda não está no código**. O que existe:
 
 - **NB treinado em runtime, não carregado de arquivo.** `nuGet()` compila o dataset embutido (`nlu.go:151-158`); o
   primeiro `classify` dispara `m.nbOnce.Do(func() { m.nb = m.nuTrain(nil) })` (`nlu.go:1429-1431`). A tabela é
   `[]int16` de `classes × nuBuckets` (`nlu.go:1395`) e o prior `[]int32` (`nlu.go:1396`). Ou seja: hoje o "asset" é
-  o JSON embutido, e o treino roda **no d610**, com `math.Log` do 386. Não há `nb.bin`, loader, versão nem hash.
+  o JSON embutido, e o treino roda **no Dell**, com `math.Log` do 386. Não há `nb.bin`, loader, versão nem hash.
 - **Calibração morta.** `ECE`, `BrierScore`, `PlattFit`, `IsotonicFit`, `ReliabilityBins` só são chamados por
   `calib_test.go`; nenhum caminho de produção usa (`calib.go:164,198,220,281`). A doc
   [unifying-math-offline.md](unifying-math-offline.md) §2 já dizia isso; o grep confirma.
@@ -79,7 +79,7 @@ A pergunta natural é "o i386 usa x87 de 80 bits e o amd64 usa SSE, então os fl
 **não**:
 
 - Go 1.15 foi a última release com `GO386=387`; a Go 1.16 **removeu** o modo x87 e passou a exigir SSE2 (ou
-  `GO386=softfloat` para CPUs sem SSE2) [S6][S7][S8]. O Pentium M Dothan tem SSE2, então o d610 compila no modo
+  `GO386=softfloat` para CPUs sem SSE2) [S6][S7][S8]. O Pentium M Dothan tem SSE2, então o Dell compila no modo
   `sse2` default.
 - O backend 386 do compilador emite `ADDSD`/`SUBSD`/`MULSD`/`DIVSD`/`SQRTSD` para `float64`, e os registradores
   `X0..X7` são SSE2 [S11]. **Medido:** no binário `linux/386` deste repo, `math.exp` (330 bytes, em `0x813d800`)
@@ -160,7 +160,7 @@ se o conjunto de instruções difere. No jazz, as expressões sensíveis a FMA s
 - `calib.go:175` — `ece += (float64(b.N)/float64(n)) * math.Abs(...)` (medição).
 - `calib.go:208-210` — `sum += d*d` (Brier; medição).
 
-Se a calibração for **ajustada** na forja com `GOAMD64=v3` e consumida no d610, os parâmetros podem diferir. Se for
+Se a calibração for **ajustada** na forja com `GOAMD64=v3` e consumida no Dell, os parâmetros podem diferir. Se for
 ajustada e **quantizada em inteiros** na forja, o runtime não tem FMA; o problema vira só de procedência. A regra:
 **ajustar uma vez, quantizar, assinar; nunca reajustar no alvo.**
 
@@ -233,7 +233,7 @@ arcos).
 `somaQ += expQ[k]` em `int64`. Como `expQ[0]=65536` representa `1.0`, a confiança em permile é
 `ConfQ = round(1000 * 65536 / somaQ)` (ou seja, `65.536.000 / somaQ`); não use `1e6/somaQ` — a escala estaria
 errada por 65,536×. A tabela é um **asset assinado**, gerada uma vez na forja com uma regra de arredondamento
-documentada (half-even) e nunca recalculada no d610. Custo: 50 lookups + somas inteiras por pedido, mais barato que
+documentada (half-even) e nunca recalculada no Dell. Custo: 50 lookups + somas inteiras por pedido, mais barato que
 50 `math.Exp` soft-float no Pentium M; 64 KB cabem na L2. Erro máximo: um `expQ` com 16 bits de fração tem erro
 relativo ≤ 2^-16; a confiança em permile tem erro ≤ 1 permile, suficiente para limiares de 0,6/0,85. Prove o bound
 no teste (`TestExpQError`), incluindo o caso de `somaQ` pequeno (uma classe só) e o clamp em 0..1000.
@@ -242,7 +242,7 @@ no teste (`TestExpQError`), incluindo o caso de `somaQ` pequeno (uma classe só)
 com `P` estritamente crescente. `ApplyQ(pQ12, nodes)` faz interpolação linear inteira:
 `y = y0 + ((p-p0)*(y1-y0) + (p1-p0)/2) / (p1-p0)`, com `int32` (4095*4095 = 16,7M < 2^31). Sem `Exp`, sem `Log`,
 sem FMA. Um "orçamento de deslocamento" `max|Y-P| <= δ` (ex.: 0,05) limita quantas decisões o mapa pode virar
-(§3.4). Ajuste na forja com `PlattFit`/`IsotonicFit` (float, tudo bem — é offline), quantize, assine; o d610 só
+(§3.4). Ajuste na forja com `PlattFit`/`IsotonicFit` (float, tudo bem — é offline), quantize, assine; o Dell só
 interpola.
 
 **C4 — Formato fixo, LE, sem float.** `nb.bin`/`calib.bin` com magic, versão, `uint16/uint32` explícitos,
@@ -255,7 +255,7 @@ aritmética com ele no runtime.
 
 **C6 — Teste golden cross-arch.** Um corpus fixo de entradas (as 75 tarefas + `nlu/blind_test.json` + casos
 sintéticos) com o resultado esperado em **bits**: `Intent.Name`, `ConfQ`, `TypoOnly`, `Missing`, `Slots` ordenados,
-`Evidence` ordenada, `Status`. O teste roda em amd64 e em 386 (qemu-i386 no CI ou no d610) e falha em qualquer
+`Evidence` ordenada, `Status`. O teste roda em amd64 e em 386 (qemu-i386 no CI ou no Dell) e falha em qualquer
 diferença. É a única prova real; o resto é argumento.
 
 ### 2.8 Perigos de 32 bits (e onde o código já está certo)
@@ -299,7 +299,7 @@ instruções são **capabilities**. `Steps[].Cap` resolve para `brCaps` (`method
 `Steps[].Cap`. Um método pode chamar `git_op push` ou `file_op delete` sem declarar nenhum `Cmds`. O eval offline
 usa um `Permit` mais restritivo (`evaloffline.go:317-333`: leitura, allowlist, teste/build/lint/fmt, file ops), mas
 a produção usa `ag.PermitCommand`, que em `--yolo`/trusted pode liberar mais. **O portão avalia um asset sob uma
-política mais restritiva que a produção** — logo um asset que passa no eval pode fazer mais no d610. Isso é um
+política mais restritiva que a produção** — logo um asset que passa no eval pode fazer mais no Dell. Isso é um
 achado, não um detalhe.
 
 Consequência: o asset precisa de um **manifesto de capacidades** e de uma política de capacidade, não só de um
@@ -354,7 +354,7 @@ O que ele **não pega**:
    observa rede, arquivos fora do fixture, processos, git remoto. Um método que exfiltra o repo e depois faz o
    trabalho "certo" passa.
 6. **Custo.** `Metrics` não tem latência nem RSS (`forge_gate.go:46-51`). Um asset que adiciona 1,6 MB de tabela ou
-   50 ms por pedido passa no accuracy e inviabiliza o d610. O eval mede p50/p95/RSS (`evaloffline.go:91-107`), mas
+   50 ms por pedido passa no accuracy e inviabiliza o Dell. O eval mede p50/p95/RSS (`evaloffline.go:91-107`), mas
    o portão não usa.
 7. **Coverage gaming.** A condição de melhoria aceita `Coverage` sozinha (`forge_gate.go:164`). Um asset que responde
    mais (mesmo "não verificado", mesmo errado) sobe coverage e é promovido, desde que `FalseSuccess` fique 0. Se o
@@ -367,7 +367,7 @@ O que ele **não pega**:
    memorização, não generalização [S29]. Nenhum split local resolve isso.
 10. **Múltiplas comparações.** A forja gera N candidatos e testa todos no mesmo held-out; o melhor por sorte passa.
     É data snooping; o controle é um teste final cego ou Reality Check [S31].
-11. **Distribuição ≠ alvo.** O eval roda no amd64 da forja, com ferramentas que o d610 não tem (`rg`, `python3`,
+11. **Distribuição ≠ alvo.** O eval roda no amd64 da forja, com ferramentas que o Dell não tem (`rg`, `python3`,
     `systemd`). Um método que passa no eval pode falhar no alvo por dependência de ambiente, não de accuracy. O
     `epProfile` e `Needs` existem (`evaloffline.go:282`), mas o portão não os usa como critério.
 12. **Assinatura do relatório.** `GateReport` é uma struct em memória; não é assinada nem ligada ao hash do corpus.
@@ -460,20 +460,20 @@ rollback/freeze/mix-and-match [S21]. Para um projeto de um mantenedor, o mínimo
    `DisallowUnknownFields` e limites de tamanho. Nunca parseie primeiro (parser bug vira bypass).
 5. **Rollback/freeze.** `version` monotônica por `assetID`; `notAfter`; `state.json` em `dataDir()/brain/` com
    `LastSeen[assetID]`, escrito com `fsync` + rename atômico. Rejeite `version <= LastSeen` e `notAfter < now`.
-   Se o relógio do d610 estiver errado (CMOS velho), `notAfter` falha fechado; ofereça `--allow-expired` com
+   Se o relógio do Dell estiver errado (CMOS velho), `notAfter` falha fechado; ofereça `--allow-expired` com
    confirmação explícita e auditoria. É um trade-off real de máquina offline.
 6. **Transparência.** `assetlog.jsonl` append-only: `{seq, assetID, version, manifestHash, keyID, gateReportHash,
    prevHash}`; o head vai no manifesto de release (assinado pela chave de release). Um compromisso da chave de
    asset não consegue empurrar um asset sem mudar o head publicado; dois usuários que veem heads diferentes
    detectam split-view. É a ideia de Certificate Transparency [S35] aplicada a um log local; para um projeto
    pequeno, o log + head assinado é suficiente. `in-toto` dá o vocabulário de proveniência [S34].
-7. **Custódia.** A chave privada de asset **nunca** no d610, **nunca** no binário, **nunca** no repo. A forja lê de
-   um arquivo 0600 ou de um agente; o d610 só tem a pública. O `scripts/release.sh` já tem o padrão para a chave de
+7. **Custódia.** A chave privada de asset **nunca** no Dell, **nunca** no binário, **nunca** no repo. A forja lê de
+   um arquivo 0600 ou de um agente; o Dell só tem a pública. O `scripts/release.sh` já tem o padrão para a chave de
    release; espelhe em `scripts/asset-release.sh`.
 
 **O que a assinatura não faz.** Ela não diz que o asset é *bom*; diz que foi *aquele* asset que o dono da chave
 aprovou. Se a forja foi comprometida, a assinatura é válida e o asset é malicioso. Por isso o log de transparência,
-a revisão humana e o lint importam. E ela não garante que o comportamento é o mesmo no d610: um asset assinado com
+a revisão humana e o lint importam. E ela não garante que o comportamento é o mesmo no Dell: um asset assinado com
 float pode decidir diferente (§2). **Assinatura certifica bytes; determinismo é o que permite certificar
 comportamento.**
 
@@ -581,7 +581,7 @@ probabilidade de um asset ruim *adaptativo* ser promovido.** Para o adaptativo, 
 
 ---
 
-## 5. Propostas em Go no d610
+## 5. Propostas em Go no Dell
 
 Ordenadas por valor esperado. Métrica = o que move `jazz eval offline` e o teste golden; impacto 1–5; esforço
 S/M/L; risco baixo/médio/alto. Tudo stdlib.
@@ -591,7 +591,7 @@ S/M/L; risco baixo/médio/alto. Tudo stdlib.
 **Mecanismo.** Adicionar `ConfQ int32` (permile) a `Intent`; `Understood()` usa `ConfQ >= 600`; `brLevel0Min` vira
 `850`. Substituir `math.Exp` do `predict` por `expQ` (tabela `int32` de 16 385 entradas, Q16) e soma `int64`;
 `ConfQ = round(1000 * 65536 / somaQ)` (não `1e6/somaQ`; ver C2). `Confidence` continua para exibição, derivada de
-`ConfQ`. Tabela gerada na forja com `exp()` puro e arredondamento half-even; assinada; nunca recalculada no d610.
+`ConfQ`. Tabela gerada na forja com `exp()` puro e arredondamento half-even; assinada; nunca recalculada no Dell.
 Alternativa mais barata: decisão por margem inteira `scores[best]-scores[segundo]` com limiar por intent, e `ConfQ`
 só para display; mas a softmax inteira é mais fiel à regra de Chow.
 
@@ -742,7 +742,7 @@ malicioso" (calibração/léxico), que sandbox nenhum pega.
 
 **Mecanismo.** `crossarch_test.go` carrega `testdata/nlu_golden.json` (gerado na forja, versionado, com hash) e
 compara, para cada entrada: `Intent.Name`, `ConfQ`, `TypoOnly`, `Missing`, `Slots` ordenados, `Evidence` ordenada,
-`Status`. Roda em amd64 e em 386 (`GOARCH=386 go test` sob qemu-i386 no CI, e no d610 antes de release). Inclui um
+`Status`. Roda em amd64 e em 386 (`GOARCH=386 go test` sob qemu-i386 no CI, e no Dell antes de release). Inclui um
 teste unitário `TestExpQError` que prova `|expQ/65536 - exp(x)| <= 2^-15` no domínio. Inclui um teste de
 `TestBuildReproducible` (script) que compara sha256 de dois builds limpos.
 
@@ -750,13 +750,13 @@ teste unitário `TestExpQError` que prova `|expQ/65536 - exp(x)| <= 2^-15` no do
 
 **Custo 386.** Só teste; o binário de teste é maior, mas não vai para produção.
 
-**Métrica.** 100% de paridade de bits; falha em qualquer diferença; tempo de teste <2 min no d610.
+**Métrica.** 100% de paridade de bits; falha em qualquer diferença; tempo de teste <2 min no Dell.
 
 **Impacto 5 · Esforço M · Risco baixo.** É a única prova real; sem ele, P1–P3 são argumento.
 
 ### P9 — Build reprodutível e proveniência
 
-**Mecanismo.** `scripts/build-d610.sh`:
+**Mecanismo.** `scripts/build-Dell.sh`:
 ```
 export GOTOOLCHAIN=go1.27.2
 export GOOS=linux GOARCH=386 CGO_ENABLED=0
@@ -768,7 +768,7 @@ se aplica a `GOARCH=386`; ele é do build amd64 da forja. Fixe o `GOAMD64` da fo
 treino e documente; não use `v3` no treino sem saber que o alvo não tem FMA — e, se usar, o asset quantizado ainda
 isola o runtime, mas o *ajuste* dos parâmetros pode diferir (§2.4).
 
-**Arquivos.** `scripts/build-d610.sh`, `Makefile`, `.github/workflows/*`, `CHANGELOG`/release manifest.
+**Arquivos.** `scripts/build-Dell.sh`, `Makefile`, `.github/workflows/*`, `CHANGELOG`/release manifest.
 
 **Custo 386.** Zero runtime.
 
@@ -810,13 +810,13 @@ split-view/freeze.
 7. **Não use `float32` para scores nem introduza float no caminho de decisão.** Use `int32`/`int16` e Q12/Q16.
 8. **Não use `encoding/gob`, `unsafe`, endian nativo, ordem de mapa, `time.Now` ou `rand` no formato/predição.**
    `binary.LittleEndian`, slices ordenadas, seed derivada (§2.8).
-9. **Não treine o NB no d610 a cada partida.** Envie a tabela quantizada; não recalibre online com dados do usuário
+9. **Não treine o NB no Dell a cada partida.** Envie a tabela quantizada; não recalibre online com dados do usuário
    (poucos, viesados). O asset é forjado uma vez; o runtime só carrega.
 10. **Não use MD5/SHA1; não parseie antes de verificar; não releia o arquivo por path depois de verificar.**
     Verifique os bytes, parseie os mesmos bytes (TOCTOU) (§3.5).
 11. **Não permita que asset introduza cap nova ou verificador novo.** `script:` só com hash no manifesto; `Verify`
     de um enum fechado; checks fortes para intents destrutivos (§3.1, P7).
-12. **Não deixe a chave privada no d610 nem no binário.** A forja assina; o d610 verifica (§3.5).
+12. **Não deixe a chave privada no Dell nem no binário.** A forja assina; o Dell verifica (§3.5).
 13. **Não construa com `-buildvcs` default e espere byte-idêntico; não misture `GOAMD64` sem fixar; não confunda
     hash do binário com hash de comportamento** (§2.5).
 14. **Não use "x87" como desculpa.** Go 386 é SSE2 para `+ - * /`; o problema é `math.Exp`/`math.Log` e FMA (§2.1).
@@ -832,7 +832,7 @@ split-view/freeze.
 - **Não rodei em 386 real.** O experimento de `math.Exp` compara a asm do amd64 com a função pura que o 386 compila,
   no amd64; verifiquei que o binário 386 tem `math.exp` (puro) e não `math.archExp`, e desmontei `math.exp` para
   confirmar SSE2. A conclusão "são algoritmos diferentes" é sólida; a diferença bit-a-bit em cada entrada no
-  hardware d610 deve ser confirmada pelo teste golden (P8) sob qemu-i386 ou no d610.
+  hardware Dell deve ser confirmada pelo teste golden (P8) sob qemu-i386 ou no Dell.
 - **Não executei FMA.** A CPU desta sessão (i5-3210M, Ivy Bridge) não tem FMA; o binário `GOAMD64=v3` se recusa a
   rodar. A prova é: (a) a disassembly mostra `vfmadd231sd` no v3 e `mulsd`+`addsd` no v1; (b) `math.FMA` calcula o
   valor fundido corretamente (bits `bc90000000000000`), diferente do separado (`0`). A semântica é definida; a
@@ -844,7 +844,7 @@ split-view/freeze.
 - **Calibração com 75 tarefas é estatisticamente fraca.** ECE/MCE com `n<10³` é enviesado; isotônico overfitta.
   A recomendação honesta é: ligar o harness, medir, e shipar identidade ou Platt/beta conservador — não um mapa
   agressivo.
-- **Custo de ed25519/sha256 no d610 é conta, não medida.** Meça antes de prometer p50.
+- **Custo de ed25519/sha256 no Dell é conta, não medida.** Meça antes de prometer p50.
 - **O portão não pode ser estatisticamente seguro contra atacante adaptativo.** A defesa é em camadas; nenhuma
   camada sozinha resolve.
 - **Atacante com o mesmo uid é fora de escopo.** `trusted.json`, `dataDir()` e `signals.jsonl` são editáveis por

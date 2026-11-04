@@ -18,3 +18,18 @@ paths = [
 # CSI 27;m;13~ (shift/alt/ctrl+enter) is a key code, not a key
 regexTarget = "line"
 regexes = ['''"27;[0-9];13".*modifyOtherKeys''']
+
+# Privacy rules (2026-11-04): the repo is public; the maintainer's tailnet
+# hostnames, home paths and messaging ids never belong in a commit.
+[[rules]]
+id = "jazz-tailnet-host"
+description = "Tailscale tailnet hostname (private network)"
+regex = '''[a-z0-9-]+\.taild[0-9a-z]+\.ts\.net'''
+[[rules]]
+id = "jazz-home-path"
+description = "maintainer home directory path"
+regex = '''/home/(jazz|h)(/|\b)'''
+[[rules]]
+id = "jazz-whatsapp-id"
+description = "WhatsApp JID / LID"
+regex = '''[0-9]{8,}@(s\.whatsapp\.net|lid)\b'''

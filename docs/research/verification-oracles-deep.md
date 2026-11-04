@@ -12,7 +12,7 @@ verificam — ou não verificam), `metaharness-self-improvement.md` (o laço de 
 tem doc, cito o doc, não o paper.
 
 Convenções: cada afirmação traz a fonte primária com id (arXiv/DOI). **(estimativa)** marca número meu,
-não medido. `file:line` refere-se ao código na data da pesquisa. "Custo no d610" = Pentium M ~1,6 GHz,
+não medido. `file:line` refere-se ao código na data da pesquisa. "Custo no Dell" = Pentium M ~1,6 GHz,
 1 núcleo, linux/386, 2 GB, só stdlib do Go + python3 stdlib. Identificadores do código em inglês.
 Status no mapa (§4): **feito** / **parcial** / **só pesquisado**.
 
@@ -300,7 +300,7 @@ verificação já escritas. O eval do próprio jazz já é isso — `evals/offli
 
 ## 3. A regra de ouro aplicada: offline vs forja vs dependência
 
-| técnica | runtime offline no d610 | forja (LLM uma vez) | dependência (proibido no laço) |
+| técnica | runtime offline no Dell | forja (LLM uma vez) | dependência (proibido no laço) |
 |---|---|---|---|
 | Avaliar `verify` (DSL pura) | ✅ já roda — `brVerify` | — | — |
 | Novos checks: stat/hash/contém/regex/contagem/exit-set | ✅ barato (stat+sha256 de arquivos envolvidos; <1 ms típico, hash de MBs ~ms-10s ms (estimativa)) | escrever cláusulas | — |
@@ -312,7 +312,7 @@ verificação já escritas. O eval do próprio jazz já é isso — `evals/offli
 | Perturbações CheckList do NLU | ✅ tabela de perturbações + replay do `brRun` em-processo | novos padrões de perturbação | — |
 | Mineração de invariantes (mini-Daikon sobre evidências) | ✅ análise offline sobre JSONL: agrupar+eliminar+ranquear; ~ms–s por método | revisar e promover candidatos | — |
 | PBT dos *parsers/DSL* (testing/quick) | ✅ testes Go, segundos | escrever propriedades | — |
-| Geração EvoSuite/Pynguin/Randoop de testes do *projeto do usuário* | ⚠️ parcial: Pynguin existe via python3, mas pesado p/ d610 e mira código, não mundo — **fora do laço**; oferecer como `suggest`, não como verify | — | — |
+| Geração EvoSuite/Pynguin/Randoop de testes do *projeto do usuário* | ⚠️ parcial: Pynguin existe via python3, mas pesado p/ Dell e mira código, não mundo — **fora do laço**; oferecer como `suggest`, não como verify | — | — |
 | Busca evolutiva de oráculos (GAssert/EvoSpex/SpecFuzzer) | ⚠️ viável só miniaturizado e offline-batch (minutos, não no laço) | sim | — |
 | TOGA/ChatAssert/AssertLLM/neural oracles | — | ✅ LLM forte escreve checks/MRs uma vez | usar em runtime |
 | Agent-as-a-Judge / LLM-as-judge / `judge.go` no laço offline | — | pode rotular dados de avaliação | **dependência** — nunca decide `succeeded` |
@@ -376,7 +376,7 @@ mecanismo de characterization (`snapshot_cmd`) criado e esquecido.
 
 ---
 
-## 6. Propostas (Go, d610, stdlib)
+## 6. Propostas (Go, Dell, stdlib)
 
 Métricas alvo em todas: `no_llm_rate` real, `sucesso verificado`, `false_success` (=0 gate),
 `false_blocks`, p50/p95 e RSS pico, `comandos/tarefa` — o próprio `eoSummary` (evaloffline.go:91-107).
@@ -393,7 +393,7 @@ primeiro passo — `stat+sha256` dos paths citados em `m.Steps[].in`/`m.Verify[]
 cap 4 MB por arquivo — acima grava só stat). Avaliador puro, sem syscall além das já existentes.
 **Arquivos**: `methods.go` (`mhCheck`, `brVerify`, `brFrame`), `brain.go` (frame em `brExecute`),
 `methods/*.json` (migração progressiva — DSL v1 continua válida: todo check antigo é uma folha).
-**Custo d610**: hash de ≤64 MB em cenário patológico ~0,5–1,5 s em 386 (estimativa; sha256 em Go é
+**Custo Dell**: hash de ≤64 MB em cenário patológico ~0,5–1,5 s em 386 (estimativa; sha256 em Go é
 ~40–80 MB/s num Pentium M); típico ≤4 arquivos pequenos → <20 ms. RSS: +~200 KB.
 **Métrica**: % de métodos de escrita com pós-condição forte (alvo: 100% de `rename/delete/git_commit`);
 `false_success` continua 0; p50 de verificação +<50 ms.
@@ -448,7 +448,7 @@ Implementação: check `agrees <capA> <capB> <field>` — brVerify executa B só
 custo é baixo (B sempre read-only da `cbReadCmds`).
 **Arquivos**: `methods.go`, `methods/*.json` (status/info methods primeiro), `caps.go` (registrar
 pares).
-**Custo**: +1 comando read-only por método (~30–100 ms no d610, estimativa) — aceitável só onde o
+**Custo**: +1 comando read-only por método (~30–100 ms no Dell, estimativa) — aceitável só onde o
 método já rodou comandos; *nunca* em atalhos <300 ms (`open_file`, `git_status` leve).
 **Métrica**: `divergências detectadas` (cada uma é um bug real do parser/perfil — valor duplo);
 `false_success` ↓; latência nos métodos pesados +<150 ms.
@@ -469,7 +469,7 @@ oráculo fraco). Kill-rate por check publicado no relatório. Complemento swarm:
 features da fixture (sem README, sem git, PATH mínimo) — fixtures pobres cobrem pré-condições.
 **Arquivos**: `evaloffline.go` (+mutantes/summary), `evals/offline/mutants.json` (tabela), `methods.go`
 (hooks p/ inspeção).
-**Custo**: só eval — fora do caminho do usuário; ~2–5 s por mutante de shell-out no d610, aceitável
+**Custo**: só eval — fora do caminho do usuário; ~2–5 s por mutante de shell-out no Dell, aceitável
 em batch (estimativa: suite atual ~50 tarefas × ~3 mutantes ≈ 10–20 min; rodar `--only` no dev).
 **Métrica**: **verifier kill-rate** (alvo ≥90% por intent), `false_success` em mutante (gate: todo
 mutante tem que ser pego *ou* classificado consciente como "mutante equivalente").
@@ -506,7 +506,7 @@ confirma "rodou" sem confirmar "respondeu o certo".
 **Arquivos**: `methods.go` (check), `methods/env_status.json`, `self_info.json`, `service_status.json`,
 `git_status.json`, `jazz-scripts/snapshot_cmd` (já pronto — só precisa de normalização opcional:
 máscara de hostname/versão/data para não tornar o oráculo frágil).
-**Custo**: um fork de python3 (~30–80 ms d610) só onde habilitado; goldens de KBs.
+**Custo**: um fork de python3 (~30–80 ms Dell) só onde habilitado; goldens de KBs.
 **Métrica**: `unverified` de métodos informativos ↓; fragilidade medida = % de snapshots que falham
 por ruído não-semântico (alvo <5% — acima, a máscara está errada, cf. Fujita JSS 2023).
 **Impacto 3 · Esforço S · Risco médio** (snapshots frágeis = falso-bloqueio; normalização é o jogo
@@ -571,7 +571,7 @@ pequenos que classificam "ilegal vs resposta".
    (fs/git/proc), não métodos Java; e nada disso compila em linux/386 com 2 GB de forma útil.
    Adota-se a *receita* (templates × traces → eliminar falsificados → ranquear), não a ferramenta (P6).
 2. **EvoSuite/Randoop/Pynguin dentro do laço.** Gerar teste unitário do *projeto do usuário* é tarefa
-   de forja/LLM (o `fix`/`create` com modelo), não do verificador — e Pynguin no d610 é inviável por
+   de forja/LLM (o `fix`/`create` com modelo), não do verificador — e Pynguin no Dell é inviável por
    custo. Oferta legítima: `suggest` para quando houver modelo, nunca `verify`.
 3. **Oráculos neurais em runtime (TOGA/ATLAS/ChatAssert/Agent-as-a-Judge).** Dependência pura — LLM
    decidindo `succeeded` é exatamente o que o cérebro offline elimina. Seu papel é *escrever* assets

@@ -775,7 +775,7 @@ existe exatamente para isso; sem ele, não faça.
 
 ### P6 — joules medidos por descarga de bateria
 
-**Mecanismo.** Script `scripts/energy-d610.sh`: amostra `energy_now` de `/sys/class/power_supply/BAT0/`, roda
+**Mecanismo.** Script `scripts/energy-Dell.sh`: amostra `energy_now` de `/sys/class/power_supply/BAT0/`, roda
 `N=200` repetições de uma tarefa fixa, amostra de novo, repete em idle, subtrai. Saída: `J/tarefa` com intervalo.
 
 **Arquivos.** Script novo; nenhuma mudança em Go (usa o binário como está).

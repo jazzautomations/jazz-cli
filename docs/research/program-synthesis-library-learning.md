@@ -12,7 +12,7 @@ learning, não "LLM escreve JSON e a gente confia". Nada aqui repete o que os do
 (HTN-MAKER, Korf, APC/AgentReuse, Self-Harness/DGM, calibração): cito o doc, não o paper.
 
 Convenções: cada afirmação traz fonte primária (arXiv id / DOI / venue). **(estimativa)** = número meu,
-não medido. `file:line` refere-se à branch `harness/offline-primitives` @ `584494d`. Alvo: d610
+não medido. `file:line` refere-se à branch `harness/offline-primitives` @ `584494d`. Alvo: Dell
 (i386, 1 CPU, 2 GB, linux/386, Go estático). Regra de ouro (vigente): **LLM no caminho crítico de
 runtime = dependência, não asset** — LLM só pode produzir o artefato uma vez; o artefato roda para
 sempre sem token.
@@ -26,14 +26,14 @@ O cérebro offline resolve exatamente o que a biblioteca cobre: 50 intenções g
 `script:*` (`methods.go:303-343`) e 19 scripts (`jazz-scripts/`). Tudo isso foi escrito à mão. A
 cobertura é o produto — cada miss (`brNotUnderstood`, `brain.go:214-222`; `brHeadlessLevel0` devolve
 `nil` e vai pro modelo, `brain.go:604-643`) é uma tarefa que custa uma requisição de 20–60 s num modelo
-grátis, ou uma tela de "não entendi" no d610.
+grátis, ou uma tela de "não entendi" no Dell.
 
 O corpus de treino já existe e está sendo gravado hoje: eventos `task` no JSONL da sessão
 (`tkSessionSink`, `task.go:258-284`), stream de eventos `.events.jsonl` (`obs.go:201` `obEmit`),
 planos verificados (`acTurnDone`/`pcBuild`, `plancache.go:377-552`), sessões carregáveis por
 `imLoadSession`/`imProjectRuns` (`improve_load.go:68-156, 421-445`) e as escolhas do usuário em menus
 (`offers.go`). A pergunta deste doc: **que algoritmos transformam esse corpus em assets executáveis
-validados, com portão held-out, rodando o mineiro no próprio d610?**
+validados, com portão held-out, rodando o mineiro no próprio Dell?**
 
 A tese: o pipeline certo é o do DreamCoder — *resolver → comprimir → reusar mais rápido* — com cada
 componente neural trocado por um determinístico que cabe num Pentium M, e com a verificação objetiva
@@ -210,7 +210,7 @@ proposicional; **Action Model Acquisition** aprende os símbolos de ação e seu
 (pré-condições/efeitos)** das transições; um planejador clássico resolve no PDDL aprendido. Avaliado
 em 8-puzzle, Hanoi, LightsOut.
 
-**Limitação.** A implementação é neural (VAE/AMA) — fora de questão no d610. Mas a *forma* do
+**Limitação.** A implementação é neural (VAE/AMA) — fora de questão no Dell. Mas a *forma* do
 problema é exatamente a nossa e já é simbólica: nossas transições `(fat antes, cap(args), fat depois,
 exit, obs)` vêm tipadas do executor (`brExecute` registra via `task.Fact`/`AddEvidence`,
 `task.go:184-197`). "Aprender o modelo de ação" vira **contagem determinística**: os fatos que sempre
@@ -265,7 +265,7 @@ risco-cobertura: [math-offline-brain.md](math-offline-brain.md) §P4. Voyager (s
 
 ## 3. Regra de ouro: o que roda OFFLINE sem LLM vs o que é dependência
 
-| componente | offline no d610? | observação |
+| componente | offline no Dell? | observação |
 |---|---|---|
 | mineração de traços/misses (`imScan`, `imLoadSession`, obEvents) | sim | já existe (`improve_load.go:334-445`) |
 | compressão de subsequências (Sequitur/anti-unificação sintática) | sim | nova; O(stream), sem corpus em RAM |
@@ -281,7 +281,7 @@ risco-cobertura: [math-offline-brain.md](math-offline-brain.md) §P4. Voyager (s
 | e-graphs / saturação / teoria equacional | não | **não adotar** (§7) |
 | modelo generativo de acurácia de LF (Snorkel) | não | **não adotar** — `verified` é ground truth |
 
-Síntese: **toda a máquina de produção determinística roda no d610** (o `jazz forge` inteiro, menos os
+Síntese: **toda a máquina de produção determinística roda no Dell** (o `jazz forge` inteiro, menos os
 opcionais marcados). O LLM, quando usado, é labeling function e redator de documentação **na forja** —
 uma chamada tool-less, batelada, com fallback. Nada do que o runtime carrega depende dele.
 
@@ -320,7 +320,7 @@ uma chamada tool-less, batelada, com fallback. Nada do que o runtime carrega dep
 
 ## 5. O fluxo `jazz forge` (design de referência)
 
-`jazz forge [--dry] [--promote] [--self]` — offline, roda no d610, em lote (noite ou sob demanda).
+`jazz forge [--dry] [--promote] [--self]` — offline, roda no Dell, em lote (noite ou sob demanda).
 Nenhum passo chama LLM por padrão; os dois opcionais (AutoDoc, corpo de script) ficam atrás de flag e
 têm fallback determinístico.
 
@@ -370,7 +370,7 @@ de volta ao quarentenado `forge/candidates/` — que o runtime **nunca** carrega
 
 ## 6. Propostas (ordenadas por impacto esperado)
 
-Todas Go stdlib, medidas no d610. Métrica = a que move em `jazz eval offline` + métricas de forge
+Todas Go stdlib, medidas no Dell. Métrica = a que move em `jazz eval offline` + métricas de forge
 (candidatos → promovidos → rebaixados; misses/semana; cobertura por asset).
 
 ### A. Overlays de assets (methods + NLU) — desbloqueia todo o resto
@@ -485,7 +485,7 @@ maior: o dono sente a cobertura crescer) → C → F → E → H.
 ## 7. Não adotar (e por quê)
 
 - **Wake-sleep completo com recognition neural e dreaming.** O DreamCoder precisa de 20–100 CPUs × ~1
-  dia por domínio e de inferência/treino de NN — sem stdlib Go/386 e sem orçamento no d610. Nosso
+  dia por domínio e de inferência/treino de NN — sem stdlib Go/386 e sem orçamento no Dell. Nosso
   "recognition" já existe e é determinístico: NB (`nlu.go:1329-1482`), nameindex e BM25. Ficamos com
   a forma do loop, não com a rede.
 - **e-graphs / saturação por igualdade / babble.** Depende de teoria equacional escrita à mão por
@@ -496,7 +496,7 @@ maior: o dono sente a cobertura crescer) → C → F → E → H.
 - **Modelo generativo do Snorkel (estimar acurácia de LF sem verdade).** Onde há checker
   (`brVerify`/`eoOne`) a verdade existe — estimar seria pior. Onde não há, abstém-se (Chow,
   math-offline-brain §P4). Fica a forma Snuba: regra cobre só onde acerta.
-- **LatPlan neural (SAE/AMA com VAE).** Sem NN no d610. A versão contadora (F) captura a ideia que
+- **LatPlan neural (SAE/AMA com VAE).** Sem NN no Dell. A versão contadora (F) captura a ideia que
   presta: o modelo de ação se aprende de transições tipadas.
 - **Indução de gramática geral (BMM/PCFG, ADIOS completo).** Corpus de dezenas–centenas de frases e
   custo de falso positivo alto (regra errada captura pedido) → só a versão restrita D, com portão

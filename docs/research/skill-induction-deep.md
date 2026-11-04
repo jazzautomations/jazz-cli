@@ -4,7 +4,7 @@
 
 **Regra de ouro (repetida porque ela decide tudo abaixo).** *Se o LLM volta ao caminho crítico em runtime, é dependência, não asset.* Inteligência cara fica em **tempo de compilação** (asset-forge / Method Forge, máquina dev ou Fable); em runtime só entra o que é estático, verificado e barato: JSON, JSONL, índice por palavra-chave.
 
-**Baseline medido no d610** (`results/dell-0.9-progress.md`): suite offline 39/39, `false_success` 0, 34/39 sem modelo, p50 ≈ 14–19 ms, p95 ≈ 362–387 ms, RSS ≤ 59 MB. Nenhum número abaixo é claim novo de medição: o que é **paper** está citado; o que é **proposta** está marcado como alvo.
+**Baseline medido no Dell** (`results/dell-0.9-progress.md`): suite offline 39/39, `false_success` 0, 34/39 sem modelo, p50 ≈ 14–19 ms, p95 ≈ 362–387 ms, RSS ≤ 59 MB. Nenhum número abaixo é claim novo de medição: o que é **paper** está citado; o que é **proposta** está marcado como alvo.
 
 ---
 
@@ -62,7 +62,7 @@ Três tradições de literatura cobrem o problema:
 
 **Mineração de sequências — Agrawal & Srikant, *Mining Sequential Patterns*, ICDE 1995 (GSP).**
 - *Método:* Apriori sobre sequências: candidatos de tamanho k a partir de frequentes de tamanho k−1, poda por suporte mínimo.
-- *Uso proposto:* exatamente este algoritmo sobre a sequência canônica de `Cap` por caso (§5.3). Custo em Go: trivial para centenas de casos — O(Σ|traço| × candidatos), microssegundos no d610.
+- *Uso proposto:* exatamente este algoritmo sobre a sequência canônica de `Cap` por caso (§5.3). Custo em Go: trivial para centenas de casos — O(Σ|traço| × candidatos), microssegundos no Dell.
 
 **XLearn — Reddy & Tadepalli, *Learning Goal-Decomposition Rules Using Exercises*, ICML 1997.**
 - *Método:* aprende regras de decomposição de meta via EBL sobre *exercícios* resolvidos; a regra diz quando um subgoal alimenta outro.
@@ -96,7 +96,7 @@ Três tradições de literatura cobrem o problema:
 - *Método:* 3 componentes — currículo automático (GPT-4 propõe tarefas progressivas), **skill library** (programas JS verificados por auto-verificação, indexados por embedding da descrição), prompting iterativo com feedback de execução.
 - *Número-chave:* 3,3× mais itens únicos, 2,3× distância, milestones até 15,3× mais rápidos vs SOTA anterior em Minecraft; biblioteca transfere zero-shot para mundo novo.
 - *Ablação que importa:* sem skill library o desempenho **estagna no estágio final** da exploração; e skills aprendidas *aceleram o AutoGPT* quando injetadas nele — skill como artefato transferível entre agentes.
-- *Limitação:* tudo é GPT-4 — escrita, verificação, índice (embedding). Em runtime no d610: inadotável como está; como padrão de forge (verificar→guardar→compor), é a referência.
+- *Limitação:* tudo é GPT-4 — escrita, verificação, índice (embedding). Em runtime no Dell: inadotável como está; como padrão de forge (verificar→guardar→compor), é a referência.
 
 **LATM — Cai et al., *Large Language Models as Tool Makers*, arXiv:2305.17126, 2023.**
 - *Método:* modelo forte faz *tool making* (escreve função reutilizável + dispatcher que decide quando usar); modelo leve faz *tool using*. Cache funcional: guarda a *capacidade* para uma classe de requests, não a resposta.
@@ -206,14 +206,14 @@ Três tradições de literatura cobrem o problema:
 
 **LatPlan — Asai & Fukunaga, *Classical Planning in Deep Latent Space*, arXiv:1705.00154, 2017 (AAAI-18).**
 - *Método:* VAE aprende representação proposicional de imagens (State Autoencoder) + Action Autoencoder/Discriminator que induz símbolos e modelos de ação → gera PDDL → planejador clássico resolve.
-- *Por que citar:* é a *forma arquitetural* correta — subsimbólico → simbólico → planejador — mas o substrato errado: VAE treinado + planejador PDDL não roda no d610 e não temos o problema deles (nossas ações já são simbólicas: `Cap` tipadas).
+- *Por que citar:* é a *forma arquitetural* correta — subsimbólico → simbólico → planejador — mas o substrato errado: VAE treinado + planejador PDDL não roda no Dell e não temos o problema deles (nossas ações já são simbólicas: `Cap` tipadas).
 - *Transferível:* só a moral — **compile o conhecimento difuso em estrutura simbólica verificável e planeje no nível simbólico**. É o que o forge faz com traços.
 
 **TACO-RL — Rosete-Beas et al., *Latent Plans for Task-Agnostic Offline Reinforcement Learning*, arXiv:2209.08959, 2022 (CoRL).**
 - *Método:* política de baixo nível aprende skills latentes por imitação de dados task-agnostic; política de alto nível (offline RL, hindsight relabeling) **emenda** ("stitches") skills latentes em sequências longas.
 - *Número-chave:* ordem de magnitude sobre baselines em metas temporais longas; uma política para 25 tarefas de manipulação real.
 - *Lição que importa:* composição linear de primitivas aprendidas resolve horizontes que a primitiva sozinha não alcança — evidência externa para macros/métodos compostos.
-- *Não transfere:* espaço latente contínuo, RL offline, políticas neurais — nada disso existe no d610.
+- *Não transfere:* espaço latente contínuo, RL offline, políticas neurais — nada disso existe no Dell.
 
 ---
 
@@ -278,7 +278,7 @@ Leitura honesta: **tudo que faz o sistema aprender é barato de guardar e caro d
 ## 5. Arquitetura proposta: traço → caso → método/macro → screen → held-out → promote
 
 ```
-            compile-time (máquina dev / Fable / `jazz forge`)          runtime (d610, offline)
+            compile-time (máquina dev / Fable / `jazz forge`)          runtime (Dell, offline)
   sessões -p ──┐
   eval fixtures ┼─→ [E1 extrator] ─→ cases.jsonl ─→ [E2 minerador] ─┐   brain.go
   logs/demote  ─┘      (win/fail,    (traço+índices)   (n-gramas,   │      │ intent (nlu.go)
@@ -362,13 +362,13 @@ A diferença para "usar Pre/Effects como planner" é load-bearing: **nunca enume
 Portão em 3 estágios (spec `offline-brain.md:79-85` concretizada):
 
 1. **Screen estático** (§5.3) — rejeito imediato, custo ~0.
-2. **Dry-run/fixture:** método executa no sandbox de `evaloffline.go` sobre fixture da mesma classe de tarefa, com `DryRun`/verifier quando disponível — custo: uma execução de suite (~segundos–minutos no d610, em forge-time).
+2. **Dry-run/fixture:** método executa no sandbox de `evaloffline.go` sobre fixture da mesma classe de tarefa, com `DryRun`/verifier quando disponível — custo: uma execução de suite (~segundos–minutos no Dell, em forge-time).
 3. **Distinct-context ×2:** replay verificado em ≥2 contextos diferentes (outro `repo_sig` ou outro slot-value), com `false_success==0`; só então `jazz improve --promote <id>` move `candidates/x.json` → `methods/learned/x.json` (dir novo, lido por `mhLibrary` depois dos embutidos, com `priority` inicial = base −1 para nunca ofuscar método curado).
 4. **Vida pós-promoção:** `wins`/`fails` por execução reusada (mesmo contador de `pcScore`); `fails ≥ 2` → demote para `candidates/` com nota de causa (`rvClassify` da falha). Provenance permanece no JSON.
 
 ---
 
-## 6. Propostas implementáveis (Go, d610)
+## 6. Propostas implementáveis (Go, Dell)
 
 Métricas no vocabulário do repo (`evaloffline.go:248`): `no_llm_rate`, **reuso efetivo %** (tarefas fechadas reusando plano/método/caso ÷ resolvidas), `cmds/tarefa` (`CmdsPerTask`), `p50`/`p95` (`P50MS/P95MS`), `false_success`, perguntas. Todos os números abaixo são **alvos/estimativas**, não medições.
 
@@ -382,7 +382,7 @@ Métricas no vocabulário do repo (`evaloffline.go:248`): `no_llm_rate`, **reuso
 | **P6** | Portão held-out + promote/demote | §5.5: dry-run fixture + 2 contextos + `jazz improve --promote`; demote em fails≥2 com nota `rvClassify` | `improve.go` (subcomando), loader `methods.go`, `evaloffline.go` para fixtures | forge-only; uma suite por promoção | false_success = 0 mantido; % promoções que sobrevivem 30 dias | 5 | M | baixo-médio — gate conservador pode bloquear métodos bons (aceitável) |
 | **P7** | Rerank de método por evidência | Estende `lrPick` (`lessons_reuse.go:88`) para ordenar `mhMethod` por wins−fails no mesmo (intent,class,sig) antes de `priority` | `methods.go` (ordenação em `mhTry`), `lessons_reuse.go`, `cases.go` | runtime: O(métodos do intent) | no_llm_rate ↑ (escolhe o método que já provou naquele contexto) | 4 | S | médio — feedback local míope; bounds: nunca rebaixar abaixo de método sem dados |
 | **P8** | Reparo indexado por falha (CHEF) | Caso-negativo `(cat, contexto, fix-verificado)`; quando `rvClassify` repete `cat` no mesmo contexto, injeta hint determinístico do fix — substitui hindsight-LLM (`plancache.go:554-628`) por template | `recover.go`, `cases.go`, `improve.go` | runtime: lookup O(1) | taxa de recovery sem pergunta ↑; perguntas ↓ | 4 | M | médio — fix errado piora; só injeta hints com wins>0 |
-| **P9** | Eval de indução | Fixtures novas cobrindo métodos induzidos + relatório `reuse%`; suite roda em forge e em CI do d610 | `evaloffline.go`, `results/` | forge/CI | suite 39/39 + induzidos; false_success 0 | 4 | S | baixo |
+| **P9** | Eval de indução | Fixtures novas cobrindo métodos induzidos + relatório `reuse%`; suite roda em forge e em CI do Dell | `evaloffline.go`, `results/` | forge/CI | suite 39/39 + induzidos; false_success 0 | 4 | S | baixo |
 
 **Ordem sugerida:** P1 → P3 → P4 → P6 (espinha do forge) → P2 → P7 → P8 → P5 → P9 em paralelo. P5 por último de propósito: macro sem massa de casos é otimização prematura — Macro-FF só paga onde a estrutura se repete.
 
@@ -392,21 +392,21 @@ Métricas no vocabulário do repo (`evaloffline.go:248`): `no_llm_rate`, **reuso
 
 ## 7. O que NÃO adotar (dependências disfarçadas)
 
-1. **Embedding retrieval de qualquer natureza** (Voyager skill index, Synapse exemplar memory, A-MEM): exige modelo de embedding no runtime — no d610 vira dependência de rede ou de dezenas de MB de pesos + CPU. Substituto já provado: keyword/BM25 (`pcMatch`, APC).
+1. **Embedding retrieval de qualquer natureza** (Voyager skill index, Synapse exemplar memory, A-MEM): exige modelo de embedding no runtime — no Dell vira dependência de rede ou de dezenas de MB de pesos + CPU. Substituto já provado: keyword/BM25 (`pcMatch`, APC).
 2. **Adaptação de plano por LLM no request** (APC `adapt`, "template + small model"): o custo está exatamente no lugar errado. Substituto: binding de slots + S3 (revalidação de cadeia) — se não liga, não reusa.
 3. **Auto-verificação neural / reward model / LLM-judge** (ASI `V_L`, Reflexion, "LLM-as-judge" em geral): sucesso auto-declarado é `false_success` esperando para acontecer. O jazz só aceita `brVerify` + exit codes + estado de FS.
 4. **Multi-agente/orquestração em runtime** (TOCOMAS e afins): já rejeitado no doc anterior; além de LLM por agente, adiciona grafo de responsabilidade que nada ganha num CLI único.
 5. **Planner geral com Pre/Effects** (usar `caps.go` como domínio PDDL + busca): Nebel & Koehler — vira o problema que queremos evitar (espaço de estados, backtracking, garantias nulas com modelo parcial). Screen linear, nunca planner.
 6. **Macros/métodos como capacidades executáveis opacas sem verifier próprio**: asset não-verificável é dívida. Todo asset promovido carrega `Verify` que `brVerify` resolve.
 7. **Aprendizado de modelo de ação induzido de observação parcial** (FAMA/LOCM completos): desnecessário — nossas execuções são totalmente observadas pelo harness. No máximo anotação candidata, nunca premissa de screen.
-8. **Espaço latente / RL offline / VAE** (LatPlan, TACO-RL): substrato neural não roda no d610 e nossas ações já são simbólicas.
+8. **Espaço latente / RL offline / VAE** (LatPlan, TACO-RL): substrato neural não roda no Dell e nossas ações já são simbólicas.
 9. **Curriculum/self-proposal em runtime** (Voyager, SkillWeaver): gerar tarefas novas é trabalho de forge-time; em runtime o curriculum é a fila real do usuário.
 10. **Unbounded growth da biblioteca**: sem trim, qualquer biblioteca aprendida degrada (Minton 1988; TroVE ablação). Caps + evict + demote são invariantes, não opcionais.
 11. **`hindsight` por LLM no caminho normal**: manter opt-in explicitamente marcado como dependência (`plancache.go:554-628`), nunca default; o equivalente offline é P8.
 
 ---
 
-## 8. Protocolo de avaliação no d610
+## 8. Protocolo de avaliação no Dell
 
 1. Implementar P1–P4; rodar `jazz forge` sobre sessões existentes + fixtures; reportar: candidatos gerados, % rejeitados no screen (S1–S7 por motivo), % promovidos.
 2. `jazz eval offline` estendido: duplicar fixtures marcando quais exigem método induzido; medir suite completa — métricas exatas de `evaloffline.go:248`.
@@ -437,4 +437,4 @@ Métricas no vocabulário do repo (`evaloffline.go:248`): `no_llm_rate`, **reuso
 **arXiv:**
 - arXiv:2303.11366 Reflexion (2023) · arXiv:2305.14318 CREATOR (2023) · arXiv:2305.16291 Voyager (2023) · arXiv:2305.17126 LATM (2023) · arXiv:2306.07863 Synapse (2023) · arXiv:2308.10144 ExpeL (2023/AAAI-24) · arXiv:2310.01714 Analogical Reasoners (2023) · arXiv:2310.03714 DSPy (2023) · arXiv:2401.12869 TroVE (2024) · arXiv:2405.16247 AutoManual (2024) · arXiv:2409.07429 AWM (2024) · arXiv:2502.12110 A-MEM (2025) · arXiv:2504.06821 ASI (2025) · arXiv:2504.07079 SkillWeaver (2025) · arXiv:2506.14852 APC (2025) · arXiv:2512.21309 AgentReuse (2025) · arXiv:2203.14465 STaR (2022) · arXiv:2209.08959 TACO-RL (2022) · arXiv:1711.10160 Snorkel (2017) · arXiv:1705.00154 LatPlan (2017) · arXiv:1109.2154 Macro-FF (depósito 2011; JAIR 2005) · arXiv:1903.01153 FAMA preliminar (2019) · arXiv:2609.37953 TOCOMAS / arXiv:2609.32192 CoMemBench (2026, ver doc anterior).
 
-**Internos:** `docs/research/tocomas-plan-reuse.md` (reuso k=3, screen estrutural), `docs/research/math-offline-brain.md` (calibração de limiares), `docs/design/offline-brain.md:79-85` (spec §7 — gap confirmado), `results/dell-0.9-progress.md` (baseline d610).
+**Internos:** `docs/research/tocomas-plan-reuse.md` (reuso k=3, screen estrutural), `docs/research/math-offline-brain.md` (calibração de limiares), `docs/design/offline-brain.md:79-85` (spec §7 — gap confirmado), `results/dell-0.9-progress.md` (baseline Dell).

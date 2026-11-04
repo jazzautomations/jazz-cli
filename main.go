@@ -933,7 +933,7 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 }
 
 // obArmDeadline records the run deadline and arms a one-shot warning at 3/4 of
-// the --timeout. 3/4 (not timeout-3*grace) keeps a real margin on the d610:
+// the --timeout. 3/4 (not timeout-3*grace) keeps a real margin on the Dell:
 // with 45m/grace 60s the latter is ~2m, less than one free-model round-trip;
 // 3/4 is 33.75m for 45m and 7.5m for 10m. The returned func stops the timer.
 func obArmDeadline(ag *Agent, timeout time.Duration) (stop func()) {

@@ -5,7 +5,7 @@ Pesquisa de UX (HCI aplicada) para o jazz, 2026-11. Escopo: o caminho offline
 e onde ele fica atrás do caminho online em **fluxo** — o que acontece entre um
 turno e outro, entre um passo e o próximo, entre um erro e a recuperação.
 
-Máquina-alvo: **d610** — Linux i686, 32-bit, 1 CPU, 2 GB RAM, TTY possivelmente
+Máquina-alvo: **Dell** — Linux i686, 32-bit, 1 CPU, 2 GB RAM, TTY possivelmente
 lento (`TERM=dumb`, SSH serial, sem cor). Toda proposta aqui precisa rodar nisso
 sem TUI de tela cheia: menus por número/seta, saída incremental por linhas,
 zero redraw caro.
@@ -31,7 +31,7 @@ fluxo em volta dele tem três buracos de continuidade:
    724, methods.go:212-217).
 2. **Sem diálogo entre turnos.** Cada `brRun` parseia o turno isoladamente
    (brain.go:49-69); o único estado conversacional é `a.menu`, que dura um
-   turno (offers.go:334,341). "e o d610?", "agora no parser", "2" como
+   turno (offers.go:334,341). "e o Dell?", "agora no parser", "2" como
    resposta a uma pergunta suspensa — tudo vira pedido novo e cai no miss.
 3. **O trabalho offline é invisível.** `brInteractive` não grava mensagens na
    sessão (brain.go:698-726 — só `task` events via `tkSessionSink`); logo
@@ -87,7 +87,7 @@ Natural Language Interfaces*, ACL 1983
 Estudo empírico: usuários de interfaces task-oriented **preferem enunciados
 fragmentados mesmo instruídos a falar completo**; resolver elipse exige
 caseframe — herdar predicado e slots do turno anterior, substituir só os
-slots mencionados. É exatamente "e o d610?": verbo/slots herdados, `host`
+slots mencionados. É exatamente "e o Dell?": verbo/slots herdados, `host`
 trocado. Sem isso, todo follow-up natural cai no miss.
 
 **P5 — Quebra de comunicação é normal; reparo é colaborativo.**
@@ -115,7 +115,7 @@ conselho em prosa.
 trabalho em paralelo.**
 Nielsen, *Response Time Limits*
 [nngroup.com/articles/response-times-3-important-limits](https://www.nngroup.com/articles/response-times-3-important-limits/)
-(raiz: Miller 1968, Card 1991). No d610 1-CPU, qualquer `go test` passa de
+(raiz: Miller 1968, Card 1991). No Dell 1-CPU, qualquer `go test` passa de
 10s → a tarefa offline **precisa** emitir linha por passo e aceitar input
 enquanto roda. Hoje `brInteractive` roda o plano inteiro num buffer e só
 imprime no fim (methods.go:212-217 → brain.go:720-723): falha clara contra
@@ -261,7 +261,7 @@ Capacidade × estado: **feito** / **parcial** / **só pesquisado** / **gap**.
 ## 3. Propostas
 
 Ordem: custo/impacto. Cada proposta lista mecanismo, mock (antes/depois),
-arquivos, custo no d610, métricas no harness, impacto (1-5), esforço (S/M/L),
+arquivos, custo no Dell, métricas no harness, impacto (1-5), esforço (S/M/L),
 risco. Todos os mocks usam o vocabulário visual atual: `●`/`⎿`/`›`/`▸`/box
 `╭─ Tag ─╮`/status `· x · y`/avisos `⚠`/`exit N` — nenhum elemento novo, nenhum
 alt-screen, tudo funciona como lista numerada em `TERM=dumb` (cliMenu,
@@ -304,7 +304,7 @@ DEPOIS:
 `!ok`), offers.go (novo `olRecoverMenu(t *TaskState, cat rvCat)` ~60 linhas,
 reusa `olOffer`/`olAction`), recover.go (mapa categoria→ações, ~40 linhas).
 
-**Custo d610/TTY.** Zero novo: mesma pipeline `olMenuView` (~2 KB escritos,
+**Custo Dell/TTY.** Zero novo: mesma pipeline `olMenuView` (~2 KB escritos,
 nenhuma alocação quente). Nenhuma dependência.
 
 **Métricas.** *recovery-completion* = % de tarefas `failed/blocked` seguidas
@@ -361,7 +361,7 @@ DEPOIS (miss, headless vira interativo-equivalente):
 `brConfirmIntent`), nlu.go (expõe `in.Alt` desc via `Desc()` — já existe),
 methods.go (`mhLibrary` lookup de `Risk` por intent — já carregado).
 
-**Custo d610/TTY.** Um `cliChoose` (~2 KB) nos casos incertos/mutantes; zero
+**Custo Dell/TTY.** Um `cliChoose` (~2 KB) nos casos incertos/mutantes; zero
 em read-only confiante. Nenhuma syscall nova.
 
 **Métricas.** *misroute rate* (tarefas desfeitas com `/undo` imediato ou
@@ -411,7 +411,7 @@ DEPOIS:
 **Arquivos.** brain.go (`brExecute`, ~50 linhas entre 265-312), methods.go
 (tabela cap→`lê|muda` via `cbRegistry`, ~15 linhas).
 
-**Custo d610/TTY.** Card ~8 linhas × 70 col; os passos já estão em memória.
+**Custo Dell/TTY.** Card ~8 linhas × 70 col; os passos já estão em memória.
 Sem custo de CPU mensurável.
 
 **Métricas.** *cancel-rate* do card (se alto → planos ruins, sinal de produto);
@@ -424,7 +424,7 @@ permissão do shell (`env.Permit` → `PermitCommand`) — deduplicar: o card
 substitui a primeira confirmação de comando do plano quando `--allow-*` já
 daria bypass, ou marcar "este passo vai pedir permissão" na linha do step.
 
-### Prop D — Continuidade de turno: caseframe + anáfora ("e o d610?")
+### Prop D — Continuidade de turno: caseframe + anáfora ("e o Dell?")
 
 **Mecanismo.** Guardar em `App` um `brLast{Intent, Slots, TaskID, Status, t}`.
 Em `olBefore`/`brInteractive`, antes de parsear normal: (1) se o texto é
@@ -433,9 +433,9 @@ marcador explícito (`de novo`, `refaz`, `outro`, `agora no X`, `e o X?`,
 entidades novas (hits de `nuWorld`) — tentar **merge caseframe**: intent e
 verbo herdados de `brLast`, slots herdados menos os que o texto redefine;
 `brFill` roda sobre o merged. Resultado SEMPRE passa pelo box de B/C:
-"entendi: run_tests, agora com host=d610 — continuo? [1 sim 2 não]". TTL
+"entendi: run_tests, agora com host=Dell — continuo? [1 sim 2 não]". TTL
 ~10 min ou até 3 turnos, o que vier primeiro; só na mesma sessão; marcadores
-explícitos têm precedência sobre parse bem-sucedido ("e o d610?" que parseia
+explícitos têm precedência sobre parse bem-sucedido ("e o Dell?" que parseia
 como algo fraco ainda assim herda). Se merged não resolve slots → cai pro
 caminho normal (miss com menu).
 
@@ -445,14 +445,14 @@ caminho normal (miss com menu).
 ANTES:
 › roda os testes
   ● run_tests ⎿ 2 falhas ...
-› e no d610?
+› e no Dell?
   · cérebro offline: não entendi → menu genérico
 
 DEPOIS:
-› e no d610?
+› e no Dell?
 ╭─ continuo o de antes? ───────────────────────────────────────╮
-│ entendi: run_tests, agora no host d610                       │
-│ ▸ 1. Roda lá (ssh d610 'cd app && go test ./...')            │
+│ entendi: run_tests, agora no host Dell                       │
+│ ▸ 1. Roda lá (ssh Dell 'cd app && go test ./...')            │
 │   2. Não — pedido novo                                       │
 ╰──────────────────────────────────────────────────────────────╯
 › de novo                       ← marcador explícito, mesma tarefa
@@ -463,7 +463,7 @@ DEPOIS:
 linhas), nlu.go (helper `nuMergeSlots(in, last) bool` ~40 linhas — slots já
 são `map[string]string`), offline.go (check antes do fast path).
 
-**Custo d610/TTY.** Uma cópia de mapa pequena + comparações de string.
+**Custo Dell/TTY.** Uma cópia de mapa pequena + comparações de string.
 Desprezível.
 
 **Métricas.** *follow-up resolution rate*: % de turnos com marcador/anáfora
@@ -520,7 +520,7 @@ DEPOIS:
 (`olBefore`: check `a.brPending` antes de `olTakePick`, ~25 linhas),
 sessions_ui.go/`cmdContinue` (box de retomada, ~30 linhas).
 
-**Custo d610/TTY.** Um struct + um append JSONL por pendência. Nada.
+**Custo Dell/TTY.** Um struct + um append JSONL por pendência. Nada.
 
 **Métricas.** *suspended-task completion*: % de `needs_input` que completam
 dentro da sessão (hoje ≈0); *abandono pós-pergunta* cai; questions_needed
@@ -565,7 +565,7 @@ Thinking+renderer, ~25 linhas), main.go (`send`: envolver `a.send` offline
 com `a.WatchTurn` — cuidado: olBefore roda antes do turno; mover ou duplicar
 o watch, ~15 linhas).
 
-**Custo d610/TTY.** 1 linha (~80 B) por step + spinner já existente. Em TTY
+**Custo Dell/TTY.** 1 linha (~80 B) por step + spinner já existente. Em TTY
 lento cada linha é barata; o spinner já tem budget de redraw.
 
 **Métricas.** *tempo até primeira ação visível* (hoje = duração total da
@@ -597,15 +597,15 @@ DEPOIS (jazz -c na mesma pasta):
   ────────────────────────────
   › roda os testes
   ● brain(run_tests) ⎿ falhou · 2 evidências    ← turno offline, visível
-  › e no d610?
-  ● brain(run_tests→host=d610) ⎿ verificado
+  › e no Dell?
+  ● brain(run_tests→host=Dell) ⎿ verificado
 ```
 
 **Arquivos.** brain.go (`brInteractive` ~15 linhas — os appends que
 `brHeadless` já faz), session.go/sessions_ui.go (render `src==offline`
 compacto no replay, ~20 linhas), agent.go (nada — `UserTurns` pega de graça).
 
-**Custo d610/TTY.** 2 appends JSONL por turno; replay +N linhas. Nada quente.
+**Custo Dell/TTY.** 2 appends JSONL por turno; replay +N linhas. Nada quente.
 
 **Métricas.** % de turnos offline presentes no replay de sessões retomadas
 (hoje 0%); uso de `/rewind` sobre turno offline (hoje impossível); precisão
@@ -668,8 +668,8 @@ DEPOIS:
 árvore `post` → paths, ~40 linhas), main.go (`/redo`, `/undo` interativo,
 ~30 linhas), offers.go (`!undo`/`undo` no `olMenu` já existe).
 
-**Custo d610/TTY.** Preview = `ls` da árvore persistida (já em memória? não
-— `git ls-tree -r --name-only <post>` 1 fork, ~5ms no d610) ou reuso de
+**Custo Dell/TTY.** Preview = `ls` da árvore persistida (já em memória? não
+— `git ls-tree -r --name-only <post>` 1 fork, ~5ms no Dell) ou reuso de
 `t.lastBash[]` + `AfterWrite` paths gravados no turno. turns.jsonl ~150
 B/turno. Aceitável.
 
@@ -711,7 +711,7 @@ DEPOIS:
 offers.go (`olBanner`/`olFooter`, ~20 linhas), task.go (contar últimos
 eventos — helper `tkLast(sess)` ~30 linhas lendo o fim do JSONL).
 
-**Custo d610/TTY.** Um scan do diretório de sessões (já feito em
+**Custo Dell/TTY.** Um scan do diretório de sessões (já feito em
 `/sessions`) + tail do último JSONL (read de poucos KB, fseek). Nada no
 caminho quente.
 
@@ -779,7 +779,7 @@ mas independe de tudo).
   (main.go:1757-1763). Coverage é parte do resultado, não rodapé de erro.
 - **Não gastar RAM/disco.** Menus ≤5 itens (olMenuMax), pendência = 1
   struct, turns.jsonl append-only com cap (~100 turnos como `maxTurns`),
-  nada de embeddings/BM25 ao vivo no d610 — plancache offline fica pra
+  nada de embeddings/BM25 ao vivo no Dell — plancache offline fica pra
   quando houver build-time index (§7 offline-brain).
 - **Não acoplar ao modelo.** Box de confirmação, merge de anáfora, menu de
   recuperação — tudo determinístico. Se um dia houver modelo, ele *melhora*
@@ -815,4 +815,4 @@ Critério de sucesso agregado: no corpus do `evaloffline`, depois de A+B+C+E:
 (1) todo turno terminal não-OK gera exatamente uma escolha acionável ou um
 motivo explícito de não haver; (2) `questions_needed - questions_answered`
 → 0 dentro da sessão; (3) zero regressão em `verified`/`false_success`;
-(4) `ttfa_ms` <1s em p95 no d610.
+(4) `ttfa_ms` <1s em p95 no Dell.

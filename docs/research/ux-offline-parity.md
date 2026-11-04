@@ -1,7 +1,7 @@
 # Paridade de UX: como fazer o offline parecer tão vivo quanto o online
 
 Pesquisa de UX para o modo offline do jazz (sem LLM), com mapeamento file:line do que já existe,
-princípios de HCI com fonte e propostas implementáveis em Go no hardware-alvo: Dell d610, Linux i686
+princípios de HCI com fonte e propostas implementáveis em Go no hardware-alvo: Dell Dell, Linux i686
 32-bit, 1 CPU, 2 GB RAM, terminal possivelmente lento (SSH), sem cor (`TERM=dumb`), sem Unicode.
 
 Tese: o offline não deve parecer um "modo quebrado". Ele já resolve a maioria dos pedidos por via
@@ -220,7 +220,7 @@ evento), então integrações headless perdem o heartbeat que o TUI tem.
 
 ## 3. Propostas
 
-Ordenadas por impacto/esforço. Custos assumem o d610 (1 CPU i686, 2 GB, TTY lento): "bytes" = saída
+Ordenadas por impacto/esforço. Custos assumem o Dell (1 CPU i686, 2 GB, TTY lento): "bytes" = saída
 extra; "CPU" = trabalho por request; nenhuma proposta adiciona goroutine nova nem dependência.
 
 ### P1 — Statusline real em TODA execução offline
@@ -251,7 +251,7 @@ ok    example.com/proj    0.9s                               digitar vai pra fil
 **Arquivos.** offline.go:419-427 (`olFastPath` offline → Thinking antes do olRun), offers.go:351-413
 (`olRun` → WatchTurn+Thinking+Shell.Run), brain.go:704-726 (`brInteractive` → envolver brRun com
 Thinking("interpretando")→Phase por estágio), ui_live.go (fases novas; reusa `Phase`).
-**Custo d610.** +1 ctx cancel, reuse da goroutine de render existente; `Shell.Run` stream já é o
+**Custo Dell.** +1 ctx cancel, reuse da goroutine de render existente; `Shell.Run` stream já é o
 caminho de `!`. Bytes: mesmo orçamento do online (~310 B/s waiting, medido em ui_bench_test.go).
 **Métrica.** tempo até 1º byte visível (<100 ms), abandono em ação >5 s, "achou que travou" (suporte).
 **Impacto 5 · Esforço S · Risco baixo** — padrão já provado em 3 call sites.
@@ -279,7 +279,7 @@ li "atualzia" como "atualiza" — atualizar o jazz?
 **Arquivos.** brain.go:136-144 (opções do Ask por contexto), 197-209 (texto), 698-715 (env.Ask),
 offline.go:419-427 (eco antes de olRun no fast path), offers.go:392 (ToolStart já mostra o cmd —
 complementar com a intenção).
-**Custo d610.** 1 linha no caminho rápido; Choose = 1 frame. Zero trabalho extra.
+**Custo Dell.** 1 linha no caminho rápido; Choose = 1 frame. Zero trabalho extra.
 **Métrica.** perguntas feitas vs necessárias (eval já mede); taxa de "não era isso" (cancel após eco);
 tempo até 1ª ação.
 **Impacto 4 · Esforço S · Risco médio** — uma linha a mais por request pode enjoar se redundante com o
@@ -313,7 +313,7 @@ digite o número (ou o começo da opção); qualquer outro texto vai como pedido
 **Arquivos.** brain.go:717-719 (não descartar; retornar a explicação), 152-153, 211-219; nlu.go:56,
 946-964 (`in.Alt` já populado); offers.go:158-209 (olAction Kind "brain" — pode reaproveitar olRun
 com um mini-despacho ou chamar brRun com texto sintético); offline.go:379-398 (montar o menu).
-**Custo d610.** `in.Alt` já computado; `mhLibrary()` já carregado (sync.Once). Bytes: ~6 linhas.
+**Custo Dell.** `in.Alt` já computado; `mhLibrary()` já carregado (sync.Once). Bytes: ~6 linhas.
 **Métrica.** miss→ação (share de picks no menu vs retype), abandono pós-miss, "menu certo no top-1".
 **Impacto 5 · Esforço M · Risco médio** — sugestão errada de Alt parece burra; gate: só oferecer Alt
 com método existente e margem mínima vs. none.
@@ -339,7 +339,7 @@ ANTES:
 **Arquivos.** methods.go (brVerify → emitir linhas via env ou coletar no Task), brain.go:482-492
 (status line com prova curta), task.go:160-165 (evidência → texto humano), offers.go:396-413
 (sumário de ação já faz "exit 0 · T" — estender com "conferi" quando houver check).
-**Custo d610.** Formatação de strings do que já é computado. ~2 linhas de saída.
+**Custo Dell.** Formatação de strings do que já é computado. ~2 linhas de saída.
 **Métrica.** % de tasks `succeeded` com ≥1 linha de prova visível; re-verificação manual do usuário
 (usuário rodando o check de novo depois → sinal de desconfiança).
 **Impacto 4 · Esforço S-M · Risco baixo.**
@@ -367,7 +367,7 @@ DEPOIS:
 **Arquivos.** offers.go:673-688 (`olFooter`: 3 ramos + flap), main.go:1252-1256 (glyph por estado,
 não warn fixo), offers.go:630-669 (`startLine` offline-aware), ui.go:285 (`uiModeTag` pode ganhar
 "offline" como tag de primeiro nível).
-**Custo d610.** Strings; o flap conta probes já existentes (`olWatch` guarda resultados).
+**Custo Dell.** Strings; o flap conta probes já existentes (`olWatch` guarda resultados).
 **Métrica.** compreensão do estado ("sei em que modo estou" → survey/benchmark); queixas de "modo
 quebrado"; tempo até descobrir `/online` (hoje depende do hint no footer — manter).
 **Impacto 3 · Esforço S · Risco baixo** — cuidado para não esconder a informação "sem rede": a
@@ -395,7 +395,7 @@ DEPOIS (método kill_process, 3 passos):
 chamar `env.StepUI` ali dentro), methods.go:158-182 (`brEnv` + campo `StepUI`), brain.go:698-726
 (instalar `env.StepUI` apontando para `ui.ToolStart`/`ToolEnd` leves ou `ui.print` direto), ui.go
 (helper `stepLine` se ToolStart for pesado).
-**Custo d610.** 1–2 linhas por passo; nada de goroutine. Se `ui.print` for caro em dumb, acumular e
+**Custo Dell.** 1–2 linhas por passo; nada de goroutine. Se `ui.print` for caro em dumb, acumular e
 imprimir em bloco — dumb já imprime o menu inteiro de uma vez.
 **Métrica.** percepção de travamento em método multi-passo; "sei o que ele está fazendo" vs. bloco
 final único; abandono em task >5 s.
@@ -410,7 +410,7 @@ enquadramento no banner: trocar "sem modelo" por "modo rápido local" *junto* da
 nunca esconder o estado (P4/P5).
 **Arquivos.** brain.go:482-492; offers.go:351-413 (Label), 630-669 (startLine); offline.go:198-217
 (`olBanner` — já lista o que funciona; acrescentar o selo).
-**Custo d610.** Strings.
+**Custo Dell.** Strings.
 **Métrica.** enquadramento percebido ("offline é limitação" → "offline é modo"), uso repetido do
 `/offline` voluntário (sinal de preferência).
 **Impacto 3 · Esforço S · Risco baixo** — não exagerar a ponto de soar marketing; uma marca por turno basta.
@@ -441,7 +441,7 @@ digite o número (ou o começo da opção); qualquer outro texto vai como pedido
 **Arquivos.** offers.go:351-413 (`olRun`: falha → olOffer com itens derivados de `olMenuState`),
 brain.go:716-723 (status terminal não-sucesso → menu), offers.go:212-241 (`olShellFailMenu` como
 template), offline.go:383-398 (mesmo mecanismo do miss).
-**Custo d610.** Reusa `olMenuState` (git probe com cap 2 s já existe — reutilizar o resultado, não
+**Custo Dell.** Reusa `olMenuState` (git probe com cap 2 s já existe — reutilizar o resultado, não
 refazer). ~4 linhas de saída só quando falha.
 **Métrica.** conversão para próxima ação útil (turnos até o objetivo), "saber o que fazer depois do
 erro" (error-recovery do NN/g #9), false_blocks percebido.
@@ -453,7 +453,7 @@ erro" (error-recovery do NN/g #9), false_blocks percebido.
 ## 4. O que NÃO fazer
 
 1. **Não fabrique latência nem progresso.** Sleep pra "animar", spinner sem trabalho real, barras
-   percentuais estimadas de mentira — destrói confiança calibrada (Lee & See) e no d610 é só custo.
+   percentuais estimadas de mentira — destrói confiança calibrada (Lee & See) e no Dell é só custo.
    O offline é *realmente* rápido; mostre isso.
 2. **Não deixe loop infinito sem fase.** NN/g: acima de ~10 s um spinner nu parece travamento e leva a
    abandono. Se vai passar de 10 s, nomeie a fase e os segundos — o `Phase()` já existe.
@@ -471,7 +471,7 @@ erro" (error-recovery do NN/g #9), false_blocks percebido.
    (fila). Fechar o input offline é regressão, não robustez — `WatchTurn` de graça resolve.
 8. **Não re-execute trabalho caro por request.** `fpDetect`, `git status` probe (2 s cap,
    offers.go:321-325), parse NLU — cada um uma vez por request e compartilhado entre olMenu, fast path
-   e brain. No 1-CPU do d610, uma segunda sonda de git é 2 s a mais de tela parada.
+   e brain. No 1-CPU do Dell, uma segunda sonda de git é 2 s a mais de tela parada.
 9. **Não dependa de cor/Unicode/cursor.** `TERM=dumb`, sem cor, SSH: o menu já imprime linhas e aceita
    número; o spinner tem glyph ASCII (`| / - \`); propostas novas devem funcionar com `+---`/`ok`/`x`.
    `olMenuView`/`mnSpec` já degrada — manter a disciplina.

@@ -1,6 +1,6 @@
 # Matemática do cérebro offline: calibração, informação, suavização, distâncias, orçamentos
 
-Pesquisa de 04/11/2026 para a 0.9.x. Continua [offline-brain-research.md](offline-brain-research.md) (algoritmos e arquitetura) e [low-level-performance.md](low-level-performance.md) (constantes medidas de máquina); este documento cobre o terceiro braço: a **matemática das decisões** — de onde saem `Confidence`, `Score`, margens e limiares, se esses números significam o que dizem, e os orçamentos que os mantêm viáveis no d610 (i386, 1 CPU, 2 GB). Não repete HTN/BT, o pipeline NLU nem o layout dos índices.
+Pesquisa de 04/11/2026 para a 0.9.x. Continua [offline-brain-research.md](offline-brain-research.md) (algoritmos e arquitetura) e [low-level-performance.md](low-level-performance.md) (constantes medidas de máquina); este documento cobre o terceiro braço: a **matemática das decisões** — de onde saem `Confidence`, `Score`, margens e limiares, se esses números significam o que dizem, e os orçamentos que os mantêm viáveis no Dell (i386, 1 CPU, 2 GB). Não repete HTN/BT, o pipeline NLU nem o layout dos índices.
 
 Convenções: `file:line` refere-se a `main` @ `e0e3ec3` (branch `harness/wave1` na escrita). *(estimativa)* marca número meu, não medido. "Medido" = medições já reportadas (§4). Status no mapa (§3): **feito** / **parcial** / **só pesquisado**.
 
@@ -143,7 +143,7 @@ O PAV (Pool Adjacent Violators): ordena pontos por score, e onde `y_i` realizado
 
 **q-gram e bounds.** `niBound(qm, ql, m, l)` = diferença de comprimento × `fzEdit` + `popcount(maskXOR)/2 × fzSlip` — um bound por comprimento + alfabeto, constante no tempo. É da família do q-gram lemma (P9): admissível por construção, descarta a maioria dos 5k paths antes da DP. A extensão óbvia (bound por contagem de 2-grams/3-grams) precisa de contagens por arquivo (~40 B/path em uint16 packed *(estimativa)*) — §5, P8.
 
-### 2.6 Orçamentos de complexidade (O() e constantes no d610)
+### 2.6 Orçamentos de complexidade (O() e constantes no Dell)
 
 Orçamento por pedido (P13): alvo ~20 ms warm, ~150 ms cold-path completo. Constantes medidas em `results/dell-0.9-progress.md` e [low-level-performance.md](low-level-performance.md); *(estimativa)* onde não medido.
 
@@ -224,7 +224,7 @@ Orçamento por pedido (P13): alvo ~20 ms warm, ~150 ms cold-path completo. Const
 
 ---
 
-## 4. Linha de base medida (d610)
+## 4. Linha de base medida (Dell)
 
 De `results/dell-0.9-progress.md` — referência para toda proposta:
 
@@ -256,7 +256,7 @@ Resumo — detalhes em cada item. Métricas sempre no harness de `evaloffline.go
 Mecanismo: flag/subcomando que roda o corpus rotulado (blind 100 frases + `evals/offline/tasks.json` + LOO dos 644 exemplos) e registra `(canal, conf, acertou)`; calcula ECE/MCE/Brier/NLL com **bins por quantis** (10-15) e despeja a reliability table em `results/`. Canal ∈ {rule-only, rule+NB, NB-only, tie, vetoed, typo-only, env-resolve, file-resolve}. Arquivos: novo `calibrate.go` + ganchos de leitura em `nlu.go` (Parse já devolve `Evidence` com o canal implícito — formalizar um campo `ConfChannel`) + `evaloffline.go`. Custo 32-bit: zero no caminho de pedido (só roda em eval); ~50-200 ms de eval extra. Métrica: ECE/MCE por canal reportados — pré-requisito de P2-P4. Impacto 5, esforço M, risco baixo (aditivo, não muda decisões).
 
 **P2 — Temperatura: `nuBeta` ajustado por NLL.**
-Mecanismo: tratar `nuBeta=6.0` como o que é — temperatura `T=n/β`. Grid search ou Newton 1-D minimizando NLL do `predict` sobre os exemplos com LOO (`nuTrain(skip)` já aceita o predicado, `nlu.go:1327`). Opcional: β por comprimento `β(n)` se NLL mostrar dependência. Arquivos: `nlu.go` (constante + doc), `calibrate.go` (fit). Custo: 0 em runtime; fit = algumas centenas de `nuTrain`+`predict` em dev (não no d610 — é asset forjado). Métrica: NLL/ECE do canal NB-only ↓ → decisões nos limiares atuais ficam corretas mais frequentemente → `no_llm_rate`↑ sem `false_success`. Impacto 4, esforço S, risco baixo — argmax imutável (P3); única decisão é a constante.
+Mecanismo: tratar `nuBeta=6.0` como o que é — temperatura `T=n/β`. Grid search ou Newton 1-D minimizando NLL do `predict` sobre os exemplos com LOO (`nuTrain(skip)` já aceita o predicado, `nlu.go:1327`). Opcional: β por comprimento `β(n)` se NLL mostrar dependência. Arquivos: `nlu.go` (constante + doc), `calibrate.go` (fit). Custo: 0 em runtime; fit = algumas centenas de `nuTrain`+`predict` em dev (não no Dell — é asset forjado). Métrica: NLL/ECE do canal NB-only ↓ → decisões nos limiares atuais ficam corretas mais frequentemente → `no_llm_rate`↑ sem `false_success`. Impacto 4, esforço S, risco baixo — argmax imutável (P3); única decisão é a constante.
 
 **P3 — Mapa de confiança pós-parse por canal, em inteiros.**
 Mecanismo: gerador (dev) ajusta isotônico (PAV, ~16 nós) ou beta-calibration por canal sobre dados de P1+P4; emite `nlu/calib.json` embutido com nós `(conf_in int16, conf_out int16)` e clips `[min,max]` por canal. `Parse` substitui os fatores fixos (`·0.75`, `×0.5`, `0.55+0.45p`, caps) pela interpolação linear int16 sobre o nó — ~10 linhas, O(1), zero alloc. Fallback: sem asset → comportamento atual (identidade). Arquivos: `nlu.go` (apply), `nlu/calib.json` (asset), `calibrate.go` (fit). Custo 32-bit: ~100 B RAM, 1 interpolação ~10ns. Métrica: ECE↓; `false_blocks` e perguntas passam a refletir frequências reais por canal. Impacto 4, esforço M, risco médio — dados de ajuste viesados distorcem; mitigar com clip por canal, LOO e fallback identidade; PAV só com ≥~50 pontos/canal, senão Platt.

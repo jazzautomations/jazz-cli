@@ -7,13 +7,13 @@ pedidos repetidos/similares, APC templates), `grep-is-all-you-need.md` (grep inl
 inline em memória de chat, com ressalvas), `harness-sota-gap.md` (memória dos agentes SOTA:
 CLAUDE.md, re-injeção pós-compact de arquivos recentes), `ux-offline-flow-continuity.md`
 (memória declarada na UX — propostas G/I deles) e `low-level-performance.md` (layout de
-memória e índice persistido no d610). O que ficou de fora e é o tema deste doc: **a loja de
+memória e índice persistido no Dell). O que ficou de fora e é o tema deste doc: **a loja de
 memória em si** — o que gravar (fatos do usuário, fatos do repo, casos), como recuperar sem
 embedding e sem LLM (BM25/trigrama puro-Go), e como esquecer/consolidar, tudo offline.
 Aterrissa em `nameindex.go` + um `memstore.go` novo.
 
 Convenções: cada afirmação traz fonte primária. **(estimativa)** marca número meu, não
-medido. "Custo em 1 núcleo" vale para o d610 (Pentium M 1,7 GHz, linux/386, 2 GB, HDD),
+medido. "Custo em 1 núcleo" vale para o Dell (Pentium M 1,7 GHz, linux/386, 2 GB, HDD),
 mesma máquina de `results/dell-0.9-progress.md`. Identificadores em inglês.
 
 ---
@@ -243,7 +243,7 @@ BM25 é o "acordado".
   **conteúdo do repo** (proposta B já registrada, não repetida aqui).
 - **ripgrep.** BurntSushi, "ripgrep is faster than {grep, ag, git grep, ucg, pt, sift}"
   (set/2016): força bruta com extração de literais internos + memchr SIMD e fallback —
-  no d610 SSE2-only o memchr ainda funciona (é word-at-a-time, não vectorizado), então
+  no Dell SSE2-only o memchr ainda funciona (é word-at-a-time, não vectorizado), então
   `rg` permanece o fallback honesto quando o índice não cobre; `grep-is-all-you-need.md`
   já analisou o caso agentic.
 
@@ -308,7 +308,7 @@ entre sessões ou regra determinística.**
 
 ## 4. Propostas (ordenadas por impacto esperado)
 
-Todas Go stdlib, medidas no d610. Métrica = o que a proposta move em `jazz eval offline`
+Todas Go stdlib, medidas no Dell. Métrica = o que a proposta move em `jazz eval offline`
 (no_llm_rate, sucesso verificado, false_success, false_blocks, perguntas, comandos/tarefa,
 p50/p95, RSS) + métricas próprias quando indicado (hit@k, precisão de extração, stale-rate).
 
@@ -553,4 +553,4 @@ Docs internos relacionados (não repetir): `offline-on-device-intelligence.md` (
 propostas B/C), `tocomas-plan-reuse.md`, `grep-is-all-you-need.md`, `harness-sota-gap.md`
 (memória dos SOTA), `ux-offline-flow-continuity.md` (memória declarada na UX),
 `math-offline-brain.md` (calibração de resolução), `low-level-performance.md` (índice
-persistido/SoA no d610), `offline-brain-research.md` (§C repomap/co-mudança).
+persistido/SoA no Dell), `offline-brain-research.md` (§C repomap/co-mudança).

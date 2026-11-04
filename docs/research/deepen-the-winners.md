@@ -3,7 +3,7 @@
 Commit de referência: `a5ffe0f`. `file:line` refere-se a essa revisão.
 Máquina de prova: Dell D610 — Pentium M 1.7 GHz, 1 núcleo, 2 MB L2, 2 GB RAM,
 linux/386, Go 1.27.2. Forja pode rodar em amd64; **medida de runtime só vale no
-d610**.
+Dell**.
 
 Este documento **não reabre** o que já está decidido. Carrega como premissa
 (não como tese a provar):
@@ -44,7 +44,7 @@ Este doc especifica a fiação e o experimento que prova que ela paga.
 | 2 | Decisão = posterior calibrado | **LOAD-BEARING** | os 4 mapas por canal + `mhMethod.Risk` como custo + menu como conjunto conformal |
 | 3 | Compressão = asset | **LOAD-BEARING** | "mínimo" = 1-minimal via ddmin; ponte `eoRun → Gate`; vida do asset (uso, falha, quarentena) |
 
-Nenhum é METÁFORA nem VIAGEM: cada um deriva um número que o d610 mede em um
+Nenhum é METÁFORA nem VIAGEM: cada um deriva um número que o Dell mede em um
 comando `jazz eval …`.
 
 ---
@@ -156,7 +156,7 @@ novo pode tornar o match mais lento/errado (utility problem, Minton 1988);
 é o que o termo `λ·|L|` de `J(L)` precifica e o `Gate` mede na prática via
 regressão held-out.
 
-### 1.4 O experimento exato no d610
+### 1.4 O experimento exato no Dell
 
 Quatro peças, cada uma um número novo no relatório:
 
@@ -189,7 +189,7 @@ assinatura de `EvalFn` (`forge_gate.go:56`) — e `Gate` (`forge_gate.go:143`)
 promove/rejeita. `Split` (`forge_gate.go:92–126`) já é determinístico
 (FNV estratificado). **Número-alvo:** fixture com um asset bom (promovido,
 +1 tarefa held-out tratada) e um plantado ruim (rejeitado, falso sucesso ou
-regressão detectada) — prova do loop fechado em < 60 s no d610.
+regressão detectada) — prova do loop fechado em < 60 s no Dell.
 
 **Sucesso do eixo inteiro:** (i) `signals.jsonl` cresce em produção;
 (ii) `tokens_saved` por run impresso; (iii) primeira linha `N_obs ≥ N*`
@@ -344,7 +344,7 @@ binário-hoje e razoável; o upgrade medível é *qual* pergunta: a que minimiza
 custo esperado restante — ordenar slots por `E[ΔE_llm evitado]` quando o
 ledger existir. Marcar como fase 2; não bloqueia o algoritmo.
 
-### 2.6 Teste que prova no d610
+### 2.6 Teste que prova no Dell
 
 **T1 — `jazz eval calib`** (novo): replay de `Parse` sobre 644 exemplos
 (`nlu/intents.json`) + 100 cegos (`nlu/blind_test.json`) + 75 prompts do eval.
@@ -414,7 +414,7 @@ vida:         asset_use/asset_fail signals → 2 fails → quarentena
 
 - universo = passos do método candidato + slots + pré-condições (~10
   elementos — ddmin custa O(n) testes para 1-minimal, O(n²) pior caso; cada
-  teste é replay in-process de strings → **microssegundos, trivial no d610**);
+  teste é replay in-process de strings → **microssegundos, trivial no Dell**);
 - Θ = "ainda verifica nos traces-suporte" — o *mesmo* `brVerify`.
 
 Honestidade: 1-minimal ≠ globalmente mínimo (mínimos locais múltiplos); é o
@@ -483,7 +483,7 @@ registra `asset_use` do promovido em produção.
 
 ---
 
-## 5. Propostas Go (d610, stdlib, em ordem de dependência)
+## 5. Propostas Go (Dell, stdlib, em ordem de dependência)
 
 Custo 386 presume: alocações pequenas, `math.Log/Exp` contados, arquivos JSONL
 streaming (`bufio`, padrão `sigRead` `signals.go:84–106`).
@@ -544,7 +544,7 @@ corpus + overlay dir candidata → `Metrics` (assinatura `EvalFn`); `Gate`
 compara vs. baseline embutida; comando `jazz forge eval <overlay>` imprime
 veredicto + `GateReport`. Arquivos: `forge_gate.go` (+~100 ln adapter),
 `evaloffline.go` (+~60 ln), fixture `testdata/overlay_{good,bad}`.
-Custo: 2× eval run (~30 s no d610 por varredura) — aceitável, roda na forja.
+Custo: 2× eval run (~30 s no Dell por varredura) — aceitável, roda na forja.
 Métrica: good promovido / bad rejeitado (falso sucesso plantado detectado);
 determinístico (mesmo seed → mesmo split, `splitHash` FNV `:69–72`).
 Impacto 5 (fecha o loop da forja). Esforço M. Risco baixo.

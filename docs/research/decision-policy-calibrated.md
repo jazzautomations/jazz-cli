@@ -7,7 +7,7 @@ entropia**; calibração e entropia são ortogonais; `calib.go` desligado é o b
 perguntar, menu, entregar ao modelo ou recusar**, com custo assimétrico (`false_success` caríssimo, perguntar barato) e
 **dados escassos** (75 tarefas, ~644 exemplos, 50 intenções).
 
-Este documento não edita código. Ele mapeia o que existe (`file:line`), propõe a política em Go para o d610
+Este documento não edita código. Ele mapeia o que existe (`file:line`), propõe a política em Go para o Dell
 (i686, 1 CPU, 2 GB), e diz com todas as letras onde a resposta boa não existe.
 
 ---
@@ -33,7 +33,7 @@ outras". Todos caem na mesma desigualdade.
 1. Quatro limiares hoje desconexos (`nuMinConf=0.6`, `brLevel0Min=0.85`, a margem de `brPick`, o empate de `niTop`)
    viram **uma tabela de τ por banda de risco**, derivada do custo, não escolhida no olho.
 2. `calib.go` (ECE/Brier/Platt/isotônico) sai do limbo: um asset `nlu/calib.json` por canal, ajustado no forge
-   (amd64), consumido no d610 em O(1), sem alocação.
+   (amd64), consumido no Dell em O(1), sem alocação.
 3. `mhMethod.Risk` e `Capability.Risk` — hoje **metadados mortos** (ninguém lê; `cbParseRisk` não tem chamador) —
    passam a definir a banda. Sem isso, a política não tem como saber que apagar arquivo e abrir README não são a
    mesma ação.
@@ -651,7 +651,7 @@ O protocolo mínimo:
    ([Kapoor & Narayanan, *Leakage and the Reproducibility Crisis in ML-based Science*, arXiv:2207.07048,
    2023](https://arxiv.org/abs/2207.07048)).
 2. **K-fold agrupado, repetido.** 5 folds × 5 repetições, estratificado por intenção, com os clusters como grupo.
-   Para o mapa de calibração, o LOO completo (n treinos) é O(n²) e caro no d610; o k-fold é O(k·n). Use k-fold no
+   Para o mapa de calibração, o LOO completo (n treinos) é O(n²) e caro no Dell; o k-fold é O(k·n). Use k-fold no
    forge (amd64). O `nuTrain(skip)` (`nlu.go:1363`) já aceita o predicado de exclusão, então o mecanismo existe.
 3. **Predições out-of-fold.** Para cada exemplo, o `p` usado na avaliação é o de um mapa ajustado sem aquele fold.
    O conjunto de predições out-of-fold é a base da curva risco–cobertura.
@@ -727,7 +727,7 @@ func binomCDF(k, n int, p float64) float64 {
 }
 ```
 
-`n ≤ 644`, `60` iterações, `O(n)` por avaliação: ~40 µs por `τ`; a grade inteira em ~1 ms. É eval-only; o d610
+`n ≤ 644`, `60` iterações, `O(n)` por avaliação: ~40 µs por `τ`; a grade inteira em ~1 ms. É eval-only; o Dell
 não paga. O `math.Lgamma` está na stdlib.
 
 **Por que não Wilson.** O intervalo de Wilson é mais estreito e mais estável, mas é uma aproximação; o
@@ -984,7 +984,7 @@ Schema proposto:
 - `default: identity`: fallback se o canal não está no asset; comportamento atual.
 - `fit`: proveniência (n, método, data, seed). O `forge_gate` usa para auditar.
 
-Tamanho: 8 canais × ~100 B = <1 KB; isotônico com 16 pontos × 8 B = 128 B por canal. No d610, carregar no `init`
+Tamanho: 8 canais × ~100 B = <1 KB; isotônico com 16 pontos × 8 B = 128 B por canal. No Dell, carregar no `init`
 é irrelevante. A aplicação em `Parse` é O(1) (Platt) ou O(log k) (isotônico, k≤32); ~20–60 ns, sem alocação.
 
 ### 6.4 Onde aplicar no `Parse`
@@ -1146,9 +1146,9 @@ métrica certa: ele captura a melhoria da ordenação risco–cobertura sem exig
 
 ---
 
-## 7. Propostas em Go para o d610
+## 7. Propostas em Go para o Dell
 
-Tudo stdlib. Impacto 1–5; esforço S/M/L; risco baixo/médio/alto. O custo 32-bit é o do runtime no d610; o ajuste
+Tudo stdlib. Impacto 1–5; esforço S/M/L; risco baixo/médio/alto. O custo 32-bit é o do runtime no Dell; o ajuste
 roda no forge (amd64), como manda a filosofia.
 
 ### P1 — Núcleo da política: bandas + `Decide` + `mhMethod.Risk` load-bearing
@@ -1185,9 +1185,9 @@ partição (canal × p-bin, + missing, + oov) e a curva risco–cobertura. Escre
 proveniência (n, seed, commit).
 
 **Arquivos.** `calibrate.go` (novo, ~350 ln); `nlu.go` (expor `Channel`, `OOVFrac`, `Residual`); `calib.go` (novo
-`QuantileBins`); `evaloffline.go` (reuso do runner). O fit pesado roda no forge; o d610 só consome o asset.
+`QuantileBins`); `evaloffline.go` (reuso do runner). O fit pesado roda no forge; o Dell só consome o asset.
 
-**Custo 32-bit.** Zero no runtime; +50–200 ms no eval. O k-fold com `nuTrain` é O(k·n); no d610, evite o LOO
+**Custo 32-bit.** Zero no runtime; +50–200 ms no eval. O k-fold com `nuTrain` é O(k·n); no Dell, evite o LOO
 completo (644² treinos); use k=5.
 
 **Métrica.** ECE/Brier por canal; `GL_explained`; fração de canais com n≥30; cobertura do fit.

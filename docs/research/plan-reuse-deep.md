@@ -1,6 +1,6 @@
 # Reuso de plano e trajetória verificado: o que a literatura sustenta e o que o jazz deve forjar
 
-**Escopo.** Este documento trata de uma coisa só: transformar uma trajetória que terminou **verificada** em um artefato reusável — plano, template, método — e executá-lo **sem LLM em runtime** no d610 (i686, 1 CPU, 2 GB, offline). Ele não é uma revisão geral de agentes. Cada paper abaixo foi lido em abstract + método + resultados + ablações, exceto onde marcado.
+**Escopo.** Este documento trata de uma coisa só: transformar uma trajetória que terminou **verificada** em um artefato reusável — plano, template, método — e executá-lo **sem LLM em runtime** no Dell (i686, 1 CPU, 2 GB, offline). Ele não é uma revisão geral de agentes. Cada paper abaixo foi lido em abstract + método + resultados + ablações, exceto onde marcado.
 
 **Regra de ouro (do blueprint do asset-forge), usada como corte epistemológico:**
 
@@ -78,7 +78,7 @@ Três testes operacionais para classificar qualquer mecanismo:
 
 **A ablação que importa.** `WithArgs` (sem extrair parâmetros) tem recall 0,8262 contra 0,9513 do AgentReuse. `OneIntent` (buscar em todo o cache, não só na intenção) fica 17,66% mais lento e perde precisão. No sweep de γ, subir o limiar aumenta precisão e derruba recall.
 
-**Limitação.** Vinte requisições, domínio AIoT chinês, ground truth = "a resposta foi igual", sem held-out, e o casamento depende de embeddings que não cabem no d610. O 93% é um teto otimista, não uma taxa que se espera em código.
+**Limitação.** Vinte requisições, domínio AIoT chinês, ground truth = "a resposta foi igual", sem held-out, e o casamento depende de embeddings que não cabem no Dell. O 93% é um teto otimista, não uma taxa que se espera em código.
 
 **O que sobra.** **Tirar os parâmetros antes de casar** é o achado mais subestimado da área e o mais barato de implementar em Go. Restringir a busca por intenção também.
 
@@ -252,7 +252,7 @@ Três testes operacionais para classificar qualquer mecanismo:
 
 O corte é a regra de ouro, aplicada mecanismo por mecanismo.
 
-| Mecanismo | Origem | Offline no d610? | Por quê |
+| Mecanismo | Origem | Offline no Dell? | Por quê |
 |---|---|---|---|
 | Remover parâmetros/slots antes de casar | AgentReuse 2512.21309 | **Sim** | regex + `nuGet().Parse` já existem; determinístico |
 | Match exato de keyword/intenção | APC 2506.14852 | **Sim** | BM25 + NB (`nlu.go:1429`) sem embedding |
@@ -274,7 +274,7 @@ O corte é a regra de ouro, aplicada mecanismo por mecanismo.
 | **Planner pequeno que adapta o template** | APC | **Não** | LLM em runtime |
 | **Extração de insights/guidelines por LLM** | ExpeL; AutoGuide | **Não** (runtime) / **Sim** (forja) | só offline-time |
 | **Indução online de workflow** | AWM | **Não** | precisa de avaliador + LLM por tarefa |
-| **Embeddings / vector store** | AgentReuse; Voyager; ExpeL; Generative Agents | **Não** | 500 MB de VRAM no AgentReuse; CPU/memória do d610 |
+| **Embeddings / vector store** | AgentReuse; Voyager; ExpeL; Generative Agents | **Não** | 500 MB de VRAM no AgentReuse; CPU/memória do Dell |
 | **Self-verification por LLM** | Voyager; Reflexion | **Não** | juiz caro e não confiável; viola o teste do gate |
 | **Importância 1–10 julgada por LLM** | Generative Agents | **Não** | substituível por utilidade verificada |
 | **Cache semântico de resposta** | baselines do APC | **Não** | falsos positivos degradam acurácia |
@@ -370,7 +370,7 @@ Isso não é um detalhe de implementação; é a diferença entre o que o docume
 
 Dez propostas, todas implementáveis em Go puro, todas alimentando o cache verificado ou a forja. A ordem apresentada é a ordem de **dependência**, não de impacto; a ordem de ataque está no §7.
 
-Convenções de custo: "d610" = i686, 1 CPU, 2 GB, binário 386. `int`/ponteiro = 4 B. Nenhuma proposta adiciona dependência externa; tudo é `encoding/json`, `sort`, `math`, `hash/fnv`, `crypto/sha256` — já no go.mod indireto via stdlib.
+Convenções de custo: "Dell" = i686, 1 CPU, 2 GB, binário 386. `int`/ponteiro = 4 B. Nenhuma proposta adiciona dependência externa; tudo é `encoding/json`, `sort`, `math`, `hash/fnv`, `crypto/sha256` — já no go.mod indireto via stdlib.
 
 ### 6.0 Definições de métrica (valem para todas as propostas)
 
@@ -414,7 +414,7 @@ Compilação a partir de `rc.log` (o log já existe, cap 80 em `agent_recover.go
 
 **Arquivos.** `planir.go` (novo); `plancache.go:479` (`pcBuild`) chama `piCompile(rc.log)`; `plancache.go:56` (`pcPlan` ganha `IR`, `Intent`, `Shape`, `Grade`); `plancache_test.go` (golden de compilação).
 
-**Custo no d610.** ~40 B por passo em memória; 100 planos × 12 passos ≈ 50 KB; JSON +2–4 KB/plano; decodificação de 400 KB ≈ 3–8 ms no Pentium M — aceitável por turno, mas cachear em memória por (mtime, tamanho) para não repetir.
+**Custo no Dell.** ~40 B por passo em memória; 100 planos × 12 passos ≈ 50 KB; JSON +2–4 KB/plano; decodificação de 400 KB ≈ 3–8 ms no Pentium M — aceitável por turno, mas cachear em memória por (mtime, tamanho) para não repetir.
 
 **Métrica.** Cobertura do IR (% de planos armazenados que compilam), passos por IR, taxa de replay bem-sucedido, false_success.
 
@@ -441,7 +441,7 @@ Rejeição gera `auditRec("plan.screen_rejected", {reason, task, step})` e o pla
 
 **Arquivos.** `planscreen.go` (novo); `plancache.go:433` (`pcStore`) chama o screen completo; `plancache.go:110` (`pcLoad`) roda o subconjunto sem fatos (DAG, cap existe, verificador); `methods.go:115` (`mhBadCmd`) reusado; `planscreen_test.go` com um caso por operador do CoMemBench.
 
-**Custo no d610.** O(V+E) com V≤12; <1 ms; zero alocação além do mapa de grau.
+**Custo no Dell.** O(V+E) com V≤12; <1 ms; zero alocação além do mapa de grau.
 
 **Métrica.** Taxa de rejeição por motivo; false_success de planos grau A (meta: 0); bad-reuse rate.
 
@@ -461,7 +461,7 @@ Pré-condições por passo: `file_exists`, `file_gone`, `bin.X`, `project.test`,
 
 **Arquivos.** `planstate.go` (novo); `plancache.go:56` (`pcPlan.State`); `lessons_reuse.go:40` (`lrRepoSig` passa a incluir HEAD); `envprobe.go` (versões já medidas); `brain.go:225` (`brFacts` já tem `bin.*`/`project.*`).
 
-**Custo no d610.** Um `git status --porcelain` por turno **só quando há match** (~10–30 ms em repo pequeno); cachear por (HEAD, mtime do index). Hash: sha256 de ≤200 linhas, <1 ms.
+**Custo no Dell.** Um `git status --porcelain` por turno **só quando há match** (~10–30 ms em repo pequeno); cachear por (HEAD, mtime do index). Hash: sha256 de ≤200 linhas, <1 ms.
 
 **Métrica.** Stale-hit rate (match que falha o estado), replay failure rate, false_success.
 
@@ -479,7 +479,7 @@ Pré-condições por passo: `file_exists`, `file_gone`, `bin.X`, `project.test`,
 
 **Arquivos.** `plancache.go:197` (`pcTerms` ganha `pcSkeleton`), `plancache.go:233` (`pcDocTerms`), `plancache.go:244` (`pcMatch`); `nlu.go:928` (`Parse`); `plancache_test.go` (casos "mesmo arquivo, tarefa diferente" e "arquivos diferentes, mesma tarefa").
 
-**Custo no d610.** Uma passada de regex sobre ≤200 chars; desprezível. BM25 inalterado.
+**Custo no Dell.** Uma passada de regex sobre ≤200 chars; desprezível. BM25 inalterado.
 
 **Métrica.** Precisão de reuso = wins/(wins+fails) nos turnos com match; bad-reuse rate; reuso efetivo % (hits que terminam verificados / hits).
 
@@ -511,7 +511,7 @@ Sem min-max (instável com n pequeno): `log1p` e exponencial são monótonas e b
 
 **Arquivos.** `plancache.go:405` (`pcScore` passa a contar `uses`), `plancache.go:129` (`pcSave` poda), `plancache.go:292` (ranking), `lessons_reuse.go:99` (`lrPick` usa LB em vez de `wins-fails`).
 
-**Custo no d610.** Um `math.Sqrt` por plano; 100 planos → microssegundos.
+**Custo no Dell.** Um `math.Sqrt` por plano; 100 planos → microssegundos.
 
 **Métrica.** Reuse success rate; tamanho do cache; churn de evicção; p50 dos turnos com match.
 
@@ -533,7 +533,7 @@ Integração: `brRunIntent` (`brain.go:130`) tenta `prReplay` **antes** de `mhLi
 
 **Arquivos.** `planreplay.go` (novo); `brain.go:130` e `brain.go:500`; `brain.go:261` (executor reusado); `caps.go:594` (`cbReadCmd`).
 
-**Custo no d610.** Custo dominado pelos comandos; +1 decode de plano; zero processo extra. Um `read_file` replay é ~1–3 ms; um `go test` é o que já seria.
+**Custo no Dell.** Custo dominado pelos comandos; +1 decode de plano; zero processo extra. Um `read_file` replay é ~1–3 ms; um `go test` é o que já seria.
 
 **Métrica.** `no_llm_rate` real (share de requisições respondidas por replay), comandos/tarefa, p50, false_success.
 
@@ -555,7 +555,7 @@ Integração: `brRunIntent` (`brain.go:130`) tenta `prReplay` **antes** de `mhLi
 
 **Arquivos.** `methodforge.go` (novo); `methods.go:81` (`mhLibrary`), `methods.go:60` (`mhMethod` ganha `Origin`); `brain.go:130`; `main.go` (subcomando).
 
-**Custo no d610.** String/JSON puro; <10 ms; arquivo ≤ 20 KB por intenção; 50 intenções ≈ 1 MB em disco, carregado uma vez (`mhOnce`).
+**Custo no Dell.** String/JSON puro; <10 ms; arquivo ≤ 20 KB por intenção; 50 intenções ≈ 1 MB em disco, carregado uma vez (`mhOnce`).
 
 **Métrica.** `no_llm_rate` no eval, comandos/tarefa, p50, false_success, número de métodos promovidos e sobreviventes após 20 usos.
 
@@ -578,7 +578,7 @@ Rollback: se nas 3 últimas utilizações o sucesso cair >20% (gate do PSN citad
 
 **Arquivos.** `plangate.go` (novo); `evaloffline.go:279` (`eoOne` reusado para rodar fixture); `evals/offline/tasks.json` (categoria `reuse`); `methodforge.go` (só chama o gate).
 
-**Custo no d610.** 2 braços × 3–5 tarefas × 1–3 s ≈ 6–30 s, mais setup das fixtures (10–40 s no total) **em tempo de forja**, nunca em runtime. É exatamente o "inteligência em tempo de compilação".
+**Custo no Dell.** 2 braços × 3–5 tarefas × 1–3 s ≈ 6–30 s, mais setup das fixtures (10–40 s no total) **em tempo de forja**, nunca em runtime. É exatamente o "inteligência em tempo de compilação".
 
 **Métrica.** Win-rate do método promovido vs pai; taxa de rollback; false_success.
 
@@ -592,7 +592,7 @@ Rollback: se nas 3 últimas utilizações o sucesso cair >20% (gate do PSN citad
 
 **Arquivos.** `plancache.go:479` (`pcBuild`), `plancache.go:305` (`pcRender`), `recover.go:53`, `lessons.go` (tag).
 
-**Custo no d610.** Desprezível (≤4 becos por plano, já limitado por `pcMaxDeadEnds`).
+**Custo no Dell.** Desprezível (≤4 becos por plano, já limitado por `pcMaxDeadEnds`).
 
 **Métrica.** Comandos/tarefa, passos até o primeiro sucesso, taxa de repetição do mesmo erro.
 
@@ -606,7 +606,7 @@ Rollback: se nas 3 últimas utilizações o sucesso cair >20% (gate do PSN citad
 
 **Arquivos.** `evaloffline.go:91` (`eoSummary`), `evaloffline.go:279` (`eoOne`), `evals/offline/tasks.json`.
 
-**Custo no d610.** Só no harness; dobra o tempo do suite (frio+quente), ainda minutos.
+**Custo no Dell.** Só no harness; dobra o tempo do suite (frio+quente), ainda minutos.
 
 **Métrica.** É o instrumento: sem ele, P1–P9 são opinião.
 
@@ -656,7 +656,7 @@ Rollback: se nas 3 últimas utilizações o sucesso cair >20% (gate do PSN citad
 
 ## 8. O que NÃO adotar (dependências disfarçadas)
 
-1. **Embeddings e vector store** (AgentReuse 2512.21309; Voyager 2305.16291; ExpeL 2308.10144; Generative Agents 2304.03442). O AgentReuse reporta ~500 MB de VRAM só para os dois modelos; no d610, 2 GB divididos com o SO e o binário. Troque por BM25 + esqueleto: a literatura não mostra que embedding ganha o suficiente para pagar isso em código.
+1. **Embeddings e vector store** (AgentReuse 2512.21309; Voyager 2305.16291; ExpeL 2308.10144; Generative Agents 2304.03442). O AgentReuse reporta ~500 MB de VRAM só para os dois modelos; no Dell, 2 GB divididos com o SO e o binário. Troque por BM25 + esqueleto: a literatura não mostra que embedding ganha o suficiente para pagar isso em código.
 2. **LLM para extrair keyword em runtime** (APC 2506.14852). É o coração do APC e é exatamente o que a regra de ouro proíbe.
 3. **Planner pequeno que adapta o template em runtime** (APC). Mesmo problema, mais caro.
 4. **Self-verification por LLM** (Voyager; Reflexion 2303.11366). Não é verificação, é opinião; e falha silenciosamente quando o modelo erra com confiança. Use exit code.

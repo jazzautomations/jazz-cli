@@ -1,6 +1,6 @@
 # Harness SOTA vs jazz-cli: estado da arte e gap analysis (2026-11-04)
 
-Alvo: `d610` (Linux i686, 1 CPU, 2 GB, WiFi flaky, binário linux/386, Go stdlib).
+Alvo: `Dell` (Linux i686, 1 CPU, 2 GB, WiFi flaky, binário linux/386, Go stdlib).
 Filosofia: inteligência em tempo de compilação — assets forjados uma vez por um modelo forte,
 reusados para sempre a custo zero de token no alvo.
 
@@ -13,7 +13,7 @@ reusados para sempre a custo zero de token no alvo.
 
 Este doc cobre o que falta: **estado da arte de harness em números (2026)**, comparação
 concreta dos 6 harnesses de referência, e um gap analysis priorizado com propostas
-que rodam no d610.
+que rodam no Dell.
 
 ---
 
@@ -276,7 +276,7 @@ safety.rs/apply_patch.rs; caps.go:356/553 (feito).
 
 ## 5. Propostas (ordenadas por impacto/esforço)
 
-Cada uma: mecanismo, arquivos, custo no d610, métrica, impacto (1–5), esforço (S/M/L), risco.
+Cada uma: mecanismo, arquivos, custo no Dell, métrica, impacto (1–5), esforço (S/M/L), risco.
 Métricas = as do eval (no_llm_rate, sucesso verificado, false_success, false_blocks,
 perguntas necessárias, comandos/tarefa, p50/p95, RSS) + as de produção (P9).
 
@@ -294,7 +294,7 @@ já pontuados; Zimmermann ICSE'04 — top-3 64%) e churn (Nagappan&Ball ICSE'05)
 `brResolve`, e a mesma nota injetada no 1º turno do modelo (B2).
 **Arquivos:** `localize.go` (~350 LOC), caps.go (+cap), methods/*.json
 (fix, run_tests), gitindex.go (reusa listagem), `git log` via runCmd read-only.
-**Custo d610:** índice já em RAM; 1-2 rg com --max-count + 1 git log bounded;
+**Custo Dell:** índice já em RAM; 1-2 rg com --max-count + 1 git log bounded;
 < 80 ms total, ~0 MB extra.
 **Métrica:** hit@1/hit@5 do arquivo-alvo em fixtures com bug plantado (nova
 categoria no tasks.json); comandos/tarefa; steps-to-first-relevant-read online.
@@ -318,7 +318,7 @@ disponível o fix.diagnose atual continua preferido (modelo > regra).
 **Arquivos:** `repair.go` (~300 LOC), `edit.go`-like `brStrReplace` (~80),
 caps.go, methods/fix.json (+`fix.mechanical` priority 15 > diagnose 10),
 recover.go (rvFixFailingTest encadeia mecânico→diagnose→blocked).
-**Custo d610:** 0 tokens; regex + índice, < 50 ms por candidato; ≤3 candidatos.
+**Custo Dell:** 0 tokens; regex + índice, < 50 ms por candidato; ≤3 candidatos.
 **Métrica:** no_llm_rate na nova categoria "bugfix mecânico" (5-8 tarefas novas
 no eval); resgate falha→verificado; **false_success deve ficar 0** (verify decide).
 **Risco:** alto→controlado. Patch ruim vira `failed`/`unverified`, nunca
@@ -333,7 +333,7 @@ tool `"brain"`, fast path registra `dbg("fastpath")`); gravado em
 mostra tabela PT: % sem-LLM por semana, por intent, comandos/tarefa; alimenta
 sementes do judge e o `improve`.
 **Arquivos:** `stats.go` (~120), headless.go/jsonui.go (stats no JSON), doctor line.
-**Custo d610:** 1 append JSON pequeno por turno; leitura sob demanda.
+**Custo Dell:** 1 append JSON pequeno por turno; leitura sob demanda.
 **Métrica:** cria a métrica `no_llm_rate` real; efeito indireto em todas as
 demais (sem medir, não melhora).
 **Risco:** nenhum.
@@ -350,7 +350,7 @@ agent_recover.go) como system-reminder + plano restante; não re-executa passos
 done.
 **Arquivos:** `taskresume.go` (~200), task.go (marshal), brain.go (gravar
 outcome em stop), offline.go (`olLeave` hook), headless.go.
-**Custo d610:** KBs de JSON por tarefa; 0 no caminho feliz.
+**Custo Dell:** KBs de JSON por tarefa; 0 no caminho feliz.
 **Métrica:** taxa de resgate (tarefas concluídas após retomada / que pararam);
 false_success (retomada com evidência < re-fazer sem evidência); perguntas
 repetidas (deve cair).
@@ -363,12 +363,12 @@ ou confidence < 0.6, pedidos que caíram no modelo, redigitações do usuário
 (mesmo alvo, outra forma — o olPick/feedback mostra a leitura aceita).
 Cluster por bigramas+NB próprio → propõe (i) novos `examples`/`rules` para
 nlu/intents.json, (ii) entradas de `slang`/`concepts` para lexicon.json,
-(iii) frases para blind_test.json. Roda **na máquina de dev** (não no d610) —
+(iii) frases para blind_test.json. Roda **na máquina de dev** (não no Dell) —
 compile-time intelligence: o LLM forte forja os assets na mineração assistida;
 o `--propose` imprime diff JSON, nunca auto-aplica. Gate: `intents_test` +
 blind test deve passar; dataset accuracy reportada antes/depois.
 **Arquivos:** `nlumine.go` (~300), main.go (subcomando), nlu/*_test.go (gate).
-**Custo d610:** zero (desenvolvimento); runtime afetado: +KBs de JSON embutido.
+**Custo Dell:** zero (desenvolvimento); runtime afetado: +KBs de JSON embutido.
 **Métrica:** cobertura entendida em corpus real (novo campo no relatório do
 mine); no_llm_rate; perguntas/tarefa.
 **Risco:** médio — overfit às frases vistas. Mitigação: blind_test rotativo e
@@ -381,7 +381,7 @@ bash, `rg|grep|git grep` usa `truncateGrep` (≤5 hits/arquivo + `[+N more in M
 files; full: <spill>]`) — o 30KB fixo atual come ⅓ de uma janela 32k em 2 greps.
 **Arquivos:** truncate.go (+~60), tools.go (dispatch por 1ª palavra), config
 `--tool-budget`.
-**Custo d610:** 0; menos bytes movidos.
+**Custo Dell:** 0; menos bytes movidos.
 **Métrica:** tokens de entrada/tarefa, compactions/tarefa, pass em janela ≤32k.
 **Risco:** baixo — head+tail continua para não-rg; spill é fallback.
 
@@ -395,7 +395,7 @@ ao brain com a evidência. Promoção: método verificado ≥2× em contextos
 distintos → candidato a recipe (metade do §7 da spec — a outra metade fica
 como proposta posterior de G5).
 **Arquivos:** `recipe.go` (~250), main.go, caps.go (resolver nome→cap), trust.
-**Custo d610:** idêntico a métodos (ms); zero LLM quando todos os slots são
+**Custo Dell:** idêntico a métodos (ms); zero LLM quando todos os slots são
 determinísticos.
 **Métrica:** no_llm_rate em tarefas de rotina (release, bump, add-test);
 conclusão verificada; LLM calls/tarefa alvo ≤1.
@@ -410,7 +410,7 @@ top-level dirs, hosts/serviços relevantes do epProfile. Meta-Harness ganhou
 7/89 tarefas TB2 com exatamente isso antes da 1ª chamada.
 **Arquivos:** `envcard.go` (~120), agent.go (`Agent.Run` junto ao prefetch),
 flag `--env-card` default off até A/B.
-**Custo d610:** reusa fpDetect+epProfile+1 git status com cap 2s; ~200 ms.
+**Custo Dell:** reusa fpDetect+epProfile+1 git status com cap 2s; ~200 ms.
 **Métrica:** steps até 1º read relevante, tokens/tarefa, pass em
 terminal-tasks/v2.
 **Risco:** baixo-médio — fato velho ancora. Mitigação: só fatos re-medidos no
@@ -425,7 +425,7 @@ contagem de falhas diferente entre 2 runs) → 1 re-run com alvo menor antes de
 `failed` (estende rvTimeout existente). Verificador desconhecido no método →
 `unverified`, como hoje.
 **Arquivos:** methods.go (brVerify→dispatch), `verifiers.go` (~150), recover.go.
-**Custo d610:** ms; re-run só em flake (segundos, raro).
+**Custo Dell:** ms; re-run só em flake (segundos, raro).
 **Métrica:** false_success (deve ficar 0 — mais checks cobrem mais métodos),
 tarefas failed por flake, unverified→succeeded.
 **Risco:** baixo.

@@ -17,7 +17,7 @@ MDL) e [math-offline-brain.md](math-offline-brain.md) (Chow, calibração). O ob
 pedido.**
 
 Convenções: `file:line` refere-se ao `main` desta sessão. **Medido** = número já em `results/`.
-**(estimativa)** = conta minha, não medida. "d610" = i686, 1 CPU, 2 GB, `linux/386`, Go stdlib.
+**(estimativa)** = conta minha, não medida. "Dell" = i686, 1 CPU, 2 GB, `linux/386`, Go stdlib.
 Identificadores de código em inglês. Prova minha é marcada como tal; onde não há resposta boa, o
 texto diz "não sei" em vez de inventar uma.
 
@@ -333,7 +333,7 @@ clássico de multiplicar probabilidades correlacionadas.
 | `git_commit` | `HEAD` mudou; `git log -1 --format=%s` == msg; árvore limpa | ~30 ms |
 | `scDef` csv/parse | permutação de linhas preserva agregados; linha duplicada dobra contagem | ~10 ms |
 
-**Custo no d610.** `second_run_noop` dobra o custo do último passo; habilitar por método, nunca
+**Custo no Dell.** `second_run_noop` dobra o custo do último passo; habilitar por método, nunca
 global (idempotência real depende do mundo — `systemd` flapado reprova a segunda sem culpa). As
 demais são leitura de estado já coletada.
 
@@ -366,7 +366,7 @@ Divergência nesses pares é **bug real de parser ou de perfil** — valor duplo
 "dois caminhos que compartilham a mesma suposição concordam". É exatamente o que Knight & Leveson
 mostram que falha.
 
-**Custo.** +1 comando read-only (~30–100 ms no d610, estimativa). Nunca em atalho de <300 ms.
+**Custo.** +1 comando read-only (~30–100 ms no Dell, estimativa). Nunca em atalho de <300 ms.
 
 ### 3.3 Property-based: a propriedade é `∀`, e o gerador é o oráculo de verdade
 
@@ -426,7 +426,7 @@ e `eoFixture` (`evaloffline.go:279-360`, `:411-455`). Replay = chamar `eoOne` co
 as mesmas respostas, e comparar o **contrato**, não o texto.
 
 **Custo.** Replay em processo: 5–300 ms por sonda (dominado por shell-out). 20 sondas ≈ 1–5 s no
-amd64; no d610, 2–3× isso. Fora do caminho do pedido.
+amd64; no Dell, 2–3× isso. Fora do caminho do pedido.
 
 ### 3.5 Sandbox com efeito observado: shadow-git como oráculo de suporte
 
@@ -451,14 +451,14 @@ rename a b  implementado como:  cp a b ; truncate a
 Ou seja: efeito observado e MR são **ortogonais**, e a interseção das duas é o que dá confiança
 mínima. Um portão que só olha `support(Δ)` aprova um asset que destrói dados.
 
-**O detalhe do d610.** Sondas de *correção* podem rodar na máquina amd64 de forja. Sondas de *custo*
+**O detalhe do Dell.** Sondas de *correção* podem rodar na máquina amd64 de forja. Sondas de *custo*
 têm que rodar no alvo: um asset que "melhora" o custo no amd64 e regride 3× no Pentium M passa no
-gate e piora a vida do usuário. Regra: `cost_ms` medido no d610 (ou num perfil 386 equivalente), e o
+gate e piora a vida do usuário. Regra: `cost_ms` medido no Dell (ou num perfil 386 equivalente), e o
 gate usa **mediana pareada**, não média — a cauda de shell-out envenena a média.
 
 ### 3.6 Consolidado
 
-| Instrumento | Prova (som) | Não prova | Assets que cobre | Custo d610 |
+| Instrumento | Prova (som) | Não prova | Assets que cobre | Custo Dell |
 |---|---|---|---|---|
 | Metamórfico | falha da relação ⇒ bug | passar ⇒ correto | método, script | <5 ms a 1 passo extra |
 | Diferencial | divergência ⇒ ≥1 errado | concordância | script, parser, perfil | +1 comando read-only |
@@ -896,7 +896,7 @@ in-place muta estado compartilhado entre pedidos e goroutines. `mhRank` **tem qu
 `sort.Slice`. Isso não é teórico: `mhLibrary` já ordena uma vez no loader (`:105-108`) e a fatia é
 reusada em todo pedido.
 
-Custo no d610: `n ≤ 8` métodos por intent, um `sqrt` cada → microssegundos. Um `sort.Slice` de 8
+Custo no Dell: `n ≤ 8` métodos por intent, um `sqrt` cada → microssegundos. Um `sort.Slice` de 8
 elementos é ~200 ns. RSS: `AssetStat` ~64 B × 50 intents × 8 ≈ 25 KB, carregado uma vez.
 
 ### 6.3 `brVerify`: frame + relação + força medida
@@ -940,7 +940,7 @@ Fixture inventada não vale (§3.4).
 
 ---
 
-## 7. Propostas (Go, d610, stdlib)
+## 7. Propostas (Go, Dell, stdlib)
 
 Impacto 1–5; esforço S/M/L; risco baixo/médio/alto. Métricas no vocabulário de `eoSummary`
 (`evaloffline.go:91-107`) + as novas: `refutations`, `verify_kill_rate`, `survival_heldout`,
@@ -966,7 +966,7 @@ candidato.
 **Critérios de parada (alvos, a confirmar em medição):** `false_success` permanece 0;
 `refutations` held-out = 0 nos promovidos; `verify_kill_rate` do promovido ≥ o do pai na mesma `M`;
 `arbitration_regret` cai monotonicamente em 200 pedidos; p50 de pedido com ranking não sobe >2 ms no
-d610.
+Dell.
 
 ---
 
@@ -996,7 +996,7 @@ d610.
 10. **Não colapsar segurança num score.** `false_success = 0` é restrição, não termo. Ordem
     lexicográfica não é representável por utilidade real (Fishburn 1974) — e é por isso que ela
     protege.
-11. **Não rodar PBT/mutação no caminho do pedido.** Tudo isso é forja (amd64). O d610 paga só o
+11. **Não rodar PBT/mutação no caminho do pedido.** Tudo isso é forja (amd64). O Dell paga só o
     lookup (~µs) e o frame (stat+sha256, <20 ms típico).
 12. **Não medir custo no amd64.** Um asset que "melhora" no amd64 e regride 3× no Pentium M passa no
     gate e piora a vida do usuário. `cost_ms` no alvo, mediana pareada.
