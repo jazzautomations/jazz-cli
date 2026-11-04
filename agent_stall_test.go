@@ -66,8 +66,8 @@ func TestConfigFirstByte(t *testing.T) {
 func TestKeylessDefaultAndImplicitChain(t *testing.T) {
 	c := pvTestCfg(t)
 	got := c.Candidates("kilo/" + kiloDefaultModel)
-	want := "kilo/poolside/laguna-s-2.1:free,kilo/minimax/minimax-m3.1-flash:free,kilo/cohere/north-mini-code:free," +
-		"kilo/nvidia/nemotron-3-super-120b-a12b:free,kilo/nvidia/nemotron-3.5-lightning:free"
+	want := "kilo/cohere/north-mini-code:free,kilo/nvidia/nemotron-3.5-lightning:free," +
+		"kilo/reflection/beam-free,kilo/nvidia/nemotron-3-ultra-550b-a55b:free"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("chain %v", got)
 	}

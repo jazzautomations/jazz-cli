@@ -65,30 +65,40 @@ func pvLim(l Limits) *Limits { return &l }
 // read from https://api.kilo.ai/api/gateway/models on 2026-10-20; MaxOut is the
 // ceiling of the output raise after a cutoff (cutoff.go).
 
-// kiloDefaultModel is the keyless default. Measured 2026-10-19: it answers in
-// ~2 s with native tool calls, while kilo-auto/free often stalls for minutes.
-const kiloDefaultModel = "poolside/laguna-s-2.1:free"
+// kiloDefaultModel is the keyless default. poolside/laguna-s-2.1:free was
+// removed by kilo (HTTP 404) by 2026-11; measured 2026-11-04 over the kilo
+// gateway, cohere/north-mini-code:free answers in ~4.4 s with tool calls (a
+// coding model) while kilo-auto/free still stalls — so it is the new default.
+const kiloDefaultModel = "cohere/north-mini-code:free"
 
 // pvOldKiloDefault was the keyless default before 2026-10; saved configs that
 // still carry it are migrated to kiloDefaultModel (it stays selectable with -m).
 const pvOldKiloDefault = "kilo-auto/free"
 
-// kiloFastFree are the other free Kilo models that answered with native tool
-// calls in 1-2 s (2026-10-19); they follow the default in the implicit chain.
+// kiloFastFree are the other free Kilo models that answer with tool calls;
+// they follow the default in the implicit chain. Refreshed 2026-11-04 after
+// kilo removed poolside/laguna, minimax-m3.1-flash and nemotron-3-super-120b
+// (all HTTP 404); these three answered in 3-5 s over the gateway.
 var kiloFastFree = []string{
-	"minimax/minimax-m3.1-flash:free",
-	"cohere/north-mini-code:free",
-	"nvidia/nemotron-3-super-120b-a12b:free",
 	"nvidia/nemotron-3.5-lightning:free",
+	"reflection/beam-free",
+	"nvidia/nemotron-3-ultra-550b-a55b:free",
 }
 
 // pvManualOnly refs are never picked automatically (omni tiers, implicit chain);
 // they still work when the user names them (-m, model, fallback, omni.tiers).
-var pvManualOnly = map[string]bool{"kilo/" + pvOldKiloDefault: true}
+var pvManualOnly = map[string]bool{"kilo/" + pvOldKiloDefault: true, "pollinations/openai-fast": true}
 
 // omniPresets are the free (and cheap emergency) providers known in 2026-10.
 func omniPresetsBase() map[string]*ProviderConf {
 	return map[string]*ProviderConf{
+		// Pollinations: keyless (sem chave nem signup), OpenAI-compatível em
+		// /openai; tier anônimo = gpt-oss-20b com tool calls. É o 2º provedor
+		// 100%% grátis sem chave, ao lado do kilo. Fica manual-only
+		// (pvManualOnly): keyless quando nomeado, fora da rotação auto por ser
+		// instável (rate-limit por IP, modelo pequeno).
+		"pollinations": {Type: "openai", BaseURL: "https://text.pollinations.ai/openai", DefaultModel: "openai-fast",
+			NoKey: true, Free: true, Train: true, Title: "Pollinations (keyless, GPT-OSS 20B)"},
 		"kilo": {Type: "openai", BaseURL: "https://api.kilo.ai/api/gateway", KeyEnv: "KILO_API_KEY", DefaultModel: kiloDefaultModel,
 			NoKey: true, Free: true, Train: true, Router: "kilo", FreeIDs: true, Probe: "chat1",
 			Limits: pvLim(Limits{RPH: 200, Scope: "key"}), Signup: "https://app.kilo.ai", Title: "Kilo Gateway"},
@@ -165,9 +175,9 @@ var presetModels = []presetModel{
 	{"sambanova/DeepSeek-V3.1", ModelConf{Q: 74, Context: 131072, Tiers: pvTiers("coder", "free")}},
 	{"sambanova/gpt-oss-120b", ModelConf{Q: 66, Context: 131072, Tiers: pvTiers("fast", "free")}},
 	{"kilo/" + kiloDefaultModel, ModelConf{Q: 72, MaxOut: 32768, Tiers: pvTiers("coder", "free")}},
-	{"kilo/minimax/minimax-m3.1-flash:free", ModelConf{Q: 66, Context: 1000000, MaxOut: 524288, Tiers: pvTiers("free", "fast", "long")}},
+	{"kilo/reflection/beam-free", ModelConf{Q: 60, MaxOut: 65536, Tiers: pvTiers("fast", "free")}},
 	{"kilo/cohere/north-mini-code:free", ModelConf{Q: 70, Context: 256000, MaxOut: 64000, Tiers: pvTiers("coder", "free")}},
-	{"kilo/nvidia/nemotron-3-super-120b-a12b:free", ModelConf{Q: 68, MaxOut: 235929, Tiers: pvTiers("coder", "free")}},
+	{"kilo/nvidia/nemotron-3-ultra-550b-a55b:free", ModelConf{Q: 75, Context: 1000000, MaxOut: 235929, Tiers: pvTiers("coder", "free", "long")}},
 	{"kilo/nvidia/nemotron-3.5-lightning:free", ModelConf{Q: 55, MaxOut: 65536, Tiers: pvTiers("fast", "free")}},
 	{"kilo/" + pvOldKiloDefault, ModelConf{Q: 60, Context: 256000}}, // manual only: stalls often
 	{"zai/glm-4.7-flash", ModelConf{Q: 70, Tiers: pvTiers("coder", "free")}},

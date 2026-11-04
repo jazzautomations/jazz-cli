@@ -408,12 +408,12 @@ func TestOmniCandidatesPlain(t *testing.T) {
 func TestOmniImplicitFreeChain(t *testing.T) {
 	c := pvTestCfg(t)
 	got := c.Candidates("openrouter/foo:free")
-	if strings.Join(got, ",") != "openrouter/foo:free,kilo/poolside/laguna-s-2.1:free,kilo/minimax/minimax-m3.1-flash:free,kilo/cohere/north-mini-code:free,kilo/nvidia/nemotron-3-super-120b-a12b:free,kilo/nvidia/nemotron-3.5-lightning:free" {
+	if strings.Join(got, ",") != "openrouter/foo:free,kilo/cohere/north-mini-code:free,kilo/nvidia/nemotron-3.5-lightning:free,kilo/reflection/beam-free,kilo/nvidia/nemotron-3-ultra-550b-a55b:free" {
 		t.Fatalf("got %v", got)
 	}
 	t.Setenv("GROQ_API_KEY", "gsk_x")
 	got = c.Candidates("openrouter/foo:free")
-	if strings.Join(got, ",") != "openrouter/foo:free,kilo/poolside/laguna-s-2.1:free,kilo/minimax/minimax-m3.1-flash:free,kilo/cohere/north-mini-code:free,kilo/nvidia/nemotron-3-super-120b-a12b:free,kilo/nvidia/nemotron-3.5-lightning:free,groq/openai/gpt-oss-120b" {
+	if strings.Join(got, ",") != "openrouter/foo:free,kilo/cohere/north-mini-code:free,kilo/nvidia/nemotron-3.5-lightning:free,kilo/reflection/beam-free,kilo/nvidia/nemotron-3-ultra-550b-a55b:free,groq/openai/gpt-oss-120b" {
 		t.Fatalf("got %v", got)
 	}
 	// a paid primary gets no implicit chain; an explicit fallback replaces it
@@ -444,12 +444,12 @@ func TestOmniRankFreeFirst(t *testing.T) {
 			t.Fatalf("omni ref leaked: %v", got)
 		}
 	}
-	if _, ok := idx["kilo/poolside/laguna-s-2.1:free"]; !ok {
+	if _, ok := idx["kilo/cohere/north-mini-code:free"]; !ok {
 		t.Fatalf("keyless kilo missing: %v", got)
 	}
 	// paid only in an emergency: after every free one; cheapest paid first
 	ds, an := idx["deepseek/deepseek-flash"], idx["anthropic/claude-sonnet-5-5"]
-	if ds == 0 || an == 0 || ds > an || ds < idx["kilo/poolside/laguna-s-2.1:free"] {
+	if ds == 0 || an == 0 || ds > an || ds < idx["kilo/cohere/north-mini-code:free"] {
 		t.Fatalf("paid order wrong: %v", got)
 	}
 	// never: no paid at all
@@ -554,6 +554,14 @@ func TestOmniAllDeadMessage(t *testing.T) {
 		MarkExhausted("kilo/"+m, time.Now().Add(30*time.Minute))
 	}
 	msg := OmniExhaustedMessage(c, "omni/free")
+	live, dead := c.omniCollect("free", Need{})
+	t.Logf("LIVE=%v DEAD=%d", func() []string {
+		var r []string
+		for _, l := range live {
+			r = append(r, l.ref)
+		}
+		return r
+	}(), len(dead))
 	if !strings.Contains(msg, "esgotados") || !strings.Contains(msg, "kilo em") {
 		t.Fatalf("msg %q", msg)
 	}
@@ -770,7 +778,7 @@ func TestOmniConfigMigratesZenAndPlan(t *testing.T) {
 	if or.DefaultModel != "openrouter/free" || or.Router != "openrouter" || !or.FreeIDs || or.Limits == nil {
 		t.Fatalf("user entry not completed from preset: %+v", or)
 	}
-	if got := c.PickDefaultModel(); got != "kilo/poolside/laguna-s-2.1:free" {
+	if got := c.PickDefaultModel(); got != "kilo/cohere/north-mini-code:free" {
 		t.Fatalf("keyless default %q", got)
 	}
 }
@@ -932,7 +940,7 @@ func TestOmniAddProviderAndReachability(t *testing.T) {
 	if w, _ := c.Limits("mac/ornith-1.5"); w != 65536 {
 		t.Fatalf("window from catalog %d", w)
 	}
-	if got := c.PickDefaultModel(); got != "kilo/poolside/laguna-s-2.1:free" {
+	if got := c.PickDefaultModel(); got != "kilo/cohere/north-mini-code:free" {
 		t.Fatalf("pick %s", got) // user-added locals are not auto-picked
 	}
 	srv.Close()
