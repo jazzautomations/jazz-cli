@@ -81,7 +81,7 @@ func TestUptimeLoadCardapio(t *testing.T) {
 	}
 	text, _ := d["text"].(string)
 	if !strings.HasPrefix(text, "up ") || !strings.Contains(text, "load ") {
-		t.Errorf("text = %q, want 'up <time>, load a/b/c on N cpus (X% busy)'", text)
+		t.Errorf("text = %q, want 'up <time>, load a/b/c on N cpus (X%% busy)'", text)
 	}
 
 	// sample_ms above the ceiling is clamped to 1000, not rejected.

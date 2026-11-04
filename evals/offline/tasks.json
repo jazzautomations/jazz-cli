@@ -140,7 +140,7 @@
    "expect": {"status": "succeeded", "intent": "todo_scan", "questions": 0}},
   {"id": "self-who", "cat": "self", "fixture": "go", "prompt": "quem é você",
    "doc": "self-knowledge: versão/binário/modo do próprio jazz sem modelo",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz", "0.11"], "questions": 0}},
+   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz", "0.12"], "questions": 0}},
   {"id": "self-version", "cat": "self", "fixture": "go", "prompt": "qual a versão do jazz",
    "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.12.0"], "questions": 0}},
   {"id": "self-about", "cat": "self", "fixture": "go", "prompt": "o que é o jazz",

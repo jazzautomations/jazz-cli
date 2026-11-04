@@ -30,6 +30,8 @@
   `JAZZ_NLU_CALIB=off` desliga; regenerar: `JAZZ_UPDATE_CALIB=1 go test -run 'TestNLUCalibAsset$'`.
   O que a curva mostrou: score cru entre 0,16 e 0,82 acerta ~60–64%; regra sem classificador (0,90) acerta
   93%; regra e classificador de acordo (0,97) acerta 99%.
+- Limiar de ação por faixa de risco sobre a confiança calibrada (Chow assimétrico, `brActMin`): leitura
+  verificável age com menos certeza do que mutação; a pergunta fica pra quando o erro custa.
 
 ### Provedores e rede
 
