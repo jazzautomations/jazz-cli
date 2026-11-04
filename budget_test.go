@@ -243,29 +243,76 @@ func TestBudgetExplorationCap(t *testing.T) {
 	}
 }
 
-func TestBudgetStepHardStopAtTwice(t *testing.T) {
-	h := newHarness(t, func(n int, r recReq) fakeResp {
+func TestBudgetStepHardStopAtCloseGrace(t *testing.T) {
+	stepStop := func(n int, r recReq) fakeResp {
 		if r.contains("user", "Step limit reached") {
 			return fakeResp{Text: "partial"}
 		}
 		return fakeResp{Calls: []fakeCall{{ID: fmt.Sprintf("b%d", n), Name: "bash", Args: fmt.Sprintf(`{"command":"true %d"}`, n)}}}
-	}, func(c *Config) { c.MaxSteps = 80; c.Quality = qgOff })
-	stop, err := h.ag.Run(context.Background(), "fix the bug in f0.go") // S: 12 steps, hard stop at 24
-	if err != nil {
+	}
+	// Lean hard stop = stepBudget + max(bgCloseGrace, half the budget rounded
+	// up) ≈ 1.5x the budget, not 2x: S 12→18, M 25→38, L 50→75.
+	cases := []struct {
+		name   string
+		prompt string
+		limit  int
+	}{
+		{"S", "fix the bug in f0.go", 18},
+		{"M", "change the pricing rules in the checkout module", 38},
+		{"L", "update a.go, b.go and c.go", 75},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, stepStop, func(cfg *Config) { cfg.MaxSteps = 200; cfg.Quality = qgOff })
+			stop, err := h.ag.Run(context.Background(), c.prompt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stop != StopStepLimit {
+				t.Fatalf("stop = %s", stop)
+			}
+			if n := len(h.fs.requests()); n != c.limit+1 {
+				t.Errorf("%s: requests = %d, want %d (%d tool-use + final no-tools)", c.name, n, c.limit+1, c.limit)
+			}
+			if !anyContains(h.ui.warns, "orçamento de passos da tarefa esgotado") {
+				t.Errorf("%s: clear stop message missing: %v", c.name, h.ui.warns)
+			}
+		})
+	}
+	// the 70%/100% reminders still fire on the way to the stop (checked for S)
+	h := newHarness(t, stepStop, func(cfg *Config) { cfg.MaxSteps = 200; cfg.Quality = qgOff })
+	if _, err := h.ag.Run(context.Background(), "fix the bug in f0.go"); err != nil {
 		t.Fatal(err)
 	}
-	if stop != StopStepLimit {
-		t.Fatalf("stop = %s", stop)
-	}
-	if n := len(h.fs.requests()); n != 25 {
-		t.Errorf("requests = %d, want 24 + the final no-tools one", n)
-	}
-	last := h.fs.requests()[24]
+	last := h.fs.requests()[18] // the final no-tools request
 	if !last.contains("tool", "used 9 of about 12 steps") || !last.contains("tool", "used the 12 steps budgeted") {
 		t.Error("70% and 100% step reminders missing")
 	}
-	if !anyContains(h.ui.warns, "orçamento de passos da tarefa esgotado") {
-		t.Errorf("clear stop message missing: %v", h.ui.warns)
+}
+
+func TestBudgetStepNoteLastPass(t *testing.T) {
+	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
+	h.ag.bgBeginTurn("change the pricing rules in the checkout module") // M: 25 steps
+	bt := h.ag.bgTurnState()
+	if bt == nil || bt.stepBudget != 25 {
+		t.Fatalf("want M budget 25, got %+v", bt)
+	}
+	// The "last pass" nudge fires at 1.25x of 25 = 31.25 -> first at used = 32,
+	// and only once.
+	firstUsed, count := -1, 0
+	for step := 1; step <= 60; step++ {
+		if strings.Contains(h.ag.bgStepNote(step), "last pass") {
+			count++
+			if firstUsed < 0 {
+				firstUsed = step - 1 // used = step - 1
+			}
+		}
+	}
+	if firstUsed != 32 {
+		t.Errorf("last-pass nudge first fires at used=%d, want 32 (1.25x of 25)", firstUsed)
+	}
+	if count != 1 {
+		t.Errorf("last-pass nudge fired %d times, want exactly once", count)
 	}
 }
 
