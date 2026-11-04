@@ -1416,6 +1416,18 @@
     },
     {
      "all": [
+      "responds",
+      "@host"
+     ]
+    },
+    {
+     "all": [
+      "responds",
+      "host"
+     ]
+    },
+    {
+     "all": [
       "status",
       "@host"
      ]
@@ -2082,7 +2094,10 @@
     "checa a conexão"
    ],
    "negatives": [
-    "o labbox está online?"
+    "o labbox está online?",
+    "responde só: ok",
+    "me responde isso",
+    "responde aí"
    ]
   },
   {

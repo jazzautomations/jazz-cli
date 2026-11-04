@@ -884,11 +884,13 @@
    "ping",
    "pinga",
    "pingar",
-   "responde",
-   "respondendo",
    "alcancavel",
    "reachable",
    "acessivel"
+  ],
+  "responds": [
+   "responde",
+   "respondendo"
   ],
   "list": [
    "lista",
