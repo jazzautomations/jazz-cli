@@ -47,6 +47,11 @@
 - Compactação com fallback determinístico quando o resumo do modelo vem vazio; prazo de execução
   (`RunDeadline`) com parada suave e nota de retomada.
 
+- ChatGPT (assinatura): ids de modelo atuais (`gpt-6.1-sol` padrão, `gpt-6.1-terra`, `gpt-6-luna`; o
+  `gpt-5.5-codex` não existe mais). Sem `jazz login chatgpt`, o jazz usa a sessão do Codex CLI
+  (`~/.codex/auth.json` / `CODEX_HOME`) só para leitura — nunca renova o token dele (a rotação
+  deslogaria o Codex); expirada, avisa pra rodar `codex` uma vez ou logar.
+
 ### Confirmação, sandbox e segurança
 
 - Confirmação de intenção só quando a LEITURA é incerta (typo-only ou confiança abaixo do limiar); mutação

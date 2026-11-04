@@ -188,7 +188,9 @@ var presetModels = []presetModel{
 	{"codestral/codestral-latest", ModelConf{Q: 45, Tiers: pvTiers("fast")}},
 	{"cerebras/gpt-oss-120b", ModelConf{Q: 66, Context: 65536, MaxReq: 28000, Tiers: pvTiers("fast")}},
 	// paid / subscription: only in an emergency under the default policy
-	{"chatgpt/gpt-5.5-codex", ModelConf{Q: 92, Tiers: pvTiers("coder", "smart")}},
+	{"chatgpt/gpt-6.1-sol", ModelConf{Q: 94, Tiers: pvTiers("coder", "smart")}},
+	{"chatgpt/gpt-6.1-terra", ModelConf{Q: 90, Tiers: pvTiers("coder", "smart")}},
+	{"chatgpt/gpt-6-luna", ModelConf{Q: 84, Tiers: pvTiers("coder", "fast")}},
 	{"anthropic/claude-sonnet-5-5", ModelConf{Q: 94, Context: 200000, Tiers: pvTiers("coder", "smart")}},
 	{"deepseek/deepseek-flash", ModelConf{Q: 82, Context: 1000000, Tiers: pvTiers("coder", "smart", "long")}},
 }
