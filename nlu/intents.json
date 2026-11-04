@@ -228,12 +228,9 @@
     "find ParseArgs",
     "where is handleLogin defined",
     "grep NewServer",
-    "procura onde usa o Tokenize",
-    "quem chama o ParseArgs",
     "encontra a string 'connection refused'",
     "localiza o arquivo que tem handleLogin",
     "procura \"timeout\" no projeto",
-    "busca referencias de NewServer",
     "onde ta definido o ParseArgs",
     "acha onde tem fmt.Println",
     "procure o simbolo Tokenize"
@@ -2863,6 +2860,85 @@
     "longest functions"
    ],
    "negatives": []
+  },
+  {
+   "name": "symbol_refs",
+   "desc": "onde um símbolo é usado (chamadas/referências)",
+   "rules": [
+    {
+     "all": [
+      "usage",
+      "who"
+     ],
+     "none": [
+      "port",
+      "kill",
+      "delete",
+      "rename",
+      "container",
+      "service"
+     ]
+    },
+    {
+     "all": [
+      "usage",
+      "find"
+     ],
+     "none": [
+      "port",
+      "kill"
+     ]
+    },
+    {
+     "all": [
+      "usage",
+      "symnoun"
+     ],
+     "none": [
+      "port",
+      "kill"
+     ]
+    },
+    {
+     "all": [
+      "usage",
+      "@symbol"
+     ],
+     "none": [
+      "port",
+      "kill"
+     ]
+    }
+   ],
+   "slots": {
+    "symbol": {
+     "kinds": [
+      "symbol"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "procura onde usa o Tokenize",
+    "quem chama o ParseArgs",
+    "busca referencias de NewServer",
+    "quem usa o ParseArgs",
+    "onde o Tokenize é usado",
+    "referências de NewServer",
+    "where is Tokenize used",
+    "who calls ParseArgs",
+    "usages of handleLogin",
+    "quem referencia o Tokenize",
+    "callers of ParseArgs",
+    "onde o ParseArgs é chamado",
+    "lista as chamadas de handleLogin",
+    "quem chama handleLogin",
+    "uses of NewServer"
+   ],
+   "negatives": [
+    "quem está usando a porta 3000",
+    "onde está a função ParseArgs"
+   ]
   }
  ]
 }

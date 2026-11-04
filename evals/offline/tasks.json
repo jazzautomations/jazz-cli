@@ -173,6 +173,8 @@
   {"id": "card-bigfunc", "cat": "cardápio", "fixture": "cardapio", "prompt": "funções grandes do projeto", "needs": "python3", "expect": {"status": "succeeded", "intent": "large_funcs", "questions": 0}},
   {"id": "card-disk-dirs", "cat": "cardápio", "fixture": "cardapio", "prompt": "o que tá ocupando espaço no disco", "needs": "python3", "doc": "script disk_usage (statvfs+walk) na frente do df -h", "expect": {"status": "succeeded", "intent": "disk_usage", "questions": 0}},
   {"id": "card-neg-todos-files", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista todos os arquivos", "doc": "'todos' = list, não é TODO", "expect": {"status": "succeeded", "intent": "list_files", "questions": 0}},
-  {"id": "card-neg-env", "cat": "cardápio", "fixture": "cardapio", "prompt": "que sistema é esse", "doc": "env sem dotenv continua env_status", "expect": {"status": "succeeded", "intent": "env_status", "questions": 0}}
+  {"id": "card-neg-env", "cat": "cardápio", "fixture": "cardapio", "prompt": "que sistema é esse", "doc": "env sem dotenv continua env_status", "expect": {"status": "succeeded", "intent": "env_status", "questions": 0}},
+  {"id": "card-symbol-refs", "cat": "cardápio", "fixture": "go", "prompt": "quem chama o ParseArgs", "needs": "python3", "doc": "usage+@symbol (2) vence find (1); refs em parser_test.go, definição à parte", "expect": {"status": "succeeded", "intent": "symbol_refs", "contains": ["parser_test.go"], "questions": 0}},
+  {"id": "card-lint-script", "cat": "cardápio", "fixture": "norunner", "prompt": "roda o lint", "needs": "python3", "doc": "sem comando de lint do projeto: lint_run com os linters instalados (0 achados é resposta honesta)", "expect": {"status": "succeeded", "intent": "lint", "contains": ["findings"], "questions": 0}}
  ]
 }

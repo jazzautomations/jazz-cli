@@ -911,6 +911,7 @@ var brLevel0Intents = map[string]bool{
 	"todo_scan": true, "git_cochange": true, "git_blame": true, "git_branch_status": true,
 	"git_conflict_scan": true, "dotenv_check": true, "config_get": true, "file_snapshot": true,
 	"dep_graph": true, "dep_outdated": true, "dup_code": true, "license_scan": true, "large_funcs": true,
+	"symbol_refs": true,
 }
 
 // brGroundIntents are interpretive: online, the brain's facts ground the

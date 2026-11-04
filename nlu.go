@@ -48,7 +48,8 @@ const nuMinConf = 0.6
 type Intent struct {
 	Name       string            `json:"name"` // "none" = not understood / out of domain
 	Slots      map[string]string `json:"slots,omitempty"`
-	Confidence float64           `json:"confidence"`
+	Confidence float64           `json:"confidence"`    // calibrated: P(this reading is right) — what the brain acts on
+	Raw        float64           `json:"raw,omitempty"` // the grammar's own score before nlu/calib.json
 	Evidence   []string          `json:"evidence,omitempty"`
 	Ents       []nuHit           `json:"entities,omitempty"`
 	Missing    []string          `json:"missing,omitempty"`   // required slots nobody filled
@@ -1064,9 +1065,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		conf *= 0.6 // a long free-form request is a job for the model, not a template
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavras fora da gramática: pedido livre", res))
 	}
+	in.Raw = math.Round(conf*100) / 100
+	// the shipped calibration turns the score into a probability (nlu_calib.go);
+	// a typo-only reading stays capped so the confirm rule keeps its meaning
+	conf = nuCalibApply(in.Raw)
+	if in.TypoOnly {
+		conf = math.Min(conf, 0.5)
+	}
 	in.Confidence = math.Round(conf*100) / 100
 	if def.Name == "none" {
-		in.Confidence = 0
+		in.Confidence, in.Raw = 0, 0
 	}
 	return in
 }
