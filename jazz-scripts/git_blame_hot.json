@@ -1,0 +1,67 @@
+{
+ "name": "git_blame_hot",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Git blame of a file or line range: lines per author, last change, hot lines rewritten by many commits",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path"],
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "tracked file to blame (project-relative or absolute)"
+   },
+   "start": {
+    "type": "integer",
+    "minimum": 1,
+    "description": "first line of the range, 1-based (default: whole file)"
+   },
+   "end": {
+    "type": "integer",
+    "minimum": 1,
+    "description": "last line of the range, inclusive (default: end of file)"
+   },
+   "n": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 2000,
+    "description": "recent commits of the file used as context for hot lines (default 50)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "file": "str (path relative to the repository root)",
+   "lines": "int",
+   "range": {
+    "start": "int",
+    "end": "int"
+   },
+   "authors": [
+    {
+     "author": "str",
+     "lines": "int",
+     "pct": "num 0..100"
+    }
+   ],
+   "last_change": {
+    "commit": "str (12 hex)",
+    "author": "str",
+    "date": "YYYY-MM-DD"
+   },
+   "commits": "int (distinct commits owning lines in the range)",
+   "recent_commits": "int (commits of the file seen, <= n)",
+   "hot_lines": [
+    {
+     "line": "int",
+     "commits": "int (distinct recent commits within +-3 lines)"
+    }
+   ],
+   "truncated": "bool",
+   "ms": "int",
+   "text": "str"
+  }
+ }
+}

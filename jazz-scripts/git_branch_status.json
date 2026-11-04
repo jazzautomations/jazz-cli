@@ -1,0 +1,61 @@
+{
+ "name": "git_branch_status",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Local branches from refs (no fetch): ahead/behind upstream, unmerged, stale and gone-upstream branches",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "repository or subdirectory to inspect (default: project root)"
+   },
+   "stale_days": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 36500,
+    "description": "a branch whose last commit is at least this old is stale (default 30)"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 500,
+    "description": "branch rows to return, oldest first (default 50)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "current": "str (branch name, or short commit when detached)",
+   "detached": "bool",
+   "default_branch": "str|null (origin/HEAD, else main/master/trunk/develop, else current)",
+   "upstream": "str|null (upstream of the current branch)",
+   "ahead": "int",
+   "behind": "int",
+   "branches": [
+    {
+     "name": "str",
+     "upstream": "str|null",
+     "gone": "bool (upstream configured but missing)",
+     "ahead": "int",
+     "behind": "int",
+     "last_commit_unix": "int",
+     "days": "int (since last commit)",
+     "author": "str",
+     "commit": "str (short)",
+     "merged": "bool (into default_branch)"
+    }
+   ],
+   "total": "int",
+   "stale": ["str"],
+   "stale_days": "int",
+   "unmerged": ["str"],
+   "gone": ["str"],
+   "truncated": "bool",
+   "ms": "int",
+   "text": "str"
+  }
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "name": "git_conflict_scan",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Leftover merge conflicts: unmerged paths in the index and <<<<<<< ======= >>>>>>> markers in files",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "directory or file inside the repository to scan (default: project root)"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 5000,
+    "description": "marker rows to return, sorted by file and line (default 200)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "in_index": ["str (paths still unmerged in the index)"],
+   "in_files": [
+    {
+     "file": "str",
+     "line": "int",
+     "marker": "<<<<<<<|||||||||=======|>>>>>>>"
+    }
+   ],
+   "count": "int (markers found, before limit)",
+   "files_with_markers": "int",
+   "files_scanned": "int",
+   "clean": "bool",
+   "truncated": "bool",
+   "ms": "int",
+   "text": "str"
+  }
+ }
+}
