@@ -974,11 +974,23 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 	return brStep{val: v, obs: obs, ok: true}
 }
 
-// brScriptLines renders a script's data payload for the terminal: scalars
-// inline, arrays one item per line (≤10), nested maps indented.
+// brScriptLines renders a script's data payload for the terminal: the
+// script's own one-line summary (data.text) first — that is the answer a
+// person reads — then scalars inline, arrays one item per line (≤10),
+// nested maps indented.
 func brScriptLines(v any, max int) []string {
 	data, _ := v.(map[string]any)["data"].(map[string]any)
 	var lines []string
+	if text, _ := data["text"].(string); strings.TrimSpace(text) != "" {
+		lines = append(lines, strings.TrimSpace(text))
+		rest := make(map[string]any, len(data))
+		for k, x := range data {
+			if k != "text" {
+				rest[k] = x
+			}
+		}
+		data = rest
+	}
 	var walk func(m map[string]any, pad string)
 	walk = func(m map[string]any, pad string) {
 		var keys []string
@@ -1033,6 +1045,8 @@ func brScriptKV(m map[string]any) string {
 			break
 		}
 		switch x := m[k].(type) {
+		case nil:
+			continue // an unknown value is not worth a "pid=<nil>" on screen
 		case map[string]any, []any:
 			b, _ := json.Marshal(x)
 			parts = append(parts, k+"="+scCut(string(b), 60))

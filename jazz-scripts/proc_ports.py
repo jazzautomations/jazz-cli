@@ -119,10 +119,15 @@ for pid in pids:
 if skipped:
     warnings.append("%d process(es) skipped (no permission or exited)" % skipped)
 
+hidden = 0
 for e in listening:
     pid = inode_pid.get(e["inode"], 0)
-    e["pid"] = pid
-    e["comm"] = procinfo.get(pid, {}).get("comm", "") if pid else ""
+    # pid None + comm "?" = the socket belongs to a process we may not read
+    # (root's sshd/dnsmasq): say so instead of a fake pid 0
+    e["pid"] = pid if pid else None
+    e["comm"] = procinfo.get(pid, {}).get("comm", "") if pid else "?"
+    if not pid:
+        hidden += 1
 
 listening.sort(key=lambda e: (e["port"], e["proto"], e["inode"]))
 
@@ -152,6 +157,9 @@ if len(listening) > limit:
     listening = listening[:limit]
     truncated = True
 
+for e in listening:
+    e.pop("inode", None)  # kernel detail: it served the owner lookup, not the reader
+
 ms = int((time.time() - T0) * 1000)
 data = {"listening": listening, "processes": processes, "truncated": truncated, "ms": ms}
 if want_port is not None:
@@ -165,9 +173,13 @@ if want_port is not None:
     else:
         text = "port %d is not a listening TCP socket" % want_port
 else:
-    text = "%d listening TCP socket(s), %d process(es)" % (len(listening), len(processes))
+    ports = sorted(set(e["port"] for e in listening))
+    shown = " ".join(str(x) for x in ports[:12]) + (" …" if len(ports) > 12 else "")
+    text = "%d listening TCP socket(s) on %d port(s): %s" % (len(listening), len(ports), shown)
+    if hidden:
+        text += " (owner of %d hidden: needs root)" % hidden
     if name_filter is not None:
-        text += " matching %r" % name_filter
+        text += " · %d process(es) matching %r" % (len(processes), name_filter)
 data["text"] = text
 
 emit(True, data, 1.0 if not skipped else 0.9, [], warnings)
