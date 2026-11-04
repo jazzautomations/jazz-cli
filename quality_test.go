@@ -264,3 +264,99 @@ func TestQualityGateOffAndUntilOrder(t *testing.T) {
 		t.Errorf("--until pass not scored: %+v", s)
 	}
 }
+
+// longGoFunc builds a Go file whose single function is well over the 60-line
+// limit, with no branches/loops, no debug print and no throwaway name — the
+// only finding is the over-long function nit.
+func longGoFunc() string {
+	var b strings.Builder
+	b.WriteString("package x\n\nfunc Long() {\n")
+	for i := 0; i < 65; i++ {
+		fmt.Fprintf(&b, "\tv%d := %d\n\t_ = v%d\n", i, i, i)
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func qgAnyReqContains(reqs []recReq, role, sub string) bool {
+	for _, r := range reqs {
+		if r.contains(role, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestQualityGateNitAdvisoryWhenTestsPass(t *testing.T) {
+	// Only finding is an over-long function and a test command ran after the edit:
+	// the gate accepts the answer and prints the nit as an advisory notice
+	// instead of reopening.
+	t.Run("advisory", func(t *testing.T) {
+		qgNoLint(t)
+		h := newHarness(t, seq(
+			fakeResp{Calls: []fakeCall{
+				{ID: "w", Name: "write", Args: jsonArgs(map[string]string{"path": "long.go", "content": longGoFunc()})},
+				{ID: "t", Name: "bash", Args: jsonArgs(map[string]string{"command": "go test ./..."})},
+			}},
+			fakeResp{Text: "done"},
+		), func(c *Config) { c.Mode = "yolo"; c.NoVerifyNudge = true })
+		stop, err := h.ag.Run(context.Background(), "create long.go")
+		if err != nil || stop != StopDone {
+			t.Fatalf("stop=%s err=%v, want done", stop, err)
+		}
+		if qgAnyReqContains(h.fs.requests(), "user", "deterministic checklist") {
+			t.Errorf("gate reopened instead of accepting the nit as advisory")
+		}
+		if !anyContains(h.ui.notices, "aviso, resposta aceita") || !anyContains(h.ui.notices, "function Long is") {
+			t.Errorf("advisory notice missing: %v", h.ui.notices)
+		}
+	})
+
+	// Negative: a debug print is a real defect, so even after a test run the
+	// gate reopens once (fed) and then fails.
+	t.Run("real_issue_reopens", func(t *testing.T) {
+		qgNoLint(t)
+		h := newHarness(t, seq(
+			fakeResp{Calls: []fakeCall{
+				{ID: "w", Name: "write", Args: jsonArgs(map[string]string{"path": "a.py", "content": "def f():\n    print(\"DEBUG here\")\n    return 1\n"})},
+				{ID: "t", Name: "bash", Args: jsonArgs(map[string]string{"command": "go test ./..."})},
+			}},
+			fakeResp{Text: "done"},
+			fakeResp{Text: "still done"},
+		), func(c *Config) { c.Mode = "yolo"; c.NoVerifyNudge = true })
+		stop, err := h.ag.Run(context.Background(), "create a.py")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stop != StopQualityFailed {
+			t.Errorf("stop=%s, want quality_failed (real defect must reopen then fail)", stop)
+		}
+		reqs := h.fs.requests()
+		if !qgAnyReqContains(reqs, "user", "deterministic checklist") || !qgAnyReqContains(reqs, "user", "a.py:2: debug print") {
+			t.Errorf("feedback round missing for a real defect; requests=%d", len(reqs))
+		}
+	})
+
+	// Negative 2: only an over-long function, but the tests did not run this
+	// turn — reopens once as today (the advisory shortcut needs a test run).
+	t.Run("no_tests_reopens", func(t *testing.T) {
+		qgNoLint(t)
+		h := newHarness(t, seq(
+			fakeResp{Calls: []fakeCall{
+				{ID: "w", Name: "write", Args: jsonArgs(map[string]string{"path": "long.go", "content": longGoFunc()})},
+			}},
+			fakeResp{Text: "done"},
+			fakeResp{Text: "still done"},
+		), func(c *Config) { c.Mode = "yolo"; c.NoVerifyNudge = true })
+		stop, err := h.ag.Run(context.Background(), "create long.go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stop != StopQualityFailed {
+			t.Errorf("stop=%s, want quality_failed (no green tests: must reopen then fail)", stop)
+		}
+		if !qgAnyReqContains(h.fs.requests(), "user", "function Long is") {
+			t.Errorf("feedback round missing when tests did not run")
+		}
+	})
+}

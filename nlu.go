@@ -48,13 +48,15 @@ const nuMinConf = 0.6
 type Intent struct {
 	Name       string            `json:"name"` // "none" = not understood / out of domain
 	Slots      map[string]string `json:"slots,omitempty"`
-	Confidence float64           `json:"confidence"`
+	Confidence float64           `json:"confidence"`    // calibrated: P(this reading is right) — what the brain acts on
+	Raw        float64           `json:"raw,omitempty"` // the grammar's own score before nlu/calib.json
 	Evidence   []string          `json:"evidence,omitempty"`
 	Ents       []nuHit           `json:"entities,omitempty"`
-	Missing    []string          `json:"missing,omitempty"` // required slots nobody filled
-	Hint       string            `json:"hint,omitempty"`    // test | symbol | file (cue words)
-	Alt        []string          `json:"alt,omitempty"`     // runner-up intents
-	Git        bool              `json:"git,omitempty"`     // the request names git/repo explicitly
+	Missing    []string          `json:"missing,omitempty"`   // required slots nobody filled
+	Hint       string            `json:"hint,omitempty"`      // test | symbol | file (cue words)
+	Alt        []string          `json:"alt,omitempty"`       // runner-up intents
+	Git        bool              `json:"git,omitempty"`       // the request names git/repo explicitly
+	TypoOnly   bool              `json:"typo_only,omitempty"` // the intent stands only on a typo-repaired word (conf capped ≤ 0.5)
 }
 
 // Understood: a named intent with enough confidence to act on.
@@ -892,6 +894,37 @@ func (m *nuModel) rules(toks []nuTok) ([]nuMatch, map[int]bool) {
 
 // ---------- parse ----------
 
+// nuTaskEvidence reports whether the tokens carry anything a task could be
+// made of: a concept, an entity tag, a quoted string, a name-shaped word
+// (path, identifier, number) or a spotted entity. A request that is only
+// fillers, greetings and profanity has none — Parse marks it "chitchat"
+// instead of letting the classifier guess an intent for it ("porra" scored
+// list_ports, "oi" is not a git_status), and brSplitMulti drops such parts
+// from compound requests.
+func nuTaskEvidence(toks []nuTok, hits []nuHit) bool {
+	if len(hits) > 0 {
+		return true
+	}
+	for i := range toks {
+		t := &toks[i]
+		if t.Quoted || len(t.Concs) > 0 || len(t.Tags) > 0 || nuNameShaped(t.Raw) {
+			return true
+		}
+	}
+	return false
+}
+
+// taskEvidence applies the non-task gate to a raw text (one part of a
+// compound request) without the grammar/classifier work of Parse.
+func (m *nuModel) taskEvidence(text string, w *nuWorld) bool {
+	if m == nil || m.loadErr != nil {
+		return true
+	}
+	toks := m.normalize(nuTokenize(text))
+	hits := m.spot(toks, w)
+	return nuTaskEvidence(toks, hits)
+}
+
 // Parse interprets one request against world w (nil = no entities).
 func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	in := Intent{Name: "none"}
@@ -920,6 +953,11 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	var conf float64
 	switch {
 	case len(matches) == 0:
+		if !nuTaskEvidence(toks, hits) {
+			in.Hint = "chitchat"
+			in.Evidence = append(in.Evidence, "sem evidência de tarefa (saudação, desabafo ou ruído)")
+			return in
+		}
 		cls, p := m.classify(canon, nil)
 		if cls < 0 {
 			return in
@@ -982,6 +1020,41 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 	}
 	in.Slots, in.Missing, in.Hint = m.fill(def, toks, hits, used)
+	// typo-only: the rule fired, but every concept/tag it relied on is carried
+	// only by a token we typo-repaired, and no correctly-spelled token names a
+	// real entity (@file/@host/@tool/…) to corroborate it. The intent then
+	// stands on spelling guesses alone, so we cap confidence under nuMinConf
+	// (and under brLevel0Min, so the online path never short-circuits on it)
+	// and let the caller offer a one-key confirmation instead of acting.
+	// Structural, not a token count: a named entity the rule did not formally
+	// consume ("explca o parser.go") still corroborates and keeps the intent.
+	if len(used) > 0 {
+		typoOnly := true
+		for c := range used {
+			for i := range toks {
+				if toks[i].Fixed == "" && toks[i].has(c) {
+					typoOnly = false
+					break
+				}
+			}
+			if !typoOnly {
+				break
+			}
+		}
+		if typoOnly {
+			for i := range toks {
+				if toks[i].Fixed == "" && len(toks[i].Tags) > 0 {
+					typoOnly = false
+					break
+				}
+			}
+		}
+		if typoOnly {
+			in.TypoOnly = true
+			conf = math.Min(conf, 0.5)
+			in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+		}
+	}
 	for name, sd := range def.Slots {
 		if v := in.Slots[name]; sd.Shape == "name" && v != "" && in.Hint == "" && !nuNameShaped(v) {
 			conf *= 0.6 // "escreve um poema": no file name, no cue word
@@ -992,9 +1065,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		conf *= 0.6 // a long free-form request is a job for the model, not a template
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavras fora da gramática: pedido livre", res))
 	}
+	in.Raw = math.Round(conf*100) / 100
+	// the shipped calibration turns the score into a probability (nlu_calib.go);
+	// a typo-only reading stays capped so the confirm rule keeps its meaning
+	conf = nuCalibApply(in.Raw)
+	if in.TypoOnly {
+		conf = math.Min(conf, 0.5)
+	}
 	in.Confidence = math.Round(conf*100) / 100
 	if def.Name == "none" {
-		in.Confidence = 0
+		in.Confidence, in.Raw = 0, 0
 	}
 	return in
 }

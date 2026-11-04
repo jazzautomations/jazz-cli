@@ -21,7 +21,11 @@ package main
 //
 // Failures go back to the model once as a numbered list; a second failure
 // ends the turn with StopQualityFailed (exit code 9 in -p; in interactive mode
-// it is only reported). Config `quality: off|standard|strict` (default
+// it is only reported). Exception: when every finding is a low-value style nit
+// (an over-long function or a throwaway name) and the tests ran after the
+// last edit, the nits are emitted as advisory notices and the answer is accepted
+// (qgAllLowValue), so a working reply is not killed over a split-this-function
+// suggestion. Config `quality: off|standard|strict` (default
 // standard), flag --quality, env JAZZ_QUALITY. Sensitive tasks (auth, money,
 // migrations…, by keywords or changed paths) are checked as strict.
 
@@ -120,6 +124,23 @@ func (a *Agent) qgRemember(bt *bgTurn, abs string) {
 	bt.order = append(bt.order, abs)
 }
 
+// qgAllLowValue reports whether every issue is a low-value style nit — a
+// function over the line limit ("… lines (limit …") or a throwaway name — with
+// no real defect among them (debug print, commented-out block, untagged
+// shortcut, tests not run). When the tests ran after the last edit, such nits
+// go back as advisory notices instead of costing the model a reopen.
+func qgAllLowValue(issues []qgIssue) bool {
+	if len(issues) == 0 {
+		return false
+	}
+	for _, is := range issues {
+		if !strings.Contains(is.Msg, " lines (limit") && !strings.Contains(is.Msg, "throwaway name") {
+			return false
+		}
+	}
+	return true
+}
+
 // acQualityGate runs the checklist when the model wants to stop. again=true:
 // feedback was appended and the turn continues; failed=true: the checklist
 // still fails after its feedback round (the caller ends with StopQualityFailed
@@ -162,6 +183,19 @@ func (a *Agent) acQualityGate(ctx context.Context) (again, failed bool) {
 		return false, false
 	}
 	if !bt.qg.fed {
+		// Only low-value style nits (over-long function, throwaway name) and
+		// the tests ran after the last edit: accept the answer and print the
+		// nits as advisory instead of spending the one reopen on a split-this-
+		// function round that would kill a working reply. testsAfter is the
+		// turn's own counter (no clock); it says the tests ran, not that they
+		// exited 0 — bt.lastTest (budget.go) does not record the exit code.
+		if qgAllLowValue(issues) && testsAfter {
+			a.ui.Notice(fmt.Sprintf("checagem de qualidade: %d %s de estilo (testes rodaram) — aviso, resposta aceita", len(issues), uiPl(len(issues), "ponto", "pontos")))
+			for _, is := range issues {
+				a.ui.Notice("qualidade (aviso): " + oneLine(is.String(), 140))
+			}
+			return false, false
+		}
 		bt.qg.fed = true
 		a.ui.Notice(fmt.Sprintf("checagem de qualidade: %d %s — devolvendo ao modelo", len(issues), uiPl(len(issues), "problema", "problemas")))
 		a.append(Message{Role: "user", Content: qgFeedback(issues)})

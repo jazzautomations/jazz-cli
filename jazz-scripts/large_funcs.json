@@ -1,0 +1,10 @@
+{"name": "large_funcs", "version": 1, "run": "python3", "effect": "read",
+ "description": "Functions/methods longer than N lines (py/go/js/ts/rs) as data, sorted by length; best-effort",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or file to scan (default: project root)"},
+     "min_lines": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "report functions with at least this many lines (default 60)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "functions to return, longest first (default 100)"},
+     "lang": {"enum": ["any", "py", "go", "js", "rs"], "description": "restrict to one language (default any; ts/tsx count as js)"}}},
+ "output": {"data": {"funcs": [{"file": "str", "line": "int", "name": "str", "lines": "int", "lang": "str", "confidence": "num 0..1 per language (py indent 0.95, go/rs braces 0.85, js 0.7)"}],
+   "count": "int", "files_scanned": "int", "truncated": "bool", "ms": "int", "text": "str"}}}

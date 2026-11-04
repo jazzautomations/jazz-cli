@@ -1,4 +1,5 @@
 {"methods": [
+ {"name": "service_status.script", "intent": "service_status", "priority": 8, "doc": "sem systemctl: script:service_status consulta runit/docker/processo (só leitura, nunca muda estado)", "needs": ["bin.python3"], "pre": [{"fact": "slot.service", "op": "set"}, {"fact": "bin.systemctl", "op": "unset"}], "steps": [{"cap": "script:service_status", "in": {"name": "$slot.service"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1200},
  {"name": "service_status.unit", "intent": "service_status", "priority": 10,
   "doc": "systemctl status <unidade> (só leitura; exit 3 = inativo, que é a resposta)",
   "needs": ["bin.systemctl"],

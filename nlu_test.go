@@ -133,3 +133,24 @@ func TestNLUToolStatusEntityFirst(t *testing.T) {
 		t.Errorf("slot tool = %q", in.Slots["tool"])
 	}
 }
+
+// 'responde/respondendo' is host_status only with a host; without one it must
+// not land on net_status (the old network false positive of "responde só: ok").
+func TestNLURespondeIsNotNetStatus(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// No host: never net_status; ideally 'none' (honest miss / the model takes it).
+	if got := nuPredict(m.Parse("responde só: ok", w)); got == "net_status" {
+		t.Errorf("%q caiu em net_status (%v)", "responde só: ok", m.Parse("responde só: ok", w).Evidence)
+	}
+	// Positives: a real network question and a host that responds.
+	cases := map[string]string{
+		"a internet caiu?":      "net_status",
+		"o macbook responde?":   "host_status",
+		"o vps tá respondendo?": "host_status",
+	}
+	for text, want := range cases {
+		if got := nuPredict(m.Parse(text, w)); got != want {
+			t.Errorf("%q => %s (%v), want %s", text, got, m.Parse(text, w).Evidence, want)
+		}
+	}
+}

@@ -66,6 +66,12 @@ func pfOmniCommand(cfg *Config, model string, args []string) (string, error) {
 		return pfOmniStatus(cfg, model), nil
 	}
 	switch args[0] {
+	case "health", "saude", "saúde":
+		rep, dead := omniHealthProbe(cfg, 45*time.Second)
+		if dead > 0 {
+			return rep, fmt.Errorf("%d modelo(s) free morto(s) no catálogo", dead)
+		}
+		return rep, nil
 	case "on", "ligar":
 		cfg.Omni.Enabled = true
 	case "off", "desligar":

@@ -8,8 +8,8 @@
   "verify": [{"check": "script_ok", "arg": "$res"}],
   "risk": "low", "cost_ms": 600},
  {"name": "find.no_python", "intent": "find", "priority": 5,
-  "doc": "sem python3: procurar símbolo depende do find_symbol; diz isso em vez de adivinhar",
-  "pre": [{"fact": "slot.query", "op": "set"}],
+  "doc": "sem python3: procurar símbolo depende do find_symbol; diz isso em vez de adivinhar (só quando python3 falta de verdade — um find_symbol que falhou mostra o motivo real)",
+  "pre": [{"fact": "slot.query", "op": "set"}, {"fact": "bin.python3", "op": "unset"}],
   "steps": [
    {"cap": "report", "in": {"text": "procurar símbolo no código usa o script find_symbol, que precisa de python3 — e ele não está no PATH", "status": "blocked", "category": "command_missing"}}],
   "verify": [],

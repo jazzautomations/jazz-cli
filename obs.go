@@ -962,6 +962,12 @@ type obSummary struct {
 	// counts ask_user questions the project answered instead (askfacts.go).
 	Prompts      int `json:"prompts"`
 	AutoAnswered int `json:"auto_answered,omitempty"`
+	// NetWaitedMS/Outages/NetDown come from netwait events (netwait.go,
+	// agent.go): how long the run waited out WiFi outages, how many outages
+	// it rode out, and whether the network was still down at the end.
+	NetWaitedMS int64 `json:"net_waited_ms,omitempty"`
+	Outages     int   `json:"outages,omitempty"`
+	NetDown     bool  `json:"net_down,omitempty"`
 }
 
 func obSummarize(evs []obEvent) obSummary {
@@ -1036,6 +1042,27 @@ func obSummarize(evs []obEvent) obSummary {
 			s.Compactions++
 		case "recover":
 			s.Recoveries++
+		case "provider":
+			// netwait events only (netwait.go). Canonical count, no double:
+			// one outage emits an "err" line then a "back_after_s" line, so
+			// only back_after_s is counted. waited_s is the run's cumulative
+			// wait, so it is a max, never a sum.
+			if e.str("src") != "netwait" {
+				continue
+			}
+			if b := e.num("back_after_s"); b > 0 {
+				s.Outages++
+				s.NetWaitedMS += int64(b * 1000)
+			}
+			if e.str("skip") == "total wait spent" {
+				s.NetDown = true
+				if w := int64(e.num("waited_s") * 1000); w > s.NetWaitedMS {
+					s.NetWaitedMS = w
+				}
+			}
+			if e.flag("offline") {
+				s.NetDown = true
+			}
 		case "run.end":
 			s.Runs++
 			s.Status, s.Outcome, s.Exit = e.str("status"), e.str("outcome"), e.int("exit")
@@ -1049,6 +1076,10 @@ func obSummarize(evs []obEvent) obSummary {
 	}
 	if s.Outcome == "" && s.Status != "aberta" {
 		s.Outcome = obOutcome(StopReason(s.Status))
+	}
+	// a run that timed out mid-outage never saw the network come back
+	if s.Status == "timeout" && s.Outages > 0 {
+		s.NetDown = true
 	}
 	return s
 }

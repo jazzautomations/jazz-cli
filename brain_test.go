@@ -471,6 +471,12 @@ func TestBrainScriptLines(t *testing.T) {
 			t.Errorf("falta %q em:\n%s", want, got)
 		}
 	}
+	// the script's summary is the first line, and not repeated as "text:"
+	v["data"].(map[string]any)["text"] = "3 items, one nested"
+	lines := brScriptLines(v, 40)
+	if lines[0] != "3 items, one nested" || strings.Contains(strings.Join(lines, "\n"), "text:") {
+		t.Errorf("summary must come first, once: %q", lines)
+	}
 }
 
 // git_log via read_cmd: repo runs the allowlisted argv; no repo is an

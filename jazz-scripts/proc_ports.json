@@ -1,0 +1,12 @@
+{"name": "proc_ports", "version": 1, "run": "python3", "effect": "read",
+ "description": "Listening TCP ports + processes from /proc (no ps/ss/netstat); owner pid/comm of a given port",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "if set, also resolve the process that owns this listening port"},
+     "name": {"type": "string", "description": "substring of comm/cmdline to filter the process list"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "max processes/sockets to return (default 100)"}}},
+ "output": {"data": {
+   "listening": [{"proto": "str", "port": "int", "inode": "int", "pid": "int", "comm": "str"}],
+   "processes": [{"pid": "int", "ppid": "int", "comm": "str", "cmdline": "str"}],
+   "owner": {"port": "int", "pid": "int", "comm": "str", "cmdline": "str"},
+   "truncated": "bool", "ms": "int", "text": "str"}}}

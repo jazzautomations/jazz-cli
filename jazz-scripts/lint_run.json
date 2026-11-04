@@ -1,0 +1,61 @@
+{
+ "name": "lint_run",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Run installed query linters (gofmt -l, go vet, ruff/flake8, eslint, shellcheck) and parse findings",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "directory or file to lint (default: project root)"
+   },
+   "tools": {
+    "type": "array",
+    "items": {
+     "type": "string"
+    },
+    "description": "restrict to these tools: gofmt, go vet, ruff, flake8, eslint, shellcheck (default: all present)"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 5000,
+    "description": "findings to return, sorted by file/line (default 300)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "tools_run": [
+    {
+     "tool": "str",
+     "version": "str|null",
+     "exit": "int",
+     "findings": "int",
+     "ms": "int"
+    }
+   ],
+   "tools_missing": [
+    "str"
+   ],
+   "findings": [
+    {
+     "tool": "str",
+     "file": "str",
+     "line": "int",
+     "col": "int",
+     "code": "str",
+     "msg": "str",
+     "severity": "error|warning|info"
+    }
+   ],
+   "total": "int",
+   "truncated": "bool",
+   "ms": "int",
+   "text": "str"
+  }
+ }
+}

@@ -49,6 +49,16 @@ var (
 	reBtYamlList = lazyRx(`^\[(.*)\]$`)
 )
 
+// reBtExfilNet and reBtSecretWrite decide whether a recipe that touches a
+// credential file is CRITICAL (sent over the network, or written into
+// authorized_keys / a shell start-up file) or HIGH (read and written to a local
+// report, as audit scripts do). reBtDotfile alone is not that test: it matches
+// the word authorized_keys anywhere, a read included.
+var (
+	reBtExfilNet    = lazyRx(`\b(curl|wget|nc|ncat|scp|rsync|sftp|ftp)\b`)
+	reBtSecretWrite = lazyRx(`(>|>>|\btee\b(?:\s+-a)?|\bcp\b\s+\S+|\bmv\b\s+\S+|\binstall\b(?:\s+-\S+)*\s+\S+)\s*["']?\S*(authorized_keys|\.ssh/|\.(bashrc|zshrc|zprofile|zshenv|bash_profile|bash_aliases|profile)\b|\.config/fish)`)
+)
+
 type btCtx struct {
 	root, realRoot string
 	allow          []string
@@ -152,7 +162,15 @@ func (c *btCtx) shell(body, cwd string, depth int, label string, classify bool) 
 	}
 	if classify {
 		if len(lines) > 1 {
-			c.classify(strings.Join(lines, "\n"), label, "", true)
+			// The whole body only looks for download-then-execute split over
+			// lines (curl -o on one, sh on another). Every other classifier
+			// runs per line: joined, ".ssh/" on one line and "2>/dev/null" on
+			// another read as credential exfiltration.
+			if pr := shellParse(strings.Join(lines, "\n")); pr.ok {
+				if r := downloadExecReason(pr.segs); r != "" {
+					c.add(true, label, r, "")
+				}
+			}
 		}
 		for _, l := range lines {
 			c.classify(l, label, l, true)
@@ -187,11 +205,29 @@ func btCritWhole(r string) bool {
 	return !strings.HasPrefix(r, "apaga arquivos vindos da entrada")
 }
 
+// btSecretReason is dangerWholeSh's verdict for a credential file next to a
+// write or transfer verb (safety.go).
+const btSecretReason = "mexe em credenciais ou config sensível"
+
+// btSecretLocal reports whether a recipe that touches a credential file keeps
+// the data on the machine: no egress to any host (egress_allow does not relax
+// secrets, as in Agent.permit), no network client, no env dump over the
+// network, no write into authorized_keys or a shell start-up file. Such a
+// recipe (an audit script fingerprinting ~/.ssh into a report) is HIGH: it
+// asks once in every mode instead of being blocked as hostile.
+func btSecretLocal(text string, eg bool) bool {
+	return !eg && !reBtExfilNet.MatchString(text) && !reBtEnv.MatchString(text) && !reBtSecretWrite.MatchString(text)
+}
+
 // classify runs the direct-command classifiers over text.
 func (c *btCtx) classify(text, label, snip string, egress bool) {
-	crit := false
+	crit, secretLocal := false, false
+	h, eg := EgressTarget(text) // once: the secret verdict and the egress finding share it
 	if r := dangerWholeSh(text); r != "" {
 		cr := btCritWhole(r)
+		if r == btSecretReason && btSecretLocal(text, eg) {
+			cr, secretLocal, r = false, true, r+" (gravação local)"
+		}
 		c.add(cr, label, r, snip)
 		crit = crit || cr
 	}
@@ -215,13 +251,11 @@ func (c *btCtx) classify(text, label, snip string, egress bool) {
 		c.add(true, label, "envia variáveis de ambiente (segredos) pela rede", snip)
 		crit = true
 	}
-	if !crit && reSecretFile.MatchString(text) {
+	if !crit && !secretLocal && reSecretFile.MatchString(text) {
 		c.add(false, label, "lê credenciais ou config sensível", snip)
 	}
-	if egress {
-		if h, eg := EgressTarget(text); eg && !egressAllowed(h, c.allow) {
-			c.add(false, label, "envia dados para fora da máquina (destino: "+h+")", snip)
-		}
+	if egress && eg && !egressAllowed(h, c.allow) {
+		c.add(false, label, "envia dados para fora da máquina (destino: "+h+")", snip)
 	}
 }
 

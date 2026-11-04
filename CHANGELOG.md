@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.12.0
+
+### Cardápio offline: 38 scripts determinísticos, e o cérebro offline usa 26 deles sem modelo
+
+- 18 scripts novos em `jazz-scripts/` (v1: config_get, dotenv_check, proc_ports, disk_usage, file_hash_diff,
+  service_status, git_cochange, todo_scan · v2: git_blame_hot, git_branch_status, git_conflict_scan, lint_run,
+  symbol_refs, large_funcs, dup_code, license_scan, dep_graph, dep_outdated). Todos stdlib, sem rede, só
+  consulta, saída determinística com orçamento e `truncated`, `text` de uma linha que responde a pergunta.
+  Oráculos honestos: dono de porta ilegível é `null` (não `pid 0`), processo casa por nome exato (nunca
+  substring), `dotenv_check` só emite NOMES de variáveis. Mapa completo em `docs/research/cardapio-offline.md`.
+- Cérebro offline ligado ao cardápio: 17 conceitos e 14 intents novos (`todo_scan`, `git_cochange`, `git_blame`,
+  `git_branch_status`, `git_conflict_scan`, `dotenv_check`, `config_get`, `file_snapshot`, `dep_graph`,
+  `dep_outdated`, `dup_code`, `license_scan`, `large_funcs`, `symbol_refs`), métodos `script:<nome>` em
+  `methods/`; `list_ports` lê `/proc` (sem `ss`), `disk_usage` usa statvfs (sem `df`), `lint` cai nos linters
+  instalados quando o projeto não tem comando. "quantas portas TCP estão escutando?" responde em < 1 s com 0
+  tokens na máquina de referência (antes ia pro modelo). A primeira linha da resposta é o resumo do script.
+- Fallbacks `.no_python` só disparam quando python3 falta de verdade (antes diziam "precisa de python3" quando
+  o script tinha falhado por outro motivo — inclusive em `find`). `$goal` em métodos: o pedido inteiro vai
+  pro script, que casa com dados reais (`config_get` acha a chave e o arquivo).
+- Split de pedido composto ("A e B") só quando cada parte é lida com confiança de ação; "procura por TODO e
+  FIXME" é uma tarefa, não duas.
+
+### Confiança calibrada (0.13)
+
+- `nlu_calib.go` + `nlu/calib.json`: a confiança que o cérebro compara com os limiares agora é probabilidade
+  calibrada (isotônica), forjada com K-fold sobre os exemplos da gramática (o classificador nunca vê o
+  exemplo que pontua), negativos e prompts do eval — 901 amostras. `Intent.Raw` guarda o score cru;
+  **opt-in nesta versão** (`JAZZ_NLU_CALIB=on`): as amostras ainda são os exemplos da gramática (95% de
+  acerto) e o piso isotônico levantava leituras fracas acima do limiar — próximo passo é amostrar dos misses reais; regenerar: `JAZZ_UPDATE_CALIB=1 go test -run 'TestNLUCalibAsset$'`.
+  O que a curva mostrou: score cru entre 0,16 e 0,82 acerta ~60–64%; regra sem classificador (0,90) acerta
+  93%; regra e classificador de acordo (0,97) acerta 99%.
+- Limiar de ação por faixa de risco sobre a confiança calibrada (Chow assimétrico, `brActMin`): leitura
+  verificável age com menos certeza do que mutação; a pergunta fica pra quando o erro custa.
+
+### Provedores e rede
+
+- `jazz omni health`: sonda cada modelo free com 1 token e explica o erro — chave recusada/expirada (401, e o
+  400 "valid API key" do Gemini) × modelo morto (404/descontinuado) × cota (429) × fora (5xx). Catálogo sem
+  ids mortos; Pollinations sem chave; `kiloFastFree` atualizado. CI diário `free-models-health.yml` abre
+  issue quando um modelo free some.
+- `--fresh` / `JAZZ_FRESH`: janela de contexto independente da memória (sem AGENTS.md, lições e memória
+  automática) — modo incógnito ao lado do modo com memória.
+- Espera de rede com teto (`netwait`): numa queda, espera no máximo `min(limite, 1/4 do orçamento)` por vez e
+  15 min no total — antes uma queda comia o orçamento inteiro (raiz dos timeouts em lote).
+- Compactação com fallback determinístico quando o resumo do modelo vem vazio; prazo de execução
+  (`RunDeadline`) com parada suave e nota de retomada.
+
+- ChatGPT (assinatura): ids de modelo atuais (`gpt-6.1-sol` padrão, `gpt-6.1-terra`, `gpt-6-luna`; o
+  `gpt-5.5-codex` não existe mais). Sem `jazz login chatgpt`, o jazz usa a sessão do Codex CLI
+  (`~/.codex/auth.json` / `CODEX_HOME`) só para leitura — nunca renova o token dele (a rotação
+  deslogaria o Codex); expirada, avisa pra rodar `codex` uma vez ou logar.
+
+### Confirmação, sandbox e segurança
+
+- Confirmação de intenção só quando a LEITURA é incerta (typo-only ou confiança abaixo do limiar); mutação
+  entendida com confiança alta não ganha pergunta extra — o consentimento é o gate de permissão na execução.
+- `--yolo` compartilha o namespace de PID do host (gerência de processo); fora dele continua isolado
+  (`JAZZ_SANDBOX_HOST_PID=1` liga à parte).
+- `.gitleaks.toml` com regras pra hosts de tailnet, caminhos de home e ids de WhatsApp. O repo é público.
+
+### Medido na máquina de referência (1 núcleo, 2 GB, linux/386)
+
+`jazz eval offline`: 95 tarefas (eram 75) · 95/95 com sucesso verificado · falso sucesso 0 · 93/95 sem
+modelo · perguntas = necessárias · p50 ~40 ms · p95 ~400 ms · RSS ~140 MB. Suíte Go inteira ok.
+Passagem de bastão e armadilhas: `docs/HANDOFF.md`.
+
 ## 0.11.0
 
 ### O agente sabe onde está e onde cada saída nasceu

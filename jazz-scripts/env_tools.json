@@ -1,0 +1,11 @@
+{"name": "env_tools", "version": 1, "run": "python3", "effect": "read",
+ "description": "Which toolchains/binaries the machine has (git, python3, go, node, docker, gcc...) with versions; no network",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "tools": {"type": "array", "items": {"type": "string"}, "description": "binary names to check instead of the built-in list of 18 (git, python3, go, node, npm, docker, podman, gcc, make, cargo, rustc, java, ruby, php, ssh, rg, jq, curl)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "max present tools to version-probe and return (default 50)"}}},
+ "output": {"data": {
+   "tools": [{"name": "str", "path": "str", "version": "str|null", "ok": "bool", "error": "str|null"}],
+   "missing": ["str"],
+   "os": {"system": "str", "release": "str", "machine": "str", "python": "str"},
+   "truncated": "bool", "ms": "int", "text": "str"}}}

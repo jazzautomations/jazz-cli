@@ -1,0 +1,12 @@
+{"name": "mem_top", "version": 1, "run": "python3", "effect": "read",
+ "description": "Memory totals from /proc/meminfo and top-N processes by RSS from /proc/<pid>/statm (no free/ps/top)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "top": {"type": "integer", "minimum": 1, "maximum": 50, "description": "how many biggest processes (by RSS) to return (default 10)"},
+     "name": {"type": "string", "description": "case-insensitive substring of comm/cmdline to filter processes before ranking"}}},
+ "output": {"data": {
+   "mem": {"total_mb": "num", "available_mb": "num", "used_mb": "num", "used_pct": "num",
+           "free_mb": "num|null", "buffers_mb": "num|null", "cached_mb": "num|null",
+           "swap_total_mb": "num|null", "swap_used_mb": "num|null"},
+   "top": [{"pid": "int", "rss_mb": "num", "comm": "str", "cmdline": "str"}],
+   "scanned": "int", "matched": "int", "skipped": "int", "truncated": "bool", "ms": "int", "text": "str"}}}

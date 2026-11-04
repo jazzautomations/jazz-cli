@@ -1,0 +1,11 @@
+{"name": "license_scan", "version": 1, "run": "python3", "effect": "read",
+ "description": "Project licenses: LICENSE/COPYING files identified by text, manifest license fields, SPDX headers, conflicts",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory (or single file) to scan (default: project root)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 20000, "description": "code files whose first 20 lines are read for SPDX headers (default 500)"}}},
+ "output": {"data": {
+   "project_licenses": [{"file": "str", "id": "str (SPDX id or unknown)", "confidence": "0..1"}],
+   "manifest_licenses": [{"file": "str", "id": "str (as written, may be an SPDX expression)"}],
+   "spdx_headers": {"ID": "int"}, "files_with_header": "int", "files_without_header": "int", "files_scanned": "int",
+   "conflicts": ["str"], "truncated": "bool", "text": "str"}}}

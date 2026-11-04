@@ -316,7 +316,7 @@ func defaultProviders() map[string]*ProviderConf {
 			Signup: "https://console.anthropic.com/settings/keys", KeyHint: "começa com sk-ant-", KeyRE: `^sk-ant-`, Title: "Anthropic (pago)"},
 		"openai": {Type: "openai", BaseURL: "https://api.openai.com/v1", KeyEnv: "OPENAI_API_KEY", DefaultModel: "gpt-6-astra",
 			Signup: "https://platform.openai.com/api-keys", KeyHint: "começa com sk-", KeyRE: `^sk-`, Quirks: []string{"effort"}, Title: "OpenAI API (pago)"},
-		"chatgpt": {Type: "codex", BaseURL: "https://chatgpt.com/backend-api/codex", DefaultModel: "gpt-5.5-codex", Sub: true, Title: "ChatGPT (assinatura)"},
+		"chatgpt": {Type: "codex", BaseURL: "https://chatgpt.com/backend-api/codex", DefaultModel: "gpt-6.1-sol", Sub: true, Title: "ChatGPT (assinatura)"},
 	}
 	for k, v := range omniPresets() {
 		m[k] = v

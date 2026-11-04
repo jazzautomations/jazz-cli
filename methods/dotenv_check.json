@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "dotenv_check.script", "intent": "dotenv_check", "priority": 10, "doc": "script:dotenv_check: .env × .env.example — só NOMES de variáveis, nunca valores", "needs": ["bin.python3"], "steps": [{"cap": "script:dotenv_check", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "dotenv_check.no_python", "intent": "dotenv_check", "priority": 1, "doc": "sem python3 o script dotenv_check não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script dotenv_check, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

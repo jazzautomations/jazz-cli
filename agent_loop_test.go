@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -355,5 +356,103 @@ func TestAcReviewLGTM(t *testing.T) {
 	}
 	if got := acReviewReport("1. bug\n[subagent used 2 tools, 30 tokens]"); got != "1. bug" {
 		t.Errorf("acReviewReport = %q", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// run clock: wrap-up nudge at 3/4 of --timeout, no reopening once warned
+// ---------------------------------------------------------------------------
+
+// countMsg counts user messages whose content holds substr.
+func countMsg(msgs []Message, substr string) int {
+	n := 0
+	for _, m := range msgs {
+		if m.Role == "user" && strings.Contains(m.Content, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestDeadlineWarnNudgesWrapUp(t *testing.T) {
+	// warn active across a multi-step turn: the wrap-up reminder is appended
+	// exactly once, not on every step.
+	readCall := fakeCall{ID: "r1", Name: "bash", Args: `{"command":"echo one"}`}
+	h := newHarness(t, seq(
+		fakeResp{Calls: []fakeCall{readCall}},
+		fakeResp{Text: "pronto, resposta final"},
+	), nil)
+	h.ag.obDeadlineWarn("test")
+	stop, err := h.ag.Run(context.Background(), "go")
+	if err != nil || stop != StopDone {
+		t.Fatalf("stop=%s err=%v", stop, err)
+	}
+	if n := countMsg(h.ag.Msgs, "termine a edição atual"); n != 1 {
+		t.Errorf("wrap-up nudge appeared %d times, want exactly 1", n)
+	}
+}
+
+func TestDeadlineWarnDoesNotReopen(t *testing.T) {
+	writeGo := fakeCall{ID: "w1", Name: "write", Args: jsonArgs(map[string]any{"path": "main.go", "content": "package main\n"})}
+	todo := fakeCall{ID: "t1", Name: "todo", Args: jsonArgs(map[string]any{"todos": []any{
+		map[string]any{"content": "finish it", "status": "in_progress"},
+	}})}
+
+	// An edited-but-unverified change plus an open todo would normally reopen
+	// the turn (verify + todo nudges). With the deadline warning active the
+	// model's final answer must stand instead.
+	t.Run("no reopen when warned", func(t *testing.T) {
+		h := newHarness(t, seq(
+			fakeResp{Calls: []fakeCall{writeGo, todo}},
+			fakeResp{Text: "feito; falta rodar os testes"},
+		), nil)
+		h.ag.obDeadlineWarn("test")
+		stop, err := h.ag.Run(context.Background(), "go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stop != StopDone {
+			t.Fatalf("stop = %s, want done", stop)
+		}
+		if n := len(h.fs.requests()); n != 2 {
+			t.Fatalf("turn reopened: requests = %d, want 2", n)
+		}
+		last := h.fs.requests()[1]
+		if last.contains("user", "did not run anything") || last.contains("user", "unfinished items") {
+			t.Errorf("warned turn must not nudge verify/todo")
+		}
+	})
+
+	// --until is the user's explicit done-criterion: it still runs when warned.
+	t.Run("until still runs when warned", func(t *testing.T) {
+		h := newHarness(t, func(int, recReq) fakeResp { return fakeResp{Text: "finished"} }, nil)
+		h.ag.SetLoopOpts(LoopOpts{Until: "false", UntilRounds: 2})
+		h.ag.obDeadlineWarn("test")
+		if _, err := h.ag.Run(context.Background(), "go"); err != nil {
+			t.Fatal(err)
+		}
+		if n := acCountStarts(h.ui, "until "); n == 0 {
+			t.Errorf("--until must still run when the deadline warning is active")
+		}
+	})
+}
+
+func TestRunDeadlineSetFromTimeout(t *testing.T) {
+	h := newHarness(t, func(int, recReq) fakeResp { return fakeResp{Text: "x"} }, nil)
+	before := time.Now()
+	stop := obArmDeadline(h.ag, 45*time.Minute)
+	defer stop()
+	want := before.Add(45 * time.Minute)
+	if d := h.ag.RunDeadline.Sub(want); d < -time.Second || d > time.Second {
+		t.Errorf("RunDeadline = %v, want ~%v (off by %v)", h.ag.RunDeadline, want, d)
+	}
+	if h.ag.obDeadlineWarned() {
+		t.Errorf("warning must not fire immediately on arm")
+	}
+	// zero timeout: no deadline, no warning armed
+	h2 := newHarness(t, func(int, recReq) fakeResp { return fakeResp{Text: "x"} }, nil)
+	obArmDeadline(h2.ag, 0)()
+	if !h2.ag.RunDeadline.IsZero() {
+		t.Errorf("zero timeout must leave RunDeadline unset, got %v", h2.ag.RunDeadline)
 	}
 }

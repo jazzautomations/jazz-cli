@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+
+[project]
+name = "demo-svc"
+version = "0.1.0"
+dependencies = [
+    "httpkit>=2.0",          # loose
+    "numlib==1.4.0",         # exact, lock has 1.5.0 -> mismatched
+    "Yaml_Kit~=5.1",         # compatible release: prefix 5.1
+    "orphan-pkg==0.1.0",     # not in the lock
+]
+
+[project.optional-dependencies]
+dev = ["testkit>=7"]

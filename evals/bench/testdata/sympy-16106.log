@@ -1,0 +1,17 @@
+· sessão 20261020-225001-c0de · kilo/poolside/laguna-s-2.1:free
+● bash python -m pytest sympy/printing/tests/test_mathml.py -q
+  ⎿ bash 1 failed, 55 passed (33.0s)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+· a rede voltou depois de 4m0s — tentando de novo
+● read sympy/printing/mathml.py
+  ⎿ read 1900 lines (10ms)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+· a rede voltou depois de 5m0s — tentando de novo
+● edit sympy/printing/mathml.py
+  ⎿ edit 1 hunk (3ms)
+● bash python -m pytest sympy/printing/tests/test_mathml.py -q
+  ⎿ bash 1 failed, 55 passed (34.1s)
+● read sympy/printing/mathml.py
+  ⎿ read 1900 lines (10ms)
+jazz: tempo esgotado: a execução passou de --timeout 45m0s
+jazz: execução interrompida pelo prazo (timeout) — trabalho salvo: checkpoint 9f8e7d · nota -

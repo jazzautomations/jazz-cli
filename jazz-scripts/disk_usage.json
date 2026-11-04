@@ -1,0 +1,13 @@
+{"name": "disk_usage", "version": 1, "run": "python3", "effect": "read",
+ "description": "Disk usage via statvfs + os.walk (no du/df): fs totals and the biggest dirs/files under a path",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory to scan (default: project root)"},
+     "top": {"type": "integer", "minimum": 1, "maximum": 200, "description": "how many biggest dirs/files to return (default 15)"},
+     "min_mb": {"type": "number", "minimum": 0, "description": "ignore dirs/files smaller than this many MB (default 0)"},
+     "skip_git": {"type": "boolean", "description": "skip .git directories (default true)"}}},
+ "output": {"data": {
+   "fs": {"total": "int", "used": "int", "free": "int", "used_pct": "num"},
+   "dirs": [{"path": "str", "bytes": "int"}],
+   "files": [{"path": "str", "bytes": "int"}],
+   "scanned": "int", "truncated": "bool", "ms": "int", "text": "str"}}}

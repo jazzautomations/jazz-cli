@@ -6,7 +6,7 @@ package main
 //   - task size S/M/L and kind (bugfix/greenfield/refactor/sensitive/question)
 //     are classified from the user's message with regexes (no LLM call);
 //   - step budget S 12 / M 25 / L 50: a reminder at 70% and at 100%, and in
-//     lean mode a hard stop at 2x (never above --max-steps);
+//     lean mode a hard stop at ~1.5x (never above --max-steps);
 //   - exploration cap S 4 / M 8 / L 15 read/search calls before the first edit:
 //     a nudge when it is reached, refused calls at 2x (lean);
 //   - reread guard: a second full read of an unchanged file returns a pointer
@@ -38,6 +38,10 @@ const (
 // bgMaxHash bounds the files the reread guard and the quality gate hash or keep.
 const bgMaxHash = 1 << 20
 
+// bgCloseGrace is the floor for the lean step grace above the budget: the hard
+// stop is stepBudget + max(bgCloseGrace, half the budget) ≈ 1.5x the budget.
+const bgCloseGrace = 5
+
 // bgTask is what the classifier makes of a request.
 type bgTask struct {
 	Size       byte   // 'S', 'M' or 'L'
@@ -59,6 +63,7 @@ type bgTurn struct {
 	warnedExpl bool
 	warned70   bool
 	warned100  bool
+	warnedLast bool            // the 1.25x "last pass" nudge already fired
 	refused    map[string]bool // write guard already fired for this path
 
 	// quality gate (quality.go)
@@ -79,10 +84,11 @@ type bgRead struct {
 
 // bgState lives on the Agent (lazily created).
 type bgState struct {
-	reads map[string]bgRead
-	turn  *bgTurn
-	netMu sync.Mutex
-	netUp int64 // unix nano of the last successful connectivity probe
+	reads     map[string]bgRead
+	turn      *bgTurn
+	netMu     sync.Mutex
+	netUp     int64 // unix nano of the last successful connectivity probe
+	netWaited int64 // total ns spent waiting out outages in this run (netwait.go)
 }
 
 func (a *Agent) bg() *bgState {
@@ -259,13 +265,19 @@ func bgKindHint(t bgTask) string {
 	return h
 }
 
-// bgStepLimit lowers the turn's step limit to twice the step budget (lean).
+// bgStepLimit lowers the turn's step limit (lean) to stepBudget plus a grace of
+// max(bgCloseGrace, half the budget rounded up) — about 1.5x the budget
+// (S 12→18, M 25→38, L 50→75), never above --max-steps.
 func (a *Agent) bgStepLimit(max int) int {
 	bt := a.bgTurnState()
 	if bt == nil || !bt.hardSteps || bt.stepBudget <= 0 {
 		return max
 	}
-	if h := 2 * bt.stepBudget; h < max {
+	grace := (bt.stepBudget + 1) / 2 // half the budget, rounded up
+	if grace < bgCloseGrace {
+		grace = bgCloseGrace
+	}
+	if h := bt.stepBudget + grace; h < max {
 		return h
 	}
 	bt.hardSteps = false // --max-steps is lower: it stays the only limit
@@ -280,6 +292,10 @@ func (a *Agent) bgStepNote(step int) string {
 	}
 	used := step - 1
 	switch {
+	case used*4 >= bt.stepBudget*5 && !bt.warnedLast:
+		bt.warnedLast, bt.warned100, bt.warned70 = true, true, true
+		dbg("budget", map[string]any{"steps_last_pass": used})
+		return "<system-reminder>You are well past budget: last pass — make no new edits, verify once and give the final answer.</system-reminder>"
 	case used >= bt.stepBudget && !bt.warned100:
 		bt.warned100, bt.warned70 = true, true
 		dbg("budget", map[string]any{"steps_reached": used})
@@ -294,7 +310,7 @@ func (a *Agent) bgStepNote(step int) string {
 // bgAtLimit explains a step-limit stop caused by the budget's hard cap.
 func (a *Agent) bgAtLimit() {
 	if bt := a.bgTurnState(); bt != nil && bt.hardSteps {
-		a.ui.Warn(fmt.Sprintf("orçamento de passos da tarefa esgotado (tamanho %c: %d passos, parada no dobro) — para tarefas longas use --budget normal ou off", bt.task.Size, bt.stepBudget))
+		a.ui.Warn(fmt.Sprintf("orçamento de passos da tarefa esgotado (tamanho %c: %d passos, parada em ~1,5x) — para tarefas longas use --budget normal ou off", bt.task.Size, bt.stepBudget))
 	}
 }
 

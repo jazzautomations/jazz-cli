@@ -13,7 +13,10 @@ package main
 // provider itself is failing), the normal fallback logic goes on. None: no
 // candidate could answer either, so we wait with backoff, probing, until the
 // network is back (then the same candidate is retried, with no stall penalty)
-// or until the run's deadline (--timeout cancels ctx), capped at bgNetMaxWait.
+// or until the run's deadline (--timeout cancels ctx). One wait is capped at
+// bgNetMaxWait (no deadline) or a quarter of what is left (at least bgNetMinWait,
+// with a deadline), and all the waits of one run together at bgNetTotalWait:
+// an outage can delay a run, never swallow it whole.
 // A successful probe is trusted for bgNetFresh, so a flaky provider costs at
 // most one probe every 20 s.
 //
@@ -37,6 +40,13 @@ var (
 	bgNetBackoff = []time.Duration{3 * time.Second, 6 * time.Second, 12 * time.Second, 20 * time.Second, 30 * time.Second}
 	// bgNetMaxWait caps one outage wait when ctx has no deadline (interactive).
 	bgNetMaxWait = 30 * time.Minute
+	// bgNetMinWait: with a deadline one wait is still at least this long, so a
+	// typical 3-5 min WiFi blip on the Dell is ridden out instead of failing.
+	bgNetMinWait = 5 * time.Minute
+	// bgNetTotalWait caps the time spent waiting out outages in one run: after
+	// that a new outage fails the request at once instead of burning the clock
+	// (eval 2026-10-20: 6 SWE tasks timed out at 45 min waiting for the WiFi).
+	bgNetTotalWait = 15 * time.Minute
 	// bgNetFresh: a successful probe this recent skips the next one.
 	bgNetFresh = 20 * time.Second
 	// bgNetSkipLocal: failures of loopback/LAN providers never mean an outage
@@ -113,11 +123,40 @@ func (a *Agent) bgNetWait(ctx context.Context, ref string, err error, cands []st
 		return false
 	}
 	t0 := time.Now()
+	st.netMu.Lock()
+	waited := time.Duration(st.netWaited)
+	st.netMu.Unlock()
+	if waited >= bgNetTotalWait {
+		dbg("netwait", map[string]any{"ref": ref, "skip": "total wait spent", "waited_s": waited.Seconds()})
+		a.ui.Warn(fmt.Sprintf("sem conexão com a internet de novo — já esperei %s nesta execução, não espero mais", waited.Round(time.Second)))
+		return false
+	}
+	spent := func() {
+		st.netMu.Lock()
+		st.netWaited += int64(time.Since(t0))
+		st.netMu.Unlock()
+	}
 	dbg("netwait", map[string]any{"ref": ref, "err": oneLine(err.Error(), 200)})
 	a.ui.Warn("sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)")
+	// one wait never eats the run: a quarter of what is left (at least
+	// bgNetMinWait, never past the deadline), capped at bgNetMaxWait and at
+	// what is left of the run's total allowance
 	limit := bgNetMaxWait
 	if dl, ok := ctx.Deadline(); ok {
-		limit = time.Until(dl)
+		rem := time.Until(dl)
+		l := rem / 4
+		if l < bgNetMinWait {
+			l = bgNetMinWait
+		}
+		if l > rem {
+			l = rem
+		}
+		if l < limit {
+			limit = l
+		}
+	}
+	if left := bgNetTotalWait - waited; left < limit {
+		limit = left
 	}
 	for i := 0; ; i++ {
 		wait := bgNetBackoff[min(i, len(bgNetBackoff)-1)]
@@ -136,10 +175,12 @@ func (a *Agent) bgNetWait(ctx context.Context, ref string, err error, cands []st
 			return true
 		}
 		if time.Since(t0) >= limit {
+			spent()
 			a.ui.Warn(fmt.Sprintf("a rede não voltou em %s — desisti de esperar", time.Since(t0).Round(time.Second)))
 			return false
 		}
 	}
+	spent()
 	st.netMu.Lock()
 	st.netUp = time.Now().UnixNano()
 	st.netMu.Unlock()

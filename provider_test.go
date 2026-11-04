@@ -1564,6 +1564,7 @@ func TestProviderCodexFailed(t *testing.T) {
 }
 
 func TestProviderCodexNotLoggedIn(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir()) // the machine's Codex CLI login must not leak in
 	t.Setenv("JAZZ_HOME", t.TempDir())
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { atomic.AddInt32(&hits, 1) }))

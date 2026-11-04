@@ -143,6 +143,10 @@ func lsConfigure(cfg *Config, flagVal string) error {
 	if v == "" && cfg != nil {
 		v = strings.TrimSpace(cfg.Lessons)
 	}
+	if pfFresh() { // --fresh venceu: lições ficam off seja qual for a flag (fresh.go)
+		lsState.Store(2)
+		return nil
+	}
 	switch strings.ToLower(v) {
 	case "", "on", "1", "true", "yes":
 		lsState.Store(1)

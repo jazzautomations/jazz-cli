@@ -1,0 +1,15 @@
+{"name": "dup_code", "version": 1, "run": "python3", "effect": "read",
+ "description": "Near-duplicate code blocks: windows of normalized lines hashed, merged into groups with file/start/end",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or file to scan (default: project root)"},
+     "window": {"type": "integer", "minimum": 3, "maximum": 50, "description": "significant lines per hashed window; the smallest block reported (default 6)"},
+     "min_block": {"type": "integer", "minimum": 1, "maximum": 500, "description": "drop groups shorter than this many significant lines (default 6)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "groups to return, biggest first (default 100)"},
+     "lang": {"type": "string", "description": "only this language/extension: python, go, javascript, typescript, rust, java, c, cpp, ruby, php, shell, sql... (default: all code)"}}},
+ "output": {"data": {
+   "groups": [{"lines": "int (significant lines in the block)",
+     "occurrences": [{"file": "str", "start": "int (1-based line)", "end": "int"}],
+     "sample": "str (first normalized line)"}],
+   "total_groups": "int", "total_dup_lines": "int (lines x (copies - 1) over all groups)",
+   "files_scanned": "int", "window": "int", "truncated": "bool", "text": "str"}}}

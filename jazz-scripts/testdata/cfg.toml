@@ -1,0 +1,17 @@
+# project manifest
+title = "Jazz CLI"
+version = "0.4.0"
+debug = false
+
+[server]
+host = "127.0.0.1"
+port = 9090
+
+[server.limits]
+max_files = 20000
+
+[[owners]]
+name = "ana"
+
+[[owners]]
+name = "bruno"

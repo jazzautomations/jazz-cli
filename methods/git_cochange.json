@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "git_cochange.script", "intent": "git_cochange", "priority": 10, "doc": "script:git_cochange: pares que mudam juntos + churn, só git log (sem rede)", "needs": ["bin.python3", "bin.git"], "steps": [{"cap": "script:git_cochange", "in": {"files": "$slot.target"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "git_cochange.no_python", "intent": "git_cochange", "priority": 1, "doc": "sem python3 o script git_cochange não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script git_cochange, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

@@ -1,0 +1,23 @@
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "httpkit"
+version = "2.3.1"
+source = { registry = "https://example.invalid/simple" }
+
+[[package]]
+name = "numlib"
+version = "1.5.0"
+source = { registry = "https://example.invalid/simple" }
+
+[package.metadata]
+requires-dist = []
+
+[[package]]
+name = "yaml-kit"
+version = "5.1.2"
+
+[[package]]
+name = "testkit"
+version = "7.4.0"

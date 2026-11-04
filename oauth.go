@@ -270,7 +270,14 @@ func chatgptCred(ctx context.Context, force bool) (*Cred, error) {
 	defer refreshMu.Unlock()
 	cr := LoadAuth()["chatgpt"]
 	if cr == nil || cr.Refresh == "" {
-		return nil, errors.New("não logado no ChatGPT — rode: jazz login chatgpt")
+		// no login of our own: borrow the Codex CLI's session read-only (oauth_codexcli.go)
+		if cc := codexCLICred(); cc != nil {
+			if cc.Expires-time.Now().UnixMilli() > 60*1000 {
+				return cc, nil
+			}
+			return nil, errors.New("a sessão do Codex CLI expirou — rode `codex` uma vez (ele renova) ou: jazz login chatgpt")
+		}
+		return nil, errors.New("não logado no ChatGPT — rode: jazz login chatgpt (ou faça login no Codex CLI)")
 	}
 	now := time.Now().UnixMilli()
 	if !force && !pvCredStale(cr, now) {

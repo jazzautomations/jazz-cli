@@ -1,0 +1,7 @@
+[build-system]
+requires = ["setuptools"]
+
+[project]
+name = "demo-tools"
+version = "0.1.0"
+license = { text = "GPL-3.0" }

@@ -1,0 +1,6 @@
+· sessão 20261021-120002-beef · kilo/poolside/laguna-s-2.1:free
+● bash python -m pytest sympy/solvers/tests/test_solvers.py -q
+  ⎿ bash 3 failed, 400 passed (120.7s)
+● read sympy/solvers/solvers.py
+  ⎿ read 3500 lines (15ms)
+● bash python -m pytest sympy/solvers/tests/test_solvers.py -q -k test_issue

@@ -231,6 +231,9 @@ func (cx *brCtx) subst(v string) any {
 	if k == "hint" {
 		return cx.in.Hint
 	}
+	if k == "goal" { // the request as typed: scripts that match it against real data (config keys)
+		return cx.task.Goal
+	}
 	if strings.HasPrefix(k, "fact.") {
 		return cx.facts[k[5:]]
 	}
@@ -971,11 +974,23 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 	return brStep{val: v, obs: obs, ok: true}
 }
 
-// brScriptLines renders a script's data payload for the terminal: scalars
-// inline, arrays one item per line (≤10), nested maps indented.
+// brScriptLines renders a script's data payload for the terminal: the
+// script's own one-line summary (data.text) first — that is the answer a
+// person reads — then scalars inline, arrays one item per line (≤10),
+// nested maps indented.
 func brScriptLines(v any, max int) []string {
 	data, _ := v.(map[string]any)["data"].(map[string]any)
 	var lines []string
+	if text, _ := data["text"].(string); strings.TrimSpace(text) != "" {
+		lines = append(lines, strings.TrimSpace(text))
+		rest := make(map[string]any, len(data))
+		for k, x := range data {
+			if k != "text" {
+				rest[k] = x
+			}
+		}
+		data = rest
+	}
 	var walk func(m map[string]any, pad string)
 	walk = func(m map[string]any, pad string) {
 		var keys []string
@@ -1030,6 +1045,8 @@ func brScriptKV(m map[string]any) string {
 			break
 		}
 		switch x := m[k].(type) {
+		case nil:
+			continue // an unknown value is not worth a "pid=<nil>" on screen
 		case map[string]any, []any:
 			b, _ := json.Marshal(x)
 			parts = append(parts, k+"="+scCut(string(b), 60))
@@ -1677,18 +1694,25 @@ func brReport(cx *brCtx, in map[string]string) brStep {
 
 // brVerify runs a method's checks: ok, or why not; unavailable = nothing
 // could check (the result is "unverified", never "succeeded").
+//
+// Every check that passes leaves one human proof line in the answer
+// ("conferi: README.md existe (49 bytes)"): "feito e verificado" without the
+// proof is the kind of verdict the offline brain must not print (P4/P5).
 func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 	if len(m.Verify) == 0 {
 		return false, true, "este método não tem verificador"
 	}
+	var proofs []string
 	for _, c := range m.Verify {
 		arg := cx.subst(c.Arg)
 		switch c.Check {
 		case "file_exists":
 			rel, _ := arg.(string)
-			if _, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel))); rel == "" || err != nil {
+			fi, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel)))
+			if rel == "" || err != nil {
 				return false, false, "o arquivo não existe: " + rel
 			}
+			proofs = append(proofs, brProofFile(rel, fi))
 		case "file_gone":
 			rel, _ := arg.(string)
 			if rel == "" {
@@ -1697,15 +1721,18 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if _, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel))); err == nil {
 				return false, false, "o arquivo ainda existe: " + rel
 			}
+			proofs = append(proofs, rel+" não existe mais")
 		case "read_ok":
 			if _, isStr := arg.(string); !isStr {
 				return false, false, "o conteúdo não foi lido"
 			}
+			proofs = append(proofs, "conteúdo lido")
 		case "exit_zero":
 			r, isRes := arg.(brCmdRes)
 			if !isRes || r.Exit != 0 {
 				return false, false, "o comando não terminou com 0"
 			}
+			proofs = append(proofs, brProofCmd(r.Cmd, "saiu com exit 0"))
 		case "cmd_ran":
 			// "o comando respondeu" — informative answers may exit non-zero
 			// (systemctl status = 3 on inactive units); 126/127 = didn't run
@@ -1713,14 +1740,17 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if !isRes || r.Exit < 0 || r.Exit == 126 || r.Exit == 127 {
 				return false, false, "o comando não rodou"
 			}
+			proofs = append(proofs, brProofCmd(r.Cmd, fmt.Sprintf("respondeu (exit %d)", r.Exit)))
 		case "status_obtained":
 			if arg == nil || arg == "" {
 				return false, false, "não consegui o status da ferramenta"
 			}
+			proofs = append(proofs, fmt.Sprintf("status de %v obtido", arg))
 		case "script_ok":
 			if ok, _ := arg.(map[string]any)["ok"].(bool); !ok {
 				return false, false, "o script não confirmou sucesso"
 			}
+			proofs = append(proofs, "script confirmou sucesso")
 		case "script_exit_zero":
 			// a script that runs a command reports data.exit_code — parse
 			// scripts emit ok:true even when the command failed, so the
@@ -1733,10 +1763,12 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if code != 0 {
 				return false, false, fmt.Sprintf("o comando saiu com exit %d (diagnóstico acima)", int(code))
 			}
+			proofs = append(proofs, "script rodou com exit 0")
 		case "profile_present":
 			if arg == nil || arg == "" {
 				return false, false, "sem perfil do ambiente"
 			}
+			proofs = append(proofs, "perfil do ambiente lido")
 		case "tests_passed":
 			r, isRes := arg.(brTestRes)
 			if !isRes {
@@ -1755,9 +1787,50 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if d.Passed == 0 && d.Total == 0 && len(d.Suites) == 0 {
 				return false, true, "nenhum teste rodou"
 			}
+			proofs = append(proofs, brProofTests(d))
 		default:
 			return false, true, "verificador desconhecido: " + c.Check
 		}
 	}
+	for _, p := range proofs { // the proof goes at the end of the body, before the status line
+		cx.say("conferi: %s", p)
+	}
 	return true, false, ""
+}
+
+// brProofFile is the evidence of a file_exists check, in human language.
+func brProofFile(rel string, fi os.FileInfo) string {
+	if fi.IsDir() {
+		return rel + " existe (pasta)"
+	}
+	return fmt.Sprintf("%s existe (%s)", rel, brProofSize(fi.Size()))
+}
+
+func brProofSize(n int64) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d bytes", n)
+	case n < 1<<20:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+}
+
+// brProofCmd names the command that answered, when the method recorded it.
+func brProofCmd(cmd, what string) string {
+	if cmd == "" {
+		return "comando " + what
+	}
+	return "`" + cmd + "` " + what
+}
+
+// brProofTests is the evidence of a tests_passed check.
+func brProofTests(d opData) string {
+	if d.Passed > 0 {
+		return fmt.Sprintf("%d teste(s) passaram · 0 falhas", d.Passed)
+	}
+	if len(d.Suites) > 0 {
+		return "suíte passou · 0 falhas"
+	}
+	return "testes passaram (exit 0)"
 }

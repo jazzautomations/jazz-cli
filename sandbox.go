@@ -54,6 +54,7 @@ type Sandbox struct {
 	Backend  string // sbSeatbelt | sbBwrap | sbJobObject
 	Bin      string // absolute path of sandbox-exec / bwrap
 	Net      bool   // children may reach the network (loopback always works)
+	HostPID  bool   // share the host PID namespace (process mgmt): default off, on under --yolo
 	Tmp      string // private temp dir (TMPDIR inside)
 	UserTmp  string // macOS per-user temp dir, also writable
 	Home     string
@@ -105,6 +106,25 @@ func sbResolveMode(flag string, cfg *Config) (string, error) {
 
 // sbNetAllowed: JAZZ_SANDBOX_NET, then config sandbox_net; default on in
 // auto, off in strict.
+// sbHostPIDAllowed: share the host PID namespace so the agent can see and
+// signal processes it did not start (daemon/supervisor tasks). Off by default
+// (the sandbox keeps --unshare-pid); on under --yolo, which already means full
+// trust, or forced by JAZZ_SANDBOX_HOST_PID. Env wins over mode.
+func sbHostPIDAllowed(cfg *Config) bool {
+	if v := strings.TrimSpace(os.Getenv("JAZZ_SANDBOX_HOST_PID")); v != "" {
+		return !olOffWord(v)
+	}
+	return cfg != nil && cfg.EffMode() == "yolo"
+}
+
+// sbSetHostPID re-resolves HostPID on the active sandbox after the permission
+// mode is known (main sets --yolo after sbSetup; /mode changes it later).
+func sbSetHostPID(cfg *Config) {
+	if sb := sbCurrent(); sb != nil {
+		sb.HostPID = sbHostPIDAllowed(cfg)
+	}
+}
+
 func sbNetAllowed(mode string, cfg *Config) bool {
 	v := strings.TrimSpace(os.Getenv("JAZZ_SANDBOX_NET"))
 	if v == "" && cfg != nil {
@@ -586,7 +606,11 @@ var sbSelfExe = func() string {
 // sbBwrapArgs are the bwrap options (before "--") for a child starting in dir.
 // Mount order matters: later binds go on top of earlier ones.
 func sbBwrapArgs(s *Sandbox, dir string) []string {
-	a := []string{"--die-with-parent", "--unshare-pid", "--new-session"}
+	a := []string{"--die-with-parent"}
+	if !s.HostPID {
+		a = append(a, "--unshare-pid") // host PID namespace only under --yolo (sbHostPIDAllowed)
+	}
+	a = append(a, "--new-session")
 	if !s.Net {
 		a = append(a, "--unshare-net") // loopback only
 	}

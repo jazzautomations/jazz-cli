@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "license_scan.script", "intent": "license_scan", "priority": 10, "doc": "script:license_scan: LICENSE/COPYING, SPDX nos cabeçalhos, licença dos manifestos e conflitos", "needs": ["bin.python3"], "steps": [{"cap": "script:license_scan", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "license_scan.no_python", "intent": "license_scan", "priority": 1, "doc": "sem python3 o script license_scan não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script license_scan, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

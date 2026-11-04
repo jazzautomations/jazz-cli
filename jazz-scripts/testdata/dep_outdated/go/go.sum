@@ -1,0 +1,5 @@
+example.org/toolkit v1.2.0 h1:AAAA
+example.org/toolkit v1.2.0/go.mod h1:BBBB
+example.org/other v0.4.0 h1:CCCC
+example.org/other v0.4.0/go.mod h1:DDDD
+example.org/single v0.1.0/go.mod h1:EEEE

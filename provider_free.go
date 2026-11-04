@@ -24,6 +24,8 @@ const pvFreeChecked = "2026-10-26"
 
 // pvFreeLimits is keyed by provider id. Providers absent here have no verified numbers.
 var pvFreeLimits = map[string]*FreeLimits{
+	"pollinations": {Checked: "2026-11-04", Source: "https://text.pollinations.ai/openai",
+		Note: "tier anônimo keyless (sem chave/signup): gpt-oss-20b via /openai; rate-limit por IP, instável sob carga"},
 	"groq": {RPM: 30, RPD: 1000, TPM: 8000, TPD: 200000, Checked: pvFreeChecked,
 		Source: "https://console.groq.com/docs/rate-limits",
 		Note:   "valores da tabela 'Developer plan' para gpt-oss-120b/20b e qwen3.8-27b; a aba do plano grátis não pôde ser lida (incerto)"},

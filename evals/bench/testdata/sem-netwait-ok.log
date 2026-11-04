@@ -1,0 +1,9 @@
+· sessão 20261021-100001-f00d · kilo/poolside/laguna-s-2.1:free
+● bash python -m pytest sympy/core/tests/test_expr.py -q
+  ⎿ bash 1 failed, 300 passed (60.1s)
+● edit sympy/core/expr.py
+  ⎿ edit 1 hunk (2ms)
+● bash python -m pytest sympy/core/tests/test_expr.py -q
+  ⎿ bash 301 passed (59.8s)
+· laguna-s-2.1 · 7 requisições · 3 ferramentas · 3m05s
+Pronto: corrigi sympy/core/expr.py e os testes passam.

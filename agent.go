@@ -102,6 +102,14 @@ type Agent struct {
 
 	obst atomic.Pointer[obState] // events, write-ahead, deadline grace (obs.go)
 
+	// run clock (main.go arms it from --timeout): RunDeadline is when the hard
+	// --timeout kills the run; dlWarn flips at 3/4 of --timeout so the loop
+	// appends one wrap-up nudge and stops reopening the turn for non-critical
+	// gates (mirrors soft/softWhy of obs.go, kept here so obs.go is untouched).
+	RunDeadline time.Time
+	dlWarn      atomic.Bool
+	dlWhy       string
+
 	// parallel tool calls (partools.go): the schedule of the current batch,
 	// the index of the call being executed (-1 = none), the lane it used
 	pt     *ptSched
@@ -353,6 +361,26 @@ const planReminder = "<system-reminder>Plan mode is on: investigate with read-on
 
 const stepLimitReminder = "<system-reminder>Step limit reached. Do not call any more tools. Give your final answer now: what was done, what is left.</system-reminder>"
 
+const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
+
+// obDeadlineWarn marks that the run passed 3/4 of its --timeout (main.go arms
+// the timer). The loop then appends one wrap-up nudge and stops reopening the
+// turn for non-critical gates, so a ready answer survives to the hard deadline
+// instead of being reopened and killed mid-request. Mirrors SoftStop (obs.go),
+// but on the Agent so obs.go stays the metrics item's file.
+func (a *Agent) obDeadlineWarn(why string) {
+	if a.dlWarn.CompareAndSwap(false, true) {
+		a.dlWhy = why
+		a.obEv("deadline.warn", map[string]any{"why": why})
+	}
+}
+
+// obDeadlineWarned: the run passed 3/4 of its --timeout for this agent or, for
+// a parallel subagent, for the agent that started it. Mirrors obSoftStopped.
+func (a *Agent) obDeadlineWarned() bool {
+	return a.dlWarn.Load() || (a.sa.parent != nil && a.sa.parent.obDeadlineWarned())
+}
+
 // Run handles one user message until the model gives a final answer.
 func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err error) {
 	a.EnsureSystem()
@@ -441,6 +469,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
 	callsIssued := 0 // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
+	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
 	boostOut := false // the last reply was cut: the next request asks for more output (cutoff.go)
 	a.recent = nil
@@ -458,6 +487,10 @@ turnLoop:
 		if a.obSoftStopped() { // deadline grace: no new request (obs.go)
 			stop = StopTimeout
 			return stop, nil
+		}
+		if a.obDeadlineWarned() && !nudgedDeadline { // 3/4 of --timeout: nudge the model to converge, once
+			nudgedDeadline = true
+			a.append(Message{Role: "user", Content: deadlineWrapUpReminder})
 		}
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
@@ -686,13 +719,13 @@ turnLoop:
 				stop = StopUnverified
 				return stop, nil
 			}
-			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub {
+			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
 				a.append(Message{Role: "user", Content: "<system-reminder>Your todo list still has unfinished items:\n" + open + "\nContinue working on them, or update the list (mark items completed or remove ones that are no longer needed) and explain why.</system-reminder>"})
 				continue
 			}
-			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() {
+			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
 				a.append(Message{Role: "user", Content: "<system-reminder>You changed code but did not run anything afterwards. If this project can be built, tested, linted or run, verify your change now with bash and fix any problem you caused. If verification isn't possible, say so in one line and finish.</system-reminder>"})
@@ -2150,6 +2183,14 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 			summary = s
 			break
 		}
+		if errors.Is(err, errEmptySummary) && ctx.Err() == nil {
+			// no text from any candidate: still shrink the context, with a
+			// deterministic digest, instead of failing and retrying every
+			// few steps while the run overflows or runs out of clock
+			summary = acDigestHistory(head)
+			a.ui.Warn("o modelo não resumiu o histórico antigo — fica um resumo automático (pedidos, arquivos e comandos)")
+			break
+		}
 		if !isOverflow(err) || ctx.Err() != nil {
 			return err
 		}
@@ -2201,7 +2242,53 @@ func (a *Agent) summarize(ctx context.Context, prefix []Message) (string, error)
 			return s, nil
 		}
 	}
-	return "", errors.New("o modelo devolveu um resumo vazio")
+	return "", errEmptySummary
+}
+
+// errEmptySummary: the summary model answered with no text (weak or free
+// models do that under load); Compact then falls back to acDigestHistory.
+var errEmptySummary = errors.New("o modelo devolveu um resumo vazio")
+
+// acDigestHistory is the deterministic fallback summary used when no model
+// returns a summary: the user's requests and the files/commands touched, in
+// order, so the agent keeps its bearings after the old history is dropped.
+// Without it the context stayed uncompacted and the run overflowed or burnt
+// the clock (SWE eval 2026-10-20, sympy-16106).
+func acDigestHistory(head []Message) string {
+	const maxTotal, maxItem = 6000, 240
+	var b strings.Builder
+	b.WriteString("(No model summary was available; this is an automatic digest of the dropped history.)\n")
+	b.WriteString("## User requests\n")
+	for _, m := range head {
+		if m.Role != "user" {
+			continue
+		}
+		c := strings.TrimSpace(acStripReminders(m.Content))
+		if c == "" || strings.HasPrefix(c, "<summary>") {
+			continue
+		}
+		b.WriteString("- " + oneLine(c, maxItem) + "\n")
+		if b.Len() > maxTotal/2 {
+			break
+		}
+	}
+	b.WriteString("## Tools called (name: args)\n")
+	seen := map[string]bool{}
+	for _, m := range head {
+		for _, tc := range m.ToolCalls {
+			line := tc.Name + ": " + oneLine(tc.Args, 160)
+			if seen[line] {
+				continue
+			}
+			seen[line] = true
+			b.WriteString("- " + line + "\n")
+			if b.Len() > maxTotal {
+				b.WriteString("- …\n")
+				return b.String()
+			}
+		}
+	}
+	return b.String()
 }
 
 // acShrinkHistory makes a summary prefix smaller after an overflow: round 0
