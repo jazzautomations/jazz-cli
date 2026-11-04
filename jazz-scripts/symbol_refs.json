@@ -1,0 +1,13 @@
+{"name": "symbol_refs", "version": 1, "run": "python3", "effect": "read",
+ "description": "Where a symbol is USED (not just defined): file, line, col, with in_comment/in_string flags; no rg",
+ "args": {"type": "object", "additionalProperties": false, "required": ["symbol"],
+   "properties": {
+     "symbol": {"type": "string", "description": "identifier to look up (word-boundary match)"},
+     "path": {"type": "string", "description": "directory or file to search (default: project root)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "references to return, sorted by file/line/col (default 300)"},
+     "include_defs": {"type": "boolean", "description": "also count the definition lines as references (default false)"},
+     "lang": {"enum": ["any", "py", "go", "js", "rs", "c", "java", "rb", "sh"], "description": "restrict to one language (default any)"}}},
+ "output": {"data": {"symbol": "str", "files": "int",
+   "refs": [{"file": "str", "line": "int", "col": "int", "text": "str", "in_comment": "bool", "in_string": "bool"}],
+   "by_file": {"file": "int"}, "defs": [{"file": "str", "line": "int"}],
+   "truncated": "bool", "ms": "int", "text": "str"}}}
