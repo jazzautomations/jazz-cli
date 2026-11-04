@@ -41,15 +41,15 @@ func TestIntentConfirmHighConfReadOnlyActs(t *testing.T) {
 func TestIntentConfirmMediumBandAsksOneKey(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, 0)
-	r := brRun(context.Background(), env, "quem usa a porta 8080") // find, conf 0.84
+	r := brRun(context.Background(), env, "roda parser") // run_tests 0.69: between nuMinConf and brActMin (0.85 for non-read)
 	if len(rec.asked) != 1 {
 		t.Fatalf("banda média deve confirmar uma vez, asked=%v\n%s", rec.asked, r.Text)
 	}
 	q := rec.asked[0]
 	for _, w := range []string{
-		"entendi 'quem usa a porta 8080' como",
+		"entendi 'roda parser' como",
 		"[enter] faz · [e] edita · [n] não",
-		"Sim, achar símbolo ou texto no código",
+		"Sim, rodar testes",
 		"Editar o pedido",
 		"Não — ver outras opções",
 	} {
@@ -158,14 +158,14 @@ func TestIntentConfirmHeadlessMediumMiss(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, 0)
 	env.Ask = nil
-	r := brRun(context.Background(), env, "quem usa a porta 8080")
+	r := brRun(context.Background(), env, "roda parser")
 	if r.Handled || !r.Miss {
 		t.Fatalf("headless na banda média não age: handled=%v miss=%v\n%s", r.Handled, r.Miss, r.Text)
 	}
 	if len(rec.cmds) != 0 {
 		t.Errorf("headless não roda comando: %v", rec.cmds)
 	}
-	for _, w := range []string{"confiança 0.8", "você quis:", "  1 ", "digitar de novo"} {
+	for _, w := range []string{"confiança 0.69", "você quis:", "  1 ", "digitar de novo"} {
 		if !strings.Contains(r.Text, w) {
 			t.Errorf("honest-miss sem %q:\n%s", w, r.Text)
 		}

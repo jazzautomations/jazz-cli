@@ -65,7 +65,11 @@ func TestPermitCommandReadOnlyNoCompile(t *testing.T) {
 	}
 	allocs := testing.AllocsPerRun(50, func() { IsReadOnly(cmd) })
 	t.Logf("IsReadOnly(%q): %.0f allocs/op", cmd, allocs)
-	if allocs > 60 {
+	limit := 60.0
+	if winIsWindows {
+		limit = 160 // two sh passes (as typed + slashes) plus the PowerShell danger/secret checks
+	}
+	if allocs > limit {
 		t.Fatalf("IsReadOnly allocates %.0f/op on a warm process; a regexp.MustCompile crept back into isReadOnlySh (use a package-level lazyRx)", allocs)
 	}
 }

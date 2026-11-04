@@ -23,7 +23,7 @@ import (
 // 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "config_get", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "yaml_get"}
+var scShipped = []string{"api_map", "config_get", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "mem_top", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -854,6 +854,31 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		v, _ := scCall(t, tb, "license_scan", nil)
 		if !scOK(v) {
 			t.Errorf("license_scan: %v", v)
+		}
+	})
+	// cardápio v3 (sistema): smoke here, deep tests in *_cardapio_test.go
+	run("env_tools", func(t *testing.T) {
+		v, _ := scCall(t, tb, "env_tools", map[string]any{"tools": []string{"zz-no-such-tool-zz"}})
+		if !scOK(v) || fmt.Sprint(scDataOf(v)["missing"]) != "[zz-no-such-tool-zz]" {
+			t.Errorf("env_tools: %v", v)
+		}
+	})
+	run("uptime_load", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("reads /proc")
+		}
+		v, _ := scCall(t, tb, "uptime_load", map[string]any{"sample_ms": 50})
+		if !scOK(v) {
+			t.Errorf("uptime_load: %v", v)
+		}
+	})
+	run("mem_top", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("reads /proc")
+		}
+		v, _ := scCall(t, tb, "mem_top", map[string]any{"top": 2})
+		if !scOK(v) {
+			t.Errorf("mem_top: %v", v)
 		}
 	})
 	for _, n := range scShipped {

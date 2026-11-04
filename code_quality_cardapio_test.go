@@ -61,16 +61,21 @@ func TestLintRunCardapio(t *testing.T) {
 	}
 
 	// No requested linter installed: ok=true, empty findings, a warning, never a failure.
-	v, out = scCall(t, tb, "lint_run", map[string]any{"tools": []string{"eslint", "shellcheck"}})
-	d = scDataOf(v)
-	if !scOK(v) || out.IsErr || len(d["findings"].([]any)) != 0 || len(d["tools_run"].([]any)) != 0 {
-		t.Fatalf("no linter: %v", v)
-	}
-	if fmt.Sprint(d["tools_missing"]) != "[eslint shellcheck]" || !strings.Contains(fmt.Sprint(v["warnings"]), "no linter available") {
-		t.Errorf("no linter: missing=%v warnings=%v", d["tools_missing"], v["warnings"])
-	}
-	if d["text"] != "0 findings from 0 tools (2 missing)" {
-		t.Errorf("text = %q", d["text"])
+	// (CI runners ship shellcheck: only meaningful where neither exists.)
+	_, e1 := exec.LookPath("eslint")
+	_, e2 := exec.LookPath("shellcheck")
+	if e1 != nil && e2 != nil {
+		v, out = scCall(t, tb, "lint_run", map[string]any{"tools": []string{"eslint", "shellcheck"}})
+		d = scDataOf(v)
+		if !scOK(v) || out.IsErr || len(d["findings"].([]any)) != 0 || len(d["tools_run"].([]any)) != 0 {
+			t.Fatalf("no linter: %v", v)
+		}
+		if fmt.Sprint(d["tools_missing"]) != "[eslint shellcheck]" || !strings.Contains(fmt.Sprint(v["warnings"]), "no linter available") {
+			t.Errorf("no linter: missing=%v warnings=%v", d["tools_missing"], v["warnings"])
+		}
+		if d["text"] != "0 findings from 0 tools (2 missing)" {
+			t.Errorf("text = %q", d["text"])
+		}
 	}
 
 	// Unknown tool name fails closed (never passed to a shell).

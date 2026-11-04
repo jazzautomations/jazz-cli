@@ -27,6 +27,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -72,7 +73,12 @@ func nuCalibGet() nuCalibAsset {
 // nuCalibApply maps a raw confidence to the calibrated probability.
 // Monotone, clamped to [0,1]; identity when calibration is off.
 func nuCalibApply(p float64) float64 {
-	if olOffWord(os.Getenv("JAZZ_NLU_CALIB")) {
+	// OPT-IN (JAZZ_NLU_CALIB=on) until the samples are representative: the
+	// K-fold set is the grammar's own examples (95% hits), so the isotonic
+	// floor lifts weak readings (raw 0.37 -> 0.60 = "understood") and broke
+	// the vetoes ("conecta no wifi" became connect_host) and the medium-band
+	// confirmation in CI. Next step: samples from real misses (signals.jsonl).
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("JAZZ_NLU_CALIB"))); v != "on" && v != "1" && v != "true" {
 		return p
 	}
 	return nuCalibGet().apply(p)

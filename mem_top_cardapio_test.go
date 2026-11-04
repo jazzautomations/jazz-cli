@@ -98,7 +98,8 @@ func TestMemTopCardapio(t *testing.T) {
 		m, _ := e.(map[string]any)
 		comm, _ := m["comm"].(string)
 		cmd, _ := m["cmdline"].(string)
-		if !strings.Contains(strings.ToLower(comm+" "+cmd), "python3") {
+		// the filter matches the FULL cmdline; the emitted one is clipped (…)
+		if !strings.Contains(strings.ToLower(comm+" "+cmd), "python3") && !strings.Contains(cmd, "…") {
 			t.Errorf("filter leaked a non-matching process: %v", m)
 		}
 	}

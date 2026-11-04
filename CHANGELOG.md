@@ -27,7 +27,8 @@
 - `nlu_calib.go` + `nlu/calib.json`: a confiança que o cérebro compara com os limiares agora é probabilidade
   calibrada (isotônica), forjada com K-fold sobre os exemplos da gramática (o classificador nunca vê o
   exemplo que pontua), negativos e prompts do eval — 901 amostras. `Intent.Raw` guarda o score cru;
-  `JAZZ_NLU_CALIB=off` desliga; regenerar: `JAZZ_UPDATE_CALIB=1 go test -run 'TestNLUCalibAsset$'`.
+  **opt-in nesta versão** (`JAZZ_NLU_CALIB=on`): as amostras ainda são os exemplos da gramática (95% de
+  acerto) e o piso isotônico levantava leituras fracas acima do limiar — próximo passo é amostrar dos misses reais; regenerar: `JAZZ_UPDATE_CALIB=1 go test -run 'TestNLUCalibAsset$'`.
   O que a curva mostrou: score cru entre 0,16 e 0,82 acerta ~60–64%; regra sem classificador (0,90) acerta
   93%; regra e classificador de acordo (0,97) acerta 99%.
 - Limiar de ação por faixa de risco sobre a confiança calibrada (Chow assimétrico, `brActMin`): leitura

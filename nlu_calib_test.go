@@ -84,6 +84,10 @@ func TestNLUCalibApplyShape(t *testing.T) {
 // Confidence (what the brain acts on).
 func TestNLUParseRawAndCalibrated(t *testing.T) {
 	m, w := nuTestWorld(t)
+	if in := m.Parse("portas abertas", w); in.Confidence != in.Raw {
+		t.Errorf("calibration is opt-in: default confidence %.2f must equal raw %.2f", in.Confidence, in.Raw)
+	}
+	t.Setenv("JAZZ_NLU_CALIB", "on")
 	in := m.Parse("portas abertas", w)
 	if in.Raw <= 0 || in.Confidence <= 0 {
 		t.Fatalf("raw %.2f conf %.2f", in.Raw, in.Confidence)

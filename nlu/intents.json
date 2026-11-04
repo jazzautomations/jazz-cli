@@ -2876,7 +2876,10 @@
       "delete",
       "rename",
       "container",
-      "service"
+      "service",
+      "@number",
+      "listen",
+      "process"
      ]
     },
     {
@@ -2886,7 +2889,10 @@
      ],
      "none": [
       "port",
-      "kill"
+      "kill",
+      "@number",
+      "listen",
+      "process"
      ]
     },
     {
@@ -2896,7 +2902,10 @@
      ],
      "none": [
       "port",
-      "kill"
+      "kill",
+      "@number",
+      "listen",
+      "process"
      ]
     },
     {
@@ -2906,7 +2915,10 @@
      ],
      "none": [
       "port",
-      "kill"
+      "kill",
+      "@number",
+      "listen",
+      "process"
      ]
     }
    ],
@@ -2937,7 +2949,9 @@
    ],
    "negatives": [
     "quem está usando a porta 3000",
-    "onde está a função ParseArgs"
+    "onde está a função ParseArgs",
+    "quem usa 8080",
+    "quem usa a 8080"
    ]
   }
  ]
