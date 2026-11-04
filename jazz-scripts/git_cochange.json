@@ -1,0 +1,65 @@
+{
+ "name": "git_cochange",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Git churn (commits per file) and co-change pairs (files committed together) for bug localization",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "repository or subdirectory to analyze (default: project root)"
+   },
+   "files": {
+    "type": "array",
+    "items": {
+     "type": "string"
+    },
+    "description": "seed files: only pairs involving them (repo path, project path or basename)"
+   },
+   "n": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 2000,
+    "description": "non-merge commits to look at, newest first (default 400)"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 200,
+    "description": "churn rows and pairs to return (default 20)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "commits": "int",
+   "files": "int",
+   "churn": [
+    {
+     "file": "str",
+     "commits": "int"
+    }
+   ],
+   "cochange": [
+    {
+     "a": "str",
+     "b": "str",
+     "count": "int",
+     "support": "num 0..1 = count / min(commits of a, commits of b)"
+    }
+   ],
+   "seed_files": [
+    {
+     "file": "str",
+     "commits": "int"
+    }
+   ],
+   "truncated": "bool",
+   "ms": "int",
+   "text": "str"
+  }
+ }
+}

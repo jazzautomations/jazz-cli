@@ -12,18 +12,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 )
 
-// scShipped are the 18 scripts docs/research/skills-personas-scripts.md §D ships,
+// scShipped are the 18 scripts docs/research/skills-personas-scripts.md §D ships, the
+// 8 of cardápio v1 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "csv_stats", "detect_project", "diff_quality", "extract_stacktrace", "extract_versions", "find_symbol",
-	"git_safe", "git_state", "http_check", "json_edit", "parse_build_errors", "parse_log_lines", "parse_test_output",
-	"port_free", "run_tests", "snapshot_cmd", "tree_summary", "ui_lint", "yaml_get"}
+var scShipped = []string{"api_map", "config_get", "csv_stats", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_cochange", "git_safe", "git_state", "http_check", "json_edit", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "todo_scan", "tree_summary", "ui_lint", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -710,6 +710,77 @@ func TestScriptsEachBuiltin(t *testing.T) {
 	})
 
 	var missing []string
+	// cardápio v1 (docs/research/cardapio-offline.md): smoke here, deep tests in *_cardapio_test.go
+	run("config_get", func(t *testing.T) {
+		scWrite(t, root, "cg.json", `{"a":{"b":7}}`)
+		defer os.Remove(filepath.Join(root, "cg.json"))
+		v, _ := scCall(t, tb, "config_get", map[string]any{"path": "cg.json", "key": "a.b"})
+		if !scOK(v) || scDataOf(v)["value"] != 7.0 {
+			t.Errorf("config_get: %v", v)
+		}
+	})
+	run("dotenv_check", func(t *testing.T) {
+		v, _ := scCall(t, tb, "dotenv_check", nil) // no .env here: ok with count 0
+		if !scOK(v) || scDataOf(v)["count"] != 0.0 {
+			t.Errorf("dotenv_check: %v", v)
+		}
+	})
+	run("proc_ports", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("reads /proc")
+		}
+		v, _ := scCall(t, tb, "proc_ports", map[string]any{"limit": 5})
+		if !scOK(v) {
+			t.Errorf("proc_ports: %v", v)
+		}
+	})
+	run("disk_usage", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("statvfs")
+		}
+		v, _ := scCall(t, tb, "disk_usage", map[string]any{"top": 3})
+		if !scOK(v) || scDataOf(v)["fs"] == nil {
+			t.Errorf("disk_usage: %v", v)
+		}
+	})
+	run("file_hash_diff", func(t *testing.T) {
+		scWrite(t, root, "h.txt", "x\n")
+		defer os.Remove(filepath.Join(root, "h.txt"))
+		v, _ := scCall(t, tb, "file_hash_diff", map[string]any{"op": "snapshot"})
+		if !scOK(v) || scDataOf(v)["root_sha256"] == nil {
+			t.Errorf("file_hash_diff: %v", v)
+		}
+	})
+	run("service_status", func(t *testing.T) {
+		v, _ := scCall(t, tb, "service_status", map[string]any{"name": "zz9absentsvc", "kind": "process"})
+		if !scOK(v) || scDataOf(v)["state"] != "not found" {
+			t.Errorf("service_status: %v", v)
+		}
+	})
+	run("git_cochange", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("git fixture")
+		}
+		gc := filepath.Join(root, "gc")
+		os.MkdirAll(gc, 0o755)
+		defer os.RemoveAll(gc)
+		scGit(t, gc, "init", "-q")
+		scWrite(t, gc, "a.go", "package a\n")
+		scGit(t, gc, "add", "--", "a.go")
+		scGit(t, gc, "commit", "-q", "-m", "one")
+		v, _ := scCall(t, tb, "git_cochange", map[string]any{"path": "gc", "limit": 2})
+		if !scOK(v) || scDataOf(v)["commits"] != 1.0 {
+			t.Errorf("git_cochange: %v", v)
+		}
+	})
+	run("todo_scan", func(t *testing.T) {
+		scWrite(t, root, "td.py", "# TODO: smoke\n")
+		defer os.Remove(filepath.Join(root, "td.py"))
+		v, _ := scCall(t, tb, "todo_scan", nil)
+		if !scOK(v) || scDataOf(v)["total"] == 0.0 {
+			t.Errorf("todo_scan: %v", v)
+		}
+	})
 	for _, n := range scShipped {
 		if !tested[n] {
 			missing = append(missing, n)

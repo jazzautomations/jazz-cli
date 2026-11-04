@@ -86,25 +86,62 @@ def check_docker():
                   pid or None, started.strip() or None, out)
 
 
+def _ancestors(pid):
+    """pids of pid's ancestors (the shell that launched us must never count as
+    'the service running': its command line can mention the name)."""
+    out = set()
+    while pid > 1 and len(out) < 64:
+        try:
+            with open("/proc/%d/stat" % pid) as f:
+                st = f.read()
+            ppid = int(st.rsplit(")", 1)[1].split()[1])
+        except (IOError, OSError, IndexError, ValueError):
+            break
+        out.add(ppid)
+        pid = ppid
+    return out
+
+
+def _proc_is(name, pid, raw):
+    """A process IS the service when its kernel name (comm), its argv[0]
+    basename, or one whole argv token equals name — never a substring of a
+    longer argument (a `bash -c '... name ...'` or `vim name.conf` would lie)."""
+    argv = [a.decode("utf-8", "replace") for a in raw.split(b"\0") if a]
+    if not argv:
+        return False
+    if os.path.basename(argv[0]) == name or argv[0] == name:
+        return True
+    if name in argv[1:]:
+        return True
+    try:
+        with open("/proc/%d/comm" % pid) as f:
+            if f.read().strip() == name[:15]:
+                return True
+    except (IOError, OSError):
+        pass
+    return False
+
+
 def check_process():
     if not os.path.isdir("/proc"):
         return None
     me = os.getpid()
+    skip = _ancestors(me) | {me}
     matches = []
     for cmdline in sorted(glob.glob("/proc/[0-9]*/cmdline")):
         try:
             pid = int(cmdline.split("/")[2])
         except (IndexError, ValueError):
             continue
-        if pid == me:
+        if pid in skip:
             continue
         try:
             with open(cmdline, "rb") as f:
                 raw = f.read()
         except (IOError, OSError):
             continue
-        cmd = raw.replace(b"\0", b" ").decode("utf-8", "replace").strip()
-        if name in cmd:
+        if _proc_is(name, pid, raw):
+            cmd = raw.replace(b"\0", b" ").decode("utf-8", "replace").strip()
             matches.append((pid, cmd))
     if not matches:
         return None

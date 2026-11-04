@@ -1,13 +1,66 @@
-{"name": "file_hash_diff", "version": 1, "run": "python3", "effect": "read",
- "description": "Verification oracle: sha256/size/mtime snapshot of a file or dir, and diff against a prior snapshot (added/removed/changed)",
- "args": {"type": "object", "additionalProperties": false,
-   "properties": {
-     "path": {"type": "string", "description": "file or directory to hash (default: project root)"},
-     "op": {"enum": ["snapshot", "diff"], "description": "snapshot (default) or diff against base"},
-     "base": {"type": "string", "description": "op=diff: a prior snapshot as JSON text, or a path to a .json snapshot file"},
-     "limit": {"type": "integer", "minimum": 1, "maximum": 200000, "description": "max files to hash (default 20000)"}}},
- "output": {"data": {"root": "str", "files": "int", "truncated": "bool",
-   "entries": [{"path": "str", "sha256": "str", "size": "int", "mtime": "int"}],
+{
+ "name": "file_hash_diff",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Snapshot sha256/size of files or diff two snapshots (added/removed/changed); verification oracle",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "file or directory to hash (default: project root)"
+   },
+   "op": {
+    "enum": [
+     "snapshot",
+     "diff"
+    ],
+    "description": "snapshot (default) or diff against base"
+   },
+   "base": {
+    "type": "string",
+    "description": "op=diff: a prior snapshot as JSON text, or a path to a .json snapshot file"
+   },
+   "limit": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 200000,
+    "description": "max files to hash (default 20000)"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "root": "str",
+   "files": "int",
+   "truncated": "bool",
+   "entries": [
+    {
+     "path": "str",
+     "sha256": "str",
+     "size": "int",
+     "mtime": "int"
+    }
+   ],
    "root_sha256": "str",
-   "added": ["str"], "removed": ["str"], "changed": [{"path": "str", "old_sha": "str", "new_sha": "str"}],
-   "unchanged": "int", "same": "bool", "text": "str"}}}
+   "added": [
+    "str"
+   ],
+   "removed": [
+    "str"
+   ],
+   "changed": [
+    {
+     "path": "str",
+     "old_sha": "str",
+     "new_sha": "str"
+    }
+   ],
+   "unchanged": "int",
+   "same": "bool",
+   "text": "str"
+  }
+ }
+}

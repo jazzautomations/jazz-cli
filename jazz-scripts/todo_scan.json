@@ -1,0 +1,11 @@
+{"name": "todo_scan", "version": 1, "run": "python3", "effect": "read",
+ "description": "TODO/FIXME/XXX/HACK/BUG markers in code and docs: file, line, tag, text; counts per tag",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or file to scan (default: project root)"},
+     "tags": {"type": "array", "items": {"type": "string"}, "description": "markers to look for, case-sensitive (default TODO FIXME XXX HACK BUG)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "items to return, sorted by file and line (default 200)"},
+     "include_tests": {"type": "boolean", "description": "also scan test files and test/testdata dirs (default true)"}}},
+ "output": {"data": {"files_scanned": "int", "files_with_markers": "int", "total": "int",
+   "items": [{"file": "str", "line": "int", "tag": "str", "text": "str"}],
+   "by_tag": {"TAG": "int"}, "truncated": "bool", "text": "str"}}}
