@@ -826,7 +826,19 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	}
 	ui.Begin(RunInfo{SessionID: ag.SessionID, Model: ag.Model, Cwd: root, Tools: names})
 	// fast path / offline mode (offline.go): fp != nil = answered without the model
+	// the offline work starts under a named status (P1); in stream-json it is
+	// a status event (jsonui.go), so headless integrations get the heartbeat too
+	forcedOff := o.offline || olForcedEnv()
+	if forcedOff {
+		ui.Thinking("offline · interpretando")
+	}
 	fp, mprompt := olHeadless(ctx, ag, tools, ui, cfg, prompt, o)
+	if forcedOff {
+		ui.StopThinking()
+	}
+	if fp != nil && o.format == "text" { // P7: one economy mark, once per run
+		fmt.Fprintln(os.Stderr, "jazz: "+olEconomySeal(false))
+	}
 	var stop StopReason
 	var err error
 	if fp == nil {
@@ -876,6 +888,9 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	imAutoAfterRun(cfg, root, ag, timedOut()) // improve.auto: learn from this run (improve.go)
 	if j, ok := ui.(*JSONUI); ok {
 		j.Extra = map[string]any{"outcome": end.Outcome}
+		if fp != nil { // answered without an LLM: the economy seal, machine-readable (P7)
+			j.Extra["local"], j.Extra["tokens"] = true, 0
+		}
 		if end.Outcome != obCompleted {
 			j.Extra["checkpoint"], j.Extra["handoff"] = end.Checkpoint, end.Handoff
 			j.Extra["resume"] = "jazz -p -r " + ag.SessionID
@@ -1008,6 +1023,13 @@ type App struct {
 	warnedModel map[string]bool // ModelWarning already shown per ref
 
 	ol olState // offline mode (offline.go)
+
+	// mode chip (P5): the offline↔online transitions seen recently, so a
+	// flapping link reads "rede instável" instead of a permanent alarm.
+	olSeen   bool
+	olSeenOn bool
+	olFlaps  int
+	olFlapAt time.Time
 
 	menu       []olAction   // pending numbered menu (offers.go): the next reply may pick from it
 	olWatching atomic.Bool  // the offline background probe runs
@@ -1157,8 +1179,12 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	if n := pfUpdateNotice(cfg); n != "" {
 		ui.Notice(n)
 	}
-	ui.print(app.startLine())
 	app.olStart() // JAZZ_OFFLINE / --offline / no candidate at all
+	if app.ol.on || app.ol.forced {
+		ui.print(app.offlineStartLine()) // no model promise when there is no model
+	} else {
+		ui.print(app.startLine())
+	}
 	app.started = false
 	if initial != "" {
 		app.send(initial)
@@ -1249,10 +1275,11 @@ func (a *App) footer() string {
 			ready++
 		}
 	}
-	if off := a.olFooter(); off != "" {
-		// offline: what matters goes first (the footer is clipped to one line)
+	if chip, style := a.modeChip(); chip != "" {
+		// offline: the mode chip leads (neutral glyph, not an alarm); the
+		// probe countdown and /online stay visible in every state (P4/P5)
 		t := a.ui.T
-		return "  " + t.fg(cGold, 33) + t.G().warn + " " + off + t.fg(cGray, 90) + " " + t.G().dot + " " + uiModeTag(t, a.cfg.EffMode()) + t.fg(cGray, 90) + " " + t.G().dot + " ? atalhos" + t.sgr("0")
+		return "  " + style + chip + t.fg(cGray, 90) + " " + t.G().dot + " " + uiModeTag(t, a.cfg.EffMode()) + t.fg(cGray, 90) + " " + t.G().dot + " ? atalhos" + t.sgr("0")
 	}
 	price := ""
 	switch {
@@ -1263,6 +1290,123 @@ func (a *App) footer() string {
 	}
 	a.ui.SetPrice(price)
 	return a.ui.Footer(a.agent.Model, ctxTok, a.agent.Window(), ready, len(a.mcp.Servers))
+}
+
+// olChipState is the three-state mode indicator (P5). Online has no chip:
+// the footer already names the model.
+type olChipState int
+
+const (
+	olChipOnline olChipState = iota
+	olChipForced             // --offline / JAZZ_OFFLINE / /offline
+	olChipDown               // the network dropped
+	olChipFlaky              // the probe is alternating: online↔offline
+)
+
+// olChipOf picks the chip from the offline state (pure: tests drive it).
+func olChipOf(forced, on, flaky bool) olChipState {
+	switch {
+	case forced:
+		return olChipForced
+	case !on:
+		return olChipOnline
+	case flaky:
+		return olChipFlaky
+	}
+	return olChipDown
+}
+
+// olChipText is the chip's words: a neutral glyph and vocabulary, never the
+// permanent "⚠" (alarm fatigue, P4). The probe countdown and /online stay
+// visible in every offline state. ascii = TERM=dumb/linux: no Unicode glyph.
+func olChipText(st olChipState, ascii bool, left time.Duration) string {
+	if left < 0 {
+		left = 0
+	}
+	wait := left.Round(time.Second).String()
+	switch st {
+	case olChipForced:
+		if ascii { // theme dot is "-": no Unicode glyph
+			return "offline - modo rápido - /online volta"
+		}
+		return "⚡ offline · modo rápido · /online volta"
+	case olChipFlaky:
+		if ascii {
+			return "~ rede instável - ficando no offline - /online agora"
+		}
+		return "~ rede instável · ficando no offline · /online agora"
+	case olChipDown:
+		if ascii {
+			return "sem rede - tentando em " + wait + " - /online agora"
+		}
+		return "◌ sem rede · tentando em " + wait + " · /online agora"
+	}
+	return ""
+}
+
+// olNoteMode records offline↔online transitions once per turn. Two changes
+// inside two probe intervals read "rede instável" instead of "sem rede".
+func (a *App) olNoteMode() {
+	on, now := a.ol.on || a.ol.forced, time.Now()
+	if a.olSeen && on != a.olSeenOn {
+		if now.Sub(a.olFlapAt) <= 2*olBgEvery {
+			a.olFlaps++
+		} else {
+			a.olFlaps = 1
+		}
+		a.olFlapAt = now
+	}
+	a.olSeen, a.olSeenOn = true, on
+}
+
+// olFlaky: the mode alternated twice recently (and we are offline now).
+func (a *App) olFlaky() bool {
+	return a.olFlaps >= 2 && time.Since(a.olFlapAt) <= 2*olBgEvery
+}
+
+// olProbeLeft is the countdown to the next background probe.
+func (a *App) olProbeLeft() time.Duration {
+	if ns := a.olNext.Load(); ns > 0 {
+		return time.Until(time.Unix(0, ns))
+	}
+	return 0
+}
+
+// modeChip is the footer's offline state ("" online), with its colour.
+func (a *App) modeChip() (string, string) {
+	t := a.ui.T
+	if a.ol.on && !a.ol.forced && a.olBack.Load() {
+		return "rede de volta · a próxima mensagem vai pro modelo", t.fg(cGray, 90)
+	}
+	switch st := olChipOf(a.ol.forced, a.ol.on, a.olFlaky()); st {
+	case olChipForced:
+		return olChipText(st, t.ascii, 0), t.fg(cAccent, 36)
+	case olChipFlaky:
+		return olChipText(st, t.ascii, 0), t.fg(cGold, 33)
+	case olChipDown:
+		return olChipText(st, t.ascii, a.olProbeLeft()), t.fg(cGray, 90)
+	}
+	return "", ""
+}
+
+// offlineStartLine replaces the model promise ("modelo X · ~Ns por resposta")
+// when the session starts offline (P5/P7): name the mode and what still works.
+func (a *App) offlineStartLine() string {
+	t, g := a.ui.T, a.ui.T.G()
+	mode := "offline"
+	if !a.ol.forced {
+		mode = "offline · sem rede"
+	}
+	return "  " + t.fg(cGray, 90) + g.dot + " " + mode + ": atalhos determinísticos + cérebro ativos " + g.dot + " /online volta" + t.sgr("0") + "\n"
+}
+
+// olEconomySeal marks a turn answered without an LLM (P7): one subtle mark
+// per turn, never a marketing banner.
+func olEconomySeal(ascii bool) string {
+	if ascii {
+		return "local · 0 tokens"
+	}
+	return "⚡ local · 0 tokens"
 }
 
 // edCommands feeds the "/" menu of the input box.
@@ -1321,7 +1465,7 @@ func (a *App) send(text string) {
 		cancel()
 	}()
 	// fast paths and offline mode (offline.go): may answer without the model
-	if handled, t := a.olBefore(ctx, text); handled {
+	if handled, t := a.offlineTurn(ctx, text); handled {
 		return
 	} else {
 		text = t
@@ -1375,6 +1519,30 @@ func (a *App) send(text string) {
 		a.ui.Notice("modo " + a.cfg.EffMode() + ": executando o plano")
 		a.send("Execute the plan above.")
 	}
+}
+
+// offlineTurn runs the offline decision path under the same live status line
+// the online path has (P1): the mode is named, the phase says what is
+// happening, Esc cancels the command in flight, and typing is kept for the
+// next prompt instead of being eaten by the terminal.
+func (a *App) offlineTurn(ctx context.Context, text string) (handled bool, out string) {
+	if !a.ol.on && !a.ol.forced {
+		return a.olBefore(ctx, text)
+	}
+	a.olNoteMode()
+	cctx, cancel := context.WithCancel(ctx)
+	stop := a.ui.WatchTurn(cancel, nil)
+	a.ui.Thinking("offline · interpretando") // mode + what it is doing, in one label
+	defer func() {
+		a.ui.StopThinking()
+		stop()
+		cancel()
+	}()
+	handled, out = a.olBefore(cctx, text)
+	if handled { // answered without an LLM: one economy mark per turn (P7)
+		a.ui.Notice(olEconomySeal(a.ui.T.ascii))
+	}
+	return handled, out
 }
 
 // pfShowProviderWarnings shows one-time provider warnings: a corrupt auth.json,

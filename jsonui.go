@@ -9,6 +9,7 @@ package main
 //   {"type":"tool_start","id","name","args"}
 //   {"type":"tool_end","id","name","is_error","summary","output"}   (output ≤ 4 KB)
 //   {"type":"notice"|"warn"|"error","text"}
+//   {"type":"status","state":"running"|"idle","text"}   (liveness: what the turn is doing)
 //   {"type":"denied","name","args","reason"}
 //   {"type":"result","status","text","error","usage","cost","turns","tools","duration_ms","session_id","model","recover"?}
 // json writes only the final result object.
@@ -73,8 +74,17 @@ func (j *JSONUI) StreamText(s string) {
 	}
 }
 func (j *JSONUI) StreamReasoning(string) {}
-func (j *JSONUI) Thinking(string)        {}
-func (j *JSONUI) StopThinking()          {}
+
+// Thinking/StopThinking are the headless status line (G10): the TUI shows
+// what the turn is doing, stream-json reports it as a status event so
+// integrations keep the same heartbeat. Buffered json stays silent.
+func (j *JSONUI) Thinking(label string) {
+	j.event(map[string]any{"type": "status", "state": "running", "text": jsonValidUTF8(sanitizeTerm(label))})
+}
+
+func (j *JSONUI) StopThinking() {
+	j.event(map[string]any{"type": "status", "state": "idle"})
+}
 
 // flushText ends the current assistant message (j.mu held).
 func (j *JSONUI) flushText() {
