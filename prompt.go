@@ -319,7 +319,9 @@ func loadInstructionsDirs(root string) (string, []string) {
 		parts = append(parts, block)
 		return true
 	}
-	add(filepath.Join(configDir(), "AGENTS.md"), "")
+	if !pfFresh() { // janela fresh: sem AGENTS.md global (fresh.go)
+		add(filepath.Join(configDir(), "AGENTS.md"), "")
+	}
 	// git resolves symlinks in --show-toplevel, so resolve root too; otherwise
 	// the walk never meets top and climbs to / (bug 27).
 	orig := filepath.Clean(root)
@@ -364,7 +366,7 @@ func loadInstructionsDirs(root string) (string, []string) {
 	for i := range dirs {
 		for _, n := range []string{"AGENTS.override.md", "AGENTS.md", "CLAUDE.md", "JAZZ.md"} {
 			p := filepath.Join(shown[i], n)
-			if pfExists(p) && add(p, top) {
+			if !pfFresh() && pfExists(p) && add(p, top) {
 				break
 			}
 		}

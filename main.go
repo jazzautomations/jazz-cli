@@ -209,6 +209,7 @@ func main() {
 	fs.StringVar(resume, "resume", "", "")
 	dir := fs.String("C", "", "")
 	yolo := fs.Bool("yolo", false, "")
+	fresh := fs.Bool("fresh", false, "") // janela de contexto sem memória (fresh.go)
 	ackNoSandbox := fs.Bool("ack-no-sandbox", false, "")
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
@@ -349,6 +350,7 @@ func main() {
 	if err := otlpConfigure(cfg, *otlpEndpoint); err != nil {
 		pfUsageErr(err.Error())
 	}
+	pfConfigureFresh(*fresh) // --fresh / JAZZ_FRESH: memória fora (fresh.go)
 	if err := lsConfigure(cfg, *lessonsFlag); err != nil {
 		pfUsageErr(err.Error())
 	}
@@ -895,7 +897,9 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		}
 	}
 	ag.Close()
-	imAutoAfterRun(cfg, root, ag, timedOut()) // improve.auto: learn from this run (improve.go)
+	if !pfFresh() { // uma janela fresh nunca vira lição (fresh.go)
+		imAutoAfterRun(cfg, root, ag, timedOut()) // improve.auto: learn from this run (improve.go)
+	}
 	if j, ok := ui.(*JSONUI); ok {
 		j.Extra = map[string]any{"outcome": end.Outcome}
 		if fp != nil { // answered without an LLM: the economy seal, machine-readable (P7)
