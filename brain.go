@@ -51,7 +51,7 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 	// multi-intent: "lista os arquivos e mostra o git status" — accept the
 	// split only when EVERY part parses to an understood intent; a false
 	// split ("procura por TODO e FIXME") falls back to the single parse
-	if parts := brSplitMulti(text); len(parts) >= 2 && len(parts) <= 4 {
+	if parts := brSplitMulti(text, nuGet(), w); len(parts) >= 2 && len(parts) <= 4 {
 		var ins []Intent
 		for _, p := range parts {
 			pi := nuGet().Parse(p, w)
@@ -70,12 +70,15 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 
 // brSplitMulti splits a request on conjunctions; callers must validate that
 // each part still parses — the split is a candidate, not a commitment.
+// Parts with no task evidence ("porra e o d610?" → "porra") are noise, not a
+// request: they are discarded here so they cannot veto the split or become
+// an action of their own.
 var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+)`)
 
-func brSplitMulti(text string) []string {
+func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	var out []string
 	for _, p := range brMultiRe.Split(text, 5) {
-		if p = strings.TrimSpace(p); p != "" {
+		if p = strings.TrimSpace(p); p != "" && m.taskEvidence(p, w) {
 			out = append(out, p)
 		}
 	}

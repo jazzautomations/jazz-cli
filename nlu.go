@@ -893,6 +893,37 @@ func (m *nuModel) rules(toks []nuTok) ([]nuMatch, map[int]bool) {
 
 // ---------- parse ----------
 
+// nuTaskEvidence reports whether the tokens carry anything a task could be
+// made of: a concept, an entity tag, a quoted string, a name-shaped word
+// (path, identifier, number) or a spotted entity. A request that is only
+// fillers, greetings and profanity has none — Parse marks it "chitchat"
+// instead of letting the classifier guess an intent for it ("porra" scored
+// list_ports, "oi" is not a git_status), and brSplitMulti drops such parts
+// from compound requests.
+func nuTaskEvidence(toks []nuTok, hits []nuHit) bool {
+	if len(hits) > 0 {
+		return true
+	}
+	for i := range toks {
+		t := &toks[i]
+		if t.Quoted || len(t.Concs) > 0 || len(t.Tags) > 0 || nuNameShaped(t.Raw) {
+			return true
+		}
+	}
+	return false
+}
+
+// taskEvidence applies the non-task gate to a raw text (one part of a
+// compound request) without the grammar/classifier work of Parse.
+func (m *nuModel) taskEvidence(text string, w *nuWorld) bool {
+	if m == nil || m.loadErr != nil {
+		return true
+	}
+	toks := m.normalize(nuTokenize(text))
+	hits := m.spot(toks, w)
+	return nuTaskEvidence(toks, hits)
+}
+
 // Parse interprets one request against world w (nil = no entities).
 func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	in := Intent{Name: "none"}
@@ -921,6 +952,11 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	var conf float64
 	switch {
 	case len(matches) == 0:
+		if !nuTaskEvidence(toks, hits) {
+			in.Hint = "chitchat"
+			in.Evidence = append(in.Evidence, "sem evidência de tarefa (saudação, desabafo ou ruído)")
+			return in
+		}
 		cls, p := m.classify(canon, nil)
 		if cls < 0 {
 			return in
