@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "log_errors_recent.script", "intent": "log_errors_recent", "priority": 10, "doc": "script:log_errors_recent: erros da última hora no journal/syslog, agrupados", "needs": ["bin.python3"], "steps": [{"cap": "script:log_errors_recent", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
+ {"name": "log_errors_recent.no_python", "intent": "log_errors_recent", "priority": 1, "doc": "sem python3 o script log_errors_recent não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script log_errors_recent, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

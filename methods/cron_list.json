@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "cron_list.script", "intent": "cron_list", "priority": 10, "doc": "script:cron_list: crontab, /etc/cron*, timers do systemd — só leitura", "needs": ["bin.python3"], "steps": [{"cap": "script:cron_list", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
+ {"name": "cron_list.no_python", "intent": "cron_list", "priority": 1, "doc": "sem python3 o script cron_list não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script cron_list, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

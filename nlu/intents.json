@@ -2953,6 +2953,319 @@
     "quem usa 8080",
     "quem usa a 8080"
    ]
+  },
+  {
+   "name": "uptime_load",
+   "desc": "uptime e carga da máquina",
+   "rules": [
+    {
+     "all": [
+      "uptime",
+      "env"
+     ],
+     "none": [
+      "kill",
+      "install",
+      "test"
+     ]
+    },
+    {
+     "all": [
+      "uptime"
+     ],
+     "none": [
+      "kill",
+      "install",
+      "test"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "uptime",
+    "há quanto tempo a máquina tá ligada",
+    "qual a carga da máquina",
+    "load average",
+    "a máquina tá sobrecarregada?",
+    "o pc tá pesado?",
+    "carga da cpu agora",
+    "show uptime",
+    "system load",
+    "how long has it been up",
+    "tempo ligado da máquina",
+    "a máquina tá lenta?"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "fs_recent",
+   "desc": "arquivos modificados recentemente",
+   "rules": [
+    {
+     "all": [
+      "recent",
+      "files"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "commit"
+     ]
+    },
+    {
+     "all": [
+      "recent",
+      "diff"
+     ],
+     "none": [
+      "git",
+      "commit",
+      "history"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais arquivos mudaram recentemente",
+    "arquivos modificados na última hora",
+    "o que foi alterado agora pouco",
+    "arquivos recentes",
+    "files changed recently",
+    "recently modified files",
+    "quais arquivos foram modificados hoje",
+    "arquivos alterados há pouco",
+    "o que mudou nos arquivos na última hora",
+    "lista os arquivos modificados recentemente"
+   ],
+   "negatives": [
+    "o que mudou no git"
+   ]
+  },
+  {
+   "name": "archive_list",
+   "desc": "conteúdo de zip/tar sem extrair",
+   "rules": [
+    {
+     "all": [
+      "archive"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "install"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "o que tem dentro do zip",
+    "lista o conteúdo do tar.gz",
+    "mostra o que tem no arquivo compactado",
+    "list the zip contents",
+    "what is inside the tarball",
+    "conteúdo do .whl",
+    "o zip é seguro de extrair?",
+    "tem arquivo perigoso no tar?",
+    "lista o jar",
+    "entradas do zip"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "hash_verify",
+   "desc": "conferir checksum (sha256/md5) de arquivo",
+   "rules": [
+    {
+     "all": [
+      "hashfile"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "confere o sha256 do arquivo",
+    "o md5 bate?",
+    "verifica o checksum do download",
+    "sha256sum do app.tar.gz",
+    "verify the sha256",
+    "check md5sum",
+    "o hash do arquivo confere com o sha256sums?",
+    "integridade do arquivo baixado",
+    "confere o sha1",
+    "valida o sha256 do instalador"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "pkg_installed",
+   "desc": "pacotes instalados (dpkg/rpm/pip/npm/go)",
+   "rules": [
+    {
+     "all": [
+      "pkgs"
+     ],
+     "none": [
+      "install",
+      "update",
+      "delete"
+     ]
+    },
+    {
+     "all": [
+      "dep",
+      "have"
+     ],
+     "none": [
+      "install",
+      "update",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais pacotes estão instalados",
+    "pacotes instalados",
+    "lista os pacotes do dpkg",
+    "pip list",
+    "npm ls",
+    "installed packages",
+    "quais libs tenho instaladas",
+    "bibliotecas instaladas",
+    "tenho a lib requests instalada?",
+    "rpm instalados",
+    "dependências instaladas"
+   ],
+   "negatives": [
+    "instala o requests",
+    "atualiza os pacotes"
+   ]
+  },
+  {
+   "name": "cron_list",
+   "desc": "cron e timers agendados",
+   "rules": [
+    {
+     "all": [
+      "cron"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "install"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "lista o cron",
+    "o que tá agendado no cron",
+    "crontab",
+    "quais timers do systemd existem",
+    "tarefas agendadas",
+    "show crontab",
+    "list scheduled jobs",
+    "tem algo agendado?",
+    "agendamentos da máquina",
+    "quais crons rodam"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "log_errors_recent",
+   "desc": "erros recentes do sistema",
+   "rules": [
+    {
+     "all": [
+      "error",
+      "logs"
+     ],
+     "none": [
+      "test",
+      "build",
+      "fix"
+     ]
+    },
+    {
+     "all": [
+      "error",
+      "env"
+     ],
+     "none": [
+      "test",
+      "build",
+      "fix",
+      "version"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "erros recentes no log",
+    "tem erro no journal?",
+    "erros do sistema na última hora",
+    "mostra os erros do syslog",
+    "system errors in the logs",
+    "recent errors in journalctl",
+    "o log tem erro?",
+    "quais erros apareceram no log do sistema",
+    "erros no journal hoje",
+    "log de erros da máquina"
+   ],
+   "negatives": [
+    "roda os testes",
+    "conserta o erro do build"
+   ]
+  },
+  {
+   "name": "net_ifaces",
+   "desc": "interfaces de rede e IPs",
+   "rules": [
+    {
+     "all": [
+      "ifaces"
+     ],
+     "none": [
+      "kill",
+      "port",
+      "connect"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais interfaces de rede tenho",
+    "qual meu ip",
+    "mostra os ips da máquina",
+    "interfaces de rede",
+    "list network interfaces",
+    "what is my ip address",
+    "ip da placa de rede",
+    "qual o ip local",
+    "show interfaces",
+    "endereços ip da máquina"
+   ],
+   "negatives": [
+    "quem usa a porta 8080"
+   ]
   }
  ]
 }
