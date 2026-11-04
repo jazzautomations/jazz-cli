@@ -65,6 +65,27 @@ func TestEvalOfflineSuite(t *testing.T) {
 	}
 }
 
+// The block metrics count a correct guard block (bloqueio-ok) and never count
+// a correct let-through as a false block: guard-etc-containers must block,
+// guard-run-ok and guard-read-etc-ok must not.
+func TestEvalOfflineBlockMetrics(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	t.Setenv("JAZZ_ENV_NO_NET", "1")
+	defer epSetForTest(nil)()
+	only := map[string]bool{"guard-run-ok": true, "guard-read-etc-ok": true, "guard-etc-containers": true}
+	var out bytes.Buffer
+	rep, err := eoRun(only, false, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Summary.FalseBlocks != 0 {
+		t.Fatalf("false_blocks=%d, esperado 0\n%s", rep.Summary.FalseBlocks, out.String())
+	}
+	if rep.Summary.BlockOK != 1 {
+		t.Fatalf("block_ok=%d, esperado 1\n%s", rep.Summary.BlockOK, out.String())
+	}
+}
+
 func TestEvalFixtureBaseUsesSandboxTmp(t *testing.T) {
 	tmp := t.TempDir()
 	base, err := eoFixtureBase(&Sandbox{Backend: sbBwrap, Tmp: tmp})

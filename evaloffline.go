@@ -92,6 +92,8 @@ type eoSummary struct {
 	N               int            `json:"n"`
 	Success         int            `json:"success"`
 	FalseSuccess    int            `json:"false_success"`
+	BlockOK         int            `json:"block_ok"`
+	FalseBlocks     int            `json:"false_blocks"`
 	NoLLM           int            `json:"answered_without_llm"`
 	NoLLMRate       float64        `json:"no_llm_rate"`
 	QuestionsAsked  int            `json:"questions_asked"`
@@ -157,7 +159,9 @@ func cmdEval(root string, args []string, w io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(w, "resultado:", p)
-	if rep.Summary.FalseSuccess > 0 {
+	// princípio 2 vira gate de CI: um falso-bloqueio (guardrail cego) falha o
+	// comando, como um falso-sucesso.
+	if rep.Summary.FalseSuccess > 0 || rep.Summary.FalseBlocks > 0 {
 		return 1
 	}
 	return 0
@@ -214,6 +218,17 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 		if r.FalseSuccess {
 			s.FalseSuccess++
 		}
+		// guard rows only: r.Got.Blocked is set exactly in the guard branch of
+		// eoOne, where *exp.Blocked is evaluated. bloqueio-ok = should block and
+		// did; falso-bloqueio = should not block but did (princípio 2: cego).
+		if r.Got.Blocked != nil && r.Expect.Blocked != nil {
+			switch {
+			case *r.Expect.Blocked && *r.Got.Blocked:
+				s.BlockOK++
+			case !*r.Expect.Blocked && *r.Got.Blocked:
+				s.FalseBlocks++
+			}
+		}
 		if r.Got.Handled || r.Got.Blocked != nil {
 			s.NoLLM++
 		}
@@ -229,8 +244,8 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 	s.P50MS, s.P95MS = eoPct(lat, 0.5), eoPct(lat, 0.95)
 	s.PeakRSSKB = eoPeakRSSKB()
 	rep.Summary = s
-	fmt.Fprintf(w, "\n%d/%d com sucesso verificado · falso sucesso %d · sem LLM %d/%d · perguntas %d (necessárias %d) · %.2f comandos/tarefa · p50 %.0f ms p95 %.0f ms · RSS pico %d KB\n",
-		s.Success, s.N, s.FalseSuccess, s.NoLLM, s.N, s.QuestionsAsked, s.QuestionsNeeded, s.CmdsPerTask, s.P50MS, s.P95MS, s.PeakRSSKB)
+	fmt.Fprintf(w, "\n%d/%d com sucesso verificado · falso sucesso %d · sem LLM %d/%d · perguntas %d (necessárias %d) · %.2f comandos/tarefa · p50 %.0f ms p95 %.0f ms · RSS pico %d KB · bloqueio-ok %d · falsos bloqueios %d · recuperação %d/%d\n",
+		s.Success, s.N, s.FalseSuccess, s.NoLLM, s.N, s.QuestionsAsked, s.QuestionsNeeded, s.CmdsPerTask, s.P50MS, s.P95MS, s.PeakRSSKB, s.BlockOK, s.FalseBlocks, s.ByCat["falha recuperável"], s.CatN["falha recuperável"])
 	return rep, nil
 }
 
