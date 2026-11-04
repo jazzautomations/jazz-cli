@@ -1,0 +1,11 @@
+· sessão 20261021-140003-cafe · kilo/poolside/laguna-s-2.1:free
+● bash python -m pytest tests -q
+  ⎿ bash 2 failed, 10 passed (3.2s)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+· a rede voltou depois de 2m0s — tentando de novo
+● read src/app.py
+  ⎿ read 120 lines (1ms)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+! a rede não voltou em 3m0s — desisti de esperar
+! sem conexão com a internet de novo — já esperei 5m0s nesta execução, não espero mais
+jazz: erro: sem conexão com a internet

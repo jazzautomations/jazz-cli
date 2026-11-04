@@ -17,6 +17,8 @@
 #   JAZZ_ARGS="…"  flags extras pro jazz (ex.: "--omni-judge on --verifier on")
 set -u
 EV="$(cd "$(dirname "$0")" && pwd)"
+# classify_infra: FAIL real vs. INFRA? (a rede comeu o prazo) vs. HANG? (morto pelo vigilante LIMIT+60)
+. "$EV/../bench/classify_infra.sh"
 RUN="$HOME/jazz-eval-results/v2-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RUN/work"
 MODEL="${1:-}"; LIMIT="${LIMIT:-900}"; ONLY="${ONLY:-}"; JAZZ="${JAZZ:-jazz}"; LANES="${LANES:-1}"; JAZZ_ARGS="${JAZZ_ARGS:-}"
@@ -40,7 +42,7 @@ copy_task() { # $1 = pasta da tarefa, $2 = pasta de trabalho
   done
 }
 
-pass=0; n=0; prompts_total=0
+pass=0; n=0; prompts_total=0; infra=0; hang=0
 echo "jazz: $("$JAZZ" --version 2>&1 | head -1)  modelo: ${MODEL:-padrão}  prazo: ${LIMIT}s  lanes: $LANES${JAZZ_ARGS:+  args: $JAZZ_ARGS}" | tee "$RUN/summary.txt"
 
 names=()
@@ -78,8 +80,11 @@ check_task() {
   if ( cd "$w" && TASK="$t" bash "$t/CHECK" ) >"$RUN/$name.check" 2>&1; then res=PASS; pass=$((pass + 1)); else res=FAIL; fi
   if [ -f "$t/CLEANUP" ]; then ( cd "$w" && TASK="$t" bash "$t/CLEANUP" ) >>"$RUN/$name.check" 2>&1; fi
   n=$((n + 1))
-  printf "%-24s %-5s %5ss  tools=%-3s prompts=%-2s rc=%-3s %s\n" "$name" "$res" "$dt" "${tools:-?}" "${prompts:-?}" "$rc" \
-    "$(grep -E '^(PASS|FAIL)' "$RUN/$name.check" | tail -1)" | tee -a "$RUN/summary.txt"
+  # um FAIL só conta como falha do modelo se a rede não comeu o prazo e o jazz não foi morto de fora
+  classify_infra "$RUN/$name.log" "$rc" "$LIMIT" "$res" "$dt" >/dev/null; res=$CLASSIFY_RES
+  case $res in "INFRA?") infra=$((infra + 1)) ;; "HANG?") hang=$((hang + 1)) ;; esac
+  printf "%-24s %-6s %5ss  tools=%-3s prompts=%-2s rc=%-3s %s%s\n" "$name" "$res" "$dt" "${tools:-?}" "${prompts:-?}" "$rc" \
+    "$([ "$CLASSIFY_NET_S" = 0 ] || echo "rede=${CLASSIFY_NET_S}s  ")" "$(grep -E '^(PASS|FAIL)' "$RUN/$name.check" | tail -1)" | tee -a "$RUN/summary.txt"
 }
 
 [ ${#names[@]} -gt 0 ] || { echo "nenhuma tarefa selecionada (ONLY=$ONLY)"; exit 1; }
@@ -107,4 +112,4 @@ else
   unlock
   for name in "${names[@]}"; do check_task "$name"; done
 fi
-echo "TOTAL: $pass/$n  (parede: $(( $(date +%s) - s0 ))s, lanes: $LANES, prompts: $prompts_total em $n tarefas)" | tee -a "$RUN/summary.txt"; echo "resultados: $RUN"
+echo "$(classify_total_line "$pass" "$n" "$infra" "$hang")  (parede: $(( $(date +%s) - s0 ))s, lanes: $LANES, prompts: $prompts_total em $n tarefas)" | tee -a "$RUN/summary.txt"; echo "resultados: $RUN"

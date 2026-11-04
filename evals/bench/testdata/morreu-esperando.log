@@ -1,0 +1,10 @@
+· sessão 20261021-031502-ab12 · kilo/poolside/laguna-s-2.1:free
+● bash python -m pytest sympy/core/tests/test_arit.py -q -x
+  ⎿ bash 2 failed, 118 passed (41.2s)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+· a rede voltou depois de 1m0s — tentando de novo
+● read sympy/core/mul.py
+  ⎿ read 2012 lines (12ms)
+! sem conexão com a internet — esperando a rede voltar (até o --timeout; Esc cancela)
+jazz: tempo esgotado: a execução passou de --timeout 45m0s
+jazz: execução interrompida pelo prazo (timeout) — trabalho salvo: checkpoint 1a2b3c · nota -
