@@ -20,10 +20,10 @@ import (
 )
 
 // scShipped are the 18 scripts docs/research/skills-personas-scripts.md §D ships, the
-// 8 of cardápio v1 (docs/research/cardapio-offline.md),
+// 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "config_get", "csv_stats", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_cochange", "git_safe", "git_state", "http_check", "json_edit", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "todo_scan", "tree_summary", "ui_lint", "yaml_get"}
+var scShipped = []string{"api_map", "config_get", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "parse_build_errors", "parse_log_lines", "parse_test_output", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -140,8 +140,8 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("description has %d lines, want <= 3", n)
 	}
 	b, _ := json.Marshal(last)
-	if est := len(b) / 4; est > 600 {
-		t.Errorf("script spec ~%d tokens, keep it small (<600)", est)
+	if est := len(b) / 4; est > 800 { // 38 scripts (cardápio v1+v2): ~17 tokens each in the signature list
+		t.Errorf("script spec ~%d tokens, keep it small (<800)", est)
 	}
 	props := last.Params["properties"].(map[string]any)
 	enum := props["name"].(map[string]any)["enum"].([]string)
@@ -779,6 +779,81 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		v, _ := scCall(t, tb, "todo_scan", nil)
 		if !scOK(v) || scDataOf(v)["total"] == 0.0 {
 			t.Errorf("todo_scan: %v", v)
+		}
+	})
+	// cardápio v2: smoke here, deep tests in *_cardapio_test.go
+	run("git_blame_hot", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("git fixture")
+		}
+		gb := filepath.Join(root, "gb")
+		os.MkdirAll(gb, 0o755)
+		defer os.RemoveAll(gb)
+		scGit(t, gb, "init", "-q")
+		scWrite(t, gb, "a.go", "package a\n")
+		scGit(t, gb, "add", "--", "a.go")
+		scGit(t, gb, "commit", "-q", "-m", "one")
+		v, _ := scCall(t, tb, "git_blame_hot", map[string]any{"path": "gb/a.go"})
+		if !scOK(v) || scDataOf(v)["lines"] != 1.0 {
+			t.Errorf("git_blame_hot: %v", v)
+		}
+		v, _ = scCall(t, tb, "git_branch_status", map[string]any{"path": "gb"})
+		if !scOK(v) || scDataOf(v)["detached"] != false {
+			t.Errorf("git_branch_status: %v", v)
+		}
+		tested["git_branch_status"] = true
+		v, _ = scCall(t, tb, "git_conflict_scan", map[string]any{"path": "gb"})
+		if !scOK(v) || scDataOf(v)["clean"] != true {
+			t.Errorf("git_conflict_scan: %v", v)
+		}
+		tested["git_conflict_scan"] = true
+	})
+	run("dep_graph", func(t *testing.T) {
+		scWrite(t, root, "dg_a.py", "import dg_b\n")
+		scWrite(t, root, "dg_b.py", "x = 1\n")
+		defer os.Remove(filepath.Join(root, "dg_a.py"))
+		defer os.Remove(filepath.Join(root, "dg_b.py"))
+		v, _ := scCall(t, tb, "dep_graph", map[string]any{"lang": "py"})
+		if !scOK(v) {
+			t.Errorf("dep_graph: %v", v)
+		}
+	})
+	run("dep_outdated", func(t *testing.T) {
+		v, _ := scCall(t, tb, "dep_outdated", nil) // no manifest: ok with a warning
+		if !scOK(v) {
+			t.Errorf("dep_outdated: %v", v)
+		}
+	})
+	run("lint_run", func(t *testing.T) {
+		v, _ := scCall(t, tb, "lint_run", map[string]any{"tools": []string{"gofmt"}})
+		if !scOK(v) {
+			t.Errorf("lint_run: %v", v)
+		}
+	})
+	run("symbol_refs", func(t *testing.T) {
+		scWrite(t, root, "sr.py", "def zork():\n    pass\n\nzork()\n")
+		defer os.Remove(filepath.Join(root, "sr.py"))
+		v, _ := scCall(t, tb, "symbol_refs", map[string]any{"symbol": "zork"})
+		if !scOK(v) || scDataOf(v)["files"] != 1.0 {
+			t.Errorf("symbol_refs: %v", v)
+		}
+	})
+	run("large_funcs", func(t *testing.T) {
+		v, _ := scCall(t, tb, "large_funcs", map[string]any{"min_lines": 3})
+		if !scOK(v) {
+			t.Errorf("large_funcs: %v", v)
+		}
+	})
+	run("dup_code", func(t *testing.T) {
+		v, _ := scCall(t, tb, "dup_code", nil)
+		if !scOK(v) {
+			t.Errorf("dup_code: %v", v)
+		}
+	})
+	run("license_scan", func(t *testing.T) {
+		v, _ := scCall(t, tb, "license_scan", nil)
+		if !scOK(v) {
+			t.Errorf("license_scan: %v", v)
 		}
 	})
 	for _, n := range scShipped {

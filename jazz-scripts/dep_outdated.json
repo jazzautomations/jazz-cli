@@ -1,0 +1,12 @@
+{"name": "dep_outdated", "version": 1, "run": "python3", "effect": "read",
+ "description": "Manifest vs lockfile, offline: deps without lock entry, loose ranges, lock pins outside the spec (npm/py/go)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory (manifests searched 2 levels deep, lockfile beside or above them) or one manifest file (default: project root)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "entries kept per list (unlocked, loose, mismatched, dev_only); default 200"}}},
+ "output": {"data": {"manifests": [{"file": "str", "kind": "npm|pip|go", "lock": "str|null", "deps": "int"}],
+   "deps": "int", "locked": "int (deps with a lock entry; requirements.txt without lock: its own == pins)",
+   "unlocked": ["name"], "loose": [{"name": "str", "spec": "str", "file": "str"}],
+   "mismatched": [{"name": "str", "spec": "str", "locked": "str", "file": "str"}],
+   "dev_only": ["name"], "indirect": ["go module"], "truncated": "bool", "ms": "int",
+   "text": "N deps, U unlocked, L loose, M mismatched"}}}

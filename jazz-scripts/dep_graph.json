@@ -1,0 +1,15 @@
+{"name": "dep_graph", "version": 1, "run": "python3", "effect": "read",
+ "description": "Import graph of the project (Py modules, Go packages, JS/TS files): nodes, edges, cycles, externals, most imported",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory or file to parse; ids stay relative to the project root (default: root). Test files, .git/node_modules/vendor/dist/testdata and files > 512 KB are skipped"},
+     "lang": {"enum": ["auto", "py", "go", "js"], "description": "only this language (default auto: all three; js covers ts/tsx/mjs/cjs)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 20000, "description": "edges to return, sorted by (from, to); counts and cycles use the whole graph (default 2000)"},
+     "internal_only": {"type": "boolean", "description": "true (default): only project modules as nodes; false: externals become nodes too (file empty)"}}},
+ "output": {"data": {"files": "int parsed", "truncated": "bool", "ms": "int",
+   "nodes": [{"id": "str (py: dotted module, go: import path, js: file path)", "file": "str (go: package dir)", "lang": "py|go|js", "in": "int", "out": "int"}],
+   "edges": [{"from": "id", "to": "id"}],
+   "cycles": [["id", "..."]],
+   "externals": {"name": "int imports (top 50)"},
+   "most_imported": [{"id": "str", "in": "int"}],
+   "text": "N files, M edges, K cycles"}}}

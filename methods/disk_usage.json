@@ -1,4 +1,5 @@
 {"methods": [
+ {"name": "disk_usage.script", "intent": "disk_usage", "priority": 20, "doc": "script:disk_usage: statvfs do filesystem + maiores pastas/arquivos do projeto, sem du/df (só leitura)", "needs": ["bin.python3"], "steps": [{"cap": "script:disk_usage", "in": {"top": "8"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 1500},
  {"name": "disk_usage.df", "intent": "disk_usage", "priority": 10,
   "doc": "df -h: uso de disco por filesystem (só leitura)",
   "cmds": ["df -h"],

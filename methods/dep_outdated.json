@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "dep_outdated.script", "intent": "dep_outdated", "priority": 10, "doc": "script:dep_outdated: manifesto × lockfile — sem lock, frouxas, pino desalinhado (sem rede)", "needs": ["bin.python3"], "steps": [{"cap": "script:dep_outdated", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "dep_outdated.no_python", "intent": "dep_outdated", "priority": 1, "doc": "sem python3 o script dep_outdated não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script dep_outdated, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

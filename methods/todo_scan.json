@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "todo_scan.script", "intent": "todo_scan", "priority": 10, "doc": "script:todo_scan lista TODO/FIXME/XXX/HACK/BUG com arquivo:linha, agrupado por tag (só leitura)", "needs": ["bin.python3"], "steps": [{"cap": "script:todo_scan", "in": {"path": "$slot.dir"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "todo_scan.no_python", "intent": "todo_scan", "priority": 1, "doc": "sem python3 o script todo_scan não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script todo_scan, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "large_funcs.script", "intent": "large_funcs", "priority": 10, "doc": "script:large_funcs: funções acima de N linhas como dado (py/go/js/rs)", "needs": ["bin.python3"], "steps": [{"cap": "script:large_funcs", "in": {"path": "$slot.dir"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "large_funcs.no_python", "intent": "large_funcs", "priority": 1, "doc": "sem python3 o script large_funcs não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script large_funcs, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

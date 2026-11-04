@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "dep_graph.script", "intent": "dep_graph", "priority": 10, "doc": "script:dep_graph: grafo de imports internos, ciclos e mais importados (py/go/js, sem rede)", "needs": ["bin.python3"], "steps": [{"cap": "script:dep_graph", "in": {"path": "$slot.dir"}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 3000},
+ {"name": "dep_graph.no_python", "intent": "dep_graph", "priority": 1, "doc": "sem python3 o script dep_graph não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script dep_graph, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

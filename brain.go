@@ -50,13 +50,15 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 	in := nuGet().Parse(text, w)
 	res.Intent = in
 	// multi-intent: "lista os arquivos e mostra o git status" — accept the
-	// split only when EVERY part parses to an understood intent; a false
-	// split ("procura por TODO e FIXME") falls back to the single parse
+	// split only when EVERY part parses to a CONFIDENT intent (the act
+	// threshold, not the bare "understood" floor): a false split ("procura
+	// por TODO e FIXME" → "FIXME" alone is a classifier-only 0.75) falls back
+	// to the single parse instead of running two half-requests
 	if parts := brSplitMulti(text, nuGet(), w); len(parts) >= 2 && len(parts) <= 4 {
 		var ins []Intent
 		for _, p := range parts {
 			pi := nuGet().Parse(p, w)
-			if !pi.Understood() || pi.Name == "none" {
+			if !pi.Understood() || pi.Name == "none" || pi.Confidence < brLevel0Min {
 				ins = nil
 				break
 			}
@@ -905,6 +907,10 @@ var brLevel0Intents = map[string]bool{
 	"container_list": true, "service_status": true, "service_logs": true,
 	"host_status": true, "list_hosts": true, "net_status": true, "git_branch": true,
 	"self_info": true,
+	// cardápio offline (docs/research/cardapio-offline.md): scripts só-leitura, verificados por script_ok
+	"todo_scan": true, "git_cochange": true, "git_blame": true, "git_branch_status": true,
+	"git_conflict_scan": true, "dotenv_check": true, "config_get": true, "file_snapshot": true,
+	"dep_graph": true, "dep_outdated": true, "dup_code": true, "license_scan": true, "large_funcs": true,
 }
 
 // brGroundIntents are interpretive: online, the brain's facts ground the

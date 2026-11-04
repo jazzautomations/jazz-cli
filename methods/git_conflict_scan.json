@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "git_conflict_scan.script", "intent": "git_conflict_scan", "priority": 10, "doc": "script:git_conflict_scan: marcadores <<<<<<< nos arquivos + índice em conflito (só leitura)", "needs": ["bin.python3", "bin.git"], "steps": [{"cap": "script:git_conflict_scan", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "git_conflict_scan.no_python", "intent": "git_conflict_scan", "priority": 1, "doc": "sem python3 o script git_conflict_scan não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script git_conflict_scan, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

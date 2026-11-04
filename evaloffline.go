@@ -435,6 +435,19 @@ func eoFixture(base, id, kind string) (string, error) {
 			"app.py":           "def soma(a, b):\n    return a + b\n",
 			"test_app.py":      "import unittest\n\nfrom app import soma\n\n\nclass T(unittest.TestCase):\n    def test_soma(self):\n        self.assertEqual(soma(1, 2), " + want + ")\n\n    def test_zero(self):\n        self.assertEqual(soma(0, 0), 0)\n\n\nif __name__ == '__main__':\n    unittest.main()\n",
 		}
+	case "cardapio":
+		// the go fixture plus what the cardápio scripts read: a TODO marker, a
+		// config file, .env × .env.example, and one commit so blame/co-change
+		// have history
+		files = map[string]string{
+			"go.mod":       "module evalfix\n\ngo 1.21\n",
+			"parser.go":    "package evalfix\n\n// ParseArgs splits the arguments.\nfunc ParseArgs(a []string) []string { return a }\n",
+			"lexer.go":     "package evalfix\n\n// TODO: handle empty input\nfunc Tokenize(s string) []string { return []string{s} }\n",
+			"config.yaml":  "port: 8080\ndatabase:\n  host: db.internal\n",
+			".env":         "PORT=8080\n",
+			".env.example": "PORT=\nDATABASE_URL=\n",
+			"README.md":    "# evalfix\n\nprojeto de teste do jazz eval offline\n",
+		}
 	case "norunner":
 		files = map[string]string{"README.md": "# nada pra testar\n", "notes.txt": "x\n"}
 	case "nogit":
@@ -458,6 +471,15 @@ func eoFixture(base, id, kind string) (string, error) {
 			c.Dir = root
 			if err := c.Run(); err != nil {
 				return "", fmt.Errorf("git init: %w", err)
+			}
+			if kind == "cardapio" {
+				for _, argv := range [][]string{{"add", "-A"}, {"-c", "user.name=eval", "-c", "user.email=eval@example.invalid", "commit", "-q", "-m", "init"}} {
+					c := exec.Command("git", argv...)
+					c.Dir = root
+					if err := c.Run(); err != nil {
+						return "", fmt.Errorf("git %s: %w", argv[len(argv)-1], err)
+					}
+				}
 			}
 		} else if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 			return "", err

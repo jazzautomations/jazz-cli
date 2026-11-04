@@ -1,4 +1,5 @@
 {"methods": [
+ {"name": "list_ports.proc", "intent": "list_ports", "priority": 20, "doc": "script:proc_ports lê /proc/net/tcp e /proc/<pid>: porta, pid, comando — sem ss/netstat (só leitura)", "needs": ["bin.python3"], "steps": [{"cap": "script:proc_ports", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 600},
  {"name": "list_ports.ss", "intent": "list_ports", "priority": 10,
   "doc": "ss -tln lista as portas TCP abertas (só leitura)",
   "cmds": ["ss -tln"],

@@ -48,5 +48,5 @@ csv_to_json · table_render (dado → tabela alinhada) · wordcount_stats.
 ## Ordem e portão
 Uma onda por vez: 4 agentes × 2-3 scripts → revisão do maestro (linha a linha) →
 roster `scShipped` em scripts_test.go → `py_compile` + testes + `eval offline` (75/75)
-→ gate no d610 (eval antes da suíte; instalação em passo separado). Métrica: cobertura
+→ gate na máquina fraca (eval antes da suíte; instalação em passo separado). Métrica: cobertura
 de classes de pedido real resolvidas por script (sem LLM), `false_success` = 0.

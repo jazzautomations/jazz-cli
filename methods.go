@@ -231,6 +231,9 @@ func (cx *brCtx) subst(v string) any {
 	if k == "hint" {
 		return cx.in.Hint
 	}
+	if k == "goal" { // the request as typed: scripts that match it against real data (config keys)
+		return cx.task.Goal
+	}
 	if strings.HasPrefix(k, "fact.") {
 		return cx.facts[k[5:]]
 	}

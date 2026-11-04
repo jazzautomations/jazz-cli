@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "git_branch_status.script", "intent": "git_branch_status", "priority": 10, "doc": "script:git_branch_status: ahead/behind, sem merge, velhas, upstream sumido (sem fetch)", "needs": ["bin.python3", "bin.git"], "steps": [{"cap": "script:git_branch_status", "in": {}, "out": "res"}], "verify": [{"check": "script_ok", "arg": "$res"}], "risk": "low", "cost_ms": 800},
+ {"name": "git_branch_status.no_python", "intent": "git_branch_status", "priority": 1, "doc": "sem python3 o script git_branch_status não roda", "pre": [{"fact": "bin.python3", "op": "unset"}], "steps": [{"cap": "report", "in": {"text": "isso usa o script git_branch_status, que precisa de python3 (não achei no PATH)", "status": "blocked", "category": "command_missing"}}], "verify": [], "risk": "low", "cost_ms": 1}
+]}

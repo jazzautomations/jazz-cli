@@ -1,8 +1,29 @@
 # config_get: read a key from a config file (.json/.yaml/.toml/.ini/.env) with no
 # third-party dependency. Never executes anything; deterministic; stdlib only.
-p = path_in_root(arg("path", ""))
 key = arg("key")  # None = whole document
 fmt = (arg("format", "auto") or "auto").lower()
+query = str(arg("query", "") or "")  # the request as typed: picks the file and the key from real data
+warnings = []
+
+# Common config file names, in preference order, for when no (valid) path is given.
+CANDIDATES = ["config.yaml", "config.yml", "config.json", "config.toml", "settings.yaml", "settings.yml",
+              "settings.json", "settings.toml", "app.yaml", "app.json", "pyproject.toml", "package.json",
+              "Cargo.toml", "setup.cfg", "tox.ini", ".env"]
+p_arg = str(arg("path", "") or "")
+p = path_in_root(p_arg) if p_arg else None
+if p is None or not os.path.isfile(p):
+    root = path_in_root(".")
+    qtoks = set(x.lower() for x in re.findall(r"[\w.\-]+", query))
+    present = [c for c in CANDIDATES if os.path.isfile(os.path.join(root, c))]
+    named = [c for c in present if c.lower() in qtoks]
+    pick = named[0] if named else (present[0] if present else None)
+    if pick is None:
+        fail("config file not found: %s" % (p_arg or "no path given and no config.*/settings.*/pyproject/package.json here"))
+    if p_arg:
+        warnings.append("path %r not found; using %s" % (p_arg, pick))
+    elif not named and len(present) > 1:
+        warnings.append("several config files here; using %s (pass path)" % pick)
+    p = os.path.join(root, pick)
 
 try:
     size = os.path.getsize(p)
@@ -15,7 +36,6 @@ try:
 except (IOError, OSError) as e:
     fail("cannot read file: %s" % e)
 
-warnings = []
 unparsed = []
 
 
@@ -408,6 +428,48 @@ def navigate(node, parts):
             return None, False
     return node, True
 
+
+def flat_keys(node, prefix="", depth=0, out=None):
+    """dotted paths of a parsed document (depth <= 5, <= 2000 paths)."""
+    if out is None:
+        out = []
+    if depth > 5 or len(out) >= 2000:
+        return out
+    if isinstance(node, dict):
+        for k, v in node.items():
+            path = "%s.%s" % (prefix, k) if prefix else str(k)
+            out.append(path)
+            flat_keys(v, path, depth + 1, out)
+    elif isinstance(node, list):
+        for i, v in enumerate(node[:50]):
+            path = "%s[%d]" % (prefix, i)
+            out.append(path)
+            flat_keys(v, path, depth + 1, out)
+    return out
+
+
+if (key is None or str(key) == "") and query:
+    # the key is whichever real path of the file the request names: a full
+    # dotted match (database.host) beats a last-segment match (host), and a
+    # longer word beats a shorter one; nothing named = whole document
+    best = None
+    paths = flat_keys(doc)
+    for tok in re.findall(r"[\w.\-]+", query):
+        tl = tok.lower().strip(".")
+        if len(tl) < 2:
+            continue
+        for fk in paths:
+            fl = fk.lower()
+            if fl == tl:
+                cand = (2, len(tl), fk)
+            elif fl.rsplit(".", 1)[-1] == tl or fl.rsplit("[", 1)[0].rsplit(".", 1)[-1] == tl:
+                cand = (1, len(tl), fk)
+            else:
+                continue
+            if best is None or cand > best:
+                best = cand
+    if best:
+        key = best[2]
 
 if key is None or str(key) == "":
     value, found, key_out = doc, True, None

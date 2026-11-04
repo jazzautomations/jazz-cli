@@ -1,0 +1,4 @@
+# plain requirements, no separate lock: == pins count as locked
+pinned-lib==1.0
+floating-lib>=2
+Other_Lib[extra]==3.2.1 ; python_version >= "3.8"

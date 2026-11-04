@@ -223,7 +223,6 @@
     "procura parseArgs",
     "onde está a função ParseArgs",
     "acha o handleLogin",
-    "busca TODO no código",
     "onde fica o NewServer",
     "cadê o Tokenize",
     "find ParseArgs",
@@ -237,7 +236,6 @@
     "busca referencias de NewServer",
     "onde ta definido o ParseArgs",
     "acha onde tem fmt.Println",
-    "search for TODO",
     "procure o simbolo Tokenize"
    ],
    "negatives": [
@@ -1898,7 +1896,13 @@
     "listening ports",
     "lista as portas",
     "que portas tão abertas",
-    "show ports"
+    "show ports",
+    "quantas portas tcp estão escutando nessa máquina",
+    "quantas portas estão escutando",
+    "portas tcp abertas",
+    "o que está escutando nessa máquina",
+    "portas tcp em uso",
+    "que portas estão escutando"
    ],
    "negatives": [
     "quem está usando a porta 3000"
@@ -2346,6 +2350,517 @@
     "me sugere um nome pro projeto",
     "traduz isso pro inglês",
     "faz um site de portfólio com react"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "todo_scan",
+   "desc": "marcadores TODO/FIXME no código",
+   "rules": [
+    {
+     "all": [
+      "todo",
+      "list|have|open|project|files|find"
+     ],
+     "none": [
+      "create",
+      "fix"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "lista os TODO do projeto",
+    "quantos TODO tem no código",
+    "mostra os FIXME",
+    "tem algum TODO pendente?",
+    "lista os fixme",
+    "quais marcadores TODO existem",
+    "todo list do projeto",
+    "show the TODOs",
+    "list FIXME markers",
+    "quantos FIXME e HACK tem",
+    "TODO e FIXME do código",
+    "onde tem TODO no projeto",
+    "me mostra os todos do codigo",
+    "lista as pendências marcadas no código",
+    "quais TODO existem no projeto",
+    "busca TODO no código",
+    "search for TODO",
+    "procura por TODO e FIXME"
+   ],
+   "negatives": [
+    "roda todos os testes",
+    "lista todos os arquivos"
+   ]
+  },
+  {
+   "name": "git_cochange",
+   "desc": "arquivos que mudam juntos (co-change) e churn",
+   "rules": [
+    {
+     "all": [
+      "cochange"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "que arquivos mudam juntos com parser.go",
+    "quais arquivos mudam juntos",
+    "arquivos acoplados no histórico",
+    "o que muda junto com o lexer.go",
+    "co-change do projeto",
+    "which files change together",
+    "files coupled with parser.go",
+    "arquivos que andam juntos nos commits",
+    "churn dos arquivos",
+    "acoplamento entre arquivos pelo git",
+    "quais arquivos mudam sempre juntos",
+    "what changes together with main.go"
+   ],
+   "negatives": [
+    "o que mudou desde ontem"
+   ]
+  },
+  {
+   "name": "git_blame",
+   "desc": "quem mexeu num arquivo, hotspots",
+   "rules": [
+    {
+     "all": [
+      "blame"
+     ],
+     "none": [
+      "port",
+      "kill",
+      "container",
+      "service"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    }
+   },
+   "examples": [
+    "quem mexeu mais no parser.go",
+    "quem mexeu no lexer.go",
+    "blame do main.go",
+    "quem escreveu o parser.go",
+    "autores do lexer.go",
+    "who changed parser.go",
+    "who wrote main.go",
+    "git blame parser.go",
+    "quem alterou o README.md",
+    "hotspots do parser.go",
+    "quem foi o último que mexeu no lexer.go",
+    "quem é o autor do main.go",
+    "linhas mais quentes do parser.go"
+   ],
+   "negatives": [
+    "quem está usando a porta 3000",
+    "quem está escutando na 8080"
+   ]
+  },
+  {
+   "name": "git_branch_status",
+   "desc": "branches sem merge, velhas, ahead/behind",
+   "rules": [
+    {
+     "all": [
+      "branch",
+      "merge"
+     ]
+    },
+    {
+     "all": [
+      "branch",
+      "stale"
+     ],
+     "none": [
+      "delete"
+     ]
+    },
+    {
+     "all": [
+      "branch",
+      "status"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "quais branches estão sem merge",
+    "tem branch velha parada?",
+    "branches sem merge",
+    "branches antigas",
+    "quantos commits estou ahead do origin",
+    "estou atrás do remoto?",
+    "status das branches",
+    "which branches are unmerged",
+    "stale branches",
+    "branches abandonadas",
+    "lista as branches com status",
+    "branches órfãs",
+    "a branch está atrás do upstream?",
+    "quais branches já foram mergeadas"
+   ],
+   "negatives": [
+    "troca pra branch main",
+    "cria uma branch nova chamada feature-x"
+   ]
+  },
+  {
+   "name": "git_conflict_scan",
+   "desc": "marcadores de conflito de merge",
+   "rules": [
+    {
+     "all": [
+      "conflict"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "tem conflito de merge?",
+    "ficou marcador de conflito em algum arquivo?",
+    "procura marcadores de conflito",
+    "tem conflito no repo?",
+    "sobrou <<<<<<< em algum arquivo",
+    "any merge conflicts?",
+    "check for conflict markers",
+    "arquivos em conflito",
+    "tem algum arquivo conflitando?",
+    "o merge deixou conflito?",
+    "lista os conflitos",
+    "conflitos pendentes"
+   ],
+   "negatives": []
+  },
+  {
+   "name": "dotenv_check",
+   "desc": ".env × .env.example (só nomes)",
+   "rules": [
+    {
+     "all": [
+      "envfile"
+     ],
+     "none": [
+      "version",
+      "create",
+      "delete",
+      "open"
+     ]
+    },
+    {
+     "all": [
+      "env",
+      "dotenv"
+     ],
+     "none": [
+      "version"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "confere o .env com o .env.example",
+    "o .env tá completo?",
+    "falta alguma variável no .env?",
+    "compara o .env com o exemplo",
+    "quais variáveis de ambiente estão faltando no .env",
+    "check .env against .env.example",
+    "is my .env missing something",
+    "o .env bate com o .env.example?",
+    "variáveis faltando no .env",
+    "confere as variáveis do .env",
+    "dotenv check",
+    "o env está completo",
+    "confere o .env",
+    "o .env e o .env.example batem?",
+    "o que falta no .env",
+    "faltam variáveis no .env?",
+    "compara .env e .env.example",
+    "checa o .env contra o example",
+    "variáveis que faltam no .env",
+    "o .env está faltando alguma coisa?"
+   ],
+   "negatives": [
+    "que sistema é esse",
+    "mostra o ambiente"
+   ]
+  },
+  {
+   "name": "config_get",
+   "desc": "ler uma chave de um arquivo de configuração",
+   "rules": [
+    {
+     "all": [
+      "keynoun",
+      "config"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "rename",
+      "dotenv"
+     ]
+    },
+    {
+     "all": [
+      "keynoun",
+      "@file"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "rename",
+      "dotenv",
+      "explain"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "qual o valor de port no config.yaml",
+    "mostra a chave database.host do config",
+    "qual a chave timeout do config.yaml",
+    "valor de debug no config.yaml",
+    "pega o campo port do config",
+    "what is the value of port in config.yaml",
+    "read key database.host from config.yaml",
+    "qual o valor de name no package.json",
+    "mostra o parametro host da configuração",
+    "qual o setting de port no config.yaml",
+    "chave version do config.yaml",
+    "campo host do config"
+   ],
+   "negatives": [
+    "abre o config.yaml",
+    "cria o config.yaml"
+   ]
+  },
+  {
+   "name": "file_snapshot",
+   "desc": "snapshot/hash dos arquivos (oráculo)",
+   "rules": [
+    {
+     "all": [
+      "snapshot"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "undo"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "tira um snapshot dos arquivos",
+    "snapshot do projeto",
+    "hash dos arquivos",
+    "checksum de tudo",
+    "faz uma fotografia dos arquivos",
+    "take a snapshot of the files",
+    "integridade dos arquivos",
+    "baseline dos arquivos",
+    "snapshot da pasta src",
+    "gera os checksums do projeto",
+    "mudou algum arquivo desde o snapshot?"
+   ],
+   "negatives": [
+    "lista os arquivos"
+   ]
+  },
+  {
+   "name": "dep_graph",
+   "desc": "grafo de imports/dependências internas",
+   "rules": [
+    {
+     "all": [
+      "imports"
+     ],
+     "none": [
+      "install",
+      "update"
+     ]
+    },
+    {
+     "all": [
+      "dep",
+      "imports"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "grafo de imports do projeto",
+    "tem ciclo de import?",
+    "grafo de dependências",
+    "quem importa o parser",
+    "dependency graph",
+    "import graph",
+    "ciclos de dependência",
+    "quais módulos são mais importados",
+    "mostra o grafo de dependências",
+    "are there import cycles",
+    "árvore de dependências internas",
+    "quem importa quem no projeto"
+   ],
+   "negatives": [
+    "instala a dependência requests",
+    "atualiza as dependências"
+   ]
+  },
+  {
+   "name": "dep_outdated",
+   "desc": "manifesto × lockfile, sem rede",
+   "rules": [
+    {
+     "all": [
+      "outdated"
+     ],
+     "none": [
+      "install"
+     ]
+    },
+    {
+     "all": [
+      "dep",
+      "outdated"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "dependências desatualizadas",
+    "o lock bate com o package.json?",
+    "quais dependências estão fora do lock",
+    "dependências pinadas e frouxas",
+    "check outdated dependencies",
+    "is the lockfile in sync",
+    "dependências sem lock",
+    "versões das dependências estão travadas?",
+    "deps desatualizadas",
+    "lockfile desatualizado",
+    "quais pacotes estão frouxos",
+    "o requirements bate com o lock?"
+   ],
+   "negatives": [
+    "atualiza as dependências",
+    "instala as dependências"
+   ]
+  },
+  {
+   "name": "dup_code",
+   "desc": "código duplicado",
+   "rules": [
+    {
+     "all": [
+      "duplicate"
+     ],
+     "none": [
+      "delete",
+      "create"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "tem código duplicado?",
+    "procura código duplicado",
+    "blocos duplicados no projeto",
+    "duplicate code",
+    "find duplicated code",
+    "código repetido no projeto",
+    "copia e cola no código",
+    "onde tem código repetido",
+    "duplicação de código na pasta src",
+    "clones de código",
+    "quanto código duplicado tem",
+    "detecta copy paste"
+   ],
+   "negatives": [
+    "apaga o arquivo duplicado"
+   ]
+  },
+  {
+   "name": "license_scan",
+   "desc": "licenças do projeto e cabeçalhos SPDX",
+   "rules": [
+    {
+     "all": [
+      "license"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "qual a licença do projeto",
+    "licença do projeto",
+    "licenças das dependências",
+    "tem cabeçalho SPDX nos arquivos?",
+    "what license is this project",
+    "license scan",
+    "qual licença esse código usa",
+    "conflito de licença",
+    "verifica as licenças",
+    "licença do package.json bate com o LICENSE?",
+    "copyright do projeto",
+    "spdx headers"
+   ],
+   "negatives": [
+    "cria um arquivo LICENSE"
+   ]
+  },
+  {
+   "name": "large_funcs",
+   "desc": "funções longas como dado",
+   "rules": [
+    {
+     "all": [
+      "bigfunc"
+     ]
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "funções grandes do projeto",
+    "quais funções são longas demais",
+    "lista as funções longas",
+    "maiores funções do código",
+    "long functions",
+    "biggest functions in the project",
+    "funções com muitas linhas",
+    "funções gigantes",
+    "quais funções passam de 60 linhas",
+    "complexidade das funções",
+    "funções enormes na pasta src",
+    "longest functions"
    ],
    "negatives": []
   }

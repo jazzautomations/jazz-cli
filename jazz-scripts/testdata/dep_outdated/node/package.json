@@ -1,0 +1,13 @@
+{
+  "name": "demo-web",
+  "version": "0.1.0",
+  "dependencies": {
+    "alpha-ui": "^1.2.0",
+    "beta-core": "1.3.0",
+    "gamma-utils": "2.0.0",
+    "delta-missing": "1.0.0"
+  },
+  "devDependencies": {
+    "epsilon-test": "4.2.1"
+  }
+}
