@@ -1,0 +1,12 @@
+{"name": "archive_list", "version": 1, "run": "python3", "effect": "read",
+ "description": "List a .zip/.whl/.jar/.tar(.gz|.bz2|.xz) without extracting; flags path-escape entries and zip bombs",
+ "args": {"type": "object", "additionalProperties": false,
+   "required": ["path"],
+   "properties": {
+     "path": {"type": "string", "description": "archive file (.zip .whl .jar .tar .tar.gz .tgz .tar.bz2 .tar.xz); max 1 GB"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "entries to return, unsafe first then by name (default 200)"}}},
+ "output": {"data": {
+   "kind": "str", "path": "str",
+   "entries": [{"name": "str", "type": "str", "size": "int", "compressed": "int", "is_dir": "bool", "unsafe": "bool", "link": "str"}],
+   "count": "int", "total_size": "int", "compressed_size": "int", "ratio": "float", "unsafe_count": "int",
+   "truncated": "bool", "text": "str"}}}

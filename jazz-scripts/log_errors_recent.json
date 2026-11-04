@@ -1,0 +1,51 @@
+{
+ "name": "log_errors_recent",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Recent errors from the journal or a log file, grouped by normalized message with counts and first/last time",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+   "minutes": {
+    "type": "integer",
+    "description": "window in minutes (default 60, max 10080 = 7 days); 0 = whole file when source is file"
+   },
+   "source": {
+    "enum": ["auto", "journal", "file"],
+    "description": "auto (default): journalctl, else /var/log/syslog or messages; journal; file = the path given"
+   },
+   "path": {
+    "type": "string",
+    "description": "log file to scan when source is file (last 2 MB are read)"
+   },
+   "limit": {
+    "type": "integer",
+    "description": "max groups returned (default 50, max 500)"
+   },
+   "min_level": {
+    "enum": ["err", "warning"],
+    "description": "lowest priority kept: err (default) or warning"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "source_used": "str|null",
+   "window_min": "int",
+   "min_level": "str",
+   "groups": [
+    {"count": "int", "unit": "str|null", "level": "str", "sample": "str", "example": "str",
+     "first": "str|null", "last": "str|null"}
+   ],
+   "matched": "int",
+   "distinct": "int",
+   "total_lines": "int",
+   "truncated": "bool",
+   "permission_denied": "bool",
+   "text": "str"
+  }
+ }
+}

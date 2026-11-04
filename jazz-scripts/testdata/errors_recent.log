@@ -1,0 +1,30 @@
+2026-10-19T10:00:01+00:00 node1 sshd[1201]: error: Connection closed by 10.0.0.5 port 51234 [preauth]
+2026-10-19T10:00:02+00:00 node1 cron[88]: INFO (CRON) job started: /usr/local/bin/backup.sh
+2026-10-19T10:00:03+00:00 node1 app[4410]: ERROR db timeout after 5000ms (attempt 1)
+2026-10-19T10:00:04+00:00 node1 sshd[1202]: error: Connection closed by 10.0.0.9 port 40022 [preauth]
+2026-10-19T10:00:05+00:00 node1 kernel: WARN usb 1-3: device descriptor read/64, error -71
+2026-10-19T10:00:06+00:00 node1 app[4410]: ERROR db timeout after 5003ms (attempt 2)
+2026-10-19T10:00:07+00:00 node1 app[4410]: INFO request id=92 ok
+2026-10-19T10:00:08+00:00 node1 sshd[1203]: error: Connection closed by 10.0.0.5 port 51240 [preauth]
+2026-10-19T10:00:09+00:00 node1 app[4411]: CRIT cannot open /var/lib/app/state-0x1f3a.db: permission denied
+2026-10-19T10:00:10+00:00 node1 kernel: WARN usb 1-3: device descriptor read/64, error -71
+2026-10-19T10:00:11+00:00 node1 app[4410]: ERROR db timeout after 5010ms (attempt 3)
+2026-10-19T10:00:12+00:00 node1 sshd[1204]: error: Connection closed by 10.0.0.7 port 51299 [preauth]
+2026-10-19T10:00:13+00:00 node1 cron[88]: INFO (CRON) job finished: /usr/local/bin/backup.sh
+2026-10-19T10:00:14+00:00 node1 app[4410]: DEBUG pool size 8
+2026-10-19T10:00:15+00:00 node1 sshd[1205]: error: Connection closed by 10.0.0.5 port 51301 [preauth]
+2026-10-19T10:00:16+00:00 node1 app[4411]: CRIT cannot open /var/lib/app/state-0x1f3b.db: permission denied
+2026-10-19T10:00:17+00:00 node1 kernel: WARN usb 1-3: device descriptor read/64, error -71
+2026-10-19T10:00:18+00:00 node1 sshd[1206]: error: Connection closed by 10.0.0.9 port 40030 [preauth]
+2026-10-19T10:00:19+00:00 node1 app[4410]: ERROR db timeout after 5020ms (attempt 4)
+2026-10-19T10:00:20+00:00 node1 app[4410]: INFO request id=93 ok
+2026-10-19T10:00:21+00:00 node1 sshd[1207]: error: Connection closed by 10.0.0.5 port 51310 [preauth]
+2026-10-19T10:00:22+00:00 node1 kernel: WARN usb 1-3: device descriptor read/64, error -71
+2026-10-19T10:00:23+00:00 node1 app[4410]: ERROR db timeout after 5001ms (attempt 5)
+2026-10-19T10:00:24+00:00 node1 sshd[1208]: error: Connection closed by 10.0.0.7 port 51320 [preauth]
+2026-10-19T10:00:25+00:00 node1 app[4411]: CRIT cannot open /var/lib/app/state-0x1f3c.db: permission denied
+2026-10-19T10:00:26+00:00 node1 app[4410]: INFO request id=94 ok
+2026-10-19T10:00:27+00:00 node1 sshd[1209]: error: Connection closed by 10.0.0.9 port 40041 [preauth]
+2026-10-19T10:00:28+00:00 node1 kernel: WARN usb 1-3: device descriptor read/64, error -71
+2026-10-19T10:00:29+00:00 node1 app[4410]: ERROR db timeout after 5002ms (attempt 6)
+2026-10-19T10:00:30+00:00 node1 sshd[1210]: error: Connection closed by 10.0.0.5 port 51333 [preauth]

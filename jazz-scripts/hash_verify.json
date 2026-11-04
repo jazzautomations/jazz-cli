@@ -1,0 +1,50 @@
+{
+ "name": "hash_verify",
+ "version": 1,
+ "run": "python3",
+ "effect": "read",
+ "description": "Verify a file against .sha256/.md5/.sha1 sidecars, SHA256SUMS (GNU/BSD) or an expected digest",
+ "args": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path"],
+  "properties": {
+   "path": {
+    "type": "string",
+    "description": "file to verify, or a checksum file (SHA256SUMS, x.sha256) whose every entry is verified"
+   },
+   "sums": {
+    "type": "string",
+    "description": "checksum file to read the expected digest from (default: <path>.sha256/.sha1/.md5 or SHA256SUMS/MD5SUMS/CHECKSUMS beside it)"
+   },
+   "algo": {
+    "enum": ["auto", "sha256", "sha1", "md5"],
+    "description": "algorithm to use (default auto: from the BSD tag, file name or digest length)"
+   },
+   "expected": {
+    "type": "string",
+    "description": "expected hex digest of path (32/40/64 chars); wins over sums and sidecars"
+   }
+  }
+ },
+ "output": {
+  "data": {
+   "results": [
+    {
+     "file": "str",
+     "algo": "md5|sha1|sha256|sha512|null",
+     "expected": "str|null",
+     "actual": "str|null",
+     "match": "bool|null",
+     "reason": "match|mismatch|file not found|not listed in ...|time budget ...|unreadable ...",
+     "source": "str"
+    }
+   ],
+   "ok_count": "int",
+   "fail_count": "int",
+   "missing_count": "int",
+   "truncated": "bool",
+   "text": "str"
+  }
+ }
+}

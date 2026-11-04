@@ -1,0 +1,12 @@
+{"name": "net_ifaces", "version": 1, "run": "python3", "effect": "read",
+ "description": "Network interfaces from /sys and /proc (no ip/ifconfig): state, MAC, IPv4/IPv6, rx/tx, default route",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "name": {"type": "string", "description": "only this interface (exact name, else substring match)"},
+     "include_lo": {"type": "boolean", "description": "also list the loopback interface (default false)"},
+     "full_mac": {"type": "boolean", "description": "show the whole MAC; default masks the last 3 octets as xx"}}},
+ "output": {"data": {
+   "ifaces": [{"name": "str", "state": "str", "up": "bool", "carrier": "bool", "mtu": "int", "mac": "str",
+     "ipv4": ["str"], "ipv6": ["str"], "rx_bytes": "int", "tx_bytes": "int", "rx_packets": "int", "tx_packets": "int",
+     "rx_errors": "int", "tx_errors": "int", "speed_mbps": "int"}],
+   "default_route_iface": "str", "truncated": "bool", "text": "str"}}}
