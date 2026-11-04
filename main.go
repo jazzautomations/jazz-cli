@@ -534,6 +534,7 @@ func main() {
 	} else if *turbo || *fullAuto {
 		cfg.ModeOverride = "turbo"
 	}
+	sbSetHostPID(cfg) // yolo shares the host PID namespace (process mgmt); set after the mode is known
 	ref := *model
 	if ref == "" {
 		ref = cfg.Model
@@ -1401,6 +1402,7 @@ func (a *App) setSessionMode(m string) {
 	} else {
 		a.cfg.ModeOverride = m
 	}
+	sbSetHostPID(a.cfg) // yolo ↔ host PID namespace follows the live mode
 	a.ui.SetMode(a.cfg.EffMode())
 }
 
