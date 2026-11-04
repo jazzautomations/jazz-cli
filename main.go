@@ -810,6 +810,10 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		names = append(names, s.Name)
 	}
 	t0 := time.Now()
+	// run clock: RunDeadline + a wrap-up warning at 3/4 of --timeout, minutes
+	// before the grace soft-stop, so the model converges while it still has a
+	// model round-trip to spare on a slow free gateway (agent.go).
+	defer obArmDeadline(ag, o.timeout)()
 	// deadline grace: past timeout-grace no new model request starts; the
 	// tool in flight finishes, then checkpoint + handoff (obs.go)
 	if grace := obGrace(o.timeout, o.grace); grace > 0 {
@@ -896,6 +900,19 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	tools.Shell.Close()
 	mcp.Close()
 	return res.Status.ExitCode()
+}
+
+// obArmDeadline records the run deadline and arms a one-shot warning at 3/4 of
+// the --timeout. 3/4 (not timeout-3*grace) keeps a real margin on the d610:
+// with 45m/grace 60s the latter is ~2m, less than one free-model round-trip;
+// 3/4 is 33.75m for 45m and 7.5m for 10m. The returned func stops the timer.
+func obArmDeadline(ag *Agent, timeout time.Duration) (stop func()) {
+	if timeout <= 0 {
+		return func() {}
+	}
+	ag.RunDeadline = time.Now().Add(timeout)
+	warn := time.AfterFunc(timeout*3/4, func() { ag.obDeadlineWarn("3/4 do --timeout") })
+	return func() { warn.Stop() }
 }
 
 // pfDeadline arms the headless --timeout: when d passes, onTimeout runs (cancel

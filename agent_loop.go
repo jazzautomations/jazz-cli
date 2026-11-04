@@ -162,9 +162,15 @@ func (a *Agent) acStopGate(ctx context.Context, lt *acTurnLoop) (again bool, why
 	} else if hWhy != "" {
 		return false, hWhy
 	}
-	qAgain, qFailed := a.acQualityGate(ctx)
-	if qAgain {
-		return true, ""
+	// near the --timeout (obDeadlineWarned): skip ONLY the quality gate, the
+	// harness's own nicety. The user's explicit criteria stay: hgDoneGate,
+	// --until, --review and --verifier still run.
+	var qFailed bool
+	if !a.obDeadlineWarned() {
+		var qAgain bool
+		if qAgain, qFailed = a.acQualityGate(ctx); qAgain {
+			return true, ""
+		}
 	}
 	if cmd := a.loop.opts.Until; cmd != "" {
 		again, why = a.acUntilCheck(ctx, lt, cmd)

@@ -102,6 +102,14 @@ type Agent struct {
 
 	obst atomic.Pointer[obState] // events, write-ahead, deadline grace (obs.go)
 
+	// run clock (main.go arms it from --timeout): RunDeadline is when the hard
+	// --timeout kills the run; dlWarn flips at 3/4 of --timeout so the loop
+	// appends one wrap-up nudge and stops reopening the turn for non-critical
+	// gates (mirrors soft/softWhy of obs.go, kept here so obs.go is untouched).
+	RunDeadline time.Time
+	dlWarn      atomic.Bool
+	dlWhy       string
+
 	// parallel tool calls (partools.go): the schedule of the current batch,
 	// the index of the call being executed (-1 = none), the lane it used
 	pt     *ptSched
@@ -353,6 +361,26 @@ const planReminder = "<system-reminder>Plan mode is on: investigate with read-on
 
 const stepLimitReminder = "<system-reminder>Step limit reached. Do not call any more tools. Give your final answer now: what was done, what is left.</system-reminder>"
 
+const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
+
+// obDeadlineWarn marks that the run passed 3/4 of its --timeout (main.go arms
+// the timer). The loop then appends one wrap-up nudge and stops reopening the
+// turn for non-critical gates, so a ready answer survives to the hard deadline
+// instead of being reopened and killed mid-request. Mirrors SoftStop (obs.go),
+// but on the Agent so obs.go stays the metrics item's file.
+func (a *Agent) obDeadlineWarn(why string) {
+	if a.dlWarn.CompareAndSwap(false, true) {
+		a.dlWhy = why
+		a.obEv("deadline.warn", map[string]any{"why": why})
+	}
+}
+
+// obDeadlineWarned: the run passed 3/4 of its --timeout for this agent or, for
+// a parallel subagent, for the agent that started it. Mirrors obSoftStopped.
+func (a *Agent) obDeadlineWarned() bool {
+	return a.dlWarn.Load() || (a.sa.parent != nil && a.sa.parent.obDeadlineWarned())
+}
+
 // Run handles one user message until the model gives a final answer.
 func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err error) {
 	a.EnsureSystem()
@@ -441,6 +469,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
 	callsIssued := 0 // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
+	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
 	boostOut := false // the last reply was cut: the next request asks for more output (cutoff.go)
 	a.recent = nil
@@ -458,6 +487,10 @@ turnLoop:
 		if a.obSoftStopped() { // deadline grace: no new request (obs.go)
 			stop = StopTimeout
 			return stop, nil
+		}
+		if a.obDeadlineWarned() && !nudgedDeadline { // 3/4 of --timeout: nudge the model to converge, once
+			nudgedDeadline = true
+			a.append(Message{Role: "user", Content: deadlineWrapUpReminder})
 		}
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
@@ -686,13 +719,13 @@ turnLoop:
 				stop = StopUnverified
 				return stop, nil
 			}
-			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub {
+			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
 				a.append(Message{Role: "user", Content: "<system-reminder>Your todo list still has unfinished items:\n" + open + "\nContinue working on them, or update the list (mark items completed or remove ones that are no longer needed) and explain why.</system-reminder>"})
 				continue
 			}
-			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() {
+			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
 				a.append(Message{Role: "user", Content: "<system-reminder>You changed code but did not run anything afterwards. If this project can be built, tested, linted or run, verify your change now with bash and fix any problem you caused. If verification isn't possible, say so in one line and finish.</system-reminder>"})
