@@ -62,13 +62,47 @@ func TestIntentConfirmMediumBandAsksOneKey(t *testing.T) {
 	}
 }
 
-// A mutant always asks, even at maximum confidence, and says the risk.
-func TestIntentConfirmMutantAlwaysAsks(t *testing.T) {
+// brMediumBand parses text the way brRun does and forces the reading into the
+// medium band (nuMinConf..brLevel0Min). The one-key confirmation fires on an
+// UNCERTAIN reading, whatever the risk. A confident mutant does not get it:
+// the mutation consent belongs to env.Permit. Asking both was the
+// cried-confirm that over-asked blocked/impossible tasks (eval 2026-11-04:
+// 14 questions where 6 were needed, plus one false_success).
+func brMediumBand(env *brEnv, text string) Intent {
+	w := env.World
+	if w == nil {
+		w = nuRuntimeWorld(env.Root, env.Profile)
+	}
+	in := nuGet().Parse(text, w)
+	in.Confidence = (nuMinConf + brLevel0Min) / 2 // squarely in the medium band
+	return in
+}
+
+// A CONFIDENT mutant pays no intention key: it goes straight to the
+// permission guardrail (env.Permit), which owns the mutation consent.
+func TestIntentConfirmConfidentMutantSkipsIntentConfirm(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, 0)
-	r := brRun(context.Background(), env, "apaga o parser.go") // delete_file, risk high, conf 0.90
+	r := brRun(context.Background(), env, "apaga o parser.go") // delete_file, conf 0.90
+	if len(rec.asked) != 0 {
+		t.Fatalf("mutante confiante não confirma intenção (o Permit cuida do consentimento), asked=%v\n%s", rec.asked, r.Text)
+	}
+	if !r.Handled || r.Status != tkSucceeded {
+		t.Fatalf("mutante confiante executa (Permit permitiu): %s\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "parser.go")); err == nil {
+		t.Error("parser.go ainda existe depois da remoção permitida")
+	}
+}
+
+// An UNCERTAIN mutant asks once and names the risk.
+func TestIntentConfirmUncertainMutantAsksAndNamesRisk(t *testing.T) {
+	root := brFixture(t)
+	env, rec := brTestEnv(t, root, nil, 0) // [enter]
+	in := brMediumBand(env, "apaga o parser.go")
+	r := brRunIntent(context.Background(), env, "apaga o parser.go", in, brResult{})
 	if len(rec.asked) != 1 {
-		t.Fatalf("mutante deve confirmar, asked=%v\n%s", rec.asked, r.Text)
+		t.Fatalf("mutante incerto deve confirmar uma vez, asked=%v\n%s", rec.asked, r.Text)
 	}
 	if !strings.Contains(rec.asked[0], "risco alto") {
 		t.Errorf("confirmação não nomeia o risco:\n%s", rec.asked[0])
@@ -85,7 +119,8 @@ func TestIntentConfirmMutantAlwaysAsks(t *testing.T) {
 func TestIntentConfirmNoFallsToMissMenu(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, 2) // "Não — ver outras opções"
-	r := brRun(context.Background(), env, "apaga o parser.go")
+	in := brMediumBand(env, "apaga o parser.go")
+	r := brRunIntent(context.Background(), env, "apaga o parser.go", in, brResult{})
 	if r.Handled || !r.Miss {
 		t.Fatalf("recusar deve virar miss: handled=%v miss=%v\n%s", r.Handled, r.Miss, r.Text)
 	}
@@ -104,7 +139,8 @@ func TestIntentConfirmNoFallsToMissMenu(t *testing.T) {
 func TestIntentConfirmEditSuggestsRequest(t *testing.T) {
 	root := brFixture(t)
 	env, rec := brTestEnv(t, root, nil, 1) // "Editar o pedido"
-	r := brRun(context.Background(), env, "apaga o parser.go")
+	in := brMediumBand(env, "apaga o parser.go")
+	r := brRunIntent(context.Background(), env, "apaga o parser.go", in, brResult{})
 	if r.Handled || r.Miss {
 		t.Fatalf("editar não executa: handled=%v miss=%v\n%s", r.Handled, r.Miss, r.Text)
 	}

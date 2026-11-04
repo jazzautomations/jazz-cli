@@ -1,0 +1,58 @@
+# Caça automática de modelo free morto. Os ids free dos provedores mudam toda
+# semana (kilo removeu laguna/minimax/nemotron-super em 2026-11, todos 404), e o
+# catálogo em omni.go apodrece em silêncio. Este job roda `jazz omni health`
+# todo dia: os provedores keyless (kilo, pollinations) são sondados sempre, sem
+# segredo; os com chave só quando o secret existe. Se um modelo free responde
+# 404, o comando sai != 0, o job falha e abre/atualiza uma issue.
+name: free-models-health
+on:
+  schedule:
+    - cron: "17 6 * * *"   # 06:17 UTC diário
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - run: go build -o jazz .
+      - name: jazz omni health
+        id: health
+        env:
+          # keyless (kilo, pollinations) não precisam de nada; os demais só
+          # sondam se o secret existir no repo (Settings > Secrets > Actions).
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
+          CO_API_KEY: ${{ secrets.CO_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        run: |
+          set -o pipefail
+          ./jazz omni health | tee health.txt
+      - name: abre issue se algum modelo free morreu
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = 'Um ou mais modelos free do catálogo responderam 404 (id removido pelo provedor).\n\n```\n';
+            try { body += fs.readFileSync('health.txt','utf8'); } catch (e) { body += '(sem saída)'; }
+            body += '\n```\n\nAtualize `presetModels` e `kiloFastFree` em `omni.go`.';
+            const title = 'free-models-health: modelo free morto no catálogo';
+            const existing = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'free-models-health'});
+            if (existing.data.length) {
+              await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.data[0].number, body});
+            } else {
+              await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: ['free-models-health']});
+            }
