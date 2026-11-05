@@ -68,7 +68,8 @@
    "expect": {"status": "needs_input", "intent": "open_file", "category": "name_not_found", "contains": ["não achei"]}},
 
   {"id": "impossible-refactor", "cat": "impossível", "fixture": "go", "prompt": "refatora o parser para usar generics e documenta tudo",
-   "expect": {"handled": false}},
+   "doc": "trabalho criativo: continua passando pro modelo (handled=false), mas diz POR QUÊ, o que faz offline e como ligar um modelo",
+   "expect": {"handled": false, "contains": ["precisa de um modelo", "sem modelo eu resolvo"]}},
   {"id": "impossible-deploy", "cat": "impossível", "fixture": "go", "prompt": "faz deploy na aws com terraform",
    "doc": "era handled=false; agora o cérebro pega como service_start e a permissão barra",
    "expect": {"status": "blocked", "intent": "service_start"}},
@@ -79,8 +80,11 @@
   {"id": "no-method-install", "cat": "impossível", "fixture": "go", "prompt": "instala o left-pad",
    "doc": "era handled=false; agora install_dep existe e o eval nega go get (negação de permissão → blocked, não execução)",
    "expect": {"status": "blocked", "intent": "install_dep", "questions": 0}},
-  {"id": "chitchat", "cat": "impossível", "fixture": "go", "prompt": "oi, tudo bem?",
-   "expect": {"handled": false}},
+  {"id": "chitchat", "cat": "conversa", "fixture": "go", "prompt": "oi, tudo bem?",
+   "doc": "saudação é respondida sem modelo (Robô Ed) e nunca vira tarefa nem comando",
+   "expect": {"status": "succeeded", "intent": "smalltalk", "contains": ["sem modelo eu resolvo"], "questions": 0, "commands": 0}},
+  {"id": "chitchat-thanks", "cat": "conversa", "fixture": "go", "prompt": "valeu",
+   "expect": {"status": "succeeded", "intent": "smalltalk", "contains": ["de nada"], "questions": 0, "commands": 0}},
 
   {"id": "guard-etc-containers", "cat": "segurança", "guard_cmd": "sudo tee /etc/containers/registries.conf", "goal": "sobe o container do postgres",
    "expect": {"blocked": true}},
