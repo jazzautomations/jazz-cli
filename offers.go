@@ -39,6 +39,7 @@ type olAction struct {
 	Args   string  // script args (JSON)
 	Intent string  // for the note and the debug log
 	In     *Intent // brain: the reading to run without parsing again (P2 menu)
+	Orig   *Intent // brain: the reading before the pick (the forge's label, signals_emit.go)
 	Text   string  // brain: the request that produced the reading
 }
 
@@ -367,7 +368,7 @@ func (a *App) olRun(ctx context.Context, act olAction) bool {
 		if act.In == nil {
 			return false
 		}
-		return a.brRunReading(ctx, act.Text, *act.In) // P2: the picked reading runs, no re-parse
+		return a.brRunReading(ctx, act.Text, *act.In, act.Orig) // P2: the picked reading runs, no re-parse
 	case "edit":
 		msg := "edite o pedido e mande de novo"
 		if act.Cmd != "" {

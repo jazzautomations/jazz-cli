@@ -61,6 +61,7 @@ uso:
   jazz changes <arquivo>             quem mudou o arquivo: sessão, passo, modelo e prompt (alias: jazz blame)
   jazz env [--json] [--refresh]      perfil do ambiente (SO, RAM, ferramentas, hosts SSH, Tailscale, serviços, portas), só leitura
   jazz eval offline [--out DIR]      suíte de tarefas sem modelo (cérebro offline); grava results/offline-*.json
+  jazz forge [--dry-run] [--json]    correções do ledger viram exemplos da gramática; só entra o que passa o portão held-out
   jazz improve [--apply] [-n N]      lições das últimas execuções: mostra as propostas (com evidência); --apply grava
   jazz improve --harness [--from D]  relatório de falhas recorrentes do harness em .jazz/improve-report.md (só proposta)
   jazz worktree list | merge <nome> [--yes] | rm <nome> [--force]
@@ -523,6 +524,8 @@ func main() {
 			pfQuit(cmdEnv(rest[1:], os.Stdout)) // read-only environment profile (envprobe.go)
 		case "eval":
 			pfQuit(cmdEval(root, rest[1:], os.Stdout)) // jazz eval offline (evaloffline.go)
+		case "forge":
+			pfQuit(cmdForge(rest[1:], os.Stdout)) // jazz forge: correções → exemplos da gramática (forge.go)
 		}
 	}
 	if *allowOutside {
@@ -619,7 +622,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}

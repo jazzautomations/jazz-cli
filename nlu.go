@@ -148,12 +148,18 @@ var (
 	nuDef  *nuModel
 )
 
-// nuGet returns the embedded interpreter.
+// nuGet returns the embedded interpreter plus the owner's forge overlay
+// (nlu_overlay.go: examples `jazz forge` accepted through the held-out gate).
+// It must never run before pfConfigureFresh (main.go): --fresh turns the
+// overlay off, and the first call fixes the model for the process.
 func nuGet() *nuModel {
 	nuOnce.Do(func() {
 		lx, _ := nuFS.ReadFile("nlu/lexicon.json")
 		ds, _ := nuFS.ReadFile("nlu/intents.json")
 		nuDef = nuCompile(lx, ds)
+		if nuDef.loadErr == nil && nuForgeOn() {
+			nuLoadOverlay(nuDef)
+		}
 	})
 	return nuDef
 }

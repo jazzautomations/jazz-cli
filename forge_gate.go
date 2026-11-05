@@ -44,10 +44,10 @@ type Example struct {
 
 // Metrics é o resultado de avaliar um EvalFn sobre um conjunto de exemplos.
 type Metrics struct {
-	Accuracy     float64 // fração de acertos [0,1]
-	FalseSuccess int     // respostas marcadas como sucesso sem serem — bloqueante
-	Coverage     float64 // fração de entradas cobertas pela resposta [0,1]
-	N            int     // tamanho do conjunto avaliado
+	Accuracy     float64 `json:"accuracy"`      // fração de acertos [0,1]
+	FalseSuccess int     `json:"false_success"` // respostas marcadas como sucesso sem serem — bloqueante
+	Coverage     float64 `json:"coverage"`      // fração de entradas cobertas pela resposta [0,1]
+	N            int     `json:"n"`             // tamanho do conjunto avaliado
 }
 
 // EvalFn avalia um conjunto de exemplos e devolve as métricas agregadas.
@@ -58,12 +58,12 @@ type EvalFn func(ex []Example) Metrics
 // GateReport é o resultado auditável do portão: a decisão, o motivo
 // legível e as quatro medições (baseline × candidato, held-in × held-out).
 type GateReport struct {
-	Accept  bool
-	Reason  string
-	BaseIn  Metrics
-	BaseOut Metrics
-	CandIn  Metrics
-	CandOut Metrics
+	Accept  bool    `json:"accept"`
+	Reason  string  `json:"reason"`
+	BaseIn  Metrics `json:"base_in"`
+	BaseOut Metrics `json:"base_out"`
+	CandIn  Metrics `json:"cand_in"`
+	CandOut Metrics `json:"cand_out"`
 }
 
 // splitHash deriva um uint64 determinístico de (seed, ID). FNV-1a sobre

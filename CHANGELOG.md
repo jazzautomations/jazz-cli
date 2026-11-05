@@ -2,6 +2,33 @@
 
 ## Não lançado
 
+### 0.14 asset-forge: correção do dono vira exemplo da gramática, só se melhorar fora da amostra
+
+- O cérebro offline agora escreve no ledger (`signals.jsonl`, no data dir, nunca sai da máquina; segredos
+  redigidos, uma linha, 300 caracteres): `unknown_intent` (não entendeu), `miss` (entendeu abaixo do limiar
+  de agir, ou o dono disse "não"/"editar" no confirm), `new_method` (entendeu, sem método offline, ou intenção
+  fora do nível 0 que foi pro modelo), `verifier_missing` (rodou sem verificador) e `correction` (o dono
+  aceitou a leitura no confirm ou escolheu uma no menu P2: o pedido + a intenção, um exemplo rotulado).
+  `brRun` continua puro; quem grava são os chamadores, então o eval e os testes nunca sujam o ledger.
+  Desligado em `--fresh`, com `JAZZ_SIGNALS=off`, durante `jazz eval offline` e em binário de teste.
+- `jazz forge [--dry-run] [--json]`: lê as correções, descarta o que não é intenção, texto > 200
+  caracteres, o que já é exemplo, o que é exemplo de outra intenção, o que é NEGATIVO da intenção escolhida
+  (rótulo envenenado), o que a gramática já faz sem perguntar e o que uma regra de outra intenção decide
+  (exemplo não muda a leitura). O resto passa pelo portão held-out (`forge_gate.go`, 0.3, seed fixa):
+  baseline e candidato treinados só no held-in, medidos em exemplos da gramática + prompts do eval offline +
+  negativos; falso sucesso (negativo caindo na intenção proibida, ou prompt do eval entendido errado com
+  confiança de agir) bloqueia, e nenhum caso de guarda pode regredir. Aceito, grava o overlay atômico
+  (temp + rename) e audita; recusado, não grava nada. Saída: 0 aceito · 1 recusado/dados insuficientes · 2 uso.
+- Overlay `<data>/forge/intents.overlay.json`: só ACRESCENTA exemplos a intenções que existem, depois dos
+  embarcados, sem duplicar pelo texto que o classificador vê, nunca um negativo da mesma intenção, teto de
+  200 por intenção e 2000 no total; arquivo inválido é ignorado (nota no debug). `JAZZ_FORGE=off`,
+  `--fresh` e o eval desligam. A gramática embarcada continua a fonte da verdade; `nlu/calib.json` segue
+  ajustado a ela (o relatório avisa).
+- Conserto: `jazz -p --offline` usava 0.85 pra agir enquanto a sessão e o nível 0 usam `brActMin` (0.7 pra
+  leitura); um pedido só-leitura entre 0.7 e 0.85 virava miss honesto só no headless offline.
+- Na máquina de desenvolvimento, `jazz eval offline`: 101/101 · falso sucesso 0 · 99/101 sem modelo ·
+  perguntas 6 (necessárias 6). A expectativa `self-version` acompanha o 0.12.1.
+
 ### Noção de tempo dentro da execução
 
 - O prompt de sistema traz a hora de início da sessão (fixa, o cache do prompt continua valendo).
