@@ -2,6 +2,38 @@
 
 ## Não lançado
 
+### 0.15 destilação: plano verificado e repetido do modelo vira método offline aprendido
+
+- A ponte online→offline (`distill.go`): o plancache já guardava planos de corridas verificadas do
+  modelo e agora grava também os comandos bash literais por trás dos passos (`pcPlan.Cmds`, até 12,
+  sempre redigidos). `jazz distill [--dry-run] [--json] [--list] [--forget X]` promove um plano
+  verificado E repetido (≥ 2 vitórias) a **método offline**: cada comando vira um passo
+  `learned_cmd` na mesma ordem — a decomposição da tarefa em sub-passos verificáveis É o método — e
+  a verificação registrada vira o check `exit_zero` (ou o próprio último passo, quando o until era
+  trivial). Executar custa zero tokens e repete o que já provou funcionar.
+- Portão duplo antes de promover: (a) REPLAY — a sequência inteira roda de novo no projeto e todo
+  passo sai `exit 0`, senão rejeita; (b) quando a candidata cria intenção nova (`learned_<id>`), o
+  mesmo portão held-out da forja — baseline sequencial, âncora de release, McNemar por intenção,
+  guarda estrita de negativos e prompts do eval — prova que a gramática não regride, e o teste
+  dirigido prova que o texto do plano lê na intenção nova. Intenção existente sem método recebe o
+  aprendido por attach, sem mexer na gramática.
+- Barras de segurança em camadas independentes: na destilação todo comando passa `dsCmdOK`
+  (DangerReason + SecretReason + segredo atrás de revisão `git show HEAD:.env`, uma linha, 240
+  caracteres) E `dsReplaySafe` (só-leitura ou ferramenta de build/teste com subcomando permitido —
+  comando que muta estado compartilhado nunca vira método, porque o portão não conseguiria
+  re-verificá-lo); na carga o overlay só aceita passos `learned_cmd` e checks `exit_zero`/`cmd_ran`,
+  intenção conhecida e nunca mutante; na execução `learned_cmd` roda pelo mesmo `env.Permit` de
+  qualquer comando do cérebro e a validação se repete — overlay editado à mão tem a mesma barra.
+- Acervo em `<data>/forge/methods.overlay.json` (atômico, 0600, teto 1 MiB): intenções `learned_*`
+  sem regras e com prior congelada (`embedN=0`), métodos, atalhos exatos texto→intenção (0.97) e
+  proveniência plano→método. Some com `JAZZ_FORGE=off`, `--fresh`, eval e testes. `jazz distill
+  --forget` remove método+intenção+atalho; `--list` mostra candidatas com o motivo de cada recusa.
+  O aviso "procedimento verificado 2× — 'jazz distill' promove a método offline" aparece uma vez
+  quando o plano cruza o limiar; intenções aprendidas entram no nível 0 do headless offline.
+- Na máquina de desenvolvimento: `jazz eval offline` 111/111 · falso sucesso 0 · 109/111 sem
+  modelo · perguntas 6 (necessárias 6). 15 testes novos cobrem barras, construção, overlay,
+  portão, execução, ponta a ponta, forget e o aviso.
+
 ### 0.14 asset-forge: correção do dono vira exemplo da gramática, só se melhorar fora da amostra
 
 - O cérebro offline agora escreve no ledger (`signals.jsonl`, no data dir, nunca sai da máquina; segredos

@@ -1008,7 +1008,7 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 	}
 	p := epGetLight()
 	in := nuGet().Parse(prompt, nuRuntimeWorld(tools.Root, p))
-	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] {
+	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] && !dsIsLearned(in.Name) {
 		brLevel0Signal(prompt, in) // what went to the model, and why
 		return nil
 	}
