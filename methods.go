@@ -307,6 +307,8 @@ var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
 	"resolve_name": brResolve,
 	"choose":       brChoose,
 	"ask_slot":     brAskSlot,
+	"refill":       brRefill,
+	"take":         brTake,
 	"read_file":    brReadFile,
 	"run_tests":    brRunTests,
 	"test_context": brTestContext,
@@ -329,6 +331,96 @@ var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
 	"pkg_cmd":      brPkgCmd,
 	"container_op": brContainerOp,
 	"undo":         brUndo,
+}
+
+// brRefill re-reads the request under another intent's slot schema and
+// merges the slots the primary parse could not see: "apaga o arquivo mais
+// novo da pasta downloads" parsed as delete_file has no dir/sort, but read
+// as file_find those words ARE dir=downloads, sort=mtime. need: comma
+// groups; "a|b" is satisfied when at least one named slot exists — no
+// match means the step fails, the chain dies and the ask variant takes
+// over like it does today.
+func brRefill(cx *brCtx, in map[string]string) brStep {
+	intent := in["intent"]
+	w := cx.env.World
+	if w == nil {
+		w = nuRuntimeWorld(cx.env.Root, cx.env.Profile)
+	}
+	slots := nuGet().FillAs(intent, cx.task.Goal, w)
+	for k, v := range slots {
+		if _, have := cx.task.Slots[k]; !have {
+			cx.task.Slots[k] = v
+			cx.facts["slot."+k] = v
+		}
+	}
+	for _, grp := range strings.Split(in["need"], ",") {
+		if grp == "" {
+			continue
+		}
+		sat := false
+		for _, k := range strings.Split(grp, "|") {
+			if cx.task.Slots[strings.TrimSpace(k)] != "" {
+				sat = true
+			}
+		}
+		if !sat {
+			return brStep{obs: rvNoCmd(), why: "o pedido não dá o que " + intent + " precisa (" + grp + ")"}
+		}
+	}
+	return brStep{obs: rvNoCmd(), ok: true}
+}
+
+// brTake lifts one item out of a script result into a slot: the producer
+// step leaves its payload in $from (file_find → data.files), take picks
+// item `index`, reads `field` (default path) and writes the slot — the
+// next chain step's $slot.X then resolves to the found value.
+func brTake(cx *brCtx, in map[string]string) brStep {
+	v := cx.subst(in["from"])
+	m, _ := v.(map[string]any)
+	data, _ := m["data"].(map[string]any)
+	field := in["field"]
+	if field == "" {
+		field = "path"
+	}
+	idx := 0
+	if s := in["index"]; s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
+			idx = n
+		}
+	}
+	val := ""
+	if arr, ok := data[field].([]any); ok && idx < len(arr) {
+		switch it := arr[idx].(type) {
+		case string:
+			val = it
+		case map[string]any:
+			val, _ = it[field].(string)
+		}
+	}
+	if val == "" {
+		for _, key := range []string{"files", "items", "results", "matches", "entries"} {
+			arr, ok := data[key].([]any)
+			if !ok || idx >= len(arr) {
+				continue
+			}
+			switch it := arr[idx].(type) {
+			case map[string]any:
+				val, _ = it[field].(string)
+			case string:
+				val = it
+			}
+			break
+		}
+	}
+	if val == "" {
+		return brStep{obs: rvNoCmd(), why: "nenhum item em " + in["from"]}
+	}
+	slot := in["slot"]
+	cx.task.Slots[slot] = val
+	cx.facts["slot."+slot] = val
+	cx.task.AddEvidence("plan", fmt.Sprintf("%s = %s", slot, val))
+	cx.say("→ %s", val)
+	return brStep{val: val, obs: rvNoCmd(), ok: true}
 }
 
 // brCap resolves a capability name: the named Go caps above, or `script:<n>`

@@ -15,7 +15,10 @@ package main
 // The state is a single factSet mutated in place: each branch pushes its
 // effects as a delta stack and pops it on backtrack — no map copies.
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // Operator is one STRIPS operator: applicable when every fact in Pre is
 // true; firing it adds Add to and removes Del from the state (Add wins
@@ -184,4 +187,176 @@ func (p *planner) solve(goals []string, budget int) (plan []string, cost int, ok
 	}
 	delete(p.active, g)
 	return best, bestCost, found
+}
+
+// ---------- wiring: plan chains inside the brain ----------
+
+// brPlanChain synthesizes a chained method when the intent's own methods
+// need a slot the parse left empty (in.Missing). Every method in the
+// library becomes an operator: the ask variants are just expensive ops,
+// so when a producer chain (refill → script → take) can derive the slot
+// cheaper than asking, the planner returns e.g.
+// [_fill.by_find, delete_file.op] and the request runs to the end.
+// The synthesized method rides the normal executor — same permissions,
+// evidence and verification — and a failed step drops back to the
+// intent's regular candidates (the ask variant) exactly like today.
+func brPlanChain(cx *brCtx, in Intent, methods []mhMethod) *mhMethod {
+	if len(methods) == 0 {
+		return nil
+	}
+	lib, err := mhLibrary()
+	if err != nil {
+		return nil
+	}
+	// "described" slots: a producer's re-read of the request yields the
+	// filter it needs ("o arquivo mais novo" is a description, not a name)
+	// — the slot then comes from the chain, not from the parsed word, so
+	// it leaves the initial state even when the parse filled it literally.
+	described := map[string]bool{}
+	for i := range lib["_fill"] {
+		fm := &lib["_fill"][i]
+		viable := false
+		for _, st := range fm.Steps {
+			if st.Cap == "refill" && brRefillViable(cx, st.In) {
+				viable = true
+			}
+			if viable && strings.HasPrefix(st.Out, "slot.") {
+				described[st.Out] = true
+			}
+		}
+	}
+	if len(in.Missing) == 0 && len(described) == 0 {
+		return nil
+	}
+	// A described slot's literal parse value is the description's own noun
+	// ("downloads" in "o arquivo mais novo da pasta downloads"), never the
+	// target — hide it from every method so a failed or missing chain asks
+	// instead of running `rm downloads`.
+	for f := range described {
+		delete(cx.task.Slots, strings.TrimPrefix(f, "slot."))
+		delete(cx.facts, f)
+	}
+	goal := "done." + in.Name
+	var ops []Operator
+	byName := map[string]*mhMethod{}
+	unsetFacts := map[string]bool{}
+	for _, ms := range lib {
+		for i := range ms {
+			m := &ms[i]
+			// producers and the intent's own methods; unrelated intents
+			// only add done facts nobody asks for, but keeping them out
+			// also keeps a foreign ask from hijacking the question text
+			if m.Intent != in.Name && !strings.HasPrefix(m.Intent, "_") {
+				continue
+			}
+			op := Operator{Name: m.Name, Cost: 10 * len(m.Steps)}
+			ok := true
+			for _, n := range m.Needs {
+				op.Pre = append(op.Pre, n)
+			}
+			for _, c := range m.Pre {
+				switch c.Op {
+				case "set", "":
+					op.Pre = append(op.Pre, c.Fact)
+				case "unset":
+					op.Pre = append(op.Pre, "no."+c.Fact)
+					unsetFacts[c.Fact] = true
+				default:
+					ok = false // eq/ne: the planner's set model can't see values
+				}
+			}
+			if !ok {
+				continue
+			}
+			for _, st := range m.Steps {
+				if st.Cap == "ask_slot" {
+					op.Cost += 40 // asking the owner is the expensive way to fill a slot
+				}
+				if st.Out == "" {
+					continue
+				}
+				if strings.HasPrefix(st.Out, "slot.") {
+					op.Add = append(op.Add, st.Out)
+					op.Del = append(op.Del, "no."+st.Out)
+				} else {
+					op.Add = append(op.Add, "have."+st.Out)
+				}
+			}
+			op.Add = append(op.Add, "done."+m.Intent)
+			op.Cost += m.CostMS / 500
+			ops = append(ops, op)
+			byName[m.Name] = m
+		}
+	}
+	var initial []string
+	for f := range cx.facts {
+		if described[f] {
+			continue
+		}
+		initial = append(initial, f)
+	}
+	for f := range unsetFacts {
+		if cx.facts[f] == "" || described[f] {
+			initial = append(initial, "no."+f)
+		}
+	}
+	plan, ok := Plan(initial, []string{goal}, ops, 4)
+	if !ok || len(plan) < 2 {
+		return nil // no chain beats the intent's own single method
+	}
+	last := byName[plan[len(plan)-1]]
+	var steps []mhStep
+	cost := 0
+	for _, n := range plan {
+		m := byName[n]
+		if m == nil {
+			return nil
+		}
+		steps = append(steps, m.Steps...)
+		cost += m.CostMS
+	}
+	return &mhMethod{
+		Name:     "plan:" + strings.Join(plan, "+"),
+		Intent:   in.Name,
+		Doc:      "cadeia: " + strings.Join(plan, " → "),
+		Priority: 99,
+		Steps:    steps,
+		Verify:   last.Verify,
+		Risk:     last.Risk,
+		CostMS:   cost,
+	}
+}
+
+// brRefillViable reports whether a refill step would satisfy its need
+// groups — the plan-time mirror of brRefill's runtime check. The producer
+// only earns a place in the chain when the request actually carries the
+// filter words ("mais novo", ".log", "10MB"); otherwise it stays a guess.
+func brRefillViable(cx *brCtx, in map[string]string) bool {
+	intent := in["intent"]
+	w := cx.env.World
+	if w == nil {
+		w = nuRuntimeWorld(cx.env.Root, cx.env.Profile)
+	}
+	slots := nuGet().FillAs(intent, cx.task.Goal, w)
+	have := func(k string) bool {
+		if slots[k] != "" {
+			return true
+		}
+		return cx.task.Slots[k] != ""
+	}
+	for _, grp := range strings.Split(in["need"], ",") {
+		if grp == "" {
+			continue
+		}
+		sat := false
+		for _, k := range strings.Split(grp, "|") {
+			if have(strings.TrimSpace(k)) {
+				sat = true
+			}
+		}
+		if !sat {
+			return false
+		}
+	}
+	return true
 }

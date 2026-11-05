@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // brFixture is a small Go project with a git marker.
@@ -141,6 +142,77 @@ func TestBrainOpenFileAmbiguous(t *testing.T) {
 	r = brRun(context.Background(), env2, "abre o handler.go")
 	if r.Status != tkSucceeded || !strings.Contains(r.Text, "handler.go ·") {
 		t.Fatalf("after the answer: %s\n%s", r.Status, r.Text)
+	}
+}
+
+// Backchain: "apaga o arquivo mais novo da pasta downloads" descreve o alvo
+// em vez de nomeá-lo — o planner deriva slot.target via file_find→take e o
+// delete opera no ARQUIVO resolvido, nunca no diretório 'downloads'.
+func TestBrainBackchainDeleteDescribedTarget(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "downloads/old.txt", "old\n", "downloads/new.txt", "new\n")
+	old := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(filepath.Join(root, "downloads/old.txt"), old, old)
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "apaga o arquivo mais novo da pasta downloads")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "downloads/new.txt")); !os.IsNotExist(err) {
+		t.Errorf("new.txt devia ter sido apagado:\n%s", r.Text)
+	}
+	// o alvo descrito virou o ARQUIVO — o diretório e seu conteúdo ficaram
+	if _, err := os.Stat(filepath.Join(root, "downloads/old.txt")); err != nil {
+		t.Errorf("old.txt sumiu junto — a cadeia apagou o diretório?\n%s", r.Text)
+	}
+}
+
+// Sem evidência descritiva não há cadeia: o delete cai no .ask normal.
+func TestBrainBackchainUndescribedAsks(t *testing.T) {
+	root := brFixture(t)
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "apaga o arquivo")
+	if r.Status != tkNeedsInput || !strings.Contains(r.Text, "qual arquivo") {
+		t.Fatalf("sem descrição devia perguntar, veio %s:\n%s", r.Status, r.Text)
+	}
+}
+
+// Produtor viável mas resultado vazio: a cadeia falha e o .ask assume —
+// nunca se inventa um alvo.
+func TestBrainBackchainEmptyProducerAsks(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "downloads/old.txt", "old\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "apaga o arquivo .xyzw mais novo da pasta downloads")
+	if r.Status != tkNeedsInput || !strings.Contains(r.Text, "qual arquivo") {
+		t.Fatalf("produtor vazio devia cair no ask, veio %s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "downloads/old.txt")); err != nil {
+		t.Errorf("old.txt sumiu num pedido sem alvo resolvido")
+	}
+}
+
+// O alvo resolvido pela cadeia não pula a portaria: permissão negada
+// mantém o arquivo de pé.
+func TestBrainBackchainPermitStillGates(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "downloads/old.txt", "old\n", "downloads/new.txt", "new\n")
+	old := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(filepath.Join(root, "downloads/old.txt"), old, old)
+	env, _ := brTestEnv(t, root, nil, -1)
+	env.Permit = func(context.Context, string) (bool, string) { return false, "negado" }
+	r := brRun(context.Background(), env, "apaga o arquivo mais novo da pasta downloads")
+	if r.Status == tkSucceeded {
+		t.Fatalf("permissão negada mas apagou:\n%s", r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "downloads/new.txt")); err != nil {
+		t.Errorf("new.txt sumiu com permissão negada:\n%s", r.Text)
 	}
 }
 

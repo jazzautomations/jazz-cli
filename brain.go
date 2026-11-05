@@ -226,6 +226,11 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 	task.must(tkInvestigating, "interpretado: "+strings.Join(in.Evidence, "; "))
 	cx.proj = fpDetect(env.Root)
 	cx.facts = brFacts(cx, p)
+	if pm := brPlanChain(cx, in, methods); pm != nil {
+		// a composed chain (e.g. file_find → take → delete) beats the
+		// ask variant when it can derive the missing slot itself
+		methods = append([]mhMethod{*pm}, methods...)
+	}
 	brExecute(cx, methods)
 	res.Status = task.Status
 	res.Text = strings.TrimRight(cx.out.String(), "\n")

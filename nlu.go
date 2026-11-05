@@ -922,6 +922,31 @@ func nuGroupOK(toks []nuTok, g string) (string, bool) {
 	return "", false
 }
 
+// nuGroupOKVeto is the none-group check: a token naming a filesystem
+// object (@file covers file/dir/test kinds) contributes its tag, not
+// its word — "a pasta downloads" is a dir, not the act of downloading.
+// Tools, ports, services and plain words keep their veto power: "make"
+// the binary still vetoes as the verb it shares a name with.
+func nuGroupOKVeto(toks []nuTok, g string) (string, bool) {
+	for _, alt := range strings.Split(g, "|") {
+		for i := range toks {
+			if toks[i].has(alt) && !nuIsTag(toks[i].Tags, "@file") {
+				return alt, true
+			}
+		}
+	}
+	return "", false
+}
+
+func nuIsTag(tags []string, want string) bool {
+	for _, t := range tags {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
 // rules returns the best rule of each intent that matches, most specific
 // first, and the intents a rule explicitly excluded ("none" hit).
 func (m *nuModel) rules(toks []nuTok) ([]nuMatch, map[int]bool) {
@@ -948,7 +973,7 @@ func (m *nuModel) rules(toks []nuTok) ([]nuMatch, map[int]bool) {
 				continue
 			}
 			for _, n := range r.None {
-				if _, has := nuGroupOK(toks, n); has {
+				if _, has := nuGroupOKVeto(toks, n); has {
 					ok = false
 					break
 				}
@@ -1144,15 +1169,18 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 		mut := ""
+		opn := ""
 		for i := range toks {
 			t := &toks[i]
 			if t.Quoted || t.Filler || nuToWords[t.Fold] || t.Fixed != "" || len(t.Tags) > 0 {
 				continue // a typo guess or an entity name is a noun, not an order
 			}
-			m, other := false, false
+			m, other, op := false, false, false
 			for _, c := range t.Concs {
 				if nuMutConcepts[c] && !used[c] {
 					m = true
+				} else if nuOpinionConcepts[c] && !used[c] {
+					op = true
 				} else if concOf[c] {
 					other = true // the same word feeds this intent's grammar
 				}
@@ -1160,10 +1188,20 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			if m && !other {
 				mut = t.Fold
 			}
+			if op && !other {
+				opn = t.Fold
+			}
 		}
 		if mut != "" {
 			conf *= 0.5
 			in.Evidence = append(in.Evidence, fmt.Sprintf("verbo de mutação '%s' não combina com leitura", mut))
+		}
+		// a judgment phrase ("o que tu acha", "what would you") asks for the
+		// model's take, not a level-0 answer — the offline brain must never
+		// speak where an opinion was requested
+		if opn != "" {
+			conf *= 0.5
+			in.Evidence = append(in.Evidence, fmt.Sprintf("frase de opinião '%s' não é comando", opn))
 		}
 	}
 	// typo-only: the rule fired, but every concept/tag it relied on is carried
@@ -1271,6 +1309,15 @@ var nuMutConcepts = map[string]bool{
 	"start": true, "stop": true, "restart": true, "kill": true, "rename": true,
 	"format": true, "build": true, "compress": true,
 	"mutate": true, "recover": true, "extract": true, "enable": true,
+}
+
+// nuOpinionConcepts mark an utterance about the assistant's own judgment
+// ("o que tu acha", "o que tu melhoraria", "what would you change") —
+// conversation for the model, never a level-0 command the brain may
+// answer. Same treatment as mutation verbs: the read still classifies,
+// it just can't act on an opinion question.
+var nuOpinionConcepts = map[string]bool{
+	"opinion": true,
 }
 
 // nuWorldKinds are slot kinds that name a real thing: a file or dir of the
@@ -1566,6 +1613,41 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 		}
 	}
 	return slots, missing, hint, unfed
+}
+
+// FillAs re-reads text under one intent's slot schema: chain sub-tasks
+// ("apaga o arquivo mais novo da pasta downloads" read as file_find
+// yields dir=downloads, sort=mtime) feed the producer steps of a plan
+// chain. It is a fill, not a verdict: the primary parse already chose
+// the intent; this only extracts the producer's view of the same words.
+func (m *nuModel) FillAs(intent, text string, w *nuWorld) map[string]string {
+	if m == nil || m.loadErr != nil {
+		return nil
+	}
+	di, ok := m.byName[intent]
+	if !ok {
+		return nil
+	}
+	text = strings.TrimSpace(text)
+	if text == "" || len(text) > 400 {
+		return nil
+	}
+	toks := m.normalize(nuTokenize(text))
+	hits := m.spot(toks, w)
+	nuEntityFirst(toks)
+	matches, _ := m.rules(toks)
+	used := map[string]bool{}
+	best, bestScore := -1, 0
+	for i, x := range matches {
+		if x.intent == di && (best < 0 || x.score > bestScore) {
+			best, bestScore = i, x.score
+		}
+	}
+	if best >= 0 {
+		used = matches[best].used
+	}
+	slots, _, _, _ := m.fill(&m.data.Intents[di], toks, hits, used, w)
+	return slots
 }
 
 func nuAllCue(t *nuTok, m *nuModel) bool {

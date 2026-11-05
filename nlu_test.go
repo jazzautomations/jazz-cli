@@ -331,3 +331,67 @@ func TestNLUV5Wiring(t *testing.T) {
 		t.Errorf("usuário matheus: owner=%q, want matheus", in.Slots["owner"])
 	}
 }
+
+// An entity tag on a real file/dir object disarms veto concepts the name
+// carries: a directory literally called "downloads" is a noun, not the
+// verb "baixar". Tools/ports/services keep vetoing (make, 8080, nginx).
+func TestNLUEntityNameDoesNotVeto(t *testing.T) {
+	m := nuGet()
+	if m.loadErr != nil {
+		t.Fatal(m.loadErr)
+	}
+	w := nuWorldFromDef(nuWorldDef{Dirs: []string{"downloads", "logs"}})
+	if in := m.Parse("qual o arquivo mais novo da pasta downloads", w); nuPredict(in) != "file_find" {
+		t.Errorf("pasta downloads (dir real) vetou file_find: %s conf=%.2f", nuPredict(in), in.Confidence)
+	}
+	// controle: a palavra sem entidade continua vetoando (download != busca)
+	if in := m.Parse("baixa o arquivo mais novo da pasta x", w); nuPredict(in) == "file_find" {
+		t.Errorf("'baixa' sem entidade devia vetar file_find, veio %s", nuPredict(in))
+	}
+	// ferramenta nomeada como verbo continua vetoando ("make" é @tool)
+	if in := m.Parse("make script.sh executable", w); nuPredict(in) == "perm_find" {
+		t.Errorf("'make' (@tool) não devia perder o veto: %s conf=%.2f", nuPredict(in), in.Confidence)
+	}
+}
+
+// Perguntas de julgamento ao assistente ("o que tu acha", "o que tu
+// melhoraria") são conversa — vão pro modelo, nunca pro cérebro offline.
+// 'acha' (opinar) não é 'acha' (encontrar); condicional de julgamento não
+// é self_info. Os comandos com as mesmas palavras seguem funcionando.
+func TestNLUOpinionIsNotIntent(t *testing.T) {
+	m := nuGet()
+	if m.loadErr != nil {
+		t.Fatal(m.loadErr)
+	}
+	w := nuWorldFromDef(m.data.World)
+	opinions := []string{
+		"e o que tu melhoraria nessa porra?",
+		"o que tu acha dessa porra?",
+		"o que tu melhoraria no jazz",
+		"o que você faria diferente",
+		"como você melhoraria isso",
+		"eai o que tu acha",
+		"o que tu acha do erro no log",
+		"me diz tua opinião",
+		"what do you think about this",
+		"what would you change",
+	}
+	for _, s := range opinions {
+		if in := m.Parse(s, w); nuPredict(in) != "none" {
+			t.Errorf("%q => %s (%.2f) — opinião tem que ir pro modelo, não virar intent offline", s, in.Name, in.Confidence)
+		}
+	}
+	// comandos legítimos com as mesmas palavras sobrevivem
+	if in := m.Parse("acha o arquivo mais novo", w); nuPredict(in) != "file_find" {
+		t.Errorf("'acha o arquivo mais novo' devia ser file_find, veio %s", nuPredict(in))
+	}
+	if in := m.Parse("acha arquivos .log", w); nuPredict(in) != "file_find" && nuPredict(in) != "list_files" && nuPredict(in) != "find" {
+		t.Errorf("'acha arquivos .log' devia ser um intent de arquivo, veio %s", nuPredict(in))
+	}
+	if in := m.Parse("me fala sobre você", w); nuPredict(in) != "self_info" {
+		t.Errorf("'me fala sobre você' devia ser self_info, veio %s", nuPredict(in))
+	}
+	if in := m.Parse("que versão você é", w); nuPredict(in) != "self_info" {
+		t.Errorf("'que versão você é' devia ser self_info, veio %s", nuPredict(in))
+	}
+}

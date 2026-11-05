@@ -1,0 +1,11 @@
+{"methods": [
+ {"name": "_fill.by_find", "intent": "_fill", "priority": 5,
+  "doc": "produz slot.target via file_find quando o pedido descreve o alvo em vez de nomeá-lo ('o arquivo mais novo da pasta downloads')",
+  "needs": ["bin.python3"],
+  "steps": [
+   {"cap": "refill", "in": {"intent": "file_find", "need": "sort|empty|ext|min_size|max_size|newer|older"}},
+   {"cap": "script:file_find", "in": {"path": "$slot.dir", "name": "$slot.name", "ext": "$slot.ext", "type": "$slot.type", "sort": "$slot.sort", "min_size": "$slot.min_size", "max_size": "$slot.max_size", "newer_min": "$slot.newer", "older_min": "$slot.older", "empty": "$slot.empty", "limit": "1"}, "out": "cand"},
+   {"cap": "take", "in": {"from": "$cand", "slot": "target", "field": "path"}, "out": "slot.target"}
+  ],
+  "verify": [], "risk": "low", "cost_ms": 1600}
+]}

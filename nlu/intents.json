@@ -299,7 +299,8 @@
       "lineselect",
       "context",
       "findattr",
-      "scope"
+      "scope",
+      "opinion"
      ]
     }
    ],
@@ -2544,30 +2545,45 @@
      "all": [
       "version",
       "jazz"
+     ],
+     "none": [
+      "opinion"
      ]
     },
     {
      "all": [
       "who",
       "self"
+     ],
+     "none": [
+      "opinion"
      ]
     },
     {
      "all": [
       "explain",
       "jazz"
+     ],
+     "none": [
+      "opinion"
      ]
     },
     {
      "all": [
       "explain",
       "self"
+     ],
+     "none": [
+      "opinion"
      ]
     },
     {
      "all": [
       "self",
       "jazz"
+     ],
+     "none": [
+      "opinion"
      ]
     },
     {
@@ -2581,6 +2597,9 @@
       "jazz",
       "status",
       "help"
+     ],
+     "none": [
+      "opinion"
      ]
     }
    ],
@@ -4101,7 +4120,8 @@
       "download",
       "net",
       "remote",
-      "user"
+      "user",
+      "opinion"
      ],
      "w": 10
     },
@@ -4121,7 +4141,8 @@
       "download",
       "net",
       "remote",
-      "user"
+      "user",
+      "opinion"
      ],
      "w": 0
     },
@@ -4139,7 +4160,8 @@
       "download",
       "net",
       "remote",
-      "user"
+      "user",
+      "opinion"
      ],
      "w": 15
     }
