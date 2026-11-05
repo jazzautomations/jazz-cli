@@ -106,6 +106,9 @@ func mhLibrary() (map[string][]mhMethod, error) {
 			l := mhLib[k]
 			sort.SliceStable(l, func(i, j int) bool { return l[i].Priority > l[j].Priority })
 		}
+		if nuForgeOn() {
+			dsLoadMethods(mhLib) // métodos aprendidos (distill.go), mesma cerca do overlay da gramática
+		}
 	})
 	return mhLib, mhErr
 }
@@ -309,6 +312,7 @@ var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
 	"ask_slot":     brAskSlot,
 	"refill":       brRefill,
 	"take":         brTake,
+	"learned_cmd":  brLearnedCmd,
 	"read_file":    brReadFile,
 	"run_tests":    brRunTests,
 	"test_context": brTestContext,

@@ -1,0 +1,1172 @@
+package main
+
+// distill.go — a ponte online→offline (0.15 "destilação").
+//
+// O que já existia: o plancache (plancache.go) grava um plano de cada corrida
+// do MODELO com sucesso verificado, e o reusa como dica quando o modelo volta.
+// Isso alimenta o modelo — nunca o cérebro offline. Esta é a peça que faltava:
+//
+//	plano verificado E REPETIDO (Wins ≥ dsMinWins) → método offline aprendido
+//
+// Um plano é destilável quando toda a trajetória que verificou são comandos
+// bash (pcPlan.Cmds, os literais por trás dos Steps clipados) — o que o
+// modelo fez de forma determinística, o cérebro repete de graça. A
+// DECOMPOSIÇÃO é o próprio método: a tarefa vira a sequência de sub-passos
+// verificáveis que resolveu ela, replayável com zero tokens.
+//
+// Segurança, em camadas (nenhuma contorna a outra):
+//
+//   - destilação: todo comando passa dsCmdOK (sem DangerReason, sem
+//     SecretReason, uma linha, tamanho) E dsReplaySafe (só-leitura ou
+//     ferramenta de build/teste conhecida) — comando que muta estado
+//     compartilhado nunca vira método, porque o portão não conseguiria
+//     re-verificá-lo sem mutar de verdade.
+//   - portão (`jazz distill`): (a) REPLAY — a sequência roda de novo no
+//     projeto e TODOS os passos saem exit 0, senão rejeita; (b) quando a
+//     candidata cria uma intenção aprendida nova, o mesmo portão held-out
+//     da forja (NonInferior + âncora de release + McNemar por intenção +
+//     guarda estrita) prova que a gramática não regride, e o teste dirigido
+//     prova que o texto do plano lê na intenção nova.
+//   - carga: o overlay só aceita passos learned_cmd e checks
+//     exit_zero/cmd_ran — nem escrito à mão ele carrega outra capacidade.
+//   - execução: learned_cmd roda pelo mesmo env.Permit de qualquer comando
+//     do cérebro; intenções mutantes (fgIsMutating) nunca recebem método
+//     nem atalho aprendido.
+//
+// Arquivo: dataDir()/forge/methods.overlay.json — {version, intents,
+// methods, aliases, prov}. Mesma disciplina do overlay da gramática: some
+// com JAZZ_FORGE=off, --fresh, eval offline e binários de teste.
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+const (
+	dsOverlayVersion = 1
+	dsOverlayMaxByte = 1 << 20
+	dsMinWins        = 2 // um procedimento aprende-se quando verificou e se repetiu
+	dsMaxSteps       = 8
+	dsMaxCmd         = 240
+	dsMaxCand        = 4   // orçamento do portão por rodada
+	dsMaxMethods     = 100 // teto do overlay inteiro
+	dsMaxIntents     = 50
+	dsLearnedPrefix  = "learned_"
+	dsCmdTimeout     = 10 * time.Minute // como proj_cmd: um passo de build/teste pode demorar
+)
+
+// dsIntent é uma intenção aprendida: nome learned_*, sem regras, só
+// exemplos — o classificador a vê (paráfrases) e o atalho a acerta (o mesmo
+// texto de novo = replay exato).
+type dsIntent struct {
+	Name     string   `json:"name"`
+	Desc     string   `json:"desc,omitempty"`
+	Examples []string `json:"examples"`
+}
+
+// dsProv é a proveniência de um método aprendido: de qual plano ele veio.
+type dsProv struct {
+	Plan   string `json:"plan"`
+	Task   string `json:"task"`
+	Intent string `json:"intent"`
+	Method string `json:"method"`
+	Wins   int    `json:"wins"`
+	Ts     int64  `json:"ts"`
+}
+
+// dsOverlay é o acervo de métodos aprendidos.
+type dsOverlay struct {
+	Version int                `json:"version"`
+	Intents []dsIntent         `json:"intents,omitempty"`
+	Methods []mhMethod         `json:"methods,omitempty"`
+	Aliases map[string]nuAlias `json:"aliases,omitempty"` // canon -> atalho exato
+	Prov    []dsProv           `json:"prov,omitempty"`
+}
+
+// dsOverlayPath é uma var para os testes apontarem o arquivo a um TempDir.
+var dsOverlayPath = func() string {
+	return filepath.Join(dataDir(), "forge", "methods.overlay.json")
+}
+
+// dsReadOverlay lê e valida o envelope; arquivo ausente é (nil, nil).
+func dsReadOverlay(path string) (*dsOverlay, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, dsOverlayMaxByte+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > dsOverlayMaxByte {
+		return nil, errors.New("overlay de métodos maior que 1 MiB")
+	}
+	var ov dsOverlay
+	if err := json.Unmarshal(b, &ov); err != nil {
+		return nil, err
+	}
+	if ov.Version != dsOverlayVersion {
+		return nil, errors.New("versão do overlay de métodos desconhecida")
+	}
+	return &ov, nil
+}
+
+// dsWriteOverlay grava atomicamente (tmp + rename, 0600).
+func dsWriteOverlay(path string, ov *dsOverlay) error {
+	ov.Version = dsOverlayVersion
+	b, err := json.MarshalIndent(ov, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// ---------- validação de comandos e passos ----------
+
+// dsCmdOK é a barra de TODO comando aprendido, na carga e na execução: sem
+// perigo (DangerReason — destructivos, forks, escritas fora), sem leitura de
+// segredo (SecretReason), uma linha só, tamanho contido. "" = permitido.
+func dsCmdOK(cmd string) string {
+	c := strings.TrimSpace(cmd)
+	switch {
+	case c == "":
+		return "vazio"
+	case len(c) > dsMaxCmd:
+		return "comando longo demais"
+	case strings.ContainsAny(c, "\n\r\x00"):
+		return "multi-linha ou byte de controle"
+	}
+	if r := DangerReason(c); r != "" {
+		return "perigoso: " + r
+	}
+	if r := SecretReason(c); r != "" {
+		return "toca segredo: " + r
+	}
+	return dsSecretFields(c)
+}
+
+// dsSecretFields pega o que escapa do SecretReason: um segredo atrás de uma
+// REVISÃO — `git show HEAD:.env`, `git cat-file blob main:.npmrc`,
+// `tar -Ox pacote.tar:id_rsa` — cujo basename não é o do arquivo.
+func dsSecretFields(c string) string {
+	for _, f := range strings.Fields(c) {
+		i := strings.IndexByte(f, ':')
+		if i <= 0 {
+			continue
+		}
+		suf := strings.Trim(f[i+1:], `"'`)
+		if suf == "" || strings.ContainsAny(suf, "*?[") {
+			continue
+		}
+		if reSecretArg.MatchString(suf) || secretName(filepath.Base(suf)) {
+			return "toca segredo: " + f
+		}
+	}
+	return ""
+}
+
+// dsReplayCmds: ferramentas de build/teste/diagnóstico cujo replay no
+// portão não muta estado compartilhado (no máximo artefatos do próprio
+// projeto, que a corrida verificada já produziu). O regex casa o resto da
+// linha depois do nome do binário. Tudo fora da lista — git mutante, ssh,
+// curl, rm, apt, pip install, docker exec, systemctl — não é reproduzível.
+var dsReplayCmds = map[string]*lazyRe{
+	"go":            lazyRx(`^(test|build|vet|fmt|list|doc|env|version|mod\s+(tidy|verify|download|graph|why|vendor))(\s|$)`),
+	"gofmt":         lazyRx(`^(-[a-z]+\s+)*\S`),
+	"gofumpt":       lazyRx(`^(-[a-z]+\s+)*\S`),
+	"goimports":     lazyRx(`^(-[a-z]+\s+)*\S`),
+	"golangci-lint": lazyRx(`^(run|linters|version|config)(\s|$)`),
+	"staticcheck":   lazyRx(`^(\S|$)`),
+	"cargo":         lazyRx(`^(test|build|check|clippy|fmt|doc|tree|metadata)(\s|$)`),
+	"rustc":         lazyRx(`^--version|(\s|$)`),
+	"rustfmt":       lazyRx(`^(\s|$)`),
+	"npm":           lazyRx(`^(test|t|ls|outdated|audit|view|pack|exec|run\s+(test|build|lint|check|verify|coverage|compile|tsc|typecheck|type-check))(\s|$)`),
+	"yarn":          lazyRx(`^(test|t|run\s+(test|build|lint|check)|build|lint|check|tsc|why|outdated|list|info)(\s|$)`),
+	"pnpm":          lazyRx(`^(test|t|run\s+(test|build|lint|check)|build|lint|check|why|outdated|list|exec\s+(tsc|eslint|jest|vitest))(\s|$)`),
+	"npx":           lazyRx(`^(tsc|eslint|jest|vitest|prettier|mocha|tsx?|node)(\s|@|$)`),
+	"node":          lazyRx(`^(--version|-v|-e\s+['"]?console|\S+\.(mjs|cjs|js))(\s|$)`),
+	"deno":          lazyRx(`^(test|check|lint|fmt|eval|info|doc|coverage)(\s|$)`),
+	"tsc":           lazyRx(`^(\s|$)`),
+	"eslint":        lazyRx(`^(\s|$)`),
+	"prettier":      lazyRx(`^(\s|$)`),
+	"jest":          lazyRx(`^(\s|$)`),
+	"vitest":        lazyRx(`^(\s|$)`),
+	"mocha":         lazyRx(`^(\s|$)`),
+	"pytest":        lazyRx(`^(\s|$)`),
+	"py.test":       lazyRx(`^(\s|$)`),
+	"python":        lazyRx(`^(-c\s+['"]?import\s+\w+|[^\s]*\.py|-m\s+(pytest|unittest|mypy|ruff|compileall|coverage|venv|pip\s+(list|show|check|freeze)|build|twine\s+check))(\s|$)`),
+	"python3":       lazyRx(`^(-c\s+['"]?import\s+\w+|[^\s]*\.py|-m\s+(pytest|unittest|mypy|ruff|compileall|coverage|venv|pip\s+(list|show|check|freeze)|build|twine\s+check))(\s|$)`),
+	"ruff":          lazyRx(`^(check|format|rule|linter|version|clean)(\s|$)`),
+	"mypy":          lazyRx(`^(\s|$)`),
+	"black":         lazyRx(`^(\s|$)`),
+	"isort":         lazyRx(`^(\s|$)`),
+	"flake8":        lazyRx(`^(\s|$)`),
+	"pylint":        lazyRx(`^(\s|$)`),
+	"shellcheck":    lazyRx(`^(\s|$)`),
+	"hadolint":      lazyRx(`^(\s|$)`),
+	"shfmt":         lazyRx(`^(\s|$)`),
+	"make":          lazyRx(`^($|(-\w+\s+)*(all|test|check|build|lint|vet|fmt|compile|unit|coverage|verify|ci|bench|deps)\s*$)`),
+	"cmake":         lazyRx(`^(--build|--version|-S\s|--list-presets)(\s|$)`),
+	"ctest":         lazyRx(`^(\s|$)`),
+	"ninja":         lazyRx(`^(\s|$)`),
+	"meson":         lazyRx(`^(test|compile|setup|introspect|info)(\s|$)`),
+	"bazel":         lazyRx(`^(test|build|query|info|check)(\s|$)`),
+	"mvn":           lazyRx(`^(test|verify|compile|package|dependency:|help:|validate)(\s|$)`),
+	"mvnw":          lazyRx(`^(test|verify|compile|package|dependency:|help:|validate)(\s|$)`),
+	"gradle":        lazyRx(`^(test|build|check|tasks|dependencies|compileJava|compileKotlin)(\s|$)`),
+	"gradlew":       lazyRx(`^(test|build|check|tasks|dependencies|compileJava|compileKotlin)(\s|$)`),
+	"javac":         lazyRx(`^(\s|$)`),
+	"dotnet":        lazyRx(`^(test|build|restore|list|clean|format|vet|sln|package)(\s|$)`),
+	"swift":         lazyRx(`^(test|build|package|describe|diagnose)(\s|$)`),
+	"mix":           lazyRx(`^(test|compile|deps\.|format|dialyzer|credo|spec)(\s|$)`),
+	"rebar3":        lazyRx(`^(eunit|ct|compile|dialyzer|as)(\s|$)`),
+	"zig":           lazyRx(`^(test|build|ast-check|fmt|version)(\s|$)`),
+	"bundle":        lazyRx(`^(exec\s+(rspec|rake|rubocop)|check|list|outdated|info|show)(\s|$)`),
+	"rake":          lazyRx(`^(test|spec|default|check|-T)(\s|$)`),
+	"rspec":         lazyRx(`^(\s|$)`),
+	"rubocop":       lazyRx(`^(\s|$)`),
+	"phpunit":       lazyRx(`^(\s|$)`),
+	"composer":      lazyRx(`^(test|check|validate|install|update|dump-autoload|cs-fix|analyse|run-script\s+\w*(test|check|lint|analy))(\s|$)`),
+	"kotlinc":       lazyRx(`^(\s|$)`),
+	"sbt":           lazyRx(`^(test|compile|check|clean|about|inspect)(\s|$)`),
+	"flutter":       lazyRx(`^(test|analyze|doctor|pub get|build)(\s|$)`),
+	"dart":          lazyRx(`^(test|analyze|format|pub get|run\s+\S+\.dart|compile)(\s|$)`),
+	"buf":           lazyRx(`^(lint|build|generate|format|breaking|ls-files)(\s|$)`),
+	"protoc":        lazyRx(`^(\s|$)`),
+	"jq":            lazyRx(`^(\s|$)`),
+	"yq":            lazyRx(`^(\s|$)`),
+}
+
+// dsReplaySafe: pode o portão rodar este comando de novo sem mutar nada que
+// a corrida original não tenha mutado? Só-leitura direto; senão, cada
+// segmento precisa ser um binário da lista de build/teste com subcomando
+// permitido.
+func dsReplaySafe(cmd string) bool {
+	c := strings.TrimSpace(cmd)
+	if c == "" {
+		return false
+	}
+	if IsReadOnly(c) {
+		return true
+	}
+	for _, part := range reSplit.Split(c, -1) {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if IsReadOnly(p) {
+			continue
+		}
+		toks := shellFields(p)
+		if len(toks) == 0 {
+			return false
+		}
+		re, ok := dsReplayCmds[filepath.Base(toks[0])]
+		if !ok {
+			return false
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(p, toks[0]))
+		if !re.MatchString(rest) {
+			return false
+		}
+	}
+	return true
+}
+
+// dsIntentNameOK: intenção aprendida é learned_ seguido de slug minúsculo.
+var dsIntentNameRe = lazyRx(`^learned_[a-z0-9_]{1,48}$`)
+
+func dsIntentNameOK(name string) bool { return dsIntentNameRe.MatchString(name) }
+
+// dsValidMethod valida um método do overlay na carga — editado à mão ou
+// não, a mesma barra: só passos learned_cmd, só checks exit_zero/cmd_ran,
+// intenção conhecida (gramática ou aprendida), nunca mutante, nada de
+// registro de comandos embutidos (Cmds é do acervo, não do overlay).
+func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
+	if m.Name == "" || m.Intent == "" || strings.ContainsAny(m.Name+m.Intent, " \t\n") {
+		return "nome ou intenção inválido"
+	}
+	if !intentOK(m.Intent) {
+		return "intenção desconhecida: " + m.Intent
+	}
+	if fgIsMutating(m.Intent) {
+		return "intenção mutante: método aprendido não se liga a ela"
+	}
+	if len(m.Cmds) > 0 {
+		return "o overlay não declara comandos de registro (cmds)"
+	}
+	if len(m.Steps) == 0 || len(m.Steps) > dsMaxSteps {
+		return "número de passos fora do permitido"
+	}
+	outs := map[string]bool{}
+	for i, st := range m.Steps {
+		if st.Cap != "learned_cmd" {
+			return fmt.Sprintf("passo %d usa capacidade %q — o overlay só carrega learned_cmd", i+1, st.Cap)
+		}
+		if why := dsCmdOK(st.In["cmd"]); why != "" {
+			return fmt.Sprintf("passo %d: %s", i+1, why)
+		}
+		for k := range st.In {
+			if k != "cmd" {
+				return fmt.Sprintf("passo %d: entrada desconhecida %q", i+1, k)
+			}
+		}
+		if st.Out != "" {
+			outs[st.Out] = true
+		}
+	}
+	if len(m.Verify) == 0 {
+		return "método aprendido sem verificação"
+	}
+	for _, v := range m.Verify {
+		if v.Check != "exit_zero" && v.Check != "cmd_ran" {
+			return "verificador não permitido: " + v.Check
+		}
+		arg, _ := strings.CutPrefix(v.Arg, "$")
+		if !outs[arg] {
+			return "verificador aponta um passo inexistente: " + v.Arg
+		}
+	}
+	for _, c := range m.Pre {
+		if c.Fact == "" || (c.Op != "" && c.Op != "set" && c.Op != "unset" && c.Op != "eq" && c.Op != "ne") {
+			return "pré-condição mal formada"
+		}
+	}
+	return ""
+}
+
+// ---------- aplicação do overlay (carga) ----------
+
+// dsApplyNLU funde as intenções e os atalhos aprendidos em m. Intenções
+// aprendidas chegam depois das embutidas, com embedN=0: a prior do
+// classificador nunca se move por elas (espec 0.14b), então um atalho
+// (0.97) é o caminho exato e o classificador só ajuda nas paráfrases.
+func dsApplyNLU(m *nuModel, ov *dsOverlay) {
+	if m == nil || ov == nil || m.loadErr != nil {
+		return
+	}
+	n := 0
+	for _, it := range ov.Intents {
+		if n >= dsMaxIntents {
+			break
+		}
+		if dsAddIntent(m, it) {
+			n++
+		}
+	}
+	for canon, a := range ov.Aliases {
+		if _, ok := m.byName[a.Intent]; !ok || a.Intent == "none" || canon == "" {
+			continue
+		}
+		if fgIsMutating(a.Intent) { // nem à mão: atalho nunca aponta uma mutação
+			continue
+		}
+		if m.aliases == nil {
+			m.aliases = map[string]string{}
+		}
+		m.aliases[canon] = a.Intent
+	}
+}
+
+// dsAddIntent acrescenta uma intenção aprendida a m (dedup por nome).
+func dsAddIntent(m *nuModel, it dsIntent) bool {
+	if !dsIntentNameOK(it.Name) || it.Name == "none" || fgIsMutating(it.Name) {
+		return false
+	}
+	if _, dup := m.byName[it.Name]; dup {
+		return false
+	}
+	var exs []string
+	for _, e := range it.Examples {
+		if t, ok := nuExampleText(e); ok {
+			exs = append(exs, t)
+		}
+	}
+	if len(exs) == 0 {
+		return false
+	}
+	m.data.Intents = append(m.data.Intents, nuIntentDef{
+		Name: it.Name, Desc: it.Desc, Examples: exs,
+	})
+	m.byName[it.Name] = len(m.data.Intents) - 1
+	m.embedN = append(m.embedN, 0)
+	return true
+}
+
+// dsLoadNLU lê o overlay de métodos e o aplica a m (chamada de nuGet,
+// dentro do mesmo portão nuForgeOn do overlay da gramática).
+func dsLoadNLU(m *nuModel) {
+	ov, err := dsReadOverlay(dsOverlayPath())
+	if err != nil {
+		dbg("distill", map[string]any{"overlay": "ignorado", "err": err.Error()})
+		return
+	}
+	dsApplyNLU(m, ov)
+}
+
+// dsApplyMethods funde os métodos aprendidos na biblioteca; cada um passa
+// por dsValidMethod e por uma intenção que exista (na gramática ou
+// aprendida no mesmo overlay). Retorna quantos entraram.
+func dsApplyMethods(lib map[string][]mhMethod, ov *dsOverlay) int {
+	if ov == nil {
+		return 0
+	}
+	// a intenção do método precisa existir em algum lugar: na biblioteca
+	// (tem métodos), entre os aprendidos deste overlay, ou na gramática.
+	grammar := map[string]bool{}
+	if m := nuGet(); m != nil && m.loadErr == nil {
+		for _, it := range m.data.Intents {
+			grammar[it.Name] = true
+		}
+	}
+	intentOK := func(name string) bool {
+		if grammar[name] {
+			return true
+		}
+		if _, ok := lib[name]; ok {
+			return true
+		}
+		for _, it := range ov.Intents {
+			if it.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	added := 0
+	for _, m := range ov.Methods {
+		if added >= dsMaxMethods {
+			break
+		}
+		if why := dsValidMethod(m, intentOK); why != "" {
+			dbg("distill", map[string]any{"método": m.Name, "ignorado": why})
+			continue
+		}
+		lib[m.Intent] = append(lib[m.Intent], m)
+		added++
+	}
+	if added > 0 {
+		for k := range lib {
+			l := lib[k]
+			sort.SliceStable(l, func(i, j int) bool { return l[i].Priority > l[j].Priority })
+			lib[k] = l
+		}
+	}
+	return added
+}
+
+// dsLoadMethods lê o overlay e funde os métodos em lib (chamada de
+// mhLibrary, dentro do mesmo portão nuForgeOn).
+func dsLoadMethods(lib map[string][]mhMethod) {
+	ov, err := dsReadOverlay(dsOverlayPath())
+	if err != nil {
+		dbg("distill", map[string]any{"overlay": "ignorado", "err": err.Error()})
+		return
+	}
+	dsApplyMethods(lib, ov)
+}
+
+// ---------- destilação: plano → candidato ----------
+
+// dsCand é uma candidata a método aprendido.
+type dsCand struct {
+	Plan   pcPlan
+	Method mhMethod
+	Intent dsIntent // Name "" quando o método gruda numa intenção existente
+	Attach string   // intenção existente que recebe o método ("" = cria Intent)
+	Alias  nuAlias  // atalho exato do texto do plano → a intenção
+}
+
+// dsEligible barra um plano antes do desenho do método: repetido,
+// trajetória de bash registrada, tudo dentro das barras de comando e de
+// replay. "" = elegível.
+func dsEligible(p pcPlan) string {
+	if p.Wins < dsMinWins {
+		return fmt.Sprintf("só %d sucesso(s) verificado(s) — precisa ≥%d", max(p.Wins, 0), dsMinWins)
+	}
+	if len(p.Cmds) == 0 {
+		return "sem comandos gravados (plano anterior à ponte)"
+	}
+	if len(p.Cmds) > dsMaxSteps {
+		return "trajetória longa demais pra destilar"
+	}
+	for i, c := range p.Cmds {
+		if why := dsCmdOK(c); why != "" {
+			return fmt.Sprintf("comando %d não destilável: %s", i+1, why)
+		}
+		if !dsReplaySafe(c) {
+			return fmt.Sprintf("comando %d muta estado, não dá pra re-verificar: %s", i+1, oneLine(c, 60))
+		}
+	}
+	if v := dsVerifyCmd(p); v != "" {
+		if why := dsCmdOK(v); why != "" {
+			return "verificação não destilável: " + why
+		}
+		if !dsReplaySafe(v) {
+			return "verificação não reproduzível sem mutar"
+		}
+	}
+	return ""
+}
+
+// dsVerifyCmd é a verificação registrada do plano, ou "" quando ela é
+// trivial/ausente (until "true" ou sem comando): aí a prova é o exit do
+// próprio último passo — que já está na sequência.
+func dsVerifyCmd(p pcPlan) string {
+	v := strings.TrimSpace(p.Verify)
+	if v == "" || v == "true" {
+		return ""
+	}
+	return v
+}
+
+// dsBuild desenha o método de um plano elegível: cada comando vira um
+// passo learned_cmd, o verificador vira check exit_zero no último passo,
+// o texto do plano vira o atalho exato e (quando a gramática não tem onde
+// encaixá-lo) a intenção learned_<id>. Quando o texto já lê numa intenção
+// existente SEM método, o método gruda nela — a ponte tapa o buraco em
+// vez de inventar outra palavra.
+func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) {
+	if why := dsEligible(p); why != "" {
+		return nil, why
+	}
+	c := &dsCand{Plan: p}
+	var steps []mhStep
+	last := ""
+	for i, cmd := range p.Cmds {
+		last = fmt.Sprintf("r%d", i+1)
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": cmd}, Out: last})
+	}
+	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v {
+		last = fmt.Sprintf("r%d", len(steps)+1)
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": v}, Out: last})
+	}
+	name := ""
+	if in := nuGet().Parse(p.Task, w); in.Understood() && in.Name != "none" &&
+		!fgIsMutating(in.Name) && !strings.HasPrefix(in.Name, dsLearnedPrefix) && len(lib[in.Name]) == 0 {
+		c.Attach = in.Name // buraco conhecido: a intenção existe e não tem método
+		name = in.Name
+	} else {
+		name = dsLearnedPrefix + p.ID
+		ex := p.Task
+		if t, ok := nuExampleText(ex); ok {
+			ex = t
+		}
+		c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{ex}}
+	}
+	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+	risk := "low"
+	for _, cm := range p.Cmds {
+		if !IsReadOnly(cm) {
+			risk = "med"
+			break
+		}
+	}
+	c.Method = mhMethod{
+		Name: name + ".replay", Intent: name, Priority: 0,
+		Doc:    "aprendido (jazz distill): " + oneLine(p.Task, 90),
+		Steps:  steps,
+		Verify: []mhCheck{{Check: "exit_zero", Arg: "$" + last}},
+		Risk:   risk, CostMS: len(steps) * 2000,
+	}
+	return c, ""
+}
+
+// ---------- o portão ----------
+
+// dsRunner roda um comando do replay e devolve o exit code (injetável nos
+// testes; em produção é o Shell do projeto).
+type dsRunner func(ctx context.Context, cmd string, timeout time.Duration) int
+
+// dsGateRep é o relatório auditável de uma candidata.
+type dsGateRep struct {
+	Plan     string      `json:"plan"`
+	Task     string      `json:"task"`
+	Intent   string      `json:"intent"`
+	Method   string      `json:"method"`
+	Accept   bool        `json:"accept"`
+	Reason   string      `json:"reason"`
+	Replay   []dsStepRep `json:"replay,omitempty"`
+	NLU      *GateReport `json:"nlu,omitempty"`
+	Directed bool        `json:"directed,omitempty"`
+}
+
+type dsStepRep struct {
+	Cmd  string `json:"cmd"`
+	Exit int    `json:"exit"`
+}
+
+// dsGate é o portão: primeiro o replay literal (a sequência verificada
+// inteira sai exit 0 de novo — é a prova de benefício), depois, quando a
+// candidata cria intenção nova, o held-out da gramática (mesma disciplina
+// da forja: NonInferior, âncora de release, McNemar por intenção, guarda
+// estrita de negativos e prompts de eval) e o teste dirigido.
+func dsGate(ctx context.Context, root string, c *dsCand, run dsRunner, seed int64, mov *dsOverlay) dsGateRep {
+	rep := dsGateRep{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 120), Method: c.Method.Name}
+	if c.Attach != "" {
+		rep.Intent = c.Attach
+	} else {
+		rep.Intent = c.Intent.Name
+	}
+	// (a) replay — cada passo sai com exit 0 no projeto de verdade.
+	for i, st := range c.Method.Steps {
+		code := run(ctx, st.In["cmd"], dsCmdTimeout)
+		rep.Replay = append(rep.Replay, dsStepRep{Cmd: st.In["cmd"], Exit: code})
+		if code != 0 {
+			rep.Reason = fmt.Sprintf("replay: passo %d saiu com exit %d — a trajetória não re-verifica", i+1, code)
+			return rep
+		}
+	}
+	rep.Directed = true // replay é o benefício dirigido do método
+	// (b) intenção nova passa pelo portão da gramática.
+	if c.Attach == "" {
+		ok, gr, why := dsNLUGate(c, seed, mov)
+		rep.NLU = &gr
+		if !ok {
+			rep.Reason = why
+			return rep
+		}
+	}
+	rep.Accept = true
+	rep.Reason = "aceito: replay verde e " + map[bool]string{true: "sem regressão no portão", false: "método numa intenção existente"}[c.Attach == ""]
+	return rep
+}
+
+// dsNLUGate prova que a intenção aprendida nova não regride a gramática:
+// mesmo conjunto pontuado da forja (exemplos embutidos + negativos +
+// prompts de eval), mesmo split por chave da instalação, mesmas réguas.
+func dsNLUGate(c *dsCand, seed int64, mov *dsOverlay) (bool, GateReport, string) {
+	lx, _ := nuFS.ReadFile("nlu/lexicon.json")
+	ds, _ := nuFS.ReadFile("nlu/intents.json")
+	cur, _ := nuReadOverlay(nuOverlayPath())
+	base := dsModel(lx, ds, cur, mov, nil, nil, nil)
+	if base.loadErr != nil {
+		return false, GateReport{}, "modelo base não compila: " + base.loadErr.Error()
+	}
+	w := nuWorldFromDef(base.data.World)
+	var exs []Example
+	keyOf := map[string]string{}
+	for _, it := range base.data.Intents {
+		for _, e := range it.Examples {
+			cn := base.canonOf(e)
+			id := "g:" + it.Name + ":" + cn
+			exs = append(exs, Example{ID: id, Input: e, Want: it.Name, Group: "g:" + it.Name})
+			keyOf[id] = it.Name + "\x00" + cn
+		}
+		for _, n := range it.Negatives {
+			exs = append(exs, Example{ID: "n:" + it.Name + ":" + base.canonOf(n), Input: n, Want: "!" + it.Name, Group: "neg"})
+		}
+	}
+	exs = append(exs, fgEvalPrompts()...)
+	inEx, outEx := SplitKeyed(exs, fgHeldOut, fgSplitKey(fgOpts{Seed: seed}))
+	outKeys := map[string]bool{}
+	for _, ex := range outEx {
+		if k, ok := keyOf[ex.ID]; ok {
+			outKeys[k] = true
+		}
+	}
+	// âncora de release: a gramática embarcada sozinha, sem nenhum overlay.
+	anchorM := dsModel(lx, ds, nil, nil, nil, nil, outKeys)
+	av, bv, cv := map[string]fgVerdict{}, map[string]fgVerdict{}, map[string]fgVerdict{}
+	anchorIn := fgScore(anchorM, w, av)(inEx)
+	anchorOut := fgScore(anchorM, w, av)(outEx)
+	seqBaseM := dsModel(lx, ds, cur, mov, nil, nil, outKeys)
+	candM := dsModel(lx, ds, cur, mov, &c.Intent, &c.Alias, outKeys)
+	bIn := fgScore(seqBaseM, w, bv)(inEx)
+	bOut := fgScore(seqBaseM, w, bv)(outEx)
+	cIn := fgScore(candM, w, cv)(inEx)
+	cOut := fgScore(candM, w, cv)(outEx)
+	gr := NonInferior(bIn, bOut, cIn, cOut, len(inEx), len(outEx))
+	if !gr.Accept {
+		return false, gr, gr.Reason
+	}
+	if ga := NonInferior(anchorIn, anchorOut, cIn, cOut, len(inEx), len(outEx)); !ga.Accept {
+		return false, gr, "vs release: " + ga.Reason
+	}
+	// McNemar por intenção no held-out + zero regressão em mutante.
+	perIntent := map[string]*[2]int{}
+	for _, ex := range outEx {
+		b, cc := bv[ex.ID], cv[ex.ID]
+		var want string
+		if strings.HasPrefix(ex.Group, "g:") {
+			want = strings.TrimPrefix(ex.Group, "g:")
+			if b.under == cc.under {
+				continue
+			}
+		} else if ex.Group == "eval" {
+			want = ex.Want
+			if b.acts == cc.acts {
+				continue
+			}
+		} else {
+			continue
+		}
+		pr := perIntent[want]
+		if pr == nil {
+			pr = &[2]int{}
+			perIntent[want] = pr
+		}
+		if (ex.Group == "eval" && b.acts) || (ex.Group != "eval" && b.under) {
+			pr[0]++
+		} else {
+			pr[1]++
+		}
+	}
+	for name, pr := range perIntent {
+		if pr[0] > 0 && fgIsMutating(name) {
+			return false, gr, fmt.Sprintf("regressão em intenção mutante %s: %d exemplo(s) held-out pioraram", name, pr[0])
+		}
+		if p := McNemarExact(pr[0], pr[1]); p < fgMcNemar {
+			return false, gr, fmt.Sprintf("regressão significativa em %s (McNemar p=%.3f, %d↓%d↑)", name, p, pr[0], pr[1])
+		}
+	}
+	// guarda estrita: negativo que vira acerto ou prompt de eval que regride.
+	var regressed []string
+	for _, ex := range exs {
+		b, cc := bv[ex.ID], cv[ex.ID]
+		if ex.Group == "neg" && !b.falseSucc && cc.falseSucc || ex.Group == "eval" && b.acts && !cc.acts {
+			regressed = append(regressed, ex.ID)
+		}
+	}
+	if len(regressed) > 0 {
+		return false, gr, fmt.Sprintf("%d caso(s) de guarda regrediram (%s)", len(regressed), strings.Join(regressed[:min(3, len(regressed))], ", "))
+	}
+	// dirigido: o texto do plano lê na intenção nova e age.
+	if in := candM.Parse(c.Alias.Text, w); !(fgActs(in) && in.Name == c.Intent.Name) {
+		return false, gr, "teste dirigido: o texto do plano não lê na intenção aprendida"
+	}
+	return true, gr, ""
+}
+
+// dsModel compila um modelo como fgModel, mais o overlay de métodos e a
+// candidata (intenção + atalho) opcionais — treinado sem as chaves held-out.
+func dsModel(lx, ds []byte, cur *nuOverlay, mov *dsOverlay, addI *dsIntent, addA *nuAlias, out map[string]bool) *nuModel {
+	m := nuCompile(lx, ds)
+	if m.loadErr != nil {
+		return m
+	}
+	nuApplyOverlay(m, cur)
+	dsApplyNLU(m, mov)
+	if addI != nil {
+		dsAddIntent(m, *addI)
+	}
+	if addA != nil && addA.Intent != "" {
+		if canon := m.canonOf(addA.Text); canon != "" {
+			if _, ok := m.byName[addA.Intent]; ok {
+				if m.aliases == nil {
+					m.aliases = map[string]string{}
+				}
+				m.aliases[canon] = addA.Intent
+			}
+		}
+	}
+	m.nb = m.nuTrain(func(ii, ei int) bool {
+		return len(out) > 0 && out[m.data.Intents[ii].Name+"\x00"+m.canonOf(m.data.Intents[ii].Examples[ei])]
+	})
+	m.nbOnce.Do(func() {})
+	return m
+}
+
+// ---------- jazz distill ----------
+
+type dsOpts struct {
+	DryRun  bool
+	JSON    bool
+	Overlay string // "" = dsOverlayPath()
+	Seed    int64  // != 0: split determinístico pra testes
+}
+
+type dsReport struct {
+	Accept  bool        `json:"accept"`
+	Reason  string      `json:"reason"`
+	DryRun  bool        `json:"dry_run"`
+	Overlay string      `json:"overlay"`
+	Wrote   bool        `json:"wrote"`
+	Plans   int         `json:"plans"`
+	Added   []dsGateRep `json:"added,omitempty"`
+	Dropped []dsDropped `json:"dropped,omitempty"`
+}
+
+type dsDropped struct {
+	Plan   string `json:"plan"`
+	Task   string `json:"task"`
+	Reason string `json:"reason"`
+}
+
+// cmdDistill implementa `jazz distill`.
+func cmdDistill(root string, args []string, w io.Writer) int {
+	o := dsOpts{Overlay: dsOverlayPath()}
+	var list bool
+	var forget string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--dry-run", "-n":
+			o.DryRun = true
+		case "--json":
+			o.JSON = true
+		case "--list", "-l":
+			list = true
+		case "--forget":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "uso: jazz distill --forget <plano|método|intenção>")
+				return 2
+			}
+			i++
+			forget = args[i]
+		default:
+			fmt.Fprintln(os.Stderr, "uso: jazz distill [--dry-run] [--json] [--list] [--forget X]")
+			return 2
+		}
+	}
+	if forget != "" {
+		return dsForget(o, forget, w)
+	}
+	if list {
+		return dsList(root, o, w)
+	}
+	rep, err := dsRun(context.Background(), root, o)
+	if err != nil {
+		fmt.Fprintln(w, "destilação:", err)
+		return 1
+	}
+	if o.JSON {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", " ")
+		enc.Encode(rep)
+	} else {
+		dsPrint(w, rep)
+	}
+	if !rep.Accept {
+		return 1
+	}
+	return 0
+}
+
+// dsList mostra as candidatas e o que já foi aprendido.
+func dsList(root string, o dsOpts, w io.Writer) int {
+	lib, _ := mhLibrary()
+	wr := nuRuntimeWorld(root, epGet(false))
+	plans := pcLoad(root)
+	ov, _ := dsReadOverlay(o.Overlay)
+	learned := map[string]bool{}
+	if ov != nil {
+		for _, p := range ov.Prov {
+			learned[p.Plan] = true
+		}
+	}
+	fmt.Fprintf(w, "destilação: %d plano(s) verificado(s) no cache\n", len(plans))
+	for _, p := range plans {
+		short := p.ID
+		if len(short) > 6 {
+			short = short[:6]
+		}
+		if learned[p.ID] {
+			fmt.Fprintf(w, "  ✓ %s %q — já aprendido (%d verificações)\n", short, oneLine(p.Task, 60), p.Wins)
+			continue
+		}
+		c, why := dsBuild(p, lib, wr)
+		if c == nil {
+			fmt.Fprintf(w, "  - %s %q: %s\n", short, oneLine(p.Task, 60), why)
+			continue
+		}
+		fmt.Fprintf(w, "  + %s %q → %s (%d passos, risco %s)\n", short, oneLine(p.Task, 60), c.Method.Intent, len(c.Method.Steps), c.Method.Risk)
+	}
+	if ov != nil && len(ov.Methods) > 0 {
+		fmt.Fprintf(w, "aprendidos (%d):\n", len(ov.Methods))
+		for _, m := range ov.Methods {
+			fmt.Fprintf(w, "  %s → %s (%d passos)\n", m.Name, m.Intent, len(m.Steps))
+		}
+	}
+	return 0
+}
+
+// dsRun é a fábrica inteira: colhe candidatas, porta, promove, grava.
+func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
+	rep := &dsReport{DryRun: o.DryRun, Overlay: o.Overlay}
+	plans := pcLoad(root)
+	rep.Plans = len(plans)
+	lib, _ := mhLibrary()
+	wr := nuRuntimeWorld(root, epGet(false))
+	ov, err := dsReadOverlay(o.Overlay)
+	if err != nil {
+		return nil, fmt.Errorf("overlay %s inválido (%v): conserte ou apague antes de destilar", o.Overlay, err)
+	}
+	learned := map[string]bool{}
+	if ov != nil {
+		for _, p := range ov.Prov {
+			learned[p.Plan] = true
+		}
+	}
+	var cands []*dsCand
+	for _, p := range plans {
+		if learned[p.ID] {
+			continue
+		}
+		c, why := dsBuild(p, lib, wr)
+		if c == nil {
+			if why != "" && p.Wins >= dsMinWins {
+				rep.Dropped = append(rep.Dropped, dsDropped{Plan: p.ID, Task: oneLine(p.Task, 80), Reason: why})
+			}
+			continue
+		}
+		cands = append(cands, c)
+	}
+	if len(cands) == 0 {
+		rep.Reason = "nada a destilar: nenhum plano verificado e repetido sobrou pra promover"
+		return rep, nil
+	}
+	// determinismo: mais verificado primeiro, id desempata.
+	sort.Slice(cands, func(i, j int) bool {
+		if cands[i].Plan.Wins != cands[j].Plan.Wins {
+			return cands[i].Plan.Wins > cands[j].Plan.Wins
+		}
+		return cands[i].Plan.ID < cands[j].Plan.ID
+	})
+	if len(cands) > dsMaxCand {
+		for _, c := range cands[dsMaxCand:] {
+			rep.Dropped = append(rep.Dropped, dsDropped{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 80), Reason: "orçamento do portão por rodada — fica pra próxima"})
+		}
+		cands = cands[:dsMaxCand]
+	}
+	sh := NewShell(root)
+	defer sh.Close()
+	run := func(ctx context.Context, cmd string, timeout time.Duration) int {
+		r := sh.Run(ctx, cmd, timeout, nil)
+		return r.ExitCode
+	}
+	now := time.Now().Unix()
+	for _, c := range cands {
+		g := dsGate(ctx, root, c, run, o.Seed, ov)
+		if !g.Accept {
+			rep.Dropped = append(rep.Dropped, dsDropped{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 80), Reason: g.Reason})
+			continue
+		}
+		rep.Added = append(rep.Added, g)
+		if o.DryRun {
+			continue
+		}
+		if ov == nil {
+			ov = &dsOverlay{Version: dsOverlayVersion, Aliases: map[string]nuAlias{}}
+		}
+		if ov.Aliases == nil {
+			ov.Aliases = map[string]nuAlias{}
+		}
+		if c.Intent.Name != "" {
+			ov.Intents = append(ov.Intents, c.Intent)
+		}
+		ov.Methods = append(ov.Methods, c.Method)
+		// o atalho fica indexado pelo canon que a gramática realmente vê
+		m := dsModelMustNoErr()
+		if m != nil {
+			if canon := m.canonOf(c.Alias.Text); canon != "" {
+				ov.Aliases[canon] = c.Alias
+			}
+		}
+		ov.Prov = append(ov.Prov, dsProv{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 120), Intent: g.Intent, Method: c.Method.Name, Wins: c.Plan.Wins, Ts: now})
+	}
+	if len(rep.Added) == 0 {
+		rep.Reason = "rejeitado: nenhum plano passou o portão"
+		return rep, nil
+	}
+	rep.Accept = true
+	rep.Reason = fmt.Sprintf("aceito: %d procedimento(s) virou método offline", len(rep.Added))
+	if o.DryRun {
+		return rep, nil
+	}
+	if err := dsWriteOverlay(o.Overlay, ov); err != nil {
+		return nil, err
+	}
+	rep.Wrote = true
+	auditRec("distill.applied", map[string]any{"path": o.Overlay, "added": len(rep.Added)})
+	return rep, nil
+}
+
+// dsModelMustNoErr é o nuGet do processo pra calcular o canon do atalho;
+// nil (sem gramática) não pode acontecer numa corrida que já destilou.
+func dsModelMustNoErr() *nuModel {
+	m := nuGet()
+	if m == nil || m.loadErr != nil {
+		return nil
+	}
+	return m
+}
+
+// dsForget remove uma intenção/método/atalho/proveniência aprendidos.
+// A chave pode ser o nome do método, o nome da intenção ou (prefixo do) id
+// do plano de origem. Com --dry-run mostra o que sairia, sem gravar.
+func dsForget(o dsOpts, key string, w io.Writer) int {
+	ov, err := dsReadOverlay(o.Overlay)
+	if err != nil || ov == nil {
+		fmt.Fprintln(w, "nada aprendido ainda")
+		return 1
+	}
+	intent := ""
+	resolve := func(v string) {
+		if intent == "" && v != "" {
+			intent = v
+		}
+	}
+	for _, m := range ov.Methods {
+		if m.Name == key || m.Intent == key {
+			resolve(m.Intent)
+		}
+	}
+	for _, it := range ov.Intents {
+		if it.Name == key {
+			resolve(it.Name)
+		}
+	}
+	for _, p := range ov.Prov {
+		if p.Plan == key || strings.HasPrefix(p.Plan, key) {
+			resolve(p.Intent)
+		}
+	}
+	for _, a := range ov.Aliases {
+		if a.Intent == key || a.Text == key {
+			resolve(a.Intent)
+		}
+	}
+	if intent == "" {
+		fmt.Fprintf(w, "não achei %q entre os aprendidos\n", key)
+		return 1
+	}
+	var methods []mhMethod
+	var dropM []string
+	for _, m := range ov.Methods {
+		if m.Intent == intent {
+			dropM = append(dropM, m.Name)
+			continue
+		}
+		methods = append(methods, m)
+	}
+	var intents []dsIntent
+	for _, it := range ov.Intents {
+		if it.Name != intent {
+			intents = append(intents, it)
+		}
+	}
+	var prov []dsProv
+	for _, p := range ov.Prov {
+		if p.Intent != intent {
+			prov = append(prov, p)
+		}
+	}
+	var aliases map[string]nuAlias
+	for c, a := range ov.Aliases {
+		if a.Intent != intent {
+			if aliases == nil {
+				aliases = map[string]nuAlias{}
+			}
+			aliases[c] = a
+		}
+	}
+	if o.DryRun {
+		fmt.Fprintf(w, "dry-run: sairia a intenção %s (%d método(s), %d atalho(s))\n", intent, len(dropM), len(ov.Aliases)-len(aliases))
+		return 0
+	}
+	ov.Methods, ov.Intents, ov.Prov, ov.Aliases = methods, intents, prov, aliases
+	if err := dsWriteOverlay(o.Overlay, ov); err != nil {
+		fmt.Fprintln(w, "falhou gravando:", err)
+		return 1
+	}
+	fmt.Fprintf(w, "esquecido: %s (%d método(s), intenção e atalho removidos)\n", intent, len(dropM))
+	return 0
+}
+
+// dsPrint é o relatório humano.
+func dsPrint(w io.Writer, r *dsReport) {
+	fmt.Fprintf(w, "destilação: %d plano(s) no cache · %d promovido(s) · %d descartado(s)\n", r.Plans, len(r.Added), len(r.Dropped))
+	for _, a := range r.Added {
+		fmt.Fprintf(w, "  + %q → %s (%s, %d passos)\n", a.Task, a.Method, a.Intent, len(a.Replay))
+		for _, st := range a.Replay {
+			fmt.Fprintf(w, "      $ %s → exit %d\n", oneLine(st.Cmd, 70), st.Exit)
+		}
+		if a.NLU != nil {
+			fmt.Fprintf(w, "      portão: %s\n", a.NLU.Reason)
+		}
+	}
+	for _, d := range r.Dropped {
+		fmt.Fprintf(w, "  - %q: %s\n", d.Task, d.Reason)
+	}
+	fmt.Fprintln(w, "portão:", r.Reason)
+	switch {
+	case r.Wrote:
+		fmt.Fprintln(w, "gravado:", r.Overlay)
+	case r.Accept && r.DryRun:
+		fmt.Fprintln(w, "dry-run: nada gravado (seria:", r.Overlay+")")
+	default:
+		fmt.Fprintln(w, "nada gravado")
+	}
+}
+
+// dsNote avisa uma vez, quando um plano cruza o limiar de repetição: "isso
+// já dá pra virar método offline". Chamada de acTurnDone depois do pcStore.
+func dsNote(a *Agent, root string, p pcPlan) {
+	if !nuForgeOn() {
+		return
+	}
+	for _, q := range pcLoad(root) {
+		if pcJaccard(q.Keys, p.Keys) < 0.7 {
+			continue
+		}
+		if q.Wins == dsMinWins && dsEligible(q) == "" {
+			a.ui.Notice(fmt.Sprintf("procedimento verificado %d× — 'jazz distill' promove a método offline", q.Wins))
+		}
+		return
+	}
+}
+
+// dsLearnedIntent: a intenção é aprendida (prefixo reservado).
+func dsIsLearned(name string) bool { return strings.HasPrefix(name, dsLearnedPrefix) }
+
+// ---------- learned_cmd (a capacidade dos métodos aprendidos) ----------
+
+// brLearnedCmd executa UM comando literal gravado por `jazz distill`. A
+// mesma cerca de qualquer comando do cérebro: env.Permit decide, o audit
+// registra, o orçamento conta, e o shadow-git cobre os efeitos pra /undo.
+// A validação roda de novo aqui — um overlay editado à mão tem a mesma
+// barra da carga (nada perigoso, nada de segredo, uma linha).
+func brLearnedCmd(cx *brCtx, in map[string]string) brStep {
+	cmd := strings.TrimSpace(in["cmd"])
+	if why := dsCmdOK(cmd); why != "" {
+		obs := rvNoCmd()
+		obs.Output = "comando aprendido recusado: " + why
+		return brStep{obs: obs, why: obs.Output}
+	}
+	out, exit, obs := cx.runCmd(cmd, dsCmdTimeout)
+	if obs.Denied || obs.BudgetLeft == 0 {
+		return brStep{obs: obs, why: obs.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 4000), "\n")
+	if shown == "" {
+		shown = "(sem saída)"
+	}
+	cx.say("$ %s — aprendido\n%s", cmd, shown)
+	if exit != 0 {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, why: cmd + " falhou"}
+	}
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, ok: true}
+}

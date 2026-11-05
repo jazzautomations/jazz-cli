@@ -152,7 +152,7 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("enum = %v", enum)
 	}
 	desc := props["name"].(map[string]any)["description"].(string)
-	for _, want := range []string{"find_symbol(symbol,kind?,path?)", "parse_test_output(file|cmd|text,framework?)", "git_state()"} {
+	for _, want := range []string{"find_symbol(symbol,ext?,kind?,+1)", "parse_test_output(file|cmd|text,framework?)", "git_state()"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("signature list misses %q: %s", want, desc)
 		}

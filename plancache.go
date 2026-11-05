@@ -50,6 +50,7 @@ const (
 	hdMinQ          = 78 // omni quality prior that counts as a strong model
 	hdTimeout       = 90 * time.Second
 	hdMaxTrailChars = 9000
+	pcMaxCmds       = 12 // full command lines kept for the distill bridge
 )
 
 // pcPlan is one stored plan template.
@@ -60,6 +61,7 @@ type pcPlan struct {
 	Keys   []string `json:"keys"` // normalized keywords of the request
 	Files  []string `json:"files,omitempty"`
 	Steps  []string `json:"steps,omitempty"` // approach: the actions that changed or checked something
+	Cmds   []string `json:"cmds,omitempty"`  // the full bash command lines behind Steps (distill.go replays these)
 	Dead   []string `json:"dead,omitempty"`  // dead ends to skip
 	Verify string   `json:"verify,omitempty"`
 	Hint   string   `json:"hint,omitempty"` // hindsight note (A3)
@@ -398,6 +400,7 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 		return
 	}
 	dbg("plan_cache", map[string]any{"stored": p.ID, "steps": steps, "hint": p.Hint != ""})
+	dsNote(a, root, p) // a ponte online→offline avisa quando o plano vira candidato
 }
 
 // pcScore counts a verified win or a failure on the plans injected in a turn;
@@ -446,7 +449,7 @@ func pcStore(root string, p pcPlan, reused []string) error {
 		}
 		if p.NSteps <= old.NSteps || old.NSteps == 0 { // keep the shorter trajectory
 			hint := old.Hint
-			old.Task, old.Keys, old.Files, old.Steps, old.Dead, old.Verify, old.NSteps = p.Task, p.Keys, p.Files, p.Steps, p.Dead, p.Verify, p.NSteps
+			old.Task, old.Keys, old.Files, old.Steps, old.Cmds, old.Dead, old.Verify, old.NSteps = p.Task, p.Keys, p.Files, p.Steps, p.Cmds, p.Dead, p.Verify, p.NSteps
 			old.Hint = hint
 		}
 		if p.Hint != "" {
@@ -515,6 +518,9 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 				d += " (" + oneLine(e.errTxt, 60) + ")"
 			}
 			p.Dead = append(p.Dead, redactSecrets(d))
+		}
+		if e.tool == "bash" && len(p.Cmds) < pcMaxCmds {
+			p.Cmds = append(p.Cmds, redactSecrets(e.target))
 		}
 		if !(e.verify || e.mut && !e.isErr) {
 			continue

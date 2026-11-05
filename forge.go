@@ -83,7 +83,7 @@ var fgMutating = map[string]bool{
 	"git_checkout": true, "git_commit": true, "git_pull": true, "git_push": true,
 	"kill_process":    true,
 	"service_restart": true, "service_start": true, "service_stop": true,
-	"container_stop": true, "container_up": true,
+	"container_stop": true, "container_up": true, "container_prune": true,
 }
 
 // fgIsMutating: the overlay loader also asks (nlu_overlay.go) — a
