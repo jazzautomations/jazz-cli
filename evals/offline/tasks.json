@@ -142,7 +142,7 @@
    "doc": "self-knowledge: versão/binário/modo do próprio jazz sem modelo",
    "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz", "0.12"], "questions": 0}},
   {"id": "self-version", "cat": "self", "fixture": "go", "prompt": "qual a versão do jazz",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.12.0"], "questions": 0}},
+   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.12.1"], "questions": 0}},
   {"id": "self-about", "cat": "self", "fixture": "go", "prompt": "o que é o jazz",
    "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz"], "questions": 0}},
   {"id": "machine-what", "cat": "env", "fixture": "go", "prompt": "que máquina é essa",
@@ -181,6 +181,16 @@
   {"id": "card-recent", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais arquivos mudaram recentemente", "needs": "python3", "expect": {"status": "succeeded", "intent": "fs_recent", "contains": ["changed in the last 60 min"], "questions": 0}},
   {"id": "card-cron", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista o cron", "needs": "python3", "expect": {"status": "succeeded", "intent": "cron_list", "questions": 0}},
   {"id": "card-ifaces", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais interfaces de rede tenho", "needs": "python3", "expect": {"status": "succeeded", "intent": "net_ifaces", "questions": 0}},
-  {"id": "card-logerr", "cat": "cardápio", "fixture": "cardapio", "prompt": "erros recentes no log", "needs": "python3", "expect": {"status": "succeeded", "intent": "log_errors_recent", "questions": 0}}
+  {"id": "card-logerr", "cat": "cardápio", "fixture": "cardapio", "prompt": "erros recentes no log", "needs": "python3", "expect": {"status": "succeeded", "intent": "log_errors_recent", "questions": 0}},
+  {"id": "cardapio-v4-wordcount_stats", "cat": "cardapio", "fixture": "cardapio", "prompt": "conta palavras v4_wordcount_stats.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "wordcount_stats", "questions": 0, "contains": ["3 words"]}, "expect_missing": {"status": "blocked", "intent": "wordcount_stats"}},
+  {"id": "cardapio-v4-url_parse", "cat": "cardapio", "fixture": "cardapio", "prompt": "decompoe url v4_url_parse.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "url_parse", "questions": 0, "contains": ["1 URL(s) parsed: /docs"]}, "expect_missing": {"status": "blocked", "intent": "url_parse"}},
+  {"id": "cardapio-v4-date_normalize", "cat": "cardapio", "fixture": "cardapio", "prompt": "normaliza datas v4_date_normalize.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "date_normalize", "questions": 0, "contains": ["2024-01-02T00:00:00"]}, "expect_missing": {"status": "blocked", "intent": "date_normalize"}},
+  {"id": "cardapio-v4-csv_to_json", "cat": "cardapio", "fixture": "cardapio", "prompt": "converte csv para json v4_csv_to_json.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "csv_to_json", "questions": 0, "contains": ["2 CSV row(s)"]}, "expect_missing": {"status": "blocked", "intent": "csv_to_json"}},
+  {"id": "cardapio-v4-json_schema_infer", "cat": "cardapio", "fixture": "cardapio", "prompt": "infere esquema json v4_json_schema_infer.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "json_schema_infer", "questions": 0, "contains": ["Inferred object schema"]}, "expect_missing": {"status": "blocked", "intent": "json_schema_infer"}},
+  {"id": "cardapio-v4-table_render", "cat": "cardapio", "fixture": "cardapio", "prompt": "renderiza tabela v4_table_render.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "table_render", "questions": 0, "contains": ["ana"]}, "expect_missing": {"status": "blocked", "intent": "table_render"}},
+  {"id": "cardapio-v4-regex_test", "cat": "cardapio", "fixture": "cardapio", "prompt": "testa regex v4_regex_test.txt \"ana\"", "needs": "python3", "expect": {"status": "succeeded", "intent": "regex_test", "questions": 0, "contains": ["1 matching line(s)"]}, "expect_missing": {"status": "blocked", "intent": "regex_test"}},
+  {"id": "cardapio-v4-text_grep", "cat": "cardapio", "fixture": "cardapio", "prompt": "busca literal v4_text_grep.txt \"ana\"", "needs": "python3", "expect": {"status": "succeeded", "intent": "text_grep", "questions": 0, "contains": ["2 literal match(es)"]}, "expect_missing": {"status": "blocked", "intent": "text_grep"}},
+  {"id": "cardapio-v4-md_outline", "cat": "cardapio", "fixture": "cardapio", "prompt": "sumario markdown v4_md_outline.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "md_outline", "questions": 0, "contains": ["1 broken anchors"]}, "expect_missing": {"status": "blocked", "intent": "md_outline"}},
+  {"id": "cardapio-v4-diff_apply_check", "cat": "cardapio", "fixture": "cardapio", "prompt": "verifica patch v4_diff_apply_check.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "diff_apply_check", "questions": 0, "contains": ["Patch applies cleanly (dry-run)"]}, "expect_missing": {"status": "blocked", "intent": "diff_apply_check"}}
  ]
 }

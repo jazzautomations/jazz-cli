@@ -440,6 +440,18 @@ func eoFixture(base, id, kind string) (string, error) {
 		// config file, .env × .env.example, and one commit so blame/co-change
 		// have history
 		files = map[string]string{
+			"v4_text_grep.txt":         "ana\nbruno\nana\n",
+			"v4_regex_test.txt":        "ana\nbruno\n",
+			"v4_wordcount_stats.txt":   "ana bruno ana\n",
+			"v4_json_schema_infer.txt": "{\"name\":\"ana\",\"count\":2}\n",
+			"v4_md_outline.txt":        "# httpkit\n[ok](#httpkit)\n[bad](#missing)\n",
+			"v4_csv_to_json.txt":       "name,count\nana,2\nbruno,3\n",
+			"v4_table_render.txt":      "[{\"name\":\"ana\",\"count\":2}]",
+			"v4_date_normalize.txt":    "2024-01-02\n",
+			"v4_url_parse.txt":         "/docs?x=2&x=1#intro\n",
+			"v4_diff_apply_check.txt":  "--- a/ana.txt\n+++ b/ana.txt\n@@ -1 +1 @@\n-ana\n+bruno\n",
+			"ana.txt":                  "ana\n",
+
 			"go.mod":       "module evalfix\n\ngo 1.21\n",
 			"parser.go":    "package evalfix\n\n// ParseArgs splits the arguments.\nfunc ParseArgs(a []string) []string { return a }\n",
 			"lexer.go":     "package evalfix\n\n// TODO: handle empty input\nfunc Tokenize(s string) []string { return []string{s} }\n",

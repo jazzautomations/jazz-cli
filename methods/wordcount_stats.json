@@ -1,0 +1,55 @@
+{
+  "methods": [
+    {
+      "name": "wordcount_stats.script",
+      "intent": "wordcount_stats",
+      "priority": 10,
+      "doc": "conta palavras",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:wordcount_stats",
+          "in": {
+            "file": "$slot.target"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "wordcount_stats.no_python",
+      "intent": "wordcount_stats",
+      "priority": 1,
+      "doc": "conta palavras",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script wordcount_stats, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

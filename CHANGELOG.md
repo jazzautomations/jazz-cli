@@ -88,7 +88,7 @@
 
 `jazz eval offline`: 95 tarefas (eram 75) · 95/95 com sucesso verificado · falso sucesso 0 · 93/95 sem
 modelo · perguntas = necessárias · p50 ~40 ms · p95 ~400 ms · RSS ~140 MB. Suíte Go inteira ok.
-Passagem de bastão e armadilhas: `docs/HANDOFF.md`.
+Passagem de bastão e armadilhas: `docs/MAINTAINERS-HANDOFF.md`.
 
 ## 0.11.0
 

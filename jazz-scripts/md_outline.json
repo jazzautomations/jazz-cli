@@ -1,0 +1,43 @@
+{
+  "name": "md_outline",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "List Markdown headings, inline links and broken local anchors",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "headings": [
+        {
+          "line": "int",
+          "level": "int",
+          "title": "str",
+          "anchor": "str"
+        }
+      ],
+      "links": [
+        {
+          "line": "int",
+          "label": "str",
+          "target": "str"
+        }
+      ],
+      "broken_anchors": "array"
+    }
+  }
+}

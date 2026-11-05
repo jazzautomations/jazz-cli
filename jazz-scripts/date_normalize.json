@@ -1,0 +1,37 @@
+{
+  "name": "date_normalize",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Normalize ISO dates or explicit date formats; return null for unknown dates",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      },
+      "format": {
+        "type": "string",
+        "description": "Explicit strptime format; default ISO 8601"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "items": [
+        {
+          "input": "str",
+          "normalized": "str|null"
+        }
+      ]
+    }
+  }
+}

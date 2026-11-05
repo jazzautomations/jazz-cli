@@ -1,0 +1,28 @@
+{
+  "name": "diff_apply_check",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Check whether a patch applies using git apply --check; never modify files",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      }
+    },
+    "required": [
+      "file"
+    ]
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "applies": "bool|null",
+      "diagnostic": "str"
+    }
+  }
+}

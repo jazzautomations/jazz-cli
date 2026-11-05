@@ -1,0 +1,36 @@
+{
+  "name": "wordcount_stats",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Count lines, Unicode words and characters with sorted word frequencies",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "lines": "int",
+      "words": "int",
+      "characters": "int",
+      "frequencies": [
+        {
+          "word": "str",
+          "count": "int"
+        }
+      ]
+    }
+  }
+}

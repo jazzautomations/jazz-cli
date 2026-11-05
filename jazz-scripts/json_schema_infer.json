@@ -1,0 +1,28 @@
+{
+  "name": "json_schema_infer",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Infer a JSON schema from observed values, including heterogeneous arrays",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "schema": "object"
+    }
+  }
+}

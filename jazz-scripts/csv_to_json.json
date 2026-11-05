@@ -1,0 +1,37 @@
+{
+  "name": "csv_to_json",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Convert CSV rows to JSON objects while preserving string values and row order",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      },
+      "delimiter": {
+        "type": "string",
+        "description": "One-character separator; default comma"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "columns": [
+        "str"
+      ],
+      "rows": [
+        "object"
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "url_parse",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Parse URL components and repeated query parameters without network access",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "items": [
+        {
+          "scheme": "str|null",
+          "host": "str|null",
+          "port": "int|null",
+          "path": "str",
+          "query": "array",
+          "fragment": "str|null"
+        }
+      ]
+    }
+  }
+}

@@ -1568,6 +1568,66 @@
    "eth0",
    "wlan0",
    "wifi interface"
+  ],
+  "v4_wordcount_stats": [
+   "conta palavras",
+   "word count",
+   "contagem de palavras",
+   "wordcount_stats"
+  ],
+  "v4_url_parse": [
+   "decompoe url",
+   "parse url",
+   "componentes url",
+   "url_parse"
+  ],
+  "v4_date_normalize": [
+   "normaliza datas",
+   "normalize dates",
+   "datas iso",
+   "date_normalize"
+  ],
+  "v4_csv_to_json": [
+   "converte csv para json",
+   "csv to json",
+   "conversao csv",
+   "csv_to_json"
+  ],
+  "v4_json_schema_infer": [
+   "infere esquema json",
+   "infer json schema",
+   "esquema inferido",
+   "json_schema_infer"
+  ],
+  "v4_table_render": [
+   "renderiza tabela",
+   "render table",
+   "tabela alinhada",
+   "table_render"
+  ],
+  "v4_regex_test": [
+   "testa regex",
+   "test regex",
+   "regex contra linhas",
+   "regex_test"
+  ],
+  "v4_text_grep": [
+   "busca literal",
+   "grep literal",
+   "literal search",
+   "text_grep"
+  ],
+  "v4_md_outline": [
+   "sumario markdown",
+   "markdown outline",
+   "ancoras quebradas",
+   "md_outline"
+  ],
+  "v4_diff_apply_check": [
+   "verifica patch",
+   "patch dry run",
+   "patch aplica",
+   "diff_apply_check"
   ]
  }
 }

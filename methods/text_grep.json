@@ -1,0 +1,56 @@
+{
+  "methods": [
+    {
+      "name": "text_grep.script",
+      "intent": "text_grep",
+      "priority": 10,
+      "doc": "busca literal",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:text_grep",
+          "in": {
+            "file": "$slot.target",
+            "query": "$goal"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "text_grep.no_python",
+      "intent": "text_grep",
+      "priority": 1,
+      "doc": "busca literal",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script text_grep, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

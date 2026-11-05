@@ -1,0 +1,55 @@
+{
+  "methods": [
+    {
+      "name": "csv_to_json.script",
+      "intent": "csv_to_json",
+      "priority": 10,
+      "doc": "converte csv para json",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:csv_to_json",
+          "in": {
+            "file": "$slot.target"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "csv_to_json.no_python",
+      "intent": "csv_to_json",
+      "priority": 1,
+      "doc": "converte csv para json",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script csv_to_json, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

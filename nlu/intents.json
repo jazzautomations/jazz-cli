@@ -3266,6 +3266,416 @@
    "negatives": [
     "quem usa a porta 8080"
    ]
+  },
+  {
+   "name": "wordcount_stats",
+   "desc": "conta palavras",
+   "rules": [
+    {
+     "all": [
+      "v4_wordcount_stats"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "conta palavras README.md",
+    "word count README.md",
+    "contagem de palavras README.md",
+    "por favor conta palavras README.md",
+    "por favor word count README.md",
+    "por favor contagem de palavras README.md",
+    "agora conta palavras README.md",
+    "agora word count README.md",
+    "agora contagem de palavras README.md",
+    "preciso: conta palavras README.md",
+    "preciso: word count README.md",
+    "preciso: contagem de palavras README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "url_parse",
+   "desc": "decompoe url",
+   "rules": [
+    {
+     "all": [
+      "v4_url_parse"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "decompoe url README.md",
+    "parse url README.md",
+    "componentes url README.md",
+    "por favor decompoe url README.md",
+    "por favor parse url README.md",
+    "por favor componentes url README.md",
+    "agora decompoe url README.md",
+    "agora parse url README.md",
+    "agora componentes url README.md",
+    "preciso: decompoe url README.md",
+    "preciso: parse url README.md",
+    "preciso: componentes url README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "date_normalize",
+   "desc": "normaliza datas",
+   "rules": [
+    {
+     "all": [
+      "v4_date_normalize"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "normaliza datas README.md",
+    "normalize dates README.md",
+    "datas iso README.md",
+    "por favor normaliza datas README.md",
+    "por favor normalize dates README.md",
+    "por favor datas iso README.md",
+    "agora normaliza datas README.md",
+    "agora normalize dates README.md",
+    "agora datas iso README.md",
+    "preciso: normaliza datas README.md",
+    "preciso: normalize dates README.md",
+    "preciso: datas iso README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "csv_to_json",
+   "desc": "converte csv para json",
+   "rules": [
+    {
+     "all": [
+      "v4_csv_to_json"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "converte csv para json README.md",
+    "csv to json README.md",
+    "conversao csv README.md",
+    "por favor converte csv para json README.md",
+    "por favor csv to json README.md",
+    "por favor conversao csv README.md",
+    "agora converte csv para json README.md",
+    "agora csv to json README.md",
+    "agora conversao csv README.md",
+    "preciso: converte csv para json README.md",
+    "preciso: csv to json README.md",
+    "preciso: conversao csv README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "json_schema_infer",
+   "desc": "infere esquema json",
+   "rules": [
+    {
+     "all": [
+      "v4_json_schema_infer"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "infere esquema json README.md",
+    "infer json schema README.md",
+    "esquema inferido README.md",
+    "por favor infere esquema json README.md",
+    "por favor infer json schema README.md",
+    "por favor esquema inferido README.md",
+    "agora infere esquema json README.md",
+    "agora infer json schema README.md",
+    "agora esquema inferido README.md",
+    "preciso: infere esquema json README.md",
+    "preciso: infer json schema README.md",
+    "preciso: esquema inferido README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "table_render",
+   "desc": "renderiza tabela",
+   "rules": [
+    {
+     "all": [
+      "v4_table_render"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "renderiza tabela README.md",
+    "render table README.md",
+    "tabela alinhada README.md",
+    "por favor renderiza tabela README.md",
+    "por favor render table README.md",
+    "por favor tabela alinhada README.md",
+    "agora renderiza tabela README.md",
+    "agora render table README.md",
+    "agora tabela alinhada README.md",
+    "preciso: renderiza tabela README.md",
+    "preciso: render table README.md",
+    "preciso: tabela alinhada README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "regex_test",
+   "desc": "testa regex",
+   "rules": [
+    {
+     "all": [
+      "v4_regex_test"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "testa regex README.md",
+    "test regex README.md",
+    "regex contra linhas README.md",
+    "por favor testa regex README.md",
+    "por favor test regex README.md",
+    "por favor regex contra linhas README.md",
+    "agora testa regex README.md",
+    "agora test regex README.md",
+    "agora regex contra linhas README.md",
+    "preciso: testa regex README.md",
+    "preciso: test regex README.md",
+    "preciso: regex contra linhas README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "text_grep",
+   "desc": "busca literal",
+   "rules": [
+    {
+     "all": [
+      "v4_text_grep"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "busca literal README.md",
+    "grep literal README.md",
+    "literal search README.md",
+    "por favor busca literal README.md",
+    "por favor grep literal README.md",
+    "por favor literal search README.md",
+    "agora busca literal README.md",
+    "agora grep literal README.md",
+    "agora literal search README.md",
+    "preciso: busca literal README.md",
+    "preciso: grep literal README.md",
+    "preciso: literal search README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "md_outline",
+   "desc": "sumario markdown",
+   "rules": [
+    {
+     "all": [
+      "v4_md_outline"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "sumario markdown README.md",
+    "markdown outline README.md",
+    "ancoras quebradas README.md",
+    "por favor sumario markdown README.md",
+    "por favor markdown outline README.md",
+    "por favor ancoras quebradas README.md",
+    "agora sumario markdown README.md",
+    "agora markdown outline README.md",
+    "agora ancoras quebradas README.md",
+    "preciso: sumario markdown README.md",
+    "preciso: markdown outline README.md",
+    "preciso: ancoras quebradas README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
+  },
+  {
+   "name": "diff_apply_check",
+   "desc": "verifica patch",
+   "rules": [
+    {
+     "all": [
+      "v4_diff_apply_check"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ]
+    }
+   ],
+   "slots": {
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "verifica patch README.md",
+    "patch dry run README.md",
+    "patch aplica README.md",
+    "por favor verifica patch README.md",
+    "por favor patch dry run README.md",
+    "por favor patch aplica README.md",
+    "agora verifica patch README.md",
+    "agora patch dry run README.md",
+    "agora patch aplica README.md",
+    "preciso: verifica patch README.md",
+    "preciso: patch dry run README.md",
+    "preciso: patch aplica README.md"
+   ],
+   "negatives": [
+    "apaga README.md",
+    "cria README.md"
+   ]
   }
  ]
 }

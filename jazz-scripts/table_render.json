@@ -1,0 +1,32 @@
+{
+  "name": "table_render",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Render a JSON array of objects as an aligned table with sorted columns",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "columns": [
+        "str"
+      ],
+      "rows": "int",
+      "table": "str"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "methods": [
+    {
+      "name": "url_parse.script",
+      "intent": "url_parse",
+      "priority": 10,
+      "doc": "decompoe url",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:url_parse",
+          "in": {
+            "file": "$slot.target"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "url_parse.no_python",
+      "intent": "url_parse",
+      "priority": 1,
+      "doc": "decompoe url",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script url_parse, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

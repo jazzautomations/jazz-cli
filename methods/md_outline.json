@@ -1,0 +1,55 @@
+{
+  "methods": [
+    {
+      "name": "md_outline.script",
+      "intent": "md_outline",
+      "priority": 10,
+      "doc": "sumario markdown",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:md_outline",
+          "in": {
+            "file": "$slot.target"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "md_outline.no_python",
+      "intent": "md_outline",
+      "priority": 1,
+      "doc": "sumario markdown",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script md_outline, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

@@ -45,6 +45,36 @@ text_grep (grep com contexto e orçamento, sem rg) · json_schema_infer · md_ou
 regex_test (testa regex contra linhas, com timeout) · date_normalize · url_parse ·
 csv_to_json · table_render (dado → tabela alinhada) · wordcount_stats.
 
+### Contrato implementado da v4
+
+Os dez scripts recebem `file` (relativo à raiz) ou `text` inline; a exceção é
+`diff_apply_check`, que exige um arquivo de patch. A integração offline pede um
+arquivo obrigatório. Exemplos: `conta palavras README.md`, `sumario markdown
+README.md`, `busca literal README.md "ana"`, `testa regex README.md "^ana$"`.
+
+- `text_grep`: busca literal, contexto de 0 a 10 linhas e limite de resultados.
+- `json_schema_infer`: esquema dos valores observados; arrays heterogêneos usam
+  `anyOf`. Não presume que uma amostra descreva todos os documentos possíveis.
+- `md_outline`: títulos ATX/Setext, links inline e âncoras locais quebradas;
+  ignora blocos cercados por crases ou tils.
+- `diff_apply_check`: somente `git apply --check`; `applies:false` significa
+  incompatibilidade, `null` significa timeout. Não grava arquivos.
+- `regex_test`: padrão de até 512 caracteres, até 1.000 linhas de 4.096
+  caracteres, 25 ms por busca e orçamento total de aproximadamente 4 s.
+  Exige temporizador POSIX; timeout produz `matched:null`, nunca falso negativo.
+- `date_normalize`: ISO 8601 por padrão, ou `format` explícito de `strptime`;
+  converte offsets para UTC e conserva datas sem fuso como ingênuas. Inválido = null.
+- `url_parse`: componentes e parâmetros repetidos, sem rede; aceita referências
+  relativas e não inventa esquema, host ou porta ausentes.
+- `csv_to_json`: preserva valores como strings e ordem das linhas, rejeitando
+  cabeçalhos duplicados e larguras inconsistentes; separador configurável.
+- `table_render`: array JSON de objetos, colunas ordenadas, ausências como null.
+- `wordcount_stats`: linhas, caracteres, palavras Unicode e frequências ordenadas.
+
+Entrada limitada a 256 KiB, com `truncated:true` quando há corte. JSON e patches
+incompletos são recusados. Caminhos resolvidos (inclusive symlinks) ficam na raiz;
+saídas incluem `data.text`, dados estruturados e `data.truncated`.
+
 ## Ordem e portão
 Uma onda por vez: 4 agentes × 2-3 scripts → revisão do maestro (linha a linha) →
 roster `scShipped` em scripts_test.go → `py_compile` + testes + `eval offline` (75/75)
