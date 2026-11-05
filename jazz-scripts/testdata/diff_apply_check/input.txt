@@ -1,0 +1,5 @@
+--- a/ana.txt
++++ b/ana.txt
+@@ -1 +1 @@
+-ana
++bruno

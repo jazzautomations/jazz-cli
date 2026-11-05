@@ -23,7 +23,7 @@ import (
 // 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "dep_graph", "dep_outdated", "detect_project", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "large_funcs", "license_scan", "lint_run", "log_errors_recent", "mem_top", "net_ifaces", "parse_build_errors", "parse_log_lines", "parse_test_output", "pkg_installed", "port_free", "proc_ports", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "yaml_get"}
+var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "csv_to_json", "date_normalize", "dep_graph", "dep_outdated", "detect_project", "diff_apply_check", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "json_schema_infer", "large_funcs", "license_scan", "lint_run", "log_errors_recent", "md_outline", "mem_top", "net_ifaces", "parse_build_errors", "parse_log_lines", "parse_test_output", "pkg_installed", "port_free", "proc_ports", "regex_test", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "table_render", "text_grep", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "url_parse", "wordcount_stats", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -143,8 +143,8 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("description has %d lines, want <= 3", n)
 	}
 	b, _ := json.Marshal(last)
-	if est := len(b) / 4; est > 800 { // 38 scripts (cardápio v1+v2): ~17 tokens each in the signature list
-		t.Errorf("script spec ~%d tokens, keep it small (<800)", est)
+	if est := len(b) / 4; est > 900 { // 58 scripts (cardápio v1–v4), ~14 tokens each after capping optionals at 2; raise only with the same arithmetic
+		t.Errorf("script spec ~%d tokens, keep it small (<900)", est)
 	}
 	props := last.Params["properties"].(map[string]any)
 	enum := props["name"].(map[string]any)["enum"].([]string)
@@ -919,6 +919,86 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		v, _ := scCall(t, tb, "archive_list", map[string]any{"path": "nope.zip"})
 		if scOK(v) {
 			t.Errorf("archive_list on a missing file must fail: %v", v)
+		}
+	})
+	run("text_grep", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "text_grep/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "text_grep", map[string]any{"file": "v4-input.txt", "pattern": "ana"})
+		if !scOK(v) || scDataOf(v)["matches"] != 2.0 {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("regex_test", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "regex_test/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "regex_test", map[string]any{"file": "v4-input.txt", "pattern": "^ana$"})
+		if !scOK(v) || scDataOf(v)["matches"] != 1.0 {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("wordcount_stats", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "wordcount_stats/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "wordcount_stats", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["words"] != 3.0 {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("json_schema_infer", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "json_schema_infer/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "json_schema_infer", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["text"] != "Inferred object schema from observed values" {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("md_outline", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "md_outline/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "md_outline", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["text"] != "1 headings, 2 links, 1 broken anchors" {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("csv_to_json", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "csv_to_json/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "csv_to_json", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["text"] != "2 CSV row(s), columns: count, name" {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("table_render", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "table_render/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "table_render", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["rows"] != 1.0 {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("date_normalize", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "date_normalize/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "date_normalize", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["text"] != "2024-01-02 = 2024-01-02T00:00:00" {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("url_parse", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "url_parse/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "url_parse", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["text"] != "1 URL(s) parsed: /docs" {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("diff_apply_check", func(t *testing.T) {
+		scWrite(t, root, "v4-input.txt", scFixture(t, "diff_apply_check/input.txt"))
+		scWrite(t, root, "ana.txt", "ana\n")
+		v, _ := scCall(t, tb, "diff_apply_check", map[string]any{"file": "v4-input.txt"})
+		if !scOK(v) || scDataOf(v)["applies"] != true {
+			t.Fatalf("result: %v", v)
 		}
 	})
 	for _, n := range scShipped {

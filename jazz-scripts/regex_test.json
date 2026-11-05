@@ -1,0 +1,47 @@
+{
+  "name": "regex_test",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Test a regular expression against lines with per-match timeouts and input limits",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      },
+      "pattern": {
+        "type": "string",
+        "description": "Regular expression, at most 512 characters",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "query": {
+        "type": "string",
+        "description": "Request containing a quoted regular expression"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "matches": "int",
+      "items": [
+        {
+          "line": "int",
+          "matched": "bool|null",
+          "span": "array|null",
+          "timed_out": "bool",
+          "input_truncated": "bool"
+        }
+      ]
+    }
+  }
+}

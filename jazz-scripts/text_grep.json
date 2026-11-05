@@ -1,0 +1,62 @@
+{
+  "name": "text_grep",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Find literal text with line numbers, bounded context and match limits",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Input file inside the project root"
+      },
+      "text": {
+        "type": "string",
+        "description": "Inline input instead of a file"
+      },
+      "pattern": {
+        "type": "string",
+        "description": "Literal text to find",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "query": {
+        "type": "string",
+        "description": "Request containing a quoted literal"
+      },
+      "context": {
+        "type": "integer",
+        "description": "Context lines on either side, 0..10",
+        "minimum": 0,
+        "maximum": 10
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum matches, 1..1000",
+        "minimum": 1,
+        "maximum": 1000
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "text": "str",
+      "truncated": "bool",
+      "matches": "int",
+      "items": [
+        {
+          "line": "int",
+          "match": "str",
+          "before": [
+            "str"
+          ],
+          "after": [
+            "str"
+          ]
+        }
+      ]
+    }
+  }
+}

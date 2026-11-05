@@ -899,6 +899,17 @@ func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt st
 // available: read-only, deterministic, and verifiable ("abre o README.md",
 // "git status" went to the model in 0.8.1 for 15–36 s and 32k tokens).
 var brLevel0Intents = map[string]bool{
+	"wordcount_stats":   true,
+	"url_parse":         true,
+	"date_normalize":    true,
+	"csv_to_json":       true,
+	"json_schema_infer": true,
+	"table_render":      true,
+	"regex_test":        true,
+	"text_grep":         true,
+	"md_outline":        true,
+	"diff_apply_check":  true,
+
 	"open_file": true, "git_status": true, "env_status": true, "tool_info": true, "tool_status": true,
 	// 0.9.1: the deterministic coverage expanded — all read-only and verified
 	"list_files": true, "project_summary": true, "explain": true, "find": true,

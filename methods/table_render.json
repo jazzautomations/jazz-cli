@@ -1,0 +1,55 @@
+{
+  "methods": [
+    {
+      "name": "table_render.script",
+      "intent": "table_render",
+      "priority": 10,
+      "doc": "renderiza tabela",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:table_render",
+          "in": {
+            "file": "$slot.target"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "table_render.no_python",
+      "intent": "table_render",
+      "priority": 1,
+      "doc": "renderiza tabela",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script table_render, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}

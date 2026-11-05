@@ -1,0 +1,56 @@
+{
+  "methods": [
+    {
+      "name": "regex_test.script",
+      "intent": "regex_test",
+      "priority": 10,
+      "doc": "testa regex",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:regex_test",
+          "in": {
+            "file": "$slot.target",
+            "query": "$goal"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 800
+    },
+    {
+      "name": "regex_test.no_python",
+      "intent": "regex_test",
+      "priority": 1,
+      "doc": "testa regex",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script regex_test, que precisa de python3 (não achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
+    }
+  ]
+}
