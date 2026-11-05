@@ -527,6 +527,8 @@ func main() {
 			pfQuit(cmdEval(root, rest[1:], os.Stdout)) // jazz eval offline (evaloffline.go)
 		case "forge":
 			pfQuit(cmdForge(rest[1:], os.Stdout)) // jazz forge: correções → exemplos da gramática (forge.go)
+		case "distill":
+			pfQuit(cmdDistill(root, rest[1:], os.Stdout)) // jazz distill: planos verificados → métodos offline (distill.go)
 		}
 	}
 	if *allowOutside {
@@ -623,7 +625,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true, "distill": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}

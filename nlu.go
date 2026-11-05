@@ -162,6 +162,7 @@ func nuGet() *nuModel {
 		if nuDef.loadErr == nil && nuForgeOn() {
 			nuLoadOverlay(nuDef)
 			nuLoadAliases(nuDef)
+			dsLoadNLU(nuDef) // intenções e atalhos aprendidos (distill.go)
 		}
 	})
 	return nuDef

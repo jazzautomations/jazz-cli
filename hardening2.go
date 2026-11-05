@@ -976,6 +976,7 @@ func h2PoisonReason(s string) string {
 func h2PlanPoison(p pcPlan) string {
 	parts := []string{p.Task, p.Verify, p.Hint}
 	parts = append(parts, p.Steps...)
+	parts = append(parts, p.Cmds...)
 	parts = append(parts, p.Dead...)
 	for _, s := range parts {
 		if r := h2PoisonReason(s); r != "" {
