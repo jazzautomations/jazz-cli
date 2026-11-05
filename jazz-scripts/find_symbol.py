@@ -8,6 +8,10 @@ kind = arg("kind", "any")
 where = path_in_root(arg("path", "."))
 if not os.path.exists(where):
     fail("path not found: %s" % rel(where))
+ext = str(arg("ext", "")).lstrip(".").lower()
+if ext and not re.match(r"^[a-z0-9]{1,16}$", ext):
+    fail("ext must be a plain extension (letters/digits), got: %s" % ext)
+glob = "*.%s" % ext if ext else None
 s = re.escape(sym)
 DEFS = {
     "go": [("func", r"^\s*func\s+(\([^)]*\)\s*)?%s\s*[\[(]"), ("type", r"^\s*type\s+%s\b"),
@@ -38,10 +42,16 @@ KIND_OK = {"any": None, "func": ("func",), "type": ("type", "class"), "class": (
 rg = shutil.which("rg")
 if rg:
     argv = [rg, "-n", "-w", "-F", "--no-heading", "--color", "never", "--max-columns", "300", "--max-filesize", "2M",
-            "-g", "!vendor", "-g", "!node_modules", "-g", "!dist", "-g", "!*.min.js", "--", sym, where]
+            "-g", "!vendor", "-g", "!node_modules", "-g", "!dist", "-g", "!*.min.js"]
+    if glob:
+        argv += ["-g", glob]
+    argv += ["--", sym, where]
 else:
     argv = ["grep", "-rnwFI", "--exclude-dir=.git", "--exclude-dir=node_modules", "--exclude-dir=vendor",
-            "--exclude-dir=dist", "--", sym, where]
+            "--exclude-dir=dist"]
+    if glob:
+        argv.append("--include=" + glob)
+    argv += ["--", sym, where]
 code, out, err = run_argv(argv, timeout=40)
 if code not in (0, 1):
     fail("search failed: %s" % clip(err.strip(), 200))

@@ -179,9 +179,11 @@ data = {
 # --- text ---
 if total:
     top = authors[0]
-    text = "%d lines, top author %s (%s%%)" % (total, top["author"], top["pct"])
     if last_change:
-        text += ", last change %s by %s" % (last_change["date"], last_change["author"])
+        text = "last change %s by %s" % (last_change["date"], last_change["author"])
+        text += "; %d lines, top author %s (%s%%)" % (total, top["author"], top["pct"])
+    else:
+        text = "%d lines, top author %s (%s%%)" % (total, top["author"], top["pct"])
     if hot_lines:
         text += "; hot: " + ", ".join("L%d (%d commits)" % (h["line"], h["commits"]) for h in hot_lines[:5])
 else:

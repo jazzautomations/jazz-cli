@@ -395,3 +395,58 @@ func TestNLUOpinionIsNotIntent(t *testing.T) {
 		t.Errorf("'que versão você é' devia ser self_info, veio %s", nuPredict(in))
 	}
 }
+
+// Corpus false-matches killed at the method/intent layer: every line here was a
+// real corpus verdict, now pinned forever.
+func TestNLUCorpusMethodLayer(t *testing.T) {
+	m := nuGet()
+	w := nuWorldFromDef(m.data.World)
+	for _, tc := range []struct {
+		s    string
+		want string
+		slot string // optional "k=v" to assert
+	}{
+		{"show sshd status", "service_status", "service=sshd"},
+		{"mostra o status do sshd", "service_status", "service=sshd"},
+		{"status do nginx", "service_status", "service=nginx"},
+		{"procura 'timeout' em todos os arquivos .conf", "find", "ext=conf"},
+		{"procura 'timeout' nos arquivos", "find", "query=timeout"},
+		{"mostra quem editou o main.go por último", "git_blame", "target=main.go"},
+		{"limpa imagens docker não usadas", "container_prune", ""},
+		{"docker image prune", "container_prune", ""},
+		{"Display source and mount point of the file system containing /some/path", "disk_usage", "path=/some/path"},
+		{"espaço em disco", "disk_usage", ""},
+	} {
+		in := m.Parse(tc.s, w)
+		if got := nuPredict(in); got != tc.want {
+			t.Errorf("%q => %s (%.2f), want %s", tc.s, got, in.Confidence, tc.want)
+			continue
+		}
+		if tc.slot != "" {
+			k, v, _ := strings.Cut(tc.slot, "=")
+			if in.Slots[k] != v {
+				t.Errorf("%q slot %s=%q, want %q", tc.s, k, in.Slots[k], v)
+			}
+		}
+	}
+	// free-form generation/awk/scaffold must refuse honestly, not become
+	// generic create/format — the model owns those.
+	for _, s := range []string{
+		"scaffold the project folder structure",
+		"Execute awk script and format the output",
+		"make a rust file that also compiles as c++",
+	} {
+		if in := m.Parse(s, w); nuPredict(in) != "none" {
+			t.Errorf("%q => %s (%.2f) — pedido livre tem que ir pro modelo", s, in.Name, in.Confidence)
+		}
+	}
+	// "por último" descreve autoria, nunca file_find
+	if in := m.Parse("quem editou por último", w); nuPredict(in) == "file_find" {
+		t.Errorf("'quem editou por último' virou file_find — 'último' contaminou")
+	}
+	// "lista os arquivos .conf" não pode tratar .conf como diretório
+	in := m.Parse("lista os arquivos .conf", w)
+	if in.Slots["dir"] == ".conf" || in.Slots["dir"] == "conf" {
+		t.Errorf("'.conf' voltou a encher slot dir: %v", in.Slots)
+	}
+}

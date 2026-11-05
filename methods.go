@@ -486,6 +486,13 @@ func brSystemd(cx *brCtx, in map[string]string) brStep {
 		shown = "(sem saída)"
 	}
 	cx.say("$ %s\n%s", cmd, shown)
+	// "unit could not be found" (exit 4) means systemd doesn't manage it —
+	// the service may still run as a plain process (sshd in a container).
+	// Failing the step lets the probe method try runit/docker/pgrep.
+	if exit == 4 || strings.Contains(out, "could not be found") {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: obs,
+			why: "systemd não conhece " + unit + " — pode estar rodando fora do systemd"}
+	}
 	// systemctl status exits 3 on inactive/failed units: that IS the answer
 	return brStep{val: brCmdRes{cmd, exit, out}, obs: obs, ok: true}
 }
@@ -895,12 +902,20 @@ var brDepRe = lazyRx(`^[a-zA-Z0-9][a-zA-Z0-9._@/+~-]{0,80}$`)
 // brContainerOp starts/stops/restarts one validated container on docker or
 // podman (whichever the environment has) through the permission path.
 func brContainerOp(cx *brCtx, in map[string]string) brStep {
-	name, obs := strings.TrimSpace(cx.str(in, "name")), rvNoCmd()
-	if !brUnitRe.MatchString(name) || strings.HasPrefix(name, "-") {
-		return brStep{obs: obs, why: "nome de container inválido: " + name}
-	}
 	op := in["op"]
-	if op != "start" && op != "stop" && op != "restart" {
+	name, obs := strings.TrimSpace(cx.str(in, "name")), rvNoCmd()
+	var sub string
+	switch op {
+	case "start", "stop", "restart":
+		if !brUnitRe.MatchString(name) || strings.HasPrefix(name, "-") {
+			return brStep{obs: obs, why: "nome de container inválido: " + name}
+		}
+		sub = op + " " + name
+	case "image_prune":
+		sub = "image prune -af"
+	case "system_prune":
+		sub = "system prune -af"
+	default:
 		return brStep{obs: obs, why: "container_op desconhecido: " + op}
 	}
 	rt := ""
@@ -912,7 +927,7 @@ func brContainerOp(cx *brCtx, in map[string]string) brStep {
 	if rt == "" {
 		return brStep{obs: obs, why: "nem docker nem podman no PATH"}
 	}
-	cmd := rt + " " + op + " " + name
+	cmd := rt + " " + sub
 	out, exit, o := cx.runCmd(cmd, 60*time.Second)
 	if o.Denied || o.Exit < 0 {
 		return brStep{obs: o, why: o.Output}

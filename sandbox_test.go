@@ -304,3 +304,55 @@ c=socket.socket(); c.connect(s.getsockname()); print('loop ok')
 		t.Errorf("hook read jazz's auth.json: code %d err %v out %q", code, err, stdout)
 	}
 }
+
+// A worktree/submodule root has .git as a "gitdir: <abs>" pointer file. The
+// sandbox masks $HOME and /tmp, so the real metadata must be bound back —
+// read-only, and only when it looks like git metadata (a crafted pointer
+// must not expose e.g. ~/.ssh).
+func TestSbGitPointerDirs(t *testing.T) {
+	root := t.TempDir()
+
+	// no .git at all
+	if got := sbGitPointerDirs(root); got != nil {
+		t.Fatalf("root sem .git => %v", got)
+	}
+
+	// real .git dir: not a pointer
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := sbGitPointerDirs(root); got != nil {
+		t.Fatalf(".git diretório => %v", got)
+	}
+	os.RemoveAll(filepath.Join(root, ".git"))
+
+	// worktree: .git file + commondir
+	main := t.TempDir()
+	gitdir := filepath.Join(main, ".git", "worktrees", "wt1")
+	if err := os.MkdirAll(gitdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gitdir, "commondir"), []byte("../..\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: "+gitdir+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := sbGitPointerDirs(root)
+	wantMain := filepath.Join(main, ".git")
+	if len(got) != 2 || got[0] != gitdir || got[1] != wantMain {
+		t.Fatalf("worktree => %v, quero [%s %s]", got, gitdir, wantMain)
+	}
+
+	// crafted pointer at ~/.ssh must be refused (not git metadata)
+	ssh := filepath.Join(t.TempDir(), ".ssh")
+	if err := os.MkdirAll(ssh, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: "+ssh+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sbGitPointerDirs(root); got != nil {
+		t.Fatalf("ponteiro forjado => %v, quero nil", got)
+	}
+}

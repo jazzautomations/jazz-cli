@@ -1372,6 +1372,11 @@ func nuSvcOnly(kinds map[string]bool) bool {
 // instalado?" — checking existence is the script's job, not the index's).
 func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
 	fileish := kinds["file"] || kinds["test"] || kinds["dir"] || kinds["symbol"]
+	// a pure extension word (".conf") is a filter, never a file/dir name —
+	// "arquivos .conf" describes a set of files, not a directory ".conf"
+	if fileish && nuPureExt(t.Raw) {
+		return false
+	}
 	if t.Quoted {
 		if fileish {
 			return true
@@ -1412,6 +1417,21 @@ func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
 		}
 	}
 	return false
+}
+
+// nuPureExt: the token is just a dot-extension (".conf", ".log") — a file
+// filter, not a file name. A real ".git" dir is entity-tagged upstream and
+// never reaches the leftover-slot check.
+func nuPureExt(raw string) bool {
+	if len(raw) < 3 || raw[0] != '.' {
+		return false
+	}
+	for _, r := range raw[1:] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // residual: the words that are not fillers and that no rule or cue explained.
@@ -1506,6 +1526,10 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuExtractPat(toks)
 			case strings.HasPrefix(sd.From, "slice:"):
 				v = nuSliceArg(toks, sd.From[6:], taken)
+			case sd.From == "svc:name":
+				v = nuSvcName(toks, taken)
+			case sd.From == "disk:path":
+				v = nuDiskPath(toks, taken)
 			}
 			// a "x:y" From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into enum/flag slots (e.g. a bare "10" into tail)
@@ -1995,6 +2019,53 @@ func (a *acAuto) find(text string, fn func(pat, end int)) {
 	}
 }
 
+// nuSvcName pulls a concrete unit name out of the text. Service words live in
+// the `service` concept (sshd, nginx…), so they arrive "explained" and never
+// reach generic residual fills — exactly the file/dir-entity trap in reverse.
+// Generic service nouns are skipped: "status do serviço" stays unnamed and the
+// method falls back to probing, which is honest.
+func nuSvcName(toks []nuTok, taken map[int]bool) string {
+	for i, t := range toks {
+		if taken[i] {
+			continue
+		}
+		switch t.Fold {
+		case "servico", "serviço", "servicos", "serviços", "service", "services", "daemon", "daemons", "unit", "units":
+			continue
+		}
+		if t.has("service") {
+			taken[i] = true
+			return t.Raw
+		}
+	}
+	return ""
+}
+
+// nuDiskPath picks the token that looks like a filesystem path. Residual joins
+// would glue "source /some/path" together; a path slot wants the token with
+// path punctuation, else the last name-shaped leftover.
+func nuDiskPath(toks []nuTok, taken map[int]bool) string {
+	best := -1
+	for i, t := range toks {
+		if taken[i] || len(t.Concs) > 0 || t.Fixed != "" || t.Quoted && !strings.ContainsAny(t.Raw, "/~.") {
+			continue
+		}
+		if !nuNameShaped(t.Raw) && !strings.ContainsAny(t.Raw, "/~.") {
+			continue
+		}
+		if strings.ContainsAny(t.Raw, "/~") || strings.HasPrefix(t.Raw, ".") {
+			taken[i] = true
+			return t.Raw
+		}
+		best = i // name-shaped fallback, keep the last one
+	}
+	if best >= 0 {
+		taken[best] = true
+		return toks[best].Raw
+	}
+	return ""
+}
+
 // nuFindArg derives file_find arguments straight from the tokens: type,
 // sort, mtime window and the empty flag live in concept words that a
 // residual slot never sees (like nuRenamePart does for names).
@@ -2023,7 +2094,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			case "maior", "maiores", "largest", "biggest", "larger", "bigger", "heaviest", "pesado", "pesada", "pesados", "pesadas", "menor", "menores", "smallest":
 				taken[i] = true
 				return "size"
-			case "newest", "latest", "oldest":
+			case "newest", "latest", "oldest", "ultimo", "último", "ultima", "última",
+			"ultimos", "últimos", "ultimas", "últimas", "recente", "recentes",
+			"antigo", "antiga", "velho", "velha":
 				taken[i] = true
 				return "mtime"
 			case "mais":

@@ -1,0 +1,18 @@
+{
+ "methods": [
+  {"name": "container_prune.images", "intent": "container_prune", "priority": 10,
+   "doc": "docker|podman image prune -af — imagens sem container as usando; permissão decide",
+   "steps": [
+    {"cap": "container_op", "in": {"op": "image_prune"}, "out": "c"}
+   ],
+   "verify": [{"check": "cmd_ran", "arg": "$c"}],
+   "risk": "high", "cost_ms": 3000},
+  {"name": "container_prune.no_runtime", "intent": "container_prune", "priority": 1,
+   "doc": "sem docker/podman não há o que limpar",
+   "pre": [{"fact": "bin.docker", "op": "unset"}, {"fact": "bin.podman", "op": "unset"}],
+   "steps": [
+    {"cap": "report", "in": {"text": "nem docker nem podman no PATH — nada de containers pra limpar", "status": "blocked", "category": "command_missing"}}
+   ],
+   "verify": [], "risk": "low", "cost_ms": 50}
+ ]
+}

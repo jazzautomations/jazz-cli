@@ -189,6 +189,41 @@ func sbProjectRoots(root string) []string {
 	return roots
 }
 
+// sbGitPointerDirs follows a worktree/submodule ".git" pointer file:
+// "gitdir: <abs>" plus the "commondir" inside it (the shared object store a
+// worktree's refs and objects actually live in). Both must look like git
+// metadata (a ".git" path component): a crafted pointer must not re-expose a
+// tmpfs-masked directory like ~/.ssh.
+func sbGitPointerDirs(root string) []string {
+	b, err := os.ReadFile(filepath.Join(root, ".git"))
+	if err != nil {
+		return nil
+	}
+	s := strings.TrimSpace(string(b))
+	if !strings.HasPrefix(s, "gitdir:") {
+		return nil
+	}
+	gitLike := func(p string) bool {
+		return filepath.Base(p) == ".git" ||
+			strings.Contains(p, string(filepath.Separator)+".git"+string(filepath.Separator))
+	}
+	gitdir := sbReal(strings.TrimSpace(s[len("gitdir:"):]))
+	var out []string
+	if gitdir != "" && gitLike(gitdir) {
+		out = append(out, gitdir)
+		if cb, err := os.ReadFile(filepath.Join(gitdir, "commondir")); err == nil {
+			c := strings.TrimSpace(string(cb))
+			if !filepath.IsAbs(c) {
+				c = filepath.Join(gitdir, c)
+			}
+			if c = sbReal(c); c != "" && gitLike(c) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
 // sbProbeOS returns the backend, its binary, or why there is none.
 func sbProbeOS() (backend, bin, why string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -265,6 +300,15 @@ func sbNew(mode, backend, bin string, net bool, roots []string) *Sandbox {
 			if v := os.Getenv(k); v != "" && filepath.IsAbs(v) {
 				sb.CacheRW = append(sb.CacheRW, sbReal(v))
 			}
+		}
+	}
+	// worktree/submodule roots keep .git as a file ("gitdir: <abs>") pointing
+	// into the real metadata — usually under $HOME or /tmp, which the sandbox
+	// masks with tmpfs. Bind the resolved gitdir read-only so git plumbing
+	// (rev-parse, blame, log) still resolves inside the namespace.
+	for _, r := range sb.Roots {
+		for _, g := range sbGitPointerDirs(r) {
+			sb.CacheRO = append(sb.CacheRO, g)
 		}
 	}
 	cfg, data := sbReal(configDir()), sbReal(dataDir())
