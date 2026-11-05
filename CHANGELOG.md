@@ -2,6 +2,16 @@
 
 ## Não lançado
 
+### Cérebro offline: erra 82% menos em pedido real; cardápio v5 (68 scripts)
+
+- Medido em 372 pedidos reais (NL2Bash, tarefas do Terminal-Bench, tarefas de dev/ops em pt e en),
+  corpus fixo: respostas com o intent errado caíram de 70 para 13, e acertos subiram de 75 para 78. O
+  cérebro prefere perguntar ou recusar a chutar: slot que só aceita coisa com cara de arquivo/serviço,
+  verbo de ação nunca respondido por intent só-leitura. Relatório: docs/research/coverage-v5.md.
+- 10 scripts novos (cardápio v5): file_find, text_extract, line_slice, file_dupes, perm_find, env_get
+  (nome com cara de segredo nunca mostra valor), file_users, net_route, text_count, dir_diff.
+- deploy/terraform/kubernetes/ansible sem modelo também explicam que precisam de modelo.
+
 ### Modo offline com botões
 
 - `menu` (ou `início`, `botões`, `?`) abre o offline como botões: Esta máquina · Git · Este projeto ·

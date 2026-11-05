@@ -1,0 +1,12 @@
+{"name": "file_dupes", "version": 1, "run": "python3", "effect": "read",
+ "description": "Byte-identical files under a path, grouped by sha256 of content (size first); reports wasted bytes",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory to scan (default: project root)"},
+     "min_size": {"type": "integer", "minimum": 0, "description": "ignore files smaller than N bytes (default 1)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "max duplicate groups to return (default 50)"},
+     "include_hidden": {"type": "boolean", "description": "also scan dot-files and dot-dirs (default false)"}}},
+ "output": {"data": {
+   "groups": [{"size": "int", "sha256": "str", "files": ["str"]}],
+   "group_count": "int", "dup_files": "int", "wasted_bytes": "int",
+   "files_scanned": "int", "min_size": "int", "truncated": "bool", "text": "str"}}}

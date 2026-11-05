@@ -1,0 +1,13 @@
+{"name": "line_slice", "version": 1, "run": "python3", "effect": "read",
+ "description": "First N, last N or a 1-based line range of a file or text (head/tail/range); never writes",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "file to read, relative to the project root"},
+     "text": {"type": "string", "description": "inline text (alternative to file)"},
+     "start": {"type": "integer", "minimum": 1, "description": "first line to show, 1-based (default with end: 1)"},
+     "end": {"type": "integer", "minimum": 1, "description": "last line to show, inclusive"},
+     "tail": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "show the last N lines (alternative to start/end)"}}},
+ "output": {"data": {
+   "lines": [{"line": "int", "text": "str"}],
+   "shown": "int", "total_lines": "int", "start": "int", "end": "int",
+   "truncated": "bool", "text": "str"}}}

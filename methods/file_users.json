@@ -1,0 +1,55 @@
+{
+ "methods": [
+  {
+   "name": "file_users.script",
+   "intent": "file_users",
+   "priority": 10,
+   "doc": "script:file_users: processos com o arquivo/diretório aberto",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:file_users",
+     "in": {
+      "path": "$slot.path"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 900
+  },
+  {
+   "name": "file_users.no_python",
+   "intent": "file_users",
+   "priority": 1,
+   "doc": "sem python3 o script file_users não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script file_users, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

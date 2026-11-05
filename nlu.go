@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -100,6 +101,7 @@ type nuIntentDef struct {
 
 type nuWorldDef struct {
 	Files      []string `json:"files"`
+	Dirs       []string `json:"dirs"`
 	Symbols    []string `json:"symbols"`
 	Services   []string `json:"services"`
 	SSHHosts   []string `json:"ssh_hosts"`
@@ -251,6 +253,7 @@ type nuTok struct {
 	Tags   []string // entity tags: @file @symbol @tool @host @service @container @number
 	Filler bool
 	Fixed  string // typo repair: the lexicon word it was moved to
+	Weak   bool   // every concept this token carries is stem-derived (the word itself is not in the lexicon — same trust level as a typo repair)
 	Slang  bool
 }
 
@@ -268,7 +271,29 @@ func (t *nuTok) has(c string) bool {
 	return false
 }
 
-// nuStem is a light PT/EN suffix stripper (one suffix, stem >= 3 letters).
+// hasStrong: c is carried by real vocabulary — an entity tag or an exact/
+// phrase/slang concept — not merely deduced from a suffix strip. A stem
+// collision ("quente"→quent→blame) must never be the sole proof of intent.
+func (t *nuTok) hasStrong(c string) bool {
+	for _, x := range t.Tags {
+		if x == c {
+			return true
+		}
+	}
+	if t.Weak {
+		return false
+	}
+	for _, x := range t.Concs {
+		if x == c {
+			return true
+		}
+	}
+	return false
+}
+
+// nuStem is a light PT/EN suffix stripper (one suffix, stem >= 3 letters —
+// but >= 4 after a single-letter suffix: "fila"→fil must not reach the stem
+// of "files"→fil, "toda"→tod must not reach the stem of "todos"→tod).
 var nuSuffixes = []string{"amente", "mente", "acoes", "icoes", "coes", "cao", "ando", "endo", "indo", "aram", "eram", "iram",
 	"ados", "adas", "idos", "idas", "ing", "ado", "ada", "ido", "ida", "ed", "ar", "er", "ir", "am", "em", "as", "es", "os", "a", "e", "o", "s"}
 
@@ -277,7 +302,11 @@ func nuStem(w string) string {
 		return w
 	}
 	for _, s := range nuSuffixes {
-		if len(w)-len(s) >= 3 && strings.HasSuffix(w, s) {
+		min := 3
+		if len(s) == 1 {
+			min = 4
+		}
+		if len(w)-len(s) >= min && strings.HasSuffix(w, s) {
 			return w[:len(w)-len(s)]
 		}
 	}
@@ -393,6 +422,12 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, c...)
 			continue
 		}
+		// a name with an archive extension IS an archive: "o que tem
+		// dentro do release.zip" wants the listing, not a tool card
+		if nuArchiveName(t.Fold) {
+			t.Concs = append(t.Concs, "archive")
+			continue
+		}
 		if m.fillers[t.Fold] {
 			t.Filler = true
 			continue
@@ -400,6 +435,7 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if !nuNameShaped(t.Raw) {
 			if c, ok := m.stem[nuStem(t.Fold)]; ok {
 				t.Concs = append(t.Concs, c...)
+				t.Weak = true // this word isn't in the lexicon; every concept it carries was deduced from a suffix strip
 			}
 		}
 	}
@@ -507,6 +543,19 @@ func newNuWorld(ents []nuEnt) *nuWorld {
 func nuWorldFromDef(d nuWorldDef) *nuWorld {
 	var e []nuEnt
 	add := func(kind, name string) { e = append(e, nuEnt{Kind: kind, Name: name, Key: fzFold(name)}) }
+	dirs := map[string]bool{}
+	addDir := func(name string) {
+		base := name
+		if j := strings.LastIndexByte(name, '/'); j >= 0 {
+			base = name[j+1:]
+		}
+		key := fzFold(base)
+		if len(key) < 2 || dirs[key] {
+			return
+		}
+		dirs[key] = true
+		e = append(e, nuEnt{Kind: "dir", Name: name, Key: key})
+	}
 	for _, f := range d.Files {
 		kind := "file"
 		base := f
@@ -524,6 +573,15 @@ func nuWorldFromDef(d nuWorldDef) *nuWorld {
 		if stem != base && len(stem) >= 3 {
 			e = append(e, nuEnt{Kind: kind, Name: f, Key: fzFold(stem)})
 		}
+		// every parent of a listed path is a dir of the world
+		for j := len(f) - 1; j > 0; j-- {
+			if f[j] == '/' {
+				addDir(f[:j])
+			}
+		}
+	}
+	for _, dir := range d.Dirs {
+		addDir(dir)
 	}
 	for _, s := range d.Symbols {
 		add("symbol", s)
@@ -586,6 +644,7 @@ func nuRuntimeWorld(root string, p *epProfile) *nuWorld {
 	}
 	ents := make([]nuEnt, 0, 1024)
 	if ix != nil {
+		dirs := map[string]bool{}
 		for i := range ix.files {
 			f := &ix.files[i]
 			kind := "file"
@@ -597,6 +656,24 @@ func nuRuntimeWorld(root string, p *epProfile) *nuWorld {
 			ents = append(ents, nuEnt{Kind: kind, Name: f.Rel, Key: fzFold(f.Base)})
 			if stem := strings.TrimSuffix(f.Base, f.Ext); stem != f.Base && len(stem) >= 3 {
 				ents = append(ents, nuEnt{Kind: kind, Name: f.Rel, Key: fzFold(stem)})
+			}
+			// the parents of every indexed path are dirs of the world, so
+			// "a pasta web" tags an entity instead of a bare word
+			for j := len(f.Rel) - 1; j > 0; j-- {
+				if f.Rel[j] != '/' {
+					continue
+				}
+				dir := f.Rel[:j]
+				base := dir
+				if k := strings.LastIndexByte(dir, '/'); k >= 0 {
+					base = dir[k+1:]
+				}
+				key := fzFold(base)
+				if len(key) < 2 || dirs[key] {
+					continue
+				}
+				dirs[key] = true
+				ents = append(ents, nuEnt{Kind: "dir", Name: dir, Key: key})
 			}
 		}
 	}
@@ -1041,7 +1118,54 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			used = x.used
 		}
 	}
-	in.Slots, in.Missing, in.Hint = m.fill(def, toks, hits, used)
+	var unfed int
+	in.Slots, in.Missing, in.Hint, unfed = m.fill(def, toks, hits, used, w)
+	if unfed > 0 {
+		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
+		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavra(s) solta(s) não parecem nome do slot", unfed))
+	}
+	// a mutation verb ("apaga", "reinicia", "move") is never answered by a
+	// read-only intent: refuse the read instead of showing the wrong table.
+	// A word that also names a read concept ("mudaram" = diff+mutate) is
+	// excused — the sentence may legitimately be about the changed state.
+	if brLevel0Intents[def.Name] {
+		// the concepts this intent's grammar speaks about
+		concOf := map[string]bool{}
+		for _, r := range def.Rules {
+			for _, g := range r.All {
+				for _, alt := range strings.Split(g, "|") {
+					concOf[alt] = true
+				}
+			}
+			for _, g := range r.Any {
+				for _, alt := range strings.Split(g, "|") {
+					concOf[alt] = true
+				}
+			}
+		}
+		mut := ""
+		for i := range toks {
+			t := &toks[i]
+			if t.Quoted || t.Filler || nuToWords[t.Fold] || t.Fixed != "" || len(t.Tags) > 0 {
+				continue // a typo guess or an entity name is a noun, not an order
+			}
+			m, other := false, false
+			for _, c := range t.Concs {
+				if nuMutConcepts[c] && !used[c] {
+					m = true
+				} else if concOf[c] {
+					other = true // the same word feeds this intent's grammar
+				}
+			}
+			if m && !other {
+				mut = t.Fold
+			}
+		}
+		if mut != "" {
+			conf *= 0.5
+			in.Evidence = append(in.Evidence, fmt.Sprintf("verbo de mutação '%s' não combina com leitura", mut))
+		}
+	}
 	// typo-only: the rule fired, but every concept/tag it relied on is carried
 	// only by a token we typo-repaired, and no correctly-spelled token names a
 	// real entity (@file/@host/@tool/…) to corroborate it. The intent then
@@ -1050,31 +1174,47 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	// and let the caller offer a one-key confirmation instead of acting.
 	// Structural, not a token count: a named entity the rule did not formally
 	// consume ("explca o parser.go") still corroborates and keeps the intent.
+	// weak-only: the rule fired, but every concept it relied on is carried
+	// only by a guessed token (typo-repaired or stem-derived — "fila"→fil,
+	// "quente"→quent) and no correctly-spelled token names a real entity
+	// (@file/@host/@tool/…) to corroborate it. The intent then stands on
+	// guesses alone, so we cap confidence under nuMinConf (and under
+	// brLevel0Min, so the online path never short-circuits on it) and let
+	// the caller offer a one-key confirmation instead of acting.
+	// Structural, not a token count: a named entity the rule did not
+	// formally consume ("explca o parser.go") still corroborates.
 	if len(used) > 0 {
-		typoOnly := true
+		weakOnly, guessed := true, false
 		for c := range used {
 			for i := range toks {
-				if toks[i].Fixed == "" && toks[i].has(c) {
-					typoOnly = false
+				if toks[i].Fixed != "" || toks[i].Weak {
+					guessed = true
+				}
+				if toks[i].Fixed == "" && toks[i].hasStrong(c) {
+					weakOnly = false
 					break
 				}
 			}
-			if !typoOnly {
+			if !weakOnly {
 				break
 			}
 		}
-		if typoOnly {
+		if weakOnly {
 			for i := range toks {
-				if toks[i].Fixed == "" && len(toks[i].Tags) > 0 {
-					typoOnly = false
+				if toks[i].Fixed == "" && !toks[i].Weak && len(toks[i].Tags) > 0 {
+					weakOnly = false
 					break
 				}
 			}
 		}
-		if typoOnly {
+		if weakOnly {
 			in.TypoOnly = true
 			conf = math.Min(conf, 0.5)
-			in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+			if guessed {
+				in.Evidence = append(in.Evidence, "baseado só em palavra deduzida (correção ou radical)")
+			} else {
+				in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+			}
 		}
 	}
 	for name, sd := range def.Slots {
@@ -1123,6 +1263,110 @@ var nuVerbConcepts = map[string]bool{"open": true, "explain": true, "find": true
 	"commit": true, "push": true, "pull": true, "checkout": true, "stash": true, "undo": true, "rename": true, "create": true, "delete": true,
 	"fix": true, "install": true, "update": true, "connect": true, "start": true, "stop": true, "restart": true, "kill": true}
 
+// nuMutConcepts mark a request that changes something: delete, move,
+// restart, install, enable... A read-only level-0 intent must never answer
+// one — an honest "not understood" beats a confident wrong listing.
+var nuMutConcepts = map[string]bool{
+	"delete": true, "create": true, "install": true, "update": true, "fix": true,
+	"start": true, "stop": true, "restart": true, "kill": true, "rename": true,
+	"format": true, "build": true, "compress": true,
+	"mutate": true, "recover": true, "extract": true, "enable": true,
+}
+
+// nuWorldKinds are slot kinds that name a real thing: a file or dir of the
+// project, a service of the machine, an installed tool, a host. A word
+// that fills one of these slots has to look like that thing — a spotted
+// entity, a quoted name, a name-shaped word, or a name the index resolves
+// — otherwise the slot stays empty and the reading loses confidence
+// instead of inventing a path, a unit or a tool out of a free word.
+var nuWorldKinds = map[string]bool{
+	"file": true, "test": true, "dir": true, "symbol": true,
+	"service": true, "container": true, "toolchain": true, "bin": true,
+	"ssh_host": true, "ts_peer": true, "port": true, "number": true,
+}
+
+// nuWorldOnly: every kind the slot accepts names a thing of the world, so
+// free text is not a candidate.
+func nuWorldOnly(kinds map[string]bool) bool {
+	if len(kinds) == 0 {
+		return false
+	}
+	for k := range kinds {
+		if !nuWorldKinds[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// nuSvcKinds are slot kinds naming a managed unit or a machine: a leftover
+// word is never one — it must come tagged or resolve in the world.
+var nuSvcKinds = map[string]bool{"service": true, "container": true, "ssh_host": true, "ts_peer": true}
+
+// nuSvcOnly: every kind the slot accepts is a service/host kind.
+func nuSvcOnly(kinds map[string]bool) bool {
+	if len(kinds) == 0 {
+		return false
+	}
+	for k := range kinds {
+		if !nuSvcKinds[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// slotTokOK: a bare word may fill a world-kind slot only when it looks
+// like a name of that world — name-shaped (parser.go, internal/db), a
+// quoted name (file-ish kinds only), or a project name the fuzzy resolver
+// would resolve ("parsr" for parser.go). Services, hosts and tools are
+// already tagged by spot when they exist, so a leftover word is never
+// one of them; a bare name does name a tool candidate ("tenho o kubectl
+// instalado?" — checking existence is the script's job, not the index's).
+func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
+	fileish := kinds["file"] || kinds["test"] || kinds["dir"] || kinds["symbol"]
+	if t.Quoted {
+		if fileish {
+			return true
+		}
+		if w == nil {
+			return false
+		}
+		for ei := range w.ents {
+			e := &w.ents[ei]
+			if nuKindAllowed(kinds, e.Kind) && e.Key == t.Fold {
+				return true
+			}
+		}
+		return false
+	}
+	if nuNameShaped(t.Raw) {
+		return true
+	}
+	if !fileish && !nuSvcOnly(kinds) && len(t.Concs) == 0 && (kinds["toolchain"] || kinds["bin"]) {
+		return true
+	}
+	if w == nil || !fileish || len(t.Fold) < 3 {
+		return false
+	}
+	lim := fzLimit(len([]rune(t.Fold)))
+	for ei := range w.ents {
+		e := &w.ents[ei]
+		switch e.Kind {
+		case "file", "test", "dir", "symbol":
+		default:
+			continue
+		}
+		if !nuKindAllowed(kinds, e.Kind) || e.Key == "" || e.Key[0] != t.Fold[0] {
+			continue
+		}
+		if fzDist(t.Fold, e.Key, lim) <= lim {
+			return true
+		}
+	}
+	return false
+}
+
 // residual: the words that are not fillers and that no rule or cue explained.
 func (m *nuModel) residual(toks []nuTok, used map[string]bool) []int {
 	var out []int
@@ -1160,11 +1404,17 @@ func (m *nuModel) residualCount(toks []nuTok, used map[string]bool) int {
 
 var nuToWords = map[string]bool{"para": true, "pra": true, "pro": true, "to": true, "por": true, "->": true, "=>": true, "em": true}
 
-// fill extracts the slots of def.
-func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool) (map[string]string, []string, string) {
+// fill extracts the slots of def. It also counts unfed — free words a
+// world-kind slot refused — so Parse can lower confidence instead of
+// inventing values. A refused word only counts when the slot needed it
+// (required, or a service/host kind — a unit is never a leftover noun)
+// and the word carries no concept of its own: "arquivo", "zip" and
+// "conteúdo" are phrasing, not failed names.
+func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool, w *nuWorld) (map[string]string, []string, string, int) {
 	slots := map[string]string{}
 	var missing []string
 	hint := ""
+	unfed := 0
 	for i := range toks {
 		switch {
 		case toks[i].has("test") && !used["test"]:
@@ -1187,96 +1437,135 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 		names = append(names, k)
 	}
 	sort.Strings(names)
-	for _, name := range names {
-		sd := def.Slots[name]
-		v := ""
-		switch sd.From {
-		case "rename_from", "rename_to":
-			v = nuRenamePart(toks, res, sd.From == "rename_to")
-		}
-		kinds := map[string]bool{}
-		for _, k := range sd.Kinds {
-			kinds[k] = true
-		}
-		if v == "" && kinds["message"] {
-			v = nuMessage(toks)
-		}
-		if v == "" {
-			// typed entity found in the text (exact first)
-			for _, exact := range []bool{true, false} {
-				for _, h := range hits {
-					if h.Exact != exact || taken[h.tok] || !nuKindAllowed(kinds, h.Kind) {
+	// Two passes: "from"-derived slots resolve first — the helpers mark their
+	// tokens taken, so generic fills can't steal them (".log" must reach ext
+	// before dir sees a name-shaped word; "10MB" must reach min_size before
+	// limit sees digits).
+	for _, helperPhase := range []bool{true, false} {
+		for _, name := range names {
+			sd := def.Slots[name]
+			if (sd.From != "") != helperPhase {
+				continue
+			}
+			v := ""
+			switch {
+			case sd.From == "rename_from" || sd.From == "rename_to":
+				v = nuRenamePart(toks, res, sd.From == "rename_to")
+			case strings.HasPrefix(sd.From, "find:"):
+				v = nuFindArg(toks, sd.From[5:], taken)
+			case strings.HasPrefix(sd.From, "perm:"):
+				v = nuPermArg(toks, sd.From[5:], taken)
+			case sd.From == "extract:pat":
+				v = nuExtractPat(toks)
+			case strings.HasPrefix(sd.From, "slice:"):
+				v = nuSliceArg(toks, sd.From[6:], taken)
+			}
+			// a "x:y" From is helper-or-nothing: the generic fallbacks would
+			// stuff leftovers into enum/flag slots (e.g. a bare "10" into tail)
+			derived := v == "" && strings.Contains(sd.From, ":")
+			kinds := map[string]bool{}
+			for _, k := range sd.Kinds {
+				kinds[k] = true
+			}
+			strict := nuWorldOnly(kinds)
+			countUnfed := sd.Required || nuSvcOnly(kinds)
+			if v == "" && kinds["message"] {
+				v = nuMessage(toks)
+			}
+			if v == "" && !derived {
+				// typed entity found in the text (exact first)
+				for _, exact := range []bool{true, false} {
+					for _, h := range hits {
+						if h.Exact != exact || taken[h.tok] || !nuKindAllowed(kinds, h.Kind) {
+							continue
+						}
+						v = h.Name
+						if h.Kind == "file" || h.Kind == "test" || h.Kind == "dir" {
+							v = toks[h.tok].Raw // keep what was typed: the method resolves it with context
+						}
+						taken[h.tok] = true
+						break
+					}
+					if v != "" {
+						break
+					}
+				}
+			}
+			if v == "" && !derived && (kinds["number"] || kinds["port"]) {
+				for i := range toks {
+					if nuIsNumber(toks[i].Fold) && !taken[i] {
+						v, taken[i] = toks[i].Fold, true
+						break
+					}
+				}
+			}
+			if v == "" && !derived {
+				// the words no rule explained, as typed
+				var parts []string
+				for _, i := range res {
+					if taken[i] {
 						continue
 					}
-					v = h.Name
-					if h.Kind == "file" || h.Kind == "test" || h.Kind == "dir" {
-						v = toks[h.tok].Raw // keep what was typed: the method resolves it with context
+					if strict {
+						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 || toks[i].Quoted {
+							continue // a number, an entity of another kind or a quoted literal is not a free name
+						}
+						if m.slotTokOK(kinds, &toks[i], w) {
+							parts = append(parts, toks[i].Raw)
+							taken[i] = true
+							break
+						}
+						if countUnfed && len(toks[i].Concs) == 0 {
+							unfed++
+						}
+						continue
 					}
-					taken[h.tok] = true
-					break
-				}
-				if v != "" {
-					break
-				}
-			}
-		}
-		if v == "" && (kinds["number"] || kinds["port"]) {
-			for i := range toks {
-				if nuIsNumber(toks[i].Fold) && !taken[i] {
-					v, taken[i] = toks[i].Fold, true
-					break
-				}
-			}
-		}
-		if v == "" {
-			// the words no rule explained, as typed
-			var parts []string
-			for _, i := range res {
-				if taken[i] {
-					continue
-				}
-				if toks[i].Quoted {
-					parts = []string{toks[i].Raw}
+					if toks[i].Quoted {
+						parts = []string{toks[i].Raw}
+						taken[i] = true
+						break
+					}
+					if nuIsNumber(toks[i].Fold) && !(kinds["number"] || kinds["text"]) {
+						continue
+					}
+					parts = append(parts, toks[i].Raw)
 					taken[i] = true
-					break
-				}
-				if nuIsNumber(toks[i].Fold) && !(kinds["number"] || kinds["text"]) {
-					continue
-				}
-				parts = append(parts, toks[i].Raw)
-				taken[i] = true
-				if !kinds["text"] || len(parts) >= 4 {
-					break
-				}
-			}
-			v = strings.Join(parts, " ")
-		}
-		if v == "" && sd.Required {
-			// a word whose concept no rule used ("instala o git": git)
-			for i := len(toks) - 1; i >= 0; i-- {
-				t := &toks[i]
-				if t.Filler || t.Slang || taken[i] {
-					continue
-				}
-				usedTok := false
-				for _, c := range t.Concs {
-					if used[c] {
-						usedTok = true
+					if !kinds["text"] || len(parts) >= 4 {
+						break
 					}
 				}
-				if !usedTok && len(t.Concs) > 0 && !nuAllCue(t, m) {
-					v, taken[i] = t.Raw, true
-					break
+				v = strings.Join(parts, " ")
+			}
+			if v == "" && sd.Required && !derived {
+				// a word whose concept no rule used ("instala o git": git)
+				for i := len(toks) - 1; i >= 0; i-- {
+					t := &toks[i]
+					if t.Filler || t.Slang || taken[i] {
+						continue
+					}
+					usedTok := false
+					for _, c := range t.Concs {
+						if used[c] {
+							usedTok = true
+						}
+					}
+					if !usedTok && len(t.Concs) > 0 && !nuAllCue(t, m) {
+						if strict && !m.slotTokOK(kinds, t, w) {
+							continue
+						}
+						v, taken[i] = t.Raw, true
+						break
+					}
 				}
 			}
-		}
-		if v != "" {
-			slots[name] = v
-		} else if sd.Required {
-			missing = append(missing, name)
+			if v != "" {
+				slots[name] = v
+			} else if sd.Required {
+				missing = append(missing, name)
+			}
 		}
 	}
-	return slots, missing, hint
+	return slots, missing, hint, unfed
 }
 
 func nuAllCue(t *nuTok, m *nuModel) bool {
@@ -1622,4 +1911,330 @@ func (a *acAuto) find(text string, fn func(pat, end int)) {
 			}
 		}
 	}
+}
+
+// nuFindArg derives file_find arguments straight from the tokens: type,
+// sort, mtime window and the empty flag live in concept words that a
+// residual slot never sees (like nuRenamePart does for names).
+func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "type":
+		dir, file := false, false
+		for _, t := range toks {
+			switch t.Fold {
+			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas":
+				dir = true
+			case "arquivo", "arquivos", "file", "files":
+				file = true
+			}
+		}
+		if dir == file {
+			return "" // both or neither: the script's "any" default applies
+		}
+		if dir {
+			return "dir"
+		}
+		return "file"
+	case "sort":
+		for i, t := range toks {
+			switch t.Fold {
+			case "maior", "maiores", "largest", "biggest", "larger", "bigger", "heaviest", "pesado", "pesada", "pesados", "pesadas", "menor", "menores", "smallest":
+				taken[i] = true
+				return "size"
+			case "newest", "latest", "oldest":
+				taken[i] = true
+				return "mtime"
+			case "mais":
+				if i+1 < len(toks) {
+					switch toks[i+1].Fold {
+					case "novo", "nova", "novos", "novas", "recente", "recentes", "velho", "velha", "antigo", "antiga":
+						taken[i], taken[i+1] = true, true
+						return "mtime"
+					}
+				}
+			}
+		}
+	case "newer", "older":
+		return nuFindWindow(toks, what == "newer", taken)
+	case "min_size", "max_size":
+		return nuFindSize(toks, what == "min_size", taken)
+	case "ext":
+		for i := range toks {
+			f := toks[i].Fold
+			if strings.HasPrefix(f, "*.") || (strings.HasPrefix(f, ".") && len(f) > 1) {
+				taken[i] = true
+				return strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
+			}
+			if nuExtWords[f] {
+				taken[i] = true
+				return f
+			}
+		}
+	case "empty":
+		for _, t := range toks {
+			switch t.Fold {
+			case "vazio", "vazia", "vazios", "vazias", "empty", "empties":
+				return "true"
+			}
+		}
+	}
+	return ""
+}
+
+// nuFindWindow turns "últimos 30 minutos" / "last 2 days" into minutes for
+// file_find's newer_min/older_min. The direction cue decides which slot
+// takes the value; without one neither does.
+func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
+	olderSeen, newerSeen := false, false
+	for _, u := range toks {
+		switch u.Fold {
+		case "older", "antigos", "antigo", "antiga", "velhos", "velho", "velha", "before", "antes", "ago", "atras", "atrás", "ha", "há":
+			olderSeen = true
+		case "ultimos", "últimos", "ultimas", "últimas", "last", "past", "within", "newer":
+			newerSeen = true
+		}
+	}
+	if newer != newerSeen || olderSeen == newerSeen {
+		return ""
+	}
+	for i, t := range toks {
+		if !nuIsNumber(t.Fold) || i+1 >= len(toks) {
+			continue
+		}
+		mult := 0
+		switch toks[i+1].Fold {
+		case "min", "mins", "minuto", "minutos", "minute", "minutes", "m":
+			mult = 1
+		case "h", "hora", "horas", "hour", "hours":
+			mult = 60
+		case "d", "dia", "dias", "day", "days":
+			mult = 1440
+		case "semana", "semanas", "week", "weeks", "w":
+			mult = 10080
+		}
+		if mult == 0 {
+			continue
+		}
+		n, err := strconv.Atoi(t.Fold)
+		if err == nil {
+			taken[i], taken[i+1] = true, true
+			return strconv.Itoa(n * mult)
+		}
+	}
+	return ""
+}
+
+var nuPermWords = map[string][]string{
+	"world_writable": {"world-writable", "writable", "escreviveis", "escrevível", "gravavel", "gravável", "gravaveis", "graváveis"},
+	"suid":           {"suid"},
+	"sgid":           {"sgid"},
+	"executable":     {"executavel", "executável", "executaveis", "executáveis", "executable", "executables", "rodavel", "rodável"},
+}
+
+func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
+	if what == "owner" {
+		return nuOwnerArg(toks, taken)
+	}
+	for _, t := range toks {
+		for _, w := range nuPermWords[what] {
+			if t.Fold == w {
+				return "true"
+			}
+		}
+	}
+	return ""
+}
+
+// nuOwnerArg takes the word after a possession cue — "do usuário matheus",
+// "owned by root", "files of user h". Without the cue, a loose word must
+// not become a user filter ("suid bit set" ≠ owner "set").
+func nuOwnerArg(toks []nuTok, taken map[int]bool) string {
+	for i, t := range toks {
+		cue := false
+		switch t.Fold {
+		case "usuario", "usuário", "usuarios", "usuários", "user", "users", "dono", "donos", "owner", "owners":
+			cue = true
+		case "by":
+			cue = i > 0 && toks[i-1].Fold == "owned"
+		}
+		if !cue {
+			continue
+		}
+		for j := i + 1; j < len(toks); j++ {
+			n := toks[j].Fold
+			if len(n) < 2 || len(toks[j].Concs) > 0 || len(toks[j].Tags) > 0 {
+				continue
+			}
+			taken[i], taken[j] = true, true
+			return n
+		}
+	}
+	return ""
+}
+
+var nuSizeUnit = map[string]int64{
+	"b": 1, "byte": 1, "bytes": 1,
+	"k": 1 << 10, "kb": 1 << 10, "kib": 1 << 10,
+	"m": 1 << 20, "mb": 1 << 20, "mib": 1 << 20,
+	"g": 1 << 30, "gb": 1 << 30, "gib": 1 << 30,
+}
+
+var nuSizeRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)(b|kb|mb|gb|kib|mib|gib|k|m|g|bytes?)?$`)
+
+// nuFindSize turns "maiores que 10MB" / "larger than 100k" into bytes for
+// min_size/max_size; the comparative cue picks the direction, so plain
+// "maiores arquivos" stays a sort, not a filter.
+func nuFindSize(toks []nuTok, min bool, taken map[int]bool) string {
+	minSeen, maxSeen := false, false
+	for _, t := range toks {
+		switch t.Fold {
+		case "maior", "maiores", "larger", "bigger", "over", "above", "acima", "exceeding", "least", "more", "minimo", "mínimo", "minimum":
+			minSeen = true
+		case "menor", "menores", "smaller", "under", "below", "less", "ate", "até", "abaixo", "maximo", "máximo", "maximum":
+			maxSeen = true
+		}
+	}
+	if min != minSeen || minSeen == maxSeen {
+		return ""
+	}
+	for i, t := range toks {
+		m := nuSizeRe.FindStringSubmatch(t.Fold)
+		if m == nil {
+			continue
+		}
+		unit := m[2]
+		if unit == "" {
+			if i+1 >= len(toks) {
+				continue
+			}
+			u := toks[i+1].Fold
+			if _, ok := nuSizeUnit[u]; !ok {
+				continue
+			}
+			unit = u
+			taken[i+1] = true
+		}
+		n, err := strconv.ParseFloat(m[1], 64)
+		if err != nil {
+			continue
+		}
+		taken[i] = true
+		return strconv.FormatInt(int64(n*float64(nuSizeUnit[unit])), 10)
+	}
+	return ""
+}
+
+// nuExtractPat maps the word the user used ("ips", "emails") to the
+// pattern enum the script validates. First match wins; ipv6 before ip.
+var nuExtractPats = []struct {
+	words []string
+	pat   string
+}{
+	{[]string{"ipv6"}, "ipv6"},
+	{[]string{"ips", "ip", "ipv4", "enderecos", "endereços"}, "ipv4"},
+	{[]string{"emails", "email", "e-mail", "e-mails", "mail", "mails"}, "email"},
+	{[]string{"urls", "url", "links", "link"}, "url"},
+	{[]string{"datas", "dates", "date", "data"}, "date"},
+	{[]string{"uuids", "uuid"}, "uuid"},
+	{[]string{"hex", "hexadecimal", "hexes"}, "hex"},
+	{[]string{"numeros", "números", "numbers", "number", "numero", "número"}, "number"},
+}
+
+func nuExtractPat(toks []nuTok) string {
+	for _, e := range nuExtractPats {
+		for _, t := range toks {
+			for _, w := range e.words {
+				if t.Fold == w {
+					return e.pat
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// nuSliceArg pulls line_slice numbers: "últimas 10" → tail=10,
+// "primeiras 20" → start=1,end=20, "linhas 5 a 20" → start=5,end=20,
+// "linha 42" → start=end=42.
+func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
+	numAfter := func(i int) string {
+		for j := i + 1; j < len(toks) && j < i+4; j++ {
+			if nuIsNumber(toks[j].Fold) {
+				taken[j] = true
+				return toks[j].Fold
+			}
+		}
+		return ""
+	}
+	var nums []string
+	var numIdx []int
+	for i, t := range toks {
+		switch t.Fold {
+		case "ultimas", "últimas", "ultimos", "últimos", "last", "tail", "finais", "final":
+			if what == "tail" {
+				if n := numAfter(i); n != "" {
+					return n
+				}
+			}
+		case "primeiras", "primeiros", "first", "head", "iniciais":
+			if what == "start" {
+				return "1"
+			}
+			if what == "end" {
+				if n := numAfter(i); n != "" {
+					return n
+				}
+			}
+		case "linha", "linhas", "line", "lines":
+			for j := i + 1; j < len(toks); j++ {
+				f := toks[j].Fold
+				if nuIsNumber(f) {
+					nums = append(nums, f)
+					numIdx = append(numIdx, j)
+					continue
+				}
+				if f == "a" || f == "to" || f == "ate" || f == "até" || f == "-" || f == "de" || f == "of" {
+					continue
+				}
+				break
+			}
+		}
+	}
+	if len(nums) == 0 {
+		return ""
+	}
+	if what == "start" {
+		taken[numIdx[0]] = true
+		return nums[0]
+	}
+	if what == "end" {
+		if len(nums) > 1 {
+			taken[numIdx[1]] = true
+			return nums[1]
+		}
+		taken[numIdx[0]] = true
+		return nums[0]
+	}
+	return ""
+}
+
+// nuExtWords are plain words that name an extension ("find log files").
+var nuExtWords = map[string]bool{
+	"log": true, "txt": true, "md": true, "py": true, "go": true, "js": true,
+	"ts": true, "json": true, "yaml": true, "yml": true, "toml": true,
+	"conf": true, "cfg": true, "ini": true, "sh": true, "c": true, "h": true,
+	"cpp": true, "rs": true, "rb": true, "java": true, "csv": true, "xml": true,
+	"html": true, "css": true, "sql": true, "db": true, "sqlite": true,
+	"zip": true, "tar": true, "gz": true, "pdf": true, "png": true, "jpg": true,
+	"jpeg": true, "gif": true, "mp3": true, "mp4": true, "wav": true,
+}
+
+// nuArchiveName reports whether a token names an archive by extension.
+func nuArchiveName(f string) bool {
+	for _, e := range []string{".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".whl", ".jar", ".war", ".rar", ".7z", ".gz", ".bz2", ".xz"} {
+		if strings.HasSuffix(f, e) {
+			return true
+		}
+	}
+	return false
 }

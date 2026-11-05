@@ -1,0 +1,53 @@
+{
+ "methods": [
+  {
+   "name": "net_route.script",
+   "intent": "net_route",
+   "priority": 10,
+   "doc": "script:net_route: tabela de rotas e gateway padrão",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:net_route",
+     "in": {},
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 500
+  },
+  {
+   "name": "net_route.no_python",
+   "intent": "net_route",
+   "priority": 1,
+   "doc": "sem python3 o script net_route não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script net_route, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

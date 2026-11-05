@@ -79,6 +79,18 @@
    3000,
    5432,
    8080
+  ],
+  "dirs": [
+   "src",
+   "docs",
+   "dist",
+   "out",
+   "tmp",
+   "vendor",
+   "web",
+   "images",
+   "backup",
+   "data"
   ]
  },
  "intents": [
@@ -89,6 +101,66 @@
     {
      "all": [
       "open"
+     ],
+     "none": [
+      "blame",
+      "logs",
+      "status",
+      "port",
+      "ifaces",
+      "ipaddr",
+      "envvars",
+      "history",
+      "summary",
+      "mutate",
+      "findattr",
+      "recent",
+      "download",
+      "extract",
+      "enable",
+      "recover",
+      "perf",
+      "diff",
+      "git",
+      "net",
+      "branch",
+      "files",
+      "container",
+      "@container",
+      "host",
+      "@host",
+      "memory",
+      "disk",
+      "cpu",
+      "process",
+      "dep",
+      "version",
+      "todo",
+      "archive",
+      "duplicate",
+      "license",
+      "snapshot",
+      "conflict",
+      "cron",
+      "usage",
+      "listen",
+      "cochange",
+      "fix",
+      "error",
+      "find",
+      "explain",
+      "symnoun",
+      "message",
+      "stale",
+      "jazz",
+      "online",
+      "sysnoun",
+      "tag",
+      "context",
+      "who",
+      "lineselect",
+      "routes",
+      "user"
      ]
     },
     {
@@ -111,7 +183,18 @@
       "format",
       "lint",
       "test",
-      "logs"
+      "logs",
+      "blame",
+      "mutate",
+      "download",
+      "extract",
+      "enable",
+      "recover",
+      "ipaddr",
+      "envvars",
+      "findattr",
+      "tag",
+      "perf"
      ]
     }
    ],
@@ -207,6 +290,16 @@
     {
      "all": [
       "find"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "scope"
      ]
     }
    ],
@@ -247,6 +340,9 @@
      "all": [
       "run",
       "test"
+     ],
+     "none": [
+      "mutate"
      ]
     },
     {
@@ -267,7 +363,9 @@
       "fix",
       "delete",
       "error",
-      "rename"
+      "rename",
+      "mutate",
+      "port"
      ]
     }
    ],
@@ -324,7 +422,11 @@
       "build"
      ],
      "none": [
+      "@file",
       "error",
+      "execperm",
+      "filenoun",
+      "findattr",
       "fix"
      ]
     }
@@ -427,7 +529,20 @@
       "net",
       "online",
       "branch",
-      "@tool"
+      "@tool",
+      "sysnoun",
+      "tag",
+      "ipaddr",
+      "pubnet",
+      "user",
+      "envvars",
+      "mutate",
+      "memory",
+      "disk",
+      "cpu",
+      "process",
+      "ifaces",
+      "summary"
      ]
     },
     {
@@ -438,16 +553,21 @@
       "open"
      ],
      "none": [
-      "commit",
-      "push",
-      "pull",
-      "stash",
-      "history",
-      "diff",
+      "blame",
       "branch",
       "checkout",
-      "undo",
+      "commit",
+      "diff",
+      "find",
+      "history",
       "install",
+      "mutate",
+      "pull",
+      "push",
+      "stash",
+      "sysnoun",
+      "tag",
+      "undo",
       "update"
      ]
     }
@@ -486,6 +606,13 @@
     {
      "all": [
       "diff"
+     ],
+     "none": [
+      "recover",
+      "rename",
+      "checkout",
+      "findattr",
+      "sort"
      ]
     }
    ],
@@ -663,6 +790,12 @@
    "rules": [
     {
      "all": [
+      "create",
+      "branch"
+     ]
+    },
+    {
+     "all": [
       "branch"
      ],
      "none": [
@@ -835,7 +968,15 @@
      "none": [
       "branch",
       "commit",
-      "container"
+      "container",
+      "recent",
+      "download",
+      "recover",
+      "mutate",
+      "ifaces",
+      "net",
+      "envvars",
+      "findattr"
      ]
     }
    ],
@@ -879,7 +1020,11 @@
      ],
      "none": [
       "container",
-      "branch"
+      "branch",
+      "recover",
+      "service",
+      "@service",
+      "mutate"
      ]
     }
    ],
@@ -913,6 +1058,10 @@
     {
      "all": [
       "fix"
+     ],
+     "none": [
+      "sysnoun",
+      "service"
      ]
     },
     {
@@ -920,10 +1069,11 @@
       "error"
      ],
      "none": [
-      "run",
       "find",
       "logs",
-      "open"
+      "open",
+      "run",
+      "service"
      ]
     }
    ],
@@ -1087,15 +1237,38 @@
       "env"
      ],
      "none": [
-      "list",
+      "connect",
+      "create",
+      "delete",
+      "download",
+      "extract",
+      "files",
+      "findattr",
       "host",
-      "connect"
+      "install",
+      "list",
+      "logs",
+      "mutate",
+      "net",
+      "process",
+      "recover",
+      "rename",
+      "routes",
+      "service",
+      "envvars"
      ]
     },
     {
      "all": [
       "status",
       "env"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "find",
+      "findattr",
+      "mutate"
      ]
     },
     {
@@ -1107,6 +1280,32 @@
       "status",
       "version",
       "list"
+     ],
+     "none": [
+      "mutate",
+      "files",
+      "lineselect"
+     ]
+    },
+    {
+     "all": [
+      "sysnoun"
+     ],
+     "any": [
+      "version",
+      "status",
+      "env",
+      "cpu",
+      "net"
+     ],
+     "none": [
+      "error",
+      "files",
+      "find",
+      "logs",
+      "mutate",
+      "service",
+      "version"
      ]
     }
    ],
@@ -1152,13 +1351,22 @@
      ],
      "none": [
       "update",
-      "jazz"
+      "jazz",
+      "sysnoun"
      ]
     },
     {
      "all": [
       "have",
       "@tool"
+     ],
+     "none": [
+      "cpu",
+      "env",
+      "files",
+      "find",
+      "findattr",
+      "status"
      ]
     },
     {
@@ -1172,22 +1380,28 @@
       "have"
      ],
      "none": [
-      "net",
-      "memory",
-      "disk",
+      "@host",
+      "@service",
       "container",
+      "cpu",
+      "dep",
+      "disk",
+      "env",
+      "error",
+      "files",
+      "help",
+      "host",
+      "install",
       "list",
+      "memory",
+      "mutate",
+      "net",
       "port",
       "process",
       "service",
-      "host",
-      "files",
-      "dep",
+      "sysnoun",
       "test",
-      "install",
-      "update",
-      "error",
-      "help"
+      "update"
      ]
     }
    ],
@@ -1367,7 +1581,12 @@
      ],
      "none": [
       "list",
-      "net"
+      "net",
+      "container",
+      "@container",
+      "mutate",
+      "context",
+      "enable"
      ]
     }
    ],
@@ -1487,19 +1706,16 @@
     },
     {
      "all": [
-      "list",
-      "env"
-     ]
-    },
-    {
-     "all": [
       "host"
      ],
      "none": [
       "connect",
       "online",
       "status",
-      "@host"
+      "@host",
+      "user",
+      "process",
+      "mutate"
      ]
     }
    ],
@@ -1548,7 +1764,11 @@
       "stop",
       "restart",
       "logs",
-      "container"
+      "container",
+      "enable",
+      "mutate",
+      "error",
+      "sysnoun"
      ]
     }
    ],
@@ -1589,7 +1809,11 @@
       "start",
       "service|@service"
      ],
-     "w": 2
+     "w": 2,
+     "none": [
+      "enable",
+      "mutate"
+     ]
     },
     {
      "all": [
@@ -1599,7 +1823,9 @@
       "container",
       "@container",
       "remote",
-      "push"
+      "push",
+      "enable",
+      "mutate"
      ]
     }
    ],
@@ -1705,7 +1931,14 @@
       "logs"
      ],
      "none": [
-      "history"
+      "history",
+      "find",
+      "mutate",
+      "create",
+      "extract",
+      "sysnoun",
+      "count",
+      "extractkind"
      ]
     }
    ],
@@ -1744,6 +1977,10 @@
      "all": [
       "start",
       "container|@container"
+     ],
+     "none": [
+      "enable",
+      "mutate"
      ]
     },
     {
@@ -1753,7 +1990,9 @@
      ],
      "none": [
       "list",
-      "running"
+      "running",
+      "enable",
+      "mutate"
      ]
     }
    ],
@@ -1830,12 +2069,20 @@
      "all": [
       "stop",
       "container|@container"
+     ],
+     "none": [
+      "recover",
+      "mutate"
      ]
     },
     {
      "all": [
       "delete",
       "container|@container"
+     ],
+     "none": [
+      "recover",
+      "mutate"
      ]
     }
    ],
@@ -1870,7 +2117,13 @@
      ],
      "none": [
       "who",
-      "kill"
+      "kill",
+      "responds",
+      "remote",
+      "host",
+      "@host",
+      "mutate",
+      "ifaces"
      ]
     },
     {
@@ -1878,7 +2131,12 @@
       "listen"
      ],
      "none": [
-      "who"
+      "who",
+      "responds",
+      "remote",
+      "host",
+      "@host",
+      "mutate"
      ]
     }
    ],
@@ -1992,7 +2250,8 @@
       "process"
      ],
      "none": [
-      "kill"
+      "kill",
+      "user"
      ]
     }
    ],
@@ -2133,7 +2392,16 @@
       "fix",
       "create",
       "delete",
-      "@file"
+      "@file",
+      "files",
+      "mutate",
+      "findattr",
+      "envvars",
+      "ipaddr",
+      "duplicate",
+      "user",
+      "sysnoun",
+      "tag"
      ]
     }
    ],
@@ -2165,7 +2433,23 @@
       "files"
      ],
      "none": [
-      "diff"
+      "diff",
+      "mutate",
+      "extract",
+      "findattr",
+      "download",
+      "blame",
+      "ipaddr",
+      "envvars",
+      "enable",
+      "recover",
+      "install",
+      "perf",
+      "status",
+      "scope",
+      "recent",
+      "duplicate",
+      "sort"
      ]
     },
     {
@@ -2178,7 +2462,23 @@
      "none": [
       "delete",
       "create",
-      "diff"
+      "diff",
+      "mutate",
+      "extract",
+      "findattr",
+      "download",
+      "blame",
+      "ipaddr",
+      "envvars",
+      "enable",
+      "recover",
+      "install",
+      "perf",
+      "status",
+      "scope",
+      "recent",
+      "duplicate",
+      "sort"
      ]
     }
    ],
@@ -2213,6 +2513,11 @@
     {
      "all": [
       "help"
+     ],
+     "none": [
+      "@tool",
+      "@service",
+      "mutate"
      ]
     }
    ],
@@ -2778,7 +3083,10 @@
      ],
      "none": [
       "delete",
-      "create"
+      "create",
+      "mutate",
+      "download",
+      "content"
      ]
     }
    ],
@@ -2867,7 +3175,7 @@
    "rules": [
     {
      "all": [
-      "usage",
+      "usage|callers",
       "who"
      ],
      "none": [
@@ -2879,12 +3187,15 @@
       "service",
       "@number",
       "listen",
-      "process"
+      "process",
+      "filenoun",
+      "files",
+      "@file"
      ]
     },
     {
      "all": [
-      "usage",
+      "usage|callers",
       "find"
      ],
      "none": [
@@ -2892,12 +3203,15 @@
       "kill",
       "@number",
       "listen",
-      "process"
+      "process",
+      "filenoun",
+      "files",
+      "@file"
      ]
     },
     {
      "all": [
-      "usage",
+      "usage|callers",
       "symnoun"
      ],
      "none": [
@@ -2905,12 +3219,15 @@
       "kill",
       "@number",
       "listen",
-      "process"
+      "process",
+      "filenoun",
+      "files",
+      "@file"
      ]
     },
     {
      "all": [
-      "usage",
+      "usage|callers",
       "@symbol"
      ],
      "none": [
@@ -2918,7 +3235,10 @@
       "kill",
       "@number",
       "listen",
-      "process"
+      "process",
+      "filenoun",
+      "files",
+      "@file"
      ]
     }
    ],
@@ -2966,7 +3286,9 @@
      "none": [
       "kill",
       "install",
-      "test"
+      "test",
+      "files",
+      "scope"
      ]
     },
     {
@@ -2976,7 +3298,9 @@
      "none": [
       "kill",
       "install",
-      "test"
+      "test",
+      "files",
+      "scope"
      ]
     }
    ],
@@ -3009,7 +3333,10 @@
      "none": [
       "delete",
       "create",
-      "commit"
+      "commit",
+      "recover",
+      "logs",
+      "scope"
      ]
     },
     {
@@ -3020,7 +3347,8 @@
      "none": [
       "git",
       "commit",
-      "history"
+      "history",
+      "recover"
      ]
     }
    ],
@@ -3050,10 +3378,28 @@
       "archive"
      ],
      "none": [
+      "compress",
       "create",
       "delete",
-      "install"
+      "download",
+      "install",
+      "mutate"
      ]
+    },
+    {
+     "all": [
+      "archive",
+      "@file|filenoun|open|content"
+     ],
+     "none": [
+      "compress",
+      "create",
+      "delete",
+      "download",
+      "install",
+      "mutate"
+     ],
+     "w": 0
     }
    ],
    "slots": {
@@ -3201,7 +3547,14 @@
      "none": [
       "test",
       "build",
-      "fix"
+      "fix",
+      "find",
+      "filenoun",
+      "files",
+      "@file",
+      "delete",
+      "mutate",
+      "create"
      ]
     },
     {
@@ -3213,7 +3566,14 @@
       "test",
       "build",
       "fix",
-      "version"
+      "version",
+      "find",
+      "filenoun",
+      "files",
+      "@file",
+      "delete",
+      "mutate",
+      "create"
      ]
     }
    ],
@@ -3246,7 +3606,37 @@
      "none": [
       "kill",
       "port",
-      "connect"
+      "connect",
+      "extract",
+      "@file",
+      "pubnet",
+      "mutate",
+      "enable",
+      "download",
+      "create",
+      "findattr",
+      "filenoun"
+     ]
+    },
+    {
+     "all": [
+      "ipaddr"
+     ],
+     "none": [
+      "extract",
+      "@file",
+      "pubnet",
+      "remote",
+      "connect",
+      "service",
+      "port",
+      "kill",
+      "files",
+      "find",
+      "download",
+      "mutate",
+      "enable",
+      "filenoun"
      ]
     }
    ],
@@ -3279,6 +3669,17 @@
       "create",
       "delete"
      ]
+    },
+    {
+     "all": [
+      "count",
+      "lineselect"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ],
+     "w": 5
     }
    ],
    "slots": {
@@ -3301,7 +3702,10 @@
     "agora contagem de palavras README.md",
     "preciso: conta palavras README.md",
     "preciso: word count README.md",
-    "preciso: contagem de palavras README.md"
+    "preciso: contagem de palavras README.md",
+    "count the lines in app.go",
+    "quantas linhas tem o log",
+    "how many lines in main.py"
    ],
    "negatives": [
     "apaga README.md",
@@ -3675,6 +4079,724 @@
    "negatives": [
     "apaga README.md",
     "cria README.md"
+   ]
+  },
+  {
+   "name": "file_find",
+   "desc": "busca arquivos/pastas por nome, extensão, tipo, tamanho, data ou vazio",
+   "rules": [
+    {
+     "all": [
+      "findattr"
+     ],
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "install",
+      "between",
+      "download",
+      "net",
+      "remote",
+      "user"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "find",
+      "nameattr"
+     ],
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "content",
+      "download",
+      "net",
+      "remote",
+      "user"
+     ],
+     "w": 0
+    },
+    {
+     "all": [
+      "newest"
+     ],
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "download",
+      "net",
+      "remote",
+      "user"
+     ],
+     "w": 15
+    }
+   ],
+   "slots": {
+    "name": {
+     "kinds": [
+      "text"
+     ]
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "type": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:type"
+    },
+    "sort": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:sort"
+    },
+    "newer": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:newer"
+    },
+    "older": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:older"
+    },
+    "empty": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:empty"
+    },
+    "limit": {
+     "kinds": [
+      "number"
+     ]
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ]
+    },
+    "min_size": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:min_size"
+    },
+    "max_size": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:max_size"
+    }
+   },
+   "examples": [
+    "procura arquivos vazios na pasta",
+    "find empty files",
+    "arquivos maiores da pasta logs",
+    "find the newest file in logs",
+    "encontra arquivos chamados config",
+    "find files named readme",
+    "achar pastas vazias",
+    "empty directories"
+   ],
+   "negatives": [
+    "quem editou este arquivo",
+    "extrai os emails do log",
+    "quantas linhas tem o arquivo",
+    "mostra o conteúdo do arquivo"
+   ]
+  },
+  {
+   "name": "perm_find",
+   "desc": "busca arquivos por permissão, dono, suid/sgid ou executável",
+   "rules": [
+    {
+     "all": [
+      "permattr"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "service",
+      "install",
+      "extract",
+      "enable"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "execperm"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "build",
+      "service",
+      "install",
+      "run",
+      "enable"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "user",
+      "files|filenoun|permattr"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "service",
+      "install",
+      "enable",
+      "blame"
+     ],
+     "w": 5
+    }
+   ],
+   "slots": {
+    "owner": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:owner"
+    },
+    "mode": {
+     "kinds": [
+      "number"
+     ]
+    },
+    "ww": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:world_writable"
+    },
+    "suid": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:suid"
+    },
+    "sgid": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:sgid"
+    },
+    "x": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:executable"
+    },
+    "type": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:type"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ]
+    }
+   },
+   "examples": [
+    "arquivos com permissão 777",
+    "world-writable files",
+    "find suid binaries",
+    "arquivos executáveis",
+    "files owned by root",
+    "arquivos do usuário matheus",
+    "writable directories"
+   ],
+   "negatives": [
+    "torna o script executável",
+    "muda a permissão do arquivo",
+    "chmod no script"
+   ]
+  },
+  {
+   "name": "text_count",
+   "desc": "conta ocorrências de um padrão literal ou regex em arquivo/texto",
+   "rules": [
+    {
+     "all": [
+      "count",
+      "logs|filenoun|@file|content"
+     ],
+     "none": [
+      "lineselect",
+      "delete",
+      "create",
+      "mutate",
+      "sysnoun",
+      "envvars"
+     ],
+     "w": 0
+    },
+    {
+     "all": [
+      "count"
+     ],
+     "none": [
+      "lineselect",
+      "envvars",
+      "sysnoun",
+      "service",
+      "delete",
+      "create",
+      "mutate",
+      "install"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "file": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    },
+    "pattern": {
+     "kinds": [
+      "text"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "quantas vezes aparece 'erro' no log",
+    "how often does 'timeout' appear in app.log",
+    "count occurrences of TODO in main.go",
+    "número de vezes que 'falha' aparece no syslog"
+   ],
+   "negatives": [
+    "quantas linhas tem o arquivo",
+    "count the lines",
+    "mostra o log"
+   ]
+  },
+  {
+   "name": "text_extract",
+   "desc": "extrai padrões (ips, emails, urls, datas, números, hex, uuid) de arquivo/texto",
+   "rules": [
+    {
+     "all": [
+      "extract",
+      "extractkind|ipaddr"
+     ],
+     "none": [
+      "archive",
+      "delete",
+      "create",
+      "compress",
+      "mutate",
+      "install"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "pattern": {
+     "kinds": [
+      "text"
+     ],
+     "required": true,
+     "from": "extract:pat"
+    },
+    "file": {
+     "kinds": [
+      "file"
+     ]
+    }
+   },
+   "examples": [
+    "extrai os ips do log",
+    "extract all emails from mbox.txt",
+    "extrai as urls do arquivo",
+    "pull out the dates from report.txt",
+    "extrai os números do texto"
+   ],
+   "negatives": [
+    "extrai o arquivo zip",
+    "descompacta o tar.gz",
+    "mostra o conteúdo"
+   ]
+  },
+  {
+   "name": "line_slice",
+   "desc": "fatia de linhas: primeiras/últimas N ou intervalo de um arquivo",
+   "rules": [
+    {
+     "all": [
+      "lineselect"
+     ],
+     "none": [
+      "count",
+      "delete",
+      "create",
+      "mutate",
+      "duplicate",
+      "envvars",
+      "commit",
+      "git",
+      "history",
+      "recent",
+      "build",
+      "test",
+      "status",
+      "sysnoun",
+      "scope",
+      "env",
+      "diff",
+      "undo",
+      "blame",
+      "service",
+      "symnoun",
+      "@symbol",
+      "project",
+      "cpu"
+     ],
+     "w": 10
+    }
+   ],
+   "slots": {
+    "file": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    },
+    "start": {
+     "kinds": [
+      "number"
+     ],
+     "from": "slice:start"
+    },
+    "end": {
+     "kinds": [
+      "number"
+     ],
+     "from": "slice:end"
+    },
+    "tail": {
+     "kinds": [
+      "number"
+     ],
+     "from": "slice:tail"
+    }
+   },
+   "examples": [
+    "últimas 10 linhas do app.log",
+    "primeiras 20 linhas do arquivo",
+    "lines 5 to 20 of main.go",
+    "tail 15 lines of syslog",
+    "mostra as linhas 30 a 40 do script"
+   ],
+   "negatives": [
+    "quantas linhas tem o arquivo",
+    "count lines in x",
+    "abre o arquivo"
+   ]
+  },
+  {
+   "name": "file_users",
+   "desc": "processos que estão com um arquivo/diretório aberto",
+   "rules": [
+    {
+     "all": [
+      "who|usage",
+      "filenoun|files|@file"
+     ],
+     "none": [
+      "symnoun",
+      "@symbol",
+      "port",
+      "kill",
+      "process",
+      "service",
+      "install",
+      "callers",
+      "blame",
+      "user",
+      "perf",
+      "cpu",
+      "env",
+      "lineselect"
+     ],
+     "w": 0
+    },
+    {
+     "all": [
+      "who|usage",
+      "open|have"
+     ],
+     "none": [
+      "symnoun",
+      "@symbol",
+      "port",
+      "kill",
+      "service",
+      "install",
+      "callers",
+      "blame",
+      "user",
+      "perf",
+      "cpu",
+      "env",
+      "lineselect"
+     ],
+     "w": 5
+    },
+    {
+     "all": [
+      "process",
+      "have|open",
+      "files|filenoun|@dir|@file"
+     ],
+     "none": [
+      "blame",
+      "symnoun",
+      "@symbol",
+      "port",
+      "kill",
+      "install",
+      "callers",
+      "user",
+      "perf",
+      "cpu",
+      "env",
+      "lineselect"
+     ],
+     "w": 5
+    }
+   ],
+   "slots": {
+    "path": {
+     "kinds": [
+      "file",
+      "dir"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "quem está usando o arquivo db.sqlite",
+    "who has app.log open",
+    "que processo segura o diretório",
+    "what is using the file",
+    "quem abriu o arquivo"
+   ],
+   "negatives": [
+    "quem usa a função ParseArgs",
+    "who calls main",
+    "porta 8080 em uso"
+   ]
+  },
+  {
+   "name": "net_route",
+   "desc": "tabela de rotas e gateway padrão",
+   "rules": [
+    {
+     "all": [
+      "routes"
+     ],
+     "none": [
+      "mutate",
+      "create",
+      "delete",
+      "connect",
+      "install",
+      "service",
+      "perf",
+      "find",
+      "ipaddr"
+     ],
+     "w": 10
+    }
+   ],
+   "slots": {},
+   "examples": [
+    "mostra a tabela de rotas",
+    "show the routing table",
+    "qual o gateway padrão",
+    "default route",
+    "rotas do sistema"
+   ],
+   "negatives": [
+    "ip da máquina",
+    "mostra as interfaces",
+    "status da rede"
+   ]
+  },
+  {
+   "name": "file_dupes",
+   "desc": "arquivos duplicados por conteúdo num diretório",
+   "rules": [
+    {
+     "all": [
+      "duplicate",
+      "files|filenoun|@dir"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "symnoun",
+      "@symbol",
+      "project"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "dir": {
+     "kinds": [
+      "dir"
+     ]
+    }
+   },
+   "examples": [
+    "arquivos duplicados na pasta",
+    "find duplicate files",
+    "duplicatas no diretório downloads",
+    "which files are duplicated"
+   ],
+   "negatives": [
+    "código duplicado",
+    "funções repetidas",
+    "copia o arquivo"
+   ]
+  },
+  {
+   "name": "env_get",
+   "desc": "valor de variáveis de ambiente",
+   "rules": [
+    {
+     "all": [
+      "envvars"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "mutate",
+      "dotenv",
+      "install",
+      "service"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "envvars",
+      "keynoun"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "mutate",
+      "dotenv",
+      "install",
+      "service"
+     ],
+     "w": 5
+    }
+   ],
+   "slots": {
+    "name": {
+     "kinds": [
+      "text"
+     ]
+    }
+   },
+   "examples": [
+    "mostra as variáveis de ambiente",
+    "get the PATH variable",
+    "valor da variável HOME",
+    "show environment variables",
+    "qual o valor de GOPATH"
+   ],
+   "negatives": [
+    "status do sistema",
+    "cria uma variável",
+    "mostra o .env"
+   ]
+  },
+  {
+   "name": "dir_diff",
+   "desc": "diferença de conteúdo entre dois diretórios",
+   "rules": [
+    {
+     "all": [
+      "diff",
+      "between"
+     ],
+     "none": [
+      "branch",
+      "commit",
+      "recover",
+      "rename",
+      "filenoun",
+      "@file",
+      "create",
+      "delete",
+      "dotenv",
+      "envfile"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "a": {
+     "kinds": [
+      "dir"
+     ],
+     "required": true
+    },
+    "b": {
+     "kinds": [
+      "dir"
+     ],
+     "required": true
+    }
+   },
+   "examples": [
+    "diferença entre a pasta a e a pasta b",
+    "diff between dir1 and dir2",
+    "compara os diretórios",
+    "compare dir a vs dir b"
+   ],
+   "negatives": [
+    "o que mudou nos arquivos",
+    "diff do arquivo",
+    "diferença entre branches"
    ]
   }
  ]

@@ -1,0 +1,55 @@
+{
+ "methods": [
+  {
+   "name": "env_get.script",
+   "intent": "env_get",
+   "priority": 10,
+   "doc": "script:env_get: valor de variáveis de ambiente",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:env_get",
+     "in": {
+      "name": "$slot.name"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 300
+  },
+  {
+   "name": "env_get.no_python",
+   "intent": "env_get",
+   "priority": 1,
+   "doc": "sem python3 o script env_get não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script env_get, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

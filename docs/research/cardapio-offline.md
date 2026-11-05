@@ -75,6 +75,23 @@ Entrada limitada a 256 KiB, com `truncated:true` quando há corte. JSON e patche
 incompletos são recusados. Caminhos resolvidos (inclusive symlinks) ficam na raiz;
 saídas incluem `data.text`, dados estruturados e `data.truncated`.
 
+## v5 — finders e inspeção (10; assets forjados, ligação com o mantenedor)
+file_find (nome/ext/tamanho/mtime/tipo/vazio) · text_extract (ipv4/email/url/
+data/número/hex/uuid ou regex) · line_slice (head/tail/faixa de linhas) ·
+file_dupes (arquivos idênticos por sha256; distinto de dup_code, que acha
+trechos de código parecidos) · perm_find (modo octal, suid/sgid,
+world-writable, executável, dono) · env_get (variáveis de ambiente; nomes com
+cara de segredo nunca mostram valor) · file_users (quem segura path aberto via
+/proc/*/fd, path exato resolvido) · net_route (tabela de rotas v4/v6 do
+/proc/net/route*) · text_count (ocorrências de literal/regex por linha) ·
+dir_diff (duas árvores: só-em-a, só-em-b, conteúdo divergente — a metade de
+leitura do rsync --dry-run).
+
+Alvo escolhido pela medição `docs/research/coverage-v5.md`: as duas maiores
+classes de miss do corpus (find de arquivos, processamento de texto) mais os
+falsos matches que um oráculo certo desarma (dup de arquivo, permissão,
+variável de ambiente, rota, "quem tem o arquivo aberto").
+
 ## Ordem e portão
 Uma onda por vez: 4 agentes × 2-3 scripts → revisão do maestro (linha a linha) →
 roster `scShipped` em scripts_test.go → `py_compile` + testes + `eval offline` (75/75)

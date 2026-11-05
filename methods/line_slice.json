@@ -1,0 +1,58 @@
+{
+ "methods": [
+  {
+   "name": "line_slice.script",
+   "intent": "line_slice",
+   "priority": 10,
+   "doc": "script:line_slice: primeiras/últimas N linhas ou intervalo",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:line_slice",
+     "in": {
+      "file": "$slot.file",
+      "start": "$slot.start",
+      "end": "$slot.end",
+      "tail": "$slot.tail"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 500
+  },
+  {
+   "name": "line_slice.no_python",
+   "intent": "line_slice",
+   "priority": 1,
+   "doc": "sem python3 o script line_slice não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script line_slice, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

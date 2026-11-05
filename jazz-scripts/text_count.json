@@ -1,0 +1,13 @@
+{"name": "text_count", "version": 1, "run": "python3", "effect": "read",
+ "description": "Count occurrences of a literal string or regex in a file or text; matching lines and densest lines",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "file to scan, relative to the project root"},
+     "text": {"type": "string", "description": "inline text to scan (alternative to file)"},
+     "pattern": {"type": "string", "description": "text to count (max 512 chars)"},
+     "regex": {"type": "boolean", "description": "treat pattern as a regex (default false = literal)"},
+     "ignore_case": {"type": "boolean", "description": "case-insensitive matching (default false)"}}},
+ "output": {"data": {
+   "count": "int", "lines_matched": "int", "lines_scanned": "int",
+   "top_lines": [{"line": "int", "matches": "int"}],
+   "pattern": "str", "regex": "bool", "truncated": "bool", "text": "str"}}}

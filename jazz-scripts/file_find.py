@@ -1,0 +1,198 @@
+# file_find: find files/dirs under a path by name glob, extension, type, size
+# range, mtime window and emptiness — the read-only half of `find`. os.walk with
+# a time budget, never follows symlinks, skips .git/node_modules/vendor and (by
+# default) hidden entries. Answer is the matching paths, sorted for stable output.
+# Python 3.8+ stdlib only.
+import fnmatch
+import stat
+import time
+
+T0 = time.time()
+BUDGET_S = 4.0
+MAX_SCAN = 300000
+SKIP = SKIP_DIRS | set([".git", ".hg", ".svn", ".tox", ".venv", ".cache"])
+
+
+def as_int(name, default, lo, hi):
+    try:
+        v = int(arg(name, default))
+    except (TypeError, ValueError):
+        fail("%s must be an integer" % name)
+    if v < lo or v > hi:
+        fail("%s must be %d..%d" % (name, lo, hi))
+    return v
+
+
+def as_bool(v, default):
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() not in ("0", "false", "no", "off", "")
+
+
+name = arg("name")
+if name is not None:
+    name = str(name)
+ext = arg("ext")
+if ext is not None:
+    ext = str(ext).lower().lstrip("*.")
+    if not ext or not re.fullmatch(r"[0-9a-z_]+", ext):
+        fail("ext must be a plain extension like 'log' or '.py'")
+kind = str(arg("type", "any")).lower()
+if kind not in ("any", "file", "dir"):
+    fail("type must be any, file or dir")
+min_size = as_int("min_size", 0, 0, 1 << 40)
+max_size = as_int("max_size", 1 << 40, 0, 1 << 40)
+if min_size > max_size:
+    fail("min_size is greater than max_size")
+newer_min = arg("newer_min")
+older_min = arg("older_min")
+newer_ts = older_ts = None
+now = time.time()
+if newer_min is not None:
+    newer_ts = now - as_int("newer_min", 0, 0, 10 * 365 * 24 * 60) * 60
+if older_min is not None:
+    older_ts = now - as_int("older_min", 0, 0, 10 * 365 * 24 * 60) * 60
+if newer_ts and older_ts and newer_ts >= older_ts:
+    fail("newer_min must be a wider window than older_min")
+empty_only = as_bool(ARGS.get("empty"), False)
+include_hidden = as_bool(ARGS.get("include_hidden"), False)
+sort_by = str(arg("sort", "name")).lower()
+if sort_by not in ("name", "size", "mtime"):
+    fail("sort must be name, size or mtime")
+limit = as_int("limit", 200, 1, 5000)
+
+
+def bounded_path(value):
+    p = os.path.realpath(path_in_root(value))
+    if os.path.commonpath([os.path.realpath(ROOT), p]) != os.path.realpath(ROOT):
+        fail("path outside project root")
+    return p
+
+
+top_arg = path_in_root(arg("path", "."))
+if os.path.islink(top_arg):
+    fail("path is a symlink (not followed): %s" % rel(top_arg))
+top = bounded_path(arg("path", "."))
+if not os.path.exists(top):
+    fail("path not found: %s" % rel(top))
+if not (name or ext or kind != "any" or min_size or max_size != (1 << 40)
+        or newer_ts or older_ts or empty_only or sort_by != "name"):
+    fail("pass at least one filter: name, ext, type, size, mtime, empty or sort")
+
+if name:
+    name_l = name.lower()
+    if not any(c in name_l for c in "*?["):
+        name_l = "*" + name_l + "*"
+
+
+def match(p, base, st):
+    is_dir = stat.S_ISDIR(st.st_mode)
+    is_file = stat.S_ISREG(st.st_mode)
+    if not (is_dir or is_file):
+        return False  # symlink, fifo, socket: not a find hit
+    if kind == "file" and not is_file:
+        return False
+    if kind == "dir" and not is_dir:
+        return False
+    if name and not fnmatch.fnmatch(base.lower(), name_l):
+        return False
+    if ext and (is_dir or not base.lower().endswith("." + ext)):
+        return False
+    if is_file and not (min_size <= st.st_size <= max_size):
+        return False
+    if newer_ts and st.st_mtime < newer_ts:
+        return False
+    if older_ts and st.st_mtime > older_ts:
+        return False
+    if empty_only:
+        if is_file:
+            if st.st_size != 0:
+                return False
+        else:
+            try:
+                if os.listdir(p):
+                    return False
+            except (IOError, OSError):
+                return False
+    return True
+
+
+hits, scanned, truncated, warnings = [], 0, False, []
+stop = False
+hidden = lambda n: n.startswith(".")
+
+if os.path.isfile(top):
+    try:
+        st = os.lstat(top)
+        if match(top, os.path.basename(top), st):
+            hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
+        scanned = 1
+    except (IOError, OSError) as e:
+        fail("cannot stat: %s" % e)
+else:
+    for d, dirs, files in os.walk(top, followlinks=False):
+        pruned = []
+        for x in dirs:
+            if x in SKIP or (not include_hidden and hidden(x)):
+                continue
+            if os.path.islink(os.path.join(d, x)):
+                continue
+            pruned.append(x)
+        dirs[:] = sorted(pruned)
+        for x in dirs:
+            p = os.path.join(d, x)
+            try:
+                st = os.lstat(p)
+            except (IOError, OSError):
+                continue
+            scanned += 1
+            if match(p, x, st):
+                hits.append((rel(p).replace(os.sep, "/"), 0, "dir", st.st_mtime))
+        for f in sorted(files):
+            if not include_hidden and hidden(f):
+                continue
+            p = os.path.join(d, f)
+            try:
+                st = os.lstat(p)
+            except (IOError, OSError):
+                continue
+            scanned += 1
+            if match(p, f, st):
+                hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
+        if scanned >= MAX_SCAN:
+            truncated, stop = True, True
+            warnings.append("stopped at %d entries" % MAX_SCAN)
+        if not stop and time.time() - T0 > BUDGET_S:
+            truncated, stop = True, True
+            warnings.append("time budget reached after %d entries" % scanned)
+        if stop:
+            break
+
+if sort_by == "size":
+    hits.sort(key=lambda h: (-h[1], h[0]))
+elif sort_by == "mtime":
+    hits.sort(key=lambda h: (-h[3], h[0]))
+else:
+    hits.sort()
+count = len(hits)
+if count > limit:
+    truncated = True
+    warnings.append("%d match(es); showing %d (raise limit)" % (count, limit))
+    hits = hits[:limit]
+
+files = [{"path": p, "size": s, "type": t} for p, s, t, _ in hits]
+nfiles = sum(1 for h in hits if h[2] == "file")
+ndirs = count - nfiles
+text = "%d match(es)" % count
+if count:
+    text += " (%d file(s), %d dir(s)); first: %s" % (nfiles, ndirs, files[0]["path"])
+else:
+    text += " under %s (%d scanned)" % (rel(top), scanned)
+if truncated:
+    text += " [truncated]"
+
+emit(True, {"files": files, "count": count, "scanned": scanned,
+            "truncated": truncated, "text": text},
+     1.0 if not truncated else 0.6, [], warnings)

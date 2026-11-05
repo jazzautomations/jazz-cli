@@ -1,0 +1,11 @@
+{"name": "env_get", "version": 1, "run": "python3", "effect": "read",
+ "description": "Environment variables: list names (secret-named marked, never shown) or look up one non-secret value",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "name": {"type": "string", "description": "one variable to look up; value shown only if the name is not secret-looking"},
+     "prefix": {"type": "string", "description": "list only variables starting with this prefix (alternative to name)"}}},
+ "output": {"data": {
+   "vars": [{"name": "str", "redacted": "bool"}],
+   "count": "int", "secret_named": "int",
+   "name": "str", "set": "bool", "redacted": "bool", "value": "str",
+   "text": "str"}}}
