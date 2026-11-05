@@ -349,6 +349,10 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.olRun(ctx, act)
 		return true, text
 	}
+	if ohIsHome(text) { // "menu": the offline brain as buttons (offline_home.go)
+		a.ohShow("")
+		return true, text
+	}
 	// "quando eu falar X é Y": a personal alias, instant (forge layer 1).
 	if phrase, intent, ok := nuAliasRequest(text); ok {
 		al, err := nuAliasAdd(phrase, intent)

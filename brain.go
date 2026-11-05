@@ -1206,7 +1206,9 @@ func (a *App) brShow(text string, r brResult) bool {
 	if r.Text != "" {
 		a.ui.print(sanitizeTerm(r.Text) + "\n")
 	}
-	a.ui.Notice(strings.TrimPrefix(brStatusLine(r), "· "))
+	if sl := strings.TrimPrefix(brStatusLine(r), "· "); strings.TrimSpace(sl) != "" { // small talk has no task: no empty "·" line
+		a.ui.Notice(sl)
+	}
 	a.agent.Note(fmt.Sprintf("<system-reminder>While offline the harness's deterministic brain handled %q as %s: %s. Output:\n%s</system-reminder>", oneLine(text, 200), r.Intent.Name, r.Status, truncateHeadTail(r.Text, 6000)))
 	return true
 }

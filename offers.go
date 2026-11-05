@@ -380,6 +380,11 @@ func (a *App) olRun(ctx context.Context, act olAction) bool {
 		sigMenuSkips(act.Text, act.Menu, chosen, a.sigTTY())
 	}
 	switch act.Kind {
+	case "submenu": // home buttons (offline_home.go): open a group, never a forge label
+		a.ohShow(act.Script)
+		return true
+	case "home":
+		return a.ohRun(ctx, act.Cmd)
 	case "slash":
 		a.command(act.Cmd)
 		return true

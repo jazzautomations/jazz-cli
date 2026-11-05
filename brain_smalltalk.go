@@ -27,7 +27,7 @@ var (
 )
 
 // stOffline is the short "what I do with no model" line.
-const stOffline = "sem modelo eu resolvo na hora: portas abertas, uso de disco e memória, git (status, log, quem mexeu, conflitos, branches), TODOs, arquivos recentes, achar arquivo ou símbolo, ler config, rodar os testes — digite \"ajuda\" pra ver tudo"
+const stOffline = "sem modelo eu resolvo na hora: portas abertas, uso de disco e memória, git (status, log, quem mexeu, conflitos, branches), TODOs, arquivos recentes, achar arquivo ou símbolo, ler config, rodar os testes — digite \"menu\" pra escolher com botões"
 
 // brSmallTalk answers conversation that is not a task. ok=false: not small talk.
 func brSmallTalk(text string) (string, bool) {
