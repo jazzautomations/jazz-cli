@@ -2,6 +2,15 @@
 
 ## Não lançado
 
+### Modo offline com educação (Robô Ed)
+
+- Conversa pura é respondida na hora, sem modelo e sem rodar nada: "oi", "eai, tudo bem?", "valeu", "boa
+  noite", "tchau". A resposta diz o que o jazz resolve sem modelo. É decidida antes da gramática: "valeu"
+  não vira mais leitura de config (era um falso match).
+- Pedido criativo sem modelo (refatorar, implementar, documentar, migrar…) não cai mais no menu genérico
+  "não entendi": o jazz diz que precisa de um modelo, por quê, o que faz offline e como ligar um modelo.
+  Continua passando pro modelo quando há um.
+
 ### 0.14 asset-forge: correção do dono vira exemplo da gramática, só se melhorar fora da amostra
 
 - O cérebro offline agora escreve no ledger (`signals.jsonl`, no data dir, nunca sai da máquina; segredos

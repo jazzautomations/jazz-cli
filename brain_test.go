@@ -260,10 +260,33 @@ func TestBrainConnectHost(t *testing.T) {
 func TestBrainFallsThrough(t *testing.T) {
 	root := brFixture(t)
 	env, _ := brTestEnv(t, root, nil, -1)
-	for _, s := range []string{"refatora o módulo de pagamento para usar injeção de dependência", "oi tudo bem", "quanto é 2+2?"} {
+	for _, s := range []string{"refatora o módulo de pagamento para usar injeção de dependência", "quanto é 2+2?"} {
 		if r := brRun(context.Background(), env, s); r.Handled {
 			t.Errorf("%q handled as %s", s, r.Intent.Name)
 		}
+	}
+	// creative work stays a miss, but the answer says why and how to get a model
+	if r := brRun(context.Background(), env, "refatora o módulo de pagamento"); r.Handled || !strings.Contains(r.Text, "precisa de um modelo") {
+		t.Errorf("needs-model answer: handled=%v %q", r.Handled, r.Text)
+	}
+}
+
+// Pure small talk is answered offline (Robô Ed) and never runs anything;
+// a greeting glued to a task still runs the task.
+func TestBrainSmallTalk(t *testing.T) {
+	root := brFixture(t)
+	env, rec := brTestEnv(t, root, nil, -1)
+	for s, want := range map[string]string{"oi tudo bem": "tudo certo", "valeu": "de nada", "tchau": "até a próxima", "boa noite": "sem modelo eu resolvo"} {
+		r := brRun(context.Background(), env, s)
+		if !r.Handled || r.Intent.Name != "smalltalk" || !strings.Contains(r.Text, want) {
+			t.Errorf("%q: handled=%v intent=%s %q", s, r.Handled, r.Intent.Name, r.Text)
+		}
+	}
+	if len(rec.cmds) != 0 {
+		t.Fatalf("small talk ran commands: %v", rec.cmds)
+	}
+	if r := brRun(context.Background(), env, "valeu, agora mostra o git status"); r.Intent.Name == "smalltalk" {
+		t.Errorf("a task after the thanks must run the task: %q", r.Text)
 	}
 }
 

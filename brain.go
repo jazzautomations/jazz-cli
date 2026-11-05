@@ -147,6 +147,13 @@ func brStatusRank(s tkStatus) int {
 func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res brResult) brResult {
 	res.Intent = in
 	res.Req = text
+	// pure small talk is decided before the grammar: "valeu" must never
+	// read as a config key nor run a command (brain_smalltalk.go)
+	if reply, ok := brSmallTalk(text); ok {
+		res.Handled, res.Status, res.Text = true, tkSucceeded, reply
+		res.Intent = Intent{Name: "smalltalk", Confidence: 1}
+		return res
+	}
 	// typo-only reading (nlu.go): the intent stands on a word we repaired
 	// and nothing else. Principle 1 (faz até o fim) says do not hand it
 	// back as homework; principle 2 (não enfraquece guardrail) says do not
@@ -156,6 +163,9 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 	if !in.Understood() && !(in.TypoOnly && in.Name != "none") {
 		res.Miss, res.MissWhy = true, "not_understood"
 		res.Text = brNotUnderstood(in)
+		if why, ok := brNeedsModel(text); ok { // creative work: say why, what works offline, how to get a model
+			res.MissWhy, res.Text = "needs_model", why
+		}
 		return res
 	}
 	lib, _ := mhLibrary()
