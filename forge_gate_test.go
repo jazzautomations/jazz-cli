@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -189,5 +191,41 @@ func TestGateRejectsNoImprovement(t *testing.T) {
 	}
 	if !strings.Contains(rep.Reason, "sem melhoria") {
 		t.Errorf("motivo não cita ausência de melhoria: %q", rep.Reason)
+	}
+}
+
+// The keyed split: deterministic per key, different across keys, and the
+// public seed alone never predicts membership (the per-install secret is
+// what an attacker cannot craft around).
+func TestSplitKeyed(t *testing.T) {
+	var exs []Example
+	for i := 0; i < 40; i++ {
+		exs = append(exs, Example{ID: "g:a:" + string(rune('a'+i%26)) + string(rune('0'+i%10)), Input: "x", Want: "a", Group: "g:a"})
+		exs = append(exs, Example{ID: "g:b:" + string(rune('a'+i%26)) + string(rune('0'+i%10)) + "b", Input: "y", Want: "b", Group: "g:b"})
+	}
+	k1 := sha256.Sum256([]byte("key-1"))
+	k2 := sha256.Sum256([]byte("key-2"))
+	in1, out1 := SplitKeyed(exs, 0.25, k1[:])
+	in2, out2 := SplitKeyed(exs, 0.25, k1[:])
+	if len(in1)+len(out1) != len(exs) || len(in1) != len(in2) {
+		t.Fatal("split degenerado ou não-determinístico")
+	}
+	ids := func(xs []Example) string {
+		var s []string
+		for _, e := range xs {
+			s = append(s, e.ID)
+		}
+		sort.Strings(s)
+		return strings.Join(s, ",")
+	}
+	if ids(out1) != ids(out2) {
+		t.Error("mesma chave, splits diferentes")
+	}
+	_, out3 := SplitKeyed(exs, 0.25, k2[:])
+	if ids(out1) == ids(out3) {
+		t.Error("chaves diferentes deviam dar splits diferentes")
+	}
+	if len(out1) == 0 || len(in1) == 0 {
+		t.Error("split degenerado")
 	}
 }

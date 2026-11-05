@@ -199,3 +199,38 @@ func TestSigCount(t *testing.T) {
 		t.Fatalf("contagem por kind: %v", c)
 	}
 }
+
+// The cap: past sigMaxBytes the ledger rotates to signals.jsonl.1 inside the
+// lock — the live file starts over small and no unbounded decode ever
+// happens (etapa B).
+func TestSigRotation(t *testing.T) {
+	p := filepath.Join(sigTestHome(t), "signals.jsonl")
+	big := Signal{Kind: "miss", Class: "x", Text: "p", Extra: map[string]string{"pad": strings.Repeat("x", sigMaxBytes)}}
+	if err := sigAppend(big); err != nil {
+		t.Fatal(err)
+	}
+	if err := sigAppend(Signal{Kind: "miss", Class: "x", Text: "depois do giro"}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(p)
+	if err != nil || st.Size() > 1<<20 {
+		t.Fatalf("ledger girou e ficou pequeno: %v %v", st, err)
+	}
+	if _, err := os.Stat(p + ".1"); err != nil {
+		t.Errorf("o backup .1 existe: %v", err)
+	}
+	sigs, err := sigRead(nil)
+	if err != nil || len(sigs) != 1 || sigs[0].Text != "depois do giro" {
+		t.Fatalf("só o sinal novo está no ledger vivo: %v %v", sigs, err)
+	}
+	// um terceiro giro descarta o .1 antigo sem erro
+	if err := sigAppend(big); err != nil {
+		t.Fatal(err)
+	}
+	if err := sigAppend(Signal{Kind: "miss", Class: "x", Text: "segundo giro"}); err != nil {
+		t.Fatal(err)
+	}
+	if sigs, _ := sigRead(nil); len(sigs) != 1 || sigs[0].Text != "segundo giro" {
+		t.Fatalf("segundo giro também sobrevive: %v", sigs)
+	}
+}

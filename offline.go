@@ -349,6 +349,16 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.olRun(ctx, act)
 		return true, text
 	}
+	// "quando eu falar X é Y": a personal alias, instant (forge layer 1).
+	if phrase, intent, ok := nuAliasRequest(text); ok {
+		al, err := nuAliasAdd(phrase, intent)
+		if err != nil {
+			a.ui.Notice("apelido: " + err.Error())
+		} else {
+			a.ui.Notice(fmt.Sprintf("apelido gravado: %q → %s — só nesta máquina ('jazz forge --forget' desfaz)", al.Text, al.Intent))
+		}
+		return true, text
+	}
 	offline := a.ol.on || a.ol.forced
 	if offline && olSummaryRe.MatchString(fpNormalize(text)) {
 		a.olSummary(ctx)

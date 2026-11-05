@@ -169,6 +169,11 @@ func cmdEval(root string, args []string, w io.Writer) int {
 
 // eoRun runs the suite (only = subset by id).
 func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
+	// fixtures are not the owner's requests, and the numbers are the
+	// embedded grammar's: no ledger writes, no forge overlay (nlu_overlay.go)
+	sigMuted.Store(true)
+	defer sigMuted.Store(false)
+	defer nuOverlayOff.Store(nuOverlayOff.Swap(true))
 	var suite struct {
 		Tasks []eoTask `json:"tasks"`
 	}

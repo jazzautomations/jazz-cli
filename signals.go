@@ -35,6 +35,13 @@ type Signal struct {
 	Extra    map[string]string `json:"extra,omitempty"`    // pares soltos (causa do verificador, tool, ...)
 }
 
+// sigMaxBytes capa o ledger: acima disso ele vira signals.jsonl.1 (um único
+// backup; o .1 antigo é descartado). O ledger cresce uma linha por turno que
+// vai pro modelo — sem teto ele incharia por anos e a forja decodificaria
+// tudo a cada run. O rotate acontece dentro do flock, então dois jazz
+// concorrentes nunca giram o arquivo ao mesmo tempo.
+const sigMaxBytes = 2 << 20
+
 // sigPath devolve o caminho do ledger. É uma var para os testes apontarem o
 // ledger para um t.TempDir() sem depender de JAZZ_HOME.
 var sigPath = func() string {
@@ -68,6 +75,10 @@ func sigAppend(s Signal) error {
 		return err
 	}
 	defer unlock()
+	if st, err := os.Stat(p); err == nil && st.Size() > sigMaxBytes {
+		os.Remove(p + ".1") // no Windows o rename não sobrescreve
+		os.Rename(p, p+".1")
+	}
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
