@@ -252,6 +252,7 @@ type nuTok struct {
 	Tags   []string // entity tags: @file @symbol @tool @host @service @container @number
 	Filler bool
 	Fixed  string // typo repair: the lexicon word it was moved to
+	Weak   bool   // every concept this token carries is stem-derived (the word itself is not in the lexicon — same trust level as a typo repair)
 	Slang  bool
 }
 
@@ -262,6 +263,26 @@ func (t *nuTok) has(c string) bool {
 		}
 	}
 	for _, x := range t.Tags {
+		if x == c {
+			return true
+		}
+	}
+	return false
+}
+
+// hasStrong: c is carried by real vocabulary — an entity tag or an exact/
+// phrase/slang concept — not merely deduced from a suffix strip. A stem
+// collision ("quente"→quent→blame) must never be the sole proof of intent.
+func (t *nuTok) hasStrong(c string) bool {
+	for _, x := range t.Tags {
+		if x == c {
+			return true
+		}
+	}
+	if t.Weak {
+		return false
+	}
+	for _, x := range t.Concs {
 		if x == c {
 			return true
 		}
@@ -407,6 +428,7 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if !nuNameShaped(t.Raw) {
 			if c, ok := m.stem[nuStem(t.Fold)]; ok {
 				t.Concs = append(t.Concs, c...)
+				t.Weak = true // this word isn't in the lexicon; every concept it carries was deduced from a suffix strip
 			}
 		}
 	}
@@ -1145,31 +1167,47 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	// and let the caller offer a one-key confirmation instead of acting.
 	// Structural, not a token count: a named entity the rule did not formally
 	// consume ("explca o parser.go") still corroborates and keeps the intent.
+	// weak-only: the rule fired, but every concept it relied on is carried
+	// only by a guessed token (typo-repaired or stem-derived — "fila"→fil,
+	// "quente"→quent) and no correctly-spelled token names a real entity
+	// (@file/@host/@tool/…) to corroborate it. The intent then stands on
+	// guesses alone, so we cap confidence under nuMinConf (and under
+	// brLevel0Min, so the online path never short-circuits on it) and let
+	// the caller offer a one-key confirmation instead of acting.
+	// Structural, not a token count: a named entity the rule did not
+	// formally consume ("explca o parser.go") still corroborates.
 	if len(used) > 0 {
-		typoOnly := true
+		weakOnly, guessed := true, false
 		for c := range used {
 			for i := range toks {
-				if toks[i].Fixed == "" && toks[i].has(c) {
-					typoOnly = false
+				if toks[i].Fixed != "" || toks[i].Weak {
+					guessed = true
+				}
+				if toks[i].Fixed == "" && toks[i].hasStrong(c) {
+					weakOnly = false
 					break
 				}
 			}
-			if !typoOnly {
+			if !weakOnly {
 				break
 			}
 		}
-		if typoOnly {
+		if weakOnly {
 			for i := range toks {
-				if toks[i].Fixed == "" && len(toks[i].Tags) > 0 {
-					typoOnly = false
+				if toks[i].Fixed == "" && !toks[i].Weak && len(toks[i].Tags) > 0 {
+					weakOnly = false
 					break
 				}
 			}
 		}
-		if typoOnly {
+		if weakOnly {
 			in.TypoOnly = true
 			conf = math.Min(conf, 0.5)
-			in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+			if guessed {
+				in.Evidence = append(in.Evidence, "baseado só em palavra deduzida (correção ou radical)")
+			} else {
+				in.Evidence = append(in.Evidence, "baseado só em correção de digitação")
+			}
 		}
 	}
 	for name, sd := range def.Slots {
@@ -1224,7 +1262,7 @@ var nuVerbConcepts = map[string]bool{"open": true, "explain": true, "find": true
 var nuMutConcepts = map[string]bool{
 	"delete": true, "create": true, "install": true, "update": true, "fix": true,
 	"start": true, "stop": true, "restart": true, "kill": true, "rename": true,
-	"format": true, "build": true,
+	"format": true, "build": true, "compress": true,
 	"mutate": true, "recover": true, "extract": true, "enable": true,
 }
 

@@ -238,7 +238,44 @@
   "off",
   "out",
   "through",
-  "without"
+  "without",
+  "many",
+  "much",
+  "more",
+  "most",
+  "few",
+  "fewer",
+  "fewest",
+  "less",
+  "least",
+  "each",
+  "every",
+  "both",
+  "either",
+  "neither",
+  "several",
+  "various",
+  "certain",
+  "such",
+  "same",
+  "other",
+  "others",
+  "another",
+  "own",
+  "per",
+  "cada",
+  "varios",
+  "várias",
+  "ambos",
+  "ambas",
+  "outro",
+  "outra",
+  "outros",
+  "outras",
+  "mesmo",
+  "mesma",
+  "tanto",
+  "tanta"
  ],
  "slang": {
   "roda ai": "run",
@@ -1059,8 +1096,7 @@
    "ocupada",
    "using",
    "usando",
-   "owner",
-   "usa"
+   "owner"
   ],
   "kill": [
    "mata",
@@ -1630,7 +1666,10 @@
    "timers",
    "scheduled",
    "schedule",
-   "tarefas agendadas"
+   "tarefas agendadas",
+   "crons",
+   "cronjob",
+   "cronjobs"
   ],
   "ifaces": [
    "interface",
@@ -1924,6 +1963,33 @@
    "ordene",
    "sort_by",
    "sort-by"
+  ],
+  "compress": [
+   "compacta",
+   "compactar",
+   "compacte",
+   "comprime",
+   "comprimir",
+   "compress",
+   "compressed",
+   "empacota",
+   "empacotar",
+   "zipa",
+   "zipar",
+   "zip up",
+   "tar up"
+  ],
+  "execperm": [
+   "executavel",
+   "executável",
+   "executable",
+   "rodavel",
+   "rodável",
+   "chmod",
+   "run permission",
+   "execute permission",
+   "permissao de execucao",
+   "permissão de execução"
   ]
  }
 }

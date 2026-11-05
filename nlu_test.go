@@ -184,3 +184,63 @@ func TestNLUShortStemIsNotFiles(t *testing.T) {
 		}
 	}
 }
+
+// A tag de entidade num token fraco não pode corroborar o próprio palpite:
+// "cargo" é ferramenta real E radical de "carga", mas a entidade não prova
+// que o pedido era sobre uptime — corroboração vem de token forte.
+func TestNLUWeakEntityDoesNotSelfCorroborate(t *testing.T) {
+	m, w := nuTestWorld(t)
+	if in := m.Parse("cargo", w); in.Confidence >= nuMinConf {
+		t.Errorf("cargo => %s (%.2f) — entidade no token fraco não prova o conceito deduzido", in.Name, in.Confidence)
+	}
+	if got := nuPredict(m.Parse("qual a carga da máquina", w)); got != "uptime_load" {
+		t.Errorf("carga da máquina => %s, want uptime_load", got)
+	}
+}
+
+// Falsos matches medidos no corpus de 372 pedidos: polissemia de conceito e
+// desempate do classificador. Cada um virou recusa honesta (conf < nuMinConf)
+// ou o intent da família certa — nunca ação errada em silêncio.
+func TestNLUCorpusFalseMatches(t *testing.T) {
+	m, w := nuTestWorld(t)
+	under := map[string]float64{
+		// verbo de compactação não é listar arquivo
+		"compacta a pasta logs em tar.gz":         nuMinConf,
+		"compress the logs folder into a tarball": nuMinConf,
+		// "make" + atributo não é build
+		"make script.sh executable": nuMinConf,
+		// entidade espúria não vende tool_info
+		"cargo": nuMinConf,
+	}
+	for text, max := range under {
+		if in := m.Parse(text, w); in.Confidence >= max {
+			t.Errorf("%q => %s (%.2f, %v) — falso match do corpus, devia ficar sob %.2f", text, in.Name, in.Confidence, in.Evidence, max)
+		}
+	}
+	right := map[string]string{
+		// modificação de arquivo é busca, não status de ambiente/ferramenta
+		"find all the files in the file system which have been modified in the last day": "find",
+		// procurar repositório é find, não git_status
+		"find the official code repository for each paper in this list": "find",
+		// quantidade de cpu é ambiente, não ferramenta
+		"how many cpus does this box have": "env_status",
+	}
+	for text, want := range right {
+		if in := m.Parse(text, w); in.Name != want {
+			t.Errorf("%q => %s (%v), want intent %s", text, in.Name, in.Evidence, want)
+		}
+	}
+	// guardas: leituras legítimas que os vetos novos não podem matar
+	keep := map[string]string{
+		"o que tem dentro do zip":    "archive_list",
+		"lista o conteúdo do tar.gz": "archive_list",
+		"tem o git instalado?":       "tool_info",
+		"status do sistema":          "env_status",
+		"lista os arquivos":          "list_files",
+	}
+	for text, want := range keep {
+		if in := m.Parse(text, w); in.Name != want {
+			t.Errorf("guarda %q => %s (%v), want intent %s", text, in.Name, in.Evidence, want)
+		}
+	}
+}

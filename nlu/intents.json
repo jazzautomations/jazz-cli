@@ -422,10 +422,12 @@
       "build"
      ],
      "none": [
+      "@file",
       "error",
-      "fix",
+      "execperm",
       "filenoun",
-      "@file"
+      "findattr",
+      "fix"
      ]
     }
    ],
@@ -551,21 +553,22 @@
       "open"
      ],
      "none": [
-      "commit",
-      "push",
-      "pull",
-      "stash",
-      "history",
-      "diff",
+      "blame",
       "branch",
       "checkout",
-      "undo",
+      "commit",
+      "diff",
+      "find",
+      "history",
       "install",
-      "update",
-      "tag",
       "mutate",
-      "blame",
-      "sysnoun"
+      "pull",
+      "push",
+      "stash",
+      "sysnoun",
+      "tag",
+      "undo",
+      "update"
      ]
     }
    ],
@@ -1066,10 +1069,11 @@
       "error"
      ],
      "none": [
-      "run",
       "find",
       "logs",
-      "open"
+      "open",
+      "run",
+      "service"
      ]
     }
    ],
@@ -1257,7 +1261,13 @@
       "status",
       "env"
      ],
-     "none": []
+     "none": [
+      "create",
+      "delete",
+      "find",
+      "findattr",
+      "mutate"
+     ]
     },
     {
      "all": [
@@ -1345,6 +1355,14 @@
      "all": [
       "have",
       "@tool"
+     ],
+     "none": [
+      "cpu",
+      "env",
+      "files",
+      "find",
+      "findattr",
+      "status"
      ]
     },
     {
@@ -1358,26 +1376,28 @@
       "have"
      ],
      "none": [
-      "net",
-      "memory",
-      "disk",
+      "@host",
+      "@service",
       "container",
+      "cpu",
+      "dep",
+      "disk",
+      "env",
+      "error",
+      "files",
+      "help",
+      "host",
+      "install",
       "list",
+      "memory",
+      "mutate",
+      "net",
       "port",
       "process",
       "service",
-      "host",
-      "files",
-      "dep",
-      "test",
-      "install",
-      "update",
-      "error",
-      "help",
       "sysnoun",
-      "mutate",
-      "@service",
-      "@host"
+      "test",
+      "update"
      ]
     }
    ],
@@ -3341,10 +3361,11 @@
       "archive"
      ],
      "none": [
+      "compress",
       "create",
       "delete",
-      "install",
       "download",
+      "install",
       "mutate"
      ]
     }
