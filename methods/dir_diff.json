@@ -1,0 +1,56 @@
+{
+ "methods": [
+  {
+   "name": "dir_diff.script",
+   "intent": "dir_diff",
+   "priority": 10,
+   "doc": "script:dir_diff: diferença entre dois diretórios",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:dir_diff",
+     "in": {
+      "a": "$slot.a",
+      "b": "$slot.b"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1200
+  },
+  {
+   "name": "dir_diff.no_python",
+   "intent": "dir_diff",
+   "priority": 1,
+   "doc": "sem python3 o script dir_diff não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script dir_diff, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

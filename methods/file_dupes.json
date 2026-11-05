@@ -1,0 +1,55 @@
+{
+ "methods": [
+  {
+   "name": "file_dupes.script",
+   "intent": "file_dupes",
+   "priority": 10,
+   "doc": "script:file_dupes: arquivos duplicados por conteúdo",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:file_dupes",
+     "in": {
+      "path": "$slot.dir"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 2500
+  },
+  {
+   "name": "file_dupes.no_python",
+   "intent": "file_dupes",
+   "priority": 1,
+   "doc": "sem python3 o script file_dupes não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script file_dupes, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

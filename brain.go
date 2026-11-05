@@ -980,6 +980,10 @@ var brLevel0Intents = map[string]bool{
 	"symbol_refs": true,
 	"uptime_load": true, "fs_recent": true, "archive_list": true, "hash_verify": true,
 	"pkg_installed": true, "cron_list": true, "log_errors_recent": true, "net_ifaces": true,
+	// v5: o cardápio de arquivos/texto/permissões vira caminho do cérebro
+	"file_find": true, "perm_find": true, "text_count": true, "text_extract": true,
+	"line_slice": true, "file_users": true, "net_route": true, "file_dupes": true,
+	"env_get": true, "dir_diff": true,
 }
 
 // brGroundIntents are interpretive: online, the brain's facts ground the

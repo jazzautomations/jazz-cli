@@ -1,0 +1,65 @@
+{
+ "methods": [
+  {
+   "name": "file_find.script",
+   "intent": "file_find",
+   "priority": 10,
+   "doc": "script:file_find: arquivos por nome, extensão, tipo, tamanho, janela de mtime ou vazio",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.name",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "sort": "$slot.sort",
+      "newer_min": "$slot.newer",
+      "older_min": "$slot.older",
+      "empty": "$slot.empty",
+      "limit": "$slot.limit",
+      "min_size": "$slot.min_size",
+      "max_size": "$slot.max_size"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1500
+  },
+  {
+   "name": "file_find.no_python",
+   "intent": "file_find",
+   "priority": 1,
+   "doc": "sem python3 o script file_find não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script file_find, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

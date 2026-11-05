@@ -247,3 +247,87 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		}
 	}
 }
+
+// v5: o cardápio de arquivos/texto/permissões vira caminho do cérebro.
+// Os intents novos cobrem a classe nl2bash (find-by-attr, permissões,
+// fatia de linhas, contagem, extração) sem engolir os vizinhos.
+func TestNLUV5Wiring(t *testing.T) {
+	m, w := nuTestWorld(t)
+	right := map[string]string{
+		"find empty files":                       "file_find",
+		"procura arquivos vazios":                "file_find",
+		"achar pastas vazias":                    "file_find",
+		"qual o arquivo mais novo da pasta logs": "file_find",
+		"maiores arquivos da pasta":              "file_find",
+		"arquivos com permissão 777":             "perm_find",
+		"world-writable files":                   "perm_find",
+		"find suid binaries":                     "perm_find",
+		"executable files":                       "perm_find",
+		"arquivos do usuário matheus":            "perm_find",
+		"extrai os ips do log":                   "text_extract",
+		"extract all emails from mbox.txt":       "text_extract",
+		"últimas 10 linhas do app.log":           "line_slice",
+		"lines 5 to 20 of main.go":               "line_slice",
+		"quem está usando o arquivo db.sqlite":   "file_users",
+		"mostra a tabela de rotas":               "net_route",
+		"qual o gateway padrão":                  "net_route",
+		"arquivos duplicados na pasta":           "file_dupes",
+		"mostra as variáveis de ambiente":        "env_get",
+		"diff between dir1 and dir2":             "dir_diff",
+		"how often does 'x' appear in app.log":   "text_count",
+		"conta quantas linhas tem o app.log":     "wordcount_stats",
+		"who last touched main.go":               "git_blame",
+		"o que tem dentro do release.zip":        "archive_list",
+	}
+	for text, want := range right {
+		if in := m.Parse(text, w); in.Name != want {
+			t.Errorf("%q => %s (%.2f, %v), want %s", text, in.Name, in.Confidence, in.Evidence, want)
+		}
+	}
+	under := map[string]float64{
+		// download não é file_find; latência não é tabela de rotas
+		"download the latest release tarball":  nuMinConf,
+		"baixa o arquivo do release mais novo": nuMinConf,
+		"measure latency to the gateway":       nuMinConf,
+		"mede a latência pro gateway":          nuMinConf,
+		// split/chmod/clean são mutações, não leituras
+		"split file data.csv into pieces per 100 lines": nuMinConf,
+		"deixa o script.sh executável":                  nuMinConf,
+		"torna o script executável":                     nuMinConf,
+		// "users logged in" não é file_users (não existe método de sessões)
+		"Print a list of unique users who are logged in": nuMinConf,
+		"Print a column of CPU usage numbers":            nuMinConf,
+	}
+	for text, max := range under {
+		if in := m.Parse(text, w); in.Confidence >= max {
+			t.Errorf("%q => %s (%.2f, %v) — falso match v5, devia ficar sob %.2f", text, in.Name, in.Confidence, in.Evidence, max)
+		}
+	}
+	// slots derivados dos helpers: os args certos saem das palavras-cue
+	if in := m.Parse("últimas 10 linhas do app.log", w); in.Slots["tail"] != "10" {
+		t.Errorf("últimas 10 linhas: tail=%q, want 10", in.Slots["tail"])
+	}
+	if in := m.Parse("linhas 5 a 20 do x", w); in.Slots["start"] != "5" || in.Slots["end"] != "20" {
+		t.Errorf("linhas 5 a 20: start=%q end=%q, want 5/20", in.Slots["start"], in.Slots["end"])
+	}
+	if in := m.Parse("extrai os ips do log", w); in.Slots["pattern"] != "ipv4" {
+		t.Errorf("extrai os ips: pattern=%q, want ipv4", in.Slots["pattern"])
+	}
+	if in := m.Parse("achar pastas vazias", w); in.Slots["type"] != "dir" || in.Slots["empty"] != "true" {
+		t.Errorf("pastas vazias: type=%q empty=%q, want dir/true", in.Slots["type"], in.Slots["empty"])
+	}
+	// helpers resolve antes dos slots genéricos: nem ".log" vira dir, nem
+	// "10MB" vira limit, nem "set" vira owner (medidos no corpus)
+	if in := m.Parse("acha todos os arquivos .log maiores que 10MB", w); in.Slots["min_size"] != "10485760" || in.Slots["ext"] != "log" || in.Slots["limit"] != "" || in.Slots["dir"] != "" {
+		t.Errorf("maiores que 10MB: slots=%v, want min_size=10485760 ext=log", in.Slots)
+	}
+	if in := m.Parse("find files larger than 100kb", w); in.Slots["min_size"] != "102400" || in.Slots["dir"] != "" || in.Slots["name"] != "" {
+		t.Errorf("larger than 100kb: slots=%v, want min_size=102400", in.Slots)
+	}
+	if in := m.Parse("arquivos com suid setado", w); in.Slots["owner"] != "" || in.Slots["suid"] != "true" {
+		t.Errorf("suid setado: slots=%v, want suid=true sem owner", in.Slots)
+	}
+	if in := m.Parse("arquivos do usuário matheus", w); in.Slots["owner"] != "matheus" {
+		t.Errorf("usuário matheus: owner=%q, want matheus", in.Slots["owner"])
+	}
+}

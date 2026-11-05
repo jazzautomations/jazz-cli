@@ -53,6 +53,11 @@ func ptyModel(t *testing.T) *httptest.Server {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		mu.Lock()
 		defer mu.Unlock()
+		if len(body.Messages) == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[],"models":[]}`)
+			return
+		}
 		last := body.Messages[len(body.Messages)-1]
 		role, _ := last["role"].(string)
 		content := fmt.Sprint(last["content"])

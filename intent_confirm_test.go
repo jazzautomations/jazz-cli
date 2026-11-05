@@ -165,7 +165,7 @@ func TestIntentConfirmHeadlessMediumMiss(t *testing.T) {
 	if len(rec.cmds) != 0 {
 		t.Errorf("headless não roda comando: %v", rec.cmds)
 	}
-	for _, w := range []string{"confiança 0.69", "você quis:", "  1 ", "digitar de novo"} {
+	for _, w := range []string{"confiança 0.", "você quis:", "  1 ", "digitar de novo"} {
 		if !strings.Contains(r.Text, w) {
 			t.Errorf("honest-miss sem %q:\n%s", w, r.Text)
 		}

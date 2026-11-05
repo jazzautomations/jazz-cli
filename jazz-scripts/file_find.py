@@ -58,6 +58,9 @@ if newer_ts and older_ts and newer_ts >= older_ts:
     fail("newer_min must be a wider window than older_min")
 empty_only = as_bool(ARGS.get("empty"), False)
 include_hidden = as_bool(ARGS.get("include_hidden"), False)
+sort_by = str(arg("sort", "name")).lower()
+if sort_by not in ("name", "size", "mtime"):
+    fail("sort must be name, size or mtime")
 limit = as_int("limit", 200, 1, 5000)
 
 
@@ -75,8 +78,8 @@ top = bounded_path(arg("path", "."))
 if not os.path.exists(top):
     fail("path not found: %s" % rel(top))
 if not (name or ext or kind != "any" or min_size or max_size != (1 << 40)
-        or newer_ts or older_ts or empty_only):
-    fail("pass at least one filter: name, ext, type, size, mtime or empty")
+        or newer_ts or older_ts or empty_only or sort_by != "name"):
+    fail("pass at least one filter: name, ext, type, size, mtime, empty or sort")
 
 if name:
     name_l = name.lower()
@@ -124,7 +127,7 @@ if os.path.isfile(top):
     try:
         st = os.lstat(top)
         if match(top, os.path.basename(top), st):
-            hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file"))
+            hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
         scanned = 1
     except (IOError, OSError) as e:
         fail("cannot stat: %s" % e)
@@ -146,7 +149,7 @@ else:
                 continue
             scanned += 1
             if match(p, x, st):
-                hits.append((rel(p).replace(os.sep, "/"), 0, "dir"))
+                hits.append((rel(p).replace(os.sep, "/"), 0, "dir", st.st_mtime))
         for f in sorted(files):
             if not include_hidden and hidden(f):
                 continue
@@ -157,7 +160,7 @@ else:
                 continue
             scanned += 1
             if match(p, f, st):
-                hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file"))
+                hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
         if scanned >= MAX_SCAN:
             truncated, stop = True, True
             warnings.append("stopped at %d entries" % MAX_SCAN)
@@ -167,14 +170,19 @@ else:
         if stop:
             break
 
-hits.sort()
+if sort_by == "size":
+    hits.sort(key=lambda h: (-h[1], h[0]))
+elif sort_by == "mtime":
+    hits.sort(key=lambda h: (-h[3], h[0]))
+else:
+    hits.sort()
 count = len(hits)
 if count > limit:
     truncated = True
     warnings.append("%d match(es); showing %d (raise limit)" % (count, limit))
     hits = hits[:limit]
 
-files = [{"path": p, "size": s, "type": t} for p, s, t in hits]
+files = [{"path": p, "size": s, "type": t} for p, s, t, _ in hits]
 nfiles = sum(1 for h in hits if h[2] == "file")
 ndirs = count - nfiles
 text = "%d match(es)" % count

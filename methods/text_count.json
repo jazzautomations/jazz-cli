@@ -1,0 +1,56 @@
+{
+ "methods": [
+  {
+   "name": "text_count.script",
+   "intent": "text_count",
+   "priority": 10,
+   "doc": "script:text_count: conta ocorrências literais/regex num arquivo",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "script:text_count",
+     "in": {
+      "file": "$slot.file",
+      "pattern": "$slot.pattern"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 800
+  },
+  {
+   "name": "text_count.no_python",
+   "intent": "text_count",
+   "priority": 1,
+   "doc": "sem python3 o script text_count não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script text_count, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}
