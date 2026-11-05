@@ -1,0 +1,15 @@
+{"name": "text_extract", "version": 1, "run": "python3", "effect": "read",
+ "description": "Extract every match of a named pattern (ipv4/email/url/date/number/hex/uuid) or a regex from a file or text",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "file": {"type": "string", "description": "file to scan, relative to the project root"},
+     "text": {"type": "string", "description": "inline text to scan (alternative to file)"},
+     "pattern": {"type": "string", "enum": ["ipv4", "ipv6", "email", "url", "date", "number", "hex", "uuid"], "description": "named pattern to extract"},
+     "regex": {"type": "string", "description": "custom regex (max 512 chars; alternative to pattern)"},
+     "ignore_case": {"type": "boolean", "description": "case-insensitive matching (default false)"},
+     "unique": {"type": "boolean", "description": "return unique values only (default false)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 500, "description": "max matches to list (default 500)"}}},
+ "output": {"data": {
+   "matches": [{"match": "str", "line": "int"}],
+   "total": "int", "unique": "int", "lines_matched": "int", "lines_scanned": "int",
+   "pattern": "str|null", "regex": "str|null", "truncated": "bool", "text": "str"}}}

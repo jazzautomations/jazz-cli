@@ -1,0 +1,8 @@
+{"name": "file_users", "version": 1, "run": "python3", "effect": "read",
+ "description": "Processes holding a file or dir open, via /proc/<pid>/fd symlinks (exact realpath match); hidden pids counted",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "file or directory to inspect (inside the project root)"}}},
+ "output": {"data": {
+   "holders": [{"pid": "int", "comm": "str|null", "fds": "int", "deleted_fds": "int"}],
+   "count": "int", "hidden_pids": "int", "path": "str", "truncated": "bool", "text": "str"}}}

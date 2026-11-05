@@ -1,0 +1,18 @@
+{"name": "file_find", "version": 1, "run": "python3", "effect": "read",
+ "description": "Find files/dirs under a path by name glob, extension, type, size, mtime window or emptiness (the read-only find)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "path": {"type": "string", "description": "directory (or single file) to search (default: project root)"},
+     "name": {"type": "string", "description": "glob on the base name ('*.log'); a plain word means contains"},
+     "ext": {"type": "string", "description": "extension filter ('log' or '.log'); files only"},
+     "type": {"type": "string", "enum": ["any", "file", "dir"], "description": "entry kind (default any)"},
+     "min_size": {"type": "integer", "minimum": 0, "description": "minimum file size in bytes"},
+     "max_size": {"type": "integer", "minimum": 0, "description": "maximum file size in bytes"},
+     "newer_min": {"type": "integer", "minimum": 0, "description": "modified within the last N minutes"},
+     "older_min": {"type": "integer", "minimum": 0, "description": "modified more than N minutes ago"},
+     "empty": {"type": "boolean", "description": "only empty files or empty directories"},
+     "include_hidden": {"type": "boolean", "description": "also scan dot-files and dot-dirs (default false)"},
+     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "max entries to return (default 200)"}}},
+ "output": {"data": {
+   "files": [{"path": "str", "size": "int", "type": "str"}],
+   "count": "int", "scanned": "int", "truncated": "bool", "text": "str"}}}

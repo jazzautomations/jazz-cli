@@ -1,0 +1,7 @@
+{"name": "net_route", "version": 1, "run": "python3", "effect": "read",
+ "description": "Kernel IPv4/IPv6 routing table from /proc/net/route* (no ip route): default route first, then by prefix",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {}},
+ "output": {"data": {
+   "routes": [{"dst": "str", "gateway": "str|null", "iface": "str", "family": "str", "default": "bool"}],
+   "count": "int", "truncated": "bool", "text": "str"}}}

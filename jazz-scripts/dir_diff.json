@@ -1,0 +1,10 @@
+{"name": "dir_diff", "version": 1, "run": "python3", "effect": "read",
+ "description": "Compare two directory trees: entries only in a, only in b, and same-path files whose content differs (sha256)",
+ "args": {"type": "object", "additionalProperties": false,
+   "properties": {
+     "a": {"type": "string", "description": "first directory, relative to the project root"},
+     "b": {"type": "string", "description": "second directory, relative to the project root"}}},
+ "output": {"data": {
+   "only_a": ["str"], "only_b": ["str"], "differ": ["str"], "identical": "int",
+   "only_a_count": "int", "only_b_count": "int", "differ_count": "int",
+   "a_entries": "int", "b_entries": "int", "truncated": "bool", "text": "str"}}}
