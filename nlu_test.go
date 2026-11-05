@@ -209,6 +209,9 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		"compress the logs folder into a tarball": nuMinConf,
 		// "make" + atributo não é build
 		"make script.sh executable": nuMinConf,
+		// serviços que falharam no boot é consulta de serviço, não ambiente nem conserto
+		"quais serviços falharam no boot": nuMinConf,
+		"which services failed at boot":   nuMinConf,
 		// entidade espúria não vende tool_info
 		"cargo": nuMinConf,
 	}

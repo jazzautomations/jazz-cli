@@ -1237,23 +1237,24 @@
       "env"
      ],
      "none": [
-      "list",
-      "host",
       "connect",
-      "process",
-      "files",
-      "mutate",
-      "delete",
       "create",
-      "rename",
-      "install",
-      "logs",
+      "delete",
       "download",
       "extract",
-      "recover",
+      "files",
       "findattr",
+      "host",
+      "install",
+      "list",
+      "logs",
+      "mutate",
       "net",
-      "routes"
+      "process",
+      "recover",
+      "rename",
+      "routes",
+      "service"
      ]
     },
     {
@@ -1297,10 +1298,12 @@
       "net"
      ],
      "none": [
-      "mutate",
+      "error",
       "files",
       "find",
       "logs",
+      "mutate",
+      "service",
       "version"
      ]
     }
