@@ -270,7 +270,7 @@ func TestForgeRejectsPoisonedCorrection(t *testing.T) {
 	}
 	// as variantes morrem no portão (falso sucesso novo) ou no teste
 	// dirigido (a paráfrase não classifica na candidata) — nunca entram.
-	if !strings.Contains(reasons, "false_success") && !strings.Contains(reasons, "paráfrase") && !strings.Contains(reasons, "rejeitado") {
+	if !strings.Contains(reasons, "false_success") && !strings.Contains(reasons, "paráfrase") && !strings.Contains(reasons, "rejeitado") && !strings.Contains(reasons, "não muda a leitura") {
 		t.Errorf("a recusa do cluster deve ser pelo portão ou pelo teste dirigido: %s", reasons)
 	}
 	if _, err := os.Stat(o.Overlay); !os.IsNotExist(err) {

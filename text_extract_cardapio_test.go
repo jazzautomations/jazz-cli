@@ -18,17 +18,17 @@ func TestTextExtractCardapio(t *testing.T) {
 		"192.0.2.10 - - [01/Jan/2026:10:01:21 +0000] \"GET /c HTTP/1.1\" 404 9\n"+
 		"mail ana@example.com and bruno@test.org\n")
 
-	// ipv4 over the access log: 4 matches, 3 unique, line numbers kept
+	// ipv4 over the access log: 3 matches (lines 1-3), 2 unique, line numbers kept
 	v, out := scCall(t, tb, "text_extract", map[string]any{"pattern": "ipv4", "file": "logs/access.log"})
 	d := scDataOf(v)
-	if !scOK(v) || d["total"] != 4.0 || d["unique"] != 3.0 || d["lines_matched"] != 4.0 {
+	if !scOK(v) || d["total"] != 3.0 || d["unique"] != 2.0 || d["lines_matched"] != 3.0 {
 		t.Fatalf("ipv4: %v\n%s", v, out.Text)
 	}
 	m := d["matches"].([]any)
 	if m[0].(map[string]any)["match"] != "192.0.2.10" || m[0].(map[string]any)["line"] != 1.0 {
 		t.Errorf("first match: %v", m[0])
 	}
-	if txt, _ := d["text"].(string); !strings.HasPrefix(txt, "4 match(es) of pattern:ipv4") {
+	if txt, _ := d["text"].(string); !strings.HasPrefix(txt, "3 match(es) of pattern:ipv4") {
 		t.Errorf("text: %q", txt)
 	}
 
@@ -36,7 +36,7 @@ func TestTextExtractCardapio(t *testing.T) {
 	v, _ = scCall(t, tb, "text_extract", map[string]any{"pattern": "ipv4", "file": "logs/access.log", "unique": true})
 	d = scDataOf(v)
 	m = d["matches"].([]any)
-	if !scOK(v) || len(m) != 3 || m[0].(map[string]any)["match"] != "192.0.2.10" || m[2].(map[string]any)["match"] != "192.0.2.11" {
+	if !scOK(v) || len(m) != 2 || m[0].(map[string]any)["match"] != "192.0.2.10" || m[1].(map[string]any)["match"] != "192.0.2.11" {
 		t.Errorf("unique: %v", m)
 	}
 	if _, hasLine := m[0].(map[string]any)["line"]; hasLine {

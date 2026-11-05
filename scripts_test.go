@@ -1071,6 +1071,28 @@ func TestScriptsEachBuiltin(t *testing.T) {
 			t.Fatalf("result: %v", v)
 		}
 	})
+	// cardápio v5 (finders/inspeção): smoke; deep tests in *_cardapio_test.go
+	run("file_find", func(t *testing.T) {
+		scWrite(t, root, "ff_alvo.txt", "x\n")
+		defer os.Remove(filepath.Join(root, "ff_alvo.txt"))
+		if v, _ := scCall(t, tb, "file_find", map[string]any{"name": "ff_alvo"}); !scOK(v) {
+			t.Errorf("file_find: %v", v)
+		}
+	})
+	for _, n := range []string{"dir_diff", "env_get", "file_dupes", "file_users", "line_slice", "net_route", "perm_find", "text_count", "text_extract"} {
+		n := n
+		run(n, func(t *testing.T) {
+			if runtime.GOOS != "linux" {
+				t.Skip("linux /proc, /sys")
+			}
+			// with no args the script either answers or names the argument it
+			// needs — never a crash or a non-JSON reply
+			v, _ := scCall(t, tb, n, map[string]any{})
+			if e, _ := v["error"].(string); !scOK(v) && strings.TrimSpace(e) == "" {
+				t.Errorf("%s: %v", n, v)
+			}
+		})
+	}
 	for _, n := range scShipped {
 		if !tested[n] {
 			missing = append(missing, n)

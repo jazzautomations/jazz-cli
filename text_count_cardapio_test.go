@@ -19,17 +19,17 @@ func TestTextCountCardapio(t *testing.T) {
 		"ERROR third ERROR same line\n"+
 		"INFO done\n")
 
-	// literal count: 5 occurrences over 3 matching lines
+	// literal count: 4 occurrences (1 + 1 + 2) over 3 matching lines
 	v, out := scCall(t, tb, "text_count", map[string]any{"pattern": "ERROR", "file": "logs/app.log"})
 	d := scDataOf(v)
-	if !scOK(v) || d["count"] != 5.0 || d["lines_matched"] != 3.0 || d["lines_scanned"] != 5.0 {
+	if !scOK(v) || d["count"] != 4.0 || d["lines_matched"] != 3.0 || d["lines_scanned"] != 5.0 {
 		t.Fatalf("count: %v\n%s", v, out.Text)
 	}
 	top := d["top_lines"].([]any)
 	if top[0].(map[string]any)["line"] != 4.0 || top[0].(map[string]any)["matches"] != 2.0 {
 		t.Errorf("top_lines: %v", top)
 	}
-	if txt, _ := d["text"].(string); !strings.HasPrefix(txt, "5 occurrence(s) of 'ERROR'") {
+	if txt, _ := d["text"].(string); !strings.HasPrefix(txt, "4 occurrence(s) of 'ERROR'") {
 		t.Errorf("text: %q", txt)
 	}
 
@@ -39,7 +39,7 @@ func TestTextCountCardapio(t *testing.T) {
 		t.Errorf("case sensitive: %v", v)
 	}
 	v, _ = scCall(t, tb, "text_count", map[string]any{"pattern": "error", "file": "logs/app.log", "ignore_case": true})
-	if d = scDataOf(v); !scOK(v) || d["count"] != 5.0 {
+	if d = scDataOf(v); !scOK(v) || d["count"] != 4.0 {
 		t.Errorf("ignore_case: %v", v)
 	}
 
