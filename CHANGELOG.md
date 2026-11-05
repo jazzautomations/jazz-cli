@@ -2,6 +2,15 @@
 
 ## Não lançado
 
+### Modo offline com botões
+
+- `menu` (ou `início`, `botões`, `?`) abre o offline como botões: Esta máquina · Git · Este projeto ·
+  Qualidade · Tudo o que sei fazer. Um número abre o grupo, outro roda a ação: ninguém precisa saber
+  comando nem frase. Cada botão é um pedido canônico que passa pelo mesmo cérebro (entendido com
+  confiança, verificado, só leitura). Clique em botão não é correção: nunca vira rótulo pro forge.
+- Saída dos scripts pra gente: números inteiros sem notação científica e tamanhos em GB/MB
+  ("free: 35.5 GB", não "3.82e+10"); sem linha de status vazia depois de conversa.
+
 ### Modo offline com educação (Robô Ed)
 
 - Conversa pura é respondida na hora, sem modelo e sem rodar nada: "oi", "eai, tudo bem?", "valeu", "boa

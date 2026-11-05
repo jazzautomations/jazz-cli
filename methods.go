@@ -1023,12 +1023,37 @@ func brScriptLines(v any, max int) []string {
 					}
 				}
 			default:
-				lines = append(lines, pad+k+": "+oneLine(fmt.Sprint(x), 200))
+				lines = append(lines, pad+k+": "+oneLine(brScalarKV(k, x), 200))
 			}
 		}
 	}
 	walk(data, "")
 	return lines
+}
+
+// brScalar prints a JSON scalar for people: whole numbers without
+// scientific notation ("38281715712", not "3.8281715712e+10").
+func brScalar(x any) string { return brScalarKV("", x) }
+
+// brSizeKeys are fields that hold byte counts in the cardápio scripts.
+var brSizeKeys = map[string]bool{"bytes": true, "size": true, "free": true, "total": true, "used": true, "avail": true, "available": true, "total_size": true, "compressed_size": true, "rx_bytes": true, "tx_bytes": true}
+
+// brScalarKV: like brScalar, and byte counts (≥ 1 MiB in a size field)
+// read as "35.6 GB" — a person reads sizes, not 11-digit integers.
+func brScalarKV(key string, x any) string {
+	if f, ok := x.(float64); ok && brSizeKeys[key] && f >= 1<<20 {
+		units := []string{"KB", "MB", "GB", "TB"}
+		v, u := f/1024, 0
+		for v >= 1024 && u < len(units)-1 {
+			v /= 1024
+			u++
+		}
+		return fmt.Sprintf("%.1f %s", v, units[u])
+	}
+	if f, ok := x.(float64); ok && f == float64(int64(f)) && f < 1e18 && f > -1e18 {
+		return fmt.Sprintf("%d", int64(f))
+	}
+	return fmt.Sprint(x)
 }
 
 // brScriptKV flattens a map item to `k=v k=v` (≤5 keys) for array items.
@@ -1051,7 +1076,7 @@ func brScriptKV(m map[string]any) string {
 			b, _ := json.Marshal(x)
 			parts = append(parts, k+"="+scCut(string(b), 60))
 		default:
-			parts = append(parts, k+"="+oneLine(fmt.Sprint(x), 60))
+			parts = append(parts, k+"="+oneLine(brScalarKV(k, x), 60))
 		}
 	}
 	return strings.Join(parts, " ")
