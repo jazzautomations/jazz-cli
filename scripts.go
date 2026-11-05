@@ -272,12 +272,12 @@ func (r *scRegistry) spec() ToolSpec {
 	}
 	return ToolSpec{
 		Name: "script",
-		Description: "Run a bundled helper script; it returns compact JSON {ok,confidence,data,unparsed,warnings} in one call instead of several bash calls and long output.\n" +
-			"Use it to detect the project, run/parse tests and builds, extract stack traces, summarize logs, find symbols, read JSON/YAML/CSV, check git state, ports and local HTTP.\n" +
-			"Pass the script's arguments in args; a wrong argument returns the script's schema.",
+		Description: "Run a bundled helper; returns compact JSON {ok,confidence,data,unparsed,warnings} in one call instead of several bash calls and long output.\n" +
+			"Detect the project, run/parse tests and builds, extract stack traces, summarize logs, find symbols, read JSON/YAML/CSV, git state, ports, local HTTP.\n" +
+			"Pass script args in args; wrong args return the schema.",
 		Params: obj(map[string]any{
-			"name": map[string]any{"type": "string", "enum": r.names, "description": "Script and its args (? = optional, a|b = one of): " + strings.Join(sigs, " ")},
-			"args": map[string]any{"type": "object", "description": "Arguments for the script"},
+			"name": map[string]any{"type": "string", "enum": r.names, "description": "Script and args (? = optional, a|b = one of): " + strings.Join(sigs, " ")},
+			"args": map[string]any{"type": "object", "description": "Script arguments"},
 		}, "name"),
 	}
 }

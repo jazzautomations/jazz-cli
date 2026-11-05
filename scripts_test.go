@@ -23,7 +23,7 @@ import (
 // 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "csv_to_json", "date_normalize", "dep_graph", "dep_outdated", "detect_project", "diff_apply_check", "diff_quality", "disk_usage", "dotenv_check", "dup_code", "env_tools", "extract_stacktrace", "extract_versions", "file_hash_diff", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "json_schema_infer", "large_funcs", "license_scan", "lint_run", "log_errors_recent", "md_outline", "mem_top", "net_ifaces", "parse_build_errors", "parse_log_lines", "parse_test_output", "pkg_installed", "port_free", "proc_ports", "regex_test", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "table_render", "text_grep", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "url_parse", "wordcount_stats", "yaml_get"}
+var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "csv_to_json", "date_normalize", "dep_graph", "dep_outdated", "detect_project", "diff_apply_check", "diff_quality", "dir_diff", "disk_usage", "dotenv_check", "dup_code", "env_get", "env_tools", "extract_stacktrace", "extract_versions", "file_dupes", "file_find", "file_hash_diff", "file_users", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "json_schema_infer", "large_funcs", "license_scan", "line_slice", "lint_run", "log_errors_recent", "md_outline", "mem_top", "net_ifaces", "net_route", "parse_build_errors", "parse_log_lines", "parse_test_output", "perm_find", "pkg_installed", "port_free", "proc_ports", "regex_test", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "table_render", "text_count", "text_extract", "text_grep", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "url_parse", "wordcount_stats", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -143,7 +143,7 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("description has %d lines, want <= 3", n)
 	}
 	b, _ := json.Marshal(last)
-	if est := len(b) / 4; est > 900 { // 58 scripts (cardápio v1–v4), ~14 tokens each after capping optionals at 2; raise only with the same arithmetic
+	if est := len(b) / 4; est > 900 { // 70 scripts (cardápio v1–v5), ~13 tokens each after capping optionals at 2; raise only with the same arithmetic
 		t.Errorf("script spec ~%d tokens, keep it small (<900)", est)
 	}
 	props := last.Params["properties"].(map[string]any)
@@ -998,6 +998,76 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		scWrite(t, root, "ana.txt", "ana\n")
 		v, _ := scCall(t, tb, "diff_apply_check", map[string]any{"file": "v4-input.txt"})
 		if !scOK(v) || scDataOf(v)["applies"] != true {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("dir_diff", func(t *testing.T) {
+		scWrite(t, root, "dd-a/x.txt", "1\n")
+		scWrite(t, root, "dd-b/x.txt", "2\n")
+		v, _ := scCall(t, tb, "dir_diff", map[string]any{"a": "dd-a", "b": "dd-b"})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("env_get", func(t *testing.T) {
+		v, _ := scCall(t, tb, "env_get", map[string]any{})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("file_dupes", func(t *testing.T) {
+		scWrite(t, root, "dups/one.txt", "same\n")
+		scWrite(t, root, "dups/two.txt", "same\n")
+		v, _ := scCall(t, tb, "file_dupes", map[string]any{"path": "dups", "min_size": 0})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("file_find", func(t *testing.T) {
+		scWrite(t, root, "ff/app.go", "package main\n")
+		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "ff", "ext": "go"})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("file_users", func(t *testing.T) {
+		scWrite(t, root, "fu/free.txt", "x\n")
+		v, _ := scCall(t, tb, "file_users", map[string]any{"path": "fu/free.txt"})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("line_slice", func(t *testing.T) {
+		scWrite(t, root, "ls/app.log", "a\nb\nc\n")
+		v, _ := scCall(t, tb, "line_slice", map[string]any{"file": "ls/app.log", "tail": 2})
+		if !scOK(v) || scDataOf(v)["lines"] == nil {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("net_route", func(t *testing.T) {
+		v, _ := scCall(t, tb, "net_route", map[string]any{})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("perm_find", func(t *testing.T) {
+		scWrite(t, root, "pf/f.txt", "x\n")
+		v, _ := scCall(t, tb, "perm_find", map[string]any{"path": "pf", "executable": true, "type": "file"})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("text_count", func(t *testing.T) {
+		scWrite(t, root, "tc/app.log", "INFO ok\nERROR bad\n")
+		v, _ := scCall(t, tb, "text_count", map[string]any{"pattern": "ERROR", "file": "tc/app.log"})
+		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("text_extract", func(t *testing.T) {
+		scWrite(t, root, "te/access.log", "hits 42 ok\n")
+		v, _ := scCall(t, tb, "text_extract", map[string]any{"pattern": "number", "file": "te/access.log"})
+		if !scOK(v) {
 			t.Fatalf("result: %v", v)
 		}
 	})

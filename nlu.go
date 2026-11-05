@@ -100,6 +100,7 @@ type nuIntentDef struct {
 
 type nuWorldDef struct {
 	Files      []string `json:"files"`
+	Dirs       []string `json:"dirs"`
 	Symbols    []string `json:"symbols"`
 	Services   []string `json:"services"`
 	SSHHosts   []string `json:"ssh_hosts"`
@@ -507,6 +508,19 @@ func newNuWorld(ents []nuEnt) *nuWorld {
 func nuWorldFromDef(d nuWorldDef) *nuWorld {
 	var e []nuEnt
 	add := func(kind, name string) { e = append(e, nuEnt{Kind: kind, Name: name, Key: fzFold(name)}) }
+	dirs := map[string]bool{}
+	addDir := func(name string) {
+		base := name
+		if j := strings.LastIndexByte(name, '/'); j >= 0 {
+			base = name[j+1:]
+		}
+		key := fzFold(base)
+		if len(key) < 2 || dirs[key] {
+			return
+		}
+		dirs[key] = true
+		e = append(e, nuEnt{Kind: "dir", Name: name, Key: key})
+	}
 	for _, f := range d.Files {
 		kind := "file"
 		base := f
@@ -524,6 +538,15 @@ func nuWorldFromDef(d nuWorldDef) *nuWorld {
 		if stem != base && len(stem) >= 3 {
 			e = append(e, nuEnt{Kind: kind, Name: f, Key: fzFold(stem)})
 		}
+		// every parent of a listed path is a dir of the world
+		for j := len(f) - 1; j > 0; j-- {
+			if f[j] == '/' {
+				addDir(f[:j])
+			}
+		}
+	}
+	for _, dir := range d.Dirs {
+		addDir(dir)
 	}
 	for _, s := range d.Symbols {
 		add("symbol", s)
@@ -586,6 +609,7 @@ func nuRuntimeWorld(root string, p *epProfile) *nuWorld {
 	}
 	ents := make([]nuEnt, 0, 1024)
 	if ix != nil {
+		dirs := map[string]bool{}
 		for i := range ix.files {
 			f := &ix.files[i]
 			kind := "file"
@@ -597,6 +621,24 @@ func nuRuntimeWorld(root string, p *epProfile) *nuWorld {
 			ents = append(ents, nuEnt{Kind: kind, Name: f.Rel, Key: fzFold(f.Base)})
 			if stem := strings.TrimSuffix(f.Base, f.Ext); stem != f.Base && len(stem) >= 3 {
 				ents = append(ents, nuEnt{Kind: kind, Name: f.Rel, Key: fzFold(stem)})
+			}
+			// the parents of every indexed path are dirs of the world, so
+			// "a pasta web" tags an entity instead of a bare word
+			for j := len(f.Rel) - 1; j > 0; j-- {
+				if f.Rel[j] != '/' {
+					continue
+				}
+				dir := f.Rel[:j]
+				base := dir
+				if k := strings.LastIndexByte(dir, '/'); k >= 0 {
+					base = dir[k+1:]
+				}
+				key := fzFold(base)
+				if len(key) < 2 || dirs[key] {
+					continue
+				}
+				dirs[key] = true
+				ents = append(ents, nuEnt{Kind: "dir", Name: dir, Key: key})
 			}
 		}
 	}
@@ -1041,7 +1083,54 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			used = x.used
 		}
 	}
-	in.Slots, in.Missing, in.Hint = m.fill(def, toks, hits, used)
+	var unfed int
+	in.Slots, in.Missing, in.Hint, unfed = m.fill(def, toks, hits, used, w)
+	if unfed > 0 {
+		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
+		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavra(s) solta(s) não parecem nome do slot", unfed))
+	}
+	// a mutation verb ("apaga", "reinicia", "move") is never answered by a
+	// read-only intent: refuse the read instead of showing the wrong table.
+	// A word that also names a read concept ("mudaram" = diff+mutate) is
+	// excused — the sentence may legitimately be about the changed state.
+	if brLevel0Intents[def.Name] {
+		// the concepts this intent's grammar speaks about
+		concOf := map[string]bool{}
+		for _, r := range def.Rules {
+			for _, g := range r.All {
+				for _, alt := range strings.Split(g, "|") {
+					concOf[alt] = true
+				}
+			}
+			for _, g := range r.Any {
+				for _, alt := range strings.Split(g, "|") {
+					concOf[alt] = true
+				}
+			}
+		}
+		mut := ""
+		for i := range toks {
+			t := &toks[i]
+			if t.Quoted || t.Filler || nuToWords[t.Fold] || t.Fixed != "" || len(t.Tags) > 0 {
+				continue // a typo guess or an entity name is a noun, not an order
+			}
+			m, other := false, false
+			for _, c := range t.Concs {
+				if nuMutConcepts[c] && !used[c] {
+					m = true
+				} else if concOf[c] {
+					other = true // the same word feeds this intent's grammar
+				}
+			}
+			if m && !other {
+				mut = t.Fold
+			}
+		}
+		if mut != "" {
+			conf *= 0.5
+			in.Evidence = append(in.Evidence, fmt.Sprintf("verbo de mutação '%s' não combina com leitura", mut))
+		}
+	}
 	// typo-only: the rule fired, but every concept/tag it relied on is carried
 	// only by a token we typo-repaired, and no correctly-spelled token names a
 	// real entity (@file/@host/@tool/…) to corroborate it. The intent then
@@ -1123,6 +1212,110 @@ var nuVerbConcepts = map[string]bool{"open": true, "explain": true, "find": true
 	"commit": true, "push": true, "pull": true, "checkout": true, "stash": true, "undo": true, "rename": true, "create": true, "delete": true,
 	"fix": true, "install": true, "update": true, "connect": true, "start": true, "stop": true, "restart": true, "kill": true}
 
+// nuMutConcepts mark a request that changes something: delete, move,
+// restart, install, enable... A read-only level-0 intent must never answer
+// one — an honest "not understood" beats a confident wrong listing.
+var nuMutConcepts = map[string]bool{
+	"delete": true, "create": true, "install": true, "update": true, "fix": true,
+	"start": true, "stop": true, "restart": true, "kill": true, "rename": true,
+	"format": true, "build": true,
+	"mutate": true, "recover": true, "extract": true, "enable": true,
+}
+
+// nuWorldKinds are slot kinds that name a real thing: a file or dir of the
+// project, a service of the machine, an installed tool, a host. A word
+// that fills one of these slots has to look like that thing — a spotted
+// entity, a quoted name, a name-shaped word, or a name the index resolves
+// — otherwise the slot stays empty and the reading loses confidence
+// instead of inventing a path, a unit or a tool out of a free word.
+var nuWorldKinds = map[string]bool{
+	"file": true, "test": true, "dir": true, "symbol": true,
+	"service": true, "container": true, "toolchain": true, "bin": true,
+	"ssh_host": true, "ts_peer": true, "port": true, "number": true,
+}
+
+// nuWorldOnly: every kind the slot accepts names a thing of the world, so
+// free text is not a candidate.
+func nuWorldOnly(kinds map[string]bool) bool {
+	if len(kinds) == 0 {
+		return false
+	}
+	for k := range kinds {
+		if !nuWorldKinds[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// nuSvcKinds are slot kinds naming a managed unit or a machine: a leftover
+// word is never one — it must come tagged or resolve in the world.
+var nuSvcKinds = map[string]bool{"service": true, "container": true, "ssh_host": true, "ts_peer": true}
+
+// nuSvcOnly: every kind the slot accepts is a service/host kind.
+func nuSvcOnly(kinds map[string]bool) bool {
+	if len(kinds) == 0 {
+		return false
+	}
+	for k := range kinds {
+		if !nuSvcKinds[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// slotTokOK: a bare word may fill a world-kind slot only when it looks
+// like a name of that world — name-shaped (parser.go, internal/db), a
+// quoted name (file-ish kinds only), or a project name the fuzzy resolver
+// would resolve ("parsr" for parser.go). Services, hosts and tools are
+// already tagged by spot when they exist, so a leftover word is never
+// one of them; a bare name does name a tool candidate ("tenho o kubectl
+// instalado?" — checking existence is the script's job, not the index's).
+func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
+	fileish := kinds["file"] || kinds["test"] || kinds["dir"] || kinds["symbol"]
+	if t.Quoted {
+		if fileish {
+			return true
+		}
+		if w == nil {
+			return false
+		}
+		for ei := range w.ents {
+			e := &w.ents[ei]
+			if nuKindAllowed(kinds, e.Kind) && e.Key == t.Fold {
+				return true
+			}
+		}
+		return false
+	}
+	if nuNameShaped(t.Raw) {
+		return true
+	}
+	if !fileish && !nuSvcOnly(kinds) && len(t.Concs) == 0 && (kinds["toolchain"] || kinds["bin"]) {
+		return true
+	}
+	if w == nil || !fileish || len(t.Fold) < 3 {
+		return false
+	}
+	lim := fzLimit(len([]rune(t.Fold)))
+	for ei := range w.ents {
+		e := &w.ents[ei]
+		switch e.Kind {
+		case "file", "test", "dir", "symbol":
+		default:
+			continue
+		}
+		if !nuKindAllowed(kinds, e.Kind) || e.Key == "" || e.Key[0] != t.Fold[0] {
+			continue
+		}
+		if fzDist(t.Fold, e.Key, lim) <= lim {
+			return true
+		}
+	}
+	return false
+}
+
 // residual: the words that are not fillers and that no rule or cue explained.
 func (m *nuModel) residual(toks []nuTok, used map[string]bool) []int {
 	var out []int
@@ -1160,11 +1353,17 @@ func (m *nuModel) residualCount(toks []nuTok, used map[string]bool) int {
 
 var nuToWords = map[string]bool{"para": true, "pra": true, "pro": true, "to": true, "por": true, "->": true, "=>": true, "em": true}
 
-// fill extracts the slots of def.
-func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool) (map[string]string, []string, string) {
+// fill extracts the slots of def. It also counts unfed — free words a
+// world-kind slot refused — so Parse can lower confidence instead of
+// inventing values. A refused word only counts when the slot needed it
+// (required, or a service/host kind — a unit is never a leftover noun)
+// and the word carries no concept of its own: "arquivo", "zip" and
+// "conteúdo" are phrasing, not failed names.
+func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool, w *nuWorld) (map[string]string, []string, string, int) {
 	slots := map[string]string{}
 	var missing []string
 	hint := ""
+	unfed := 0
 	for i := range toks {
 		switch {
 		case toks[i].has("test") && !used["test"]:
@@ -1198,6 +1397,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 		for _, k := range sd.Kinds {
 			kinds[k] = true
 		}
+		strict := nuWorldOnly(kinds)
+		countUnfed := sd.Required || nuSvcOnly(kinds)
 		if v == "" && kinds["message"] {
 			v = nuMessage(toks)
 		}
@@ -1235,6 +1436,20 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				if taken[i] {
 					continue
 				}
+				if strict {
+					if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
+						continue // a number or an entity of another kind is not a free name
+					}
+					if m.slotTokOK(kinds, &toks[i], w) {
+						parts = append(parts, toks[i].Raw)
+						taken[i] = true
+						break
+					}
+					if countUnfed && len(toks[i].Concs) == 0 {
+						unfed++
+					}
+					continue
+				}
 				if toks[i].Quoted {
 					parts = []string{toks[i].Raw}
 					taken[i] = true
@@ -1265,6 +1480,9 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 				}
 				if !usedTok && len(t.Concs) > 0 && !nuAllCue(t, m) {
+					if strict && !m.slotTokOK(kinds, t, w) {
+						continue
+					}
 					v, taken[i] = t.Raw, true
 					break
 				}
@@ -1276,7 +1494,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			missing = append(missing, name)
 		}
 	}
-	return slots, missing, hint
+	return slots, missing, hint, unfed
 }
 
 func nuAllCue(t *nuTok, m *nuModel) bool {

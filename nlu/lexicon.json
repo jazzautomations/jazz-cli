@@ -217,7 +217,28 @@
   "viu",
   "porfavor",
   "sacou",
-  "saca"
+  "saca",
+  "under",
+  "below",
+  "beneath",
+  "above",
+  "over",
+  "between",
+  "within",
+  "inside",
+  "outside",
+  "before",
+  "after",
+  "around",
+  "among",
+  "during",
+  "onto",
+  "upon",
+  "down",
+  "off",
+  "out",
+  "through",
+  "without"
  ],
  "slang": {
   "roda ai": "run",
@@ -481,7 +502,9 @@
    "vivo",
    "viva",
    "alive",
-   "up"
+   "up",
+   "ativos",
+   "ativas"
   ],
   "test": [
    "teste",
@@ -506,7 +529,8 @@
    "buildar",
    "building",
    "compilacao",
-   "binario"
+   "binario",
+   "make"
   ],
   "lint": [
    "lint",
@@ -543,7 +567,12 @@
    "status",
    "estado",
    "situacao",
-   "state"
+   "state",
+   "modificado",
+   "modificada",
+   "modificados",
+   "modificadas",
+   "modified"
   ],
   "diff": [
    "diff",
@@ -555,16 +584,19 @@
    "alterados",
    "alteracao",
    "alteracoes",
-   "modificado",
-   "modificados",
    "modificacoes",
    "diferenca",
    "diferencas",
-   "changes",
    "changed",
+   "changes",
    "alterei",
    "mudei",
-   "modifiquei"
+   "modifiquei",
+   "compare",
+   "compara",
+   "comparar",
+   "comparacao",
+   "comparação"
   ],
   "history": [
    "historico",
@@ -677,7 +709,14 @@
    "write",
    "faz um",
    "faca um",
-   "monta"
+   "monta",
+   "save",
+   "salva",
+   "salvar",
+   "salve",
+   "scaffold",
+   "scaffolding",
+   "make"
   ],
   "delete": [
    "apaga",
@@ -693,7 +732,16 @@
    "exclui",
    "excluir",
    "exclua",
-   "del"
+   "del",
+   "drop",
+   "descarta",
+   "descartar",
+   "joga fora",
+   "wipe",
+   "limpa",
+   "limpar",
+   "limpe",
+   "limpo"
   ],
   "fix": [
    "conserta",
@@ -828,7 +876,11 @@
    "hostname",
    "whoami",
    "usuario",
-   "user"
+   "user",
+   "machine",
+   "machines",
+   "computer",
+   "laptop"
   ],
   "version": [
    "versao",
@@ -876,7 +928,8 @@
    "tailscale",
    "tailnet",
    "remota",
-   "remotas"
+   "remotas",
+   "proxy"
   ],
   "online": [
    "online",
@@ -914,7 +967,16 @@
    "runit",
    "launchd",
    "servidor",
-   "server"
+   "server",
+   "units",
+   "sshd",
+   "nginx",
+   "postgres",
+   "postgresql",
+   "httpd",
+   "apache",
+   "mysqld",
+   "mariadb"
   ],
   "start": [
    "sobe",
@@ -930,7 +992,6 @@
    "levantar",
    "starta",
    "startar",
-   "boot",
    "deploy",
    "bota"
   ],
@@ -945,7 +1006,12 @@
    "derrubar",
    "shutdown",
    "encerra",
-   "encerrar"
+   "encerrar",
+   "desativa",
+   "desativar",
+   "desative",
+   "pausa",
+   "pausar"
   ],
   "restart": [
    "reinicia",
@@ -1023,7 +1089,13 @@
    "storage",
    "disk",
    "df",
-   "particao"
+   "particao",
+   "mount",
+   "mounts",
+   "montagem",
+   "montado",
+   "montada",
+   "mountpoint"
   ],
   "memory": [
    "memoria",
@@ -1039,7 +1111,11 @@
    "wifi",
    "conexao",
    "conectividade",
-   "net"
+   "net",
+   "dns",
+   "vpn",
+   "wireguard",
+   "openvpn"
   ],
   "summary": [
    "resumo",
@@ -1189,7 +1265,11 @@
    "quente",
    "quentes",
    "mais mudado",
-   "mais alterado"
+   "mais alterado",
+   "editou",
+   "editaram",
+   "edited",
+   "modificou"
   ],
   "merge": [
    "merge",
@@ -1253,11 +1333,6 @@
    "faltam",
    "falta",
    "missing",
-   "variaveis de ambiente",
-   "variavel de ambiente",
-   "env vars",
-   "env var",
-   "environment variables",
    "completo",
    "completa",
    "bate com",
@@ -1490,13 +1565,15 @@
    "agora pouco",
    "ha pouco",
    "hoje",
-   "modificados",
-   "modificado",
    "alterados recentemente",
    "recently",
    "recent",
    "changed recently",
-   "last hour"
+   "last hour",
+   "newest",
+   "mais novo",
+   "mais nova",
+   "last-created"
   ],
   "archive": [
    "zip",
@@ -1559,11 +1636,6 @@
    "interface",
    "interfaces",
    "placa de rede",
-   "ip",
-   "ips",
-   "endereco ip",
-   "enderecos ip",
-   "ip address",
    "mac",
    "eth0",
    "wlan0",
@@ -1628,6 +1700,230 @@
    "patch dry run",
    "patch aplica",
    "diff_apply_check"
+  ],
+  "ipaddr": [
+   "ip",
+   "ips",
+   "ip address",
+   "endereco ip",
+   "enderecos ip"
+  ],
+  "pubnet": [
+   "ip externo",
+   "ip publico",
+   "external ip",
+   "public ip",
+   "externo",
+   "externa",
+   "external",
+   "publico",
+   "publica",
+   "public"
+  ],
+  "user": [
+   "usuario",
+   "usuarios",
+   "user",
+   "users",
+   "whoami",
+   "dono",
+   "usuário",
+   "usuária"
+  ],
+  "sysnoun": [
+   "kernel",
+   "distro",
+   "driver",
+   "drivers",
+   "firmware",
+   "bootloader",
+   "bios",
+   "uefi",
+   "boot",
+   "boots"
+  ],
+  "tag": [
+   "tag",
+   "tags"
+  ],
+  "context": [
+   "context",
+   "contexto"
+  ],
+  "envvars": [
+   "variaveis de ambiente",
+   "variavel de ambiente",
+   "variaveis",
+   "variavel",
+   "env vars",
+   "env var",
+   "environment variables",
+   "variables",
+   "variable"
+  ],
+  "findattr": [
+   "permissao",
+   "permission",
+   "permissions",
+   "permissoes",
+   "suid",
+   "sgid",
+   "world-writable",
+   "world writable",
+   "writable",
+   "executable",
+   "executavel",
+   "vazio",
+   "vazia",
+   "vazios",
+   "empty",
+   "largest",
+   "biggest",
+   "heaviest",
+   "maior",
+   "maiores",
+   "larger",
+   "bigger",
+   "legiveis",
+   "escreviveis",
+   "readable",
+   "ownership",
+   "propriedade",
+   "group",
+   "grupo",
+   "pesada",
+   "pesado",
+   "777",
+   "775",
+   "755",
+   "750",
+   "700",
+   "644",
+   "640",
+   "600",
+   "666",
+   "444",
+   "400"
+  ],
+  "mutate": [
+   "change",
+   "changing",
+   "muda",
+   "mudar",
+   "mude",
+   "move",
+   "mover",
+   "mova",
+   "copia",
+   "copiar",
+   "copy",
+   "chown",
+   "chmod",
+   "chgrp",
+   "mkdir",
+   "rmdir",
+   "alias",
+   "turn on",
+   "turns on",
+   "turn off",
+   "turns off",
+   "transcribe",
+   "transcreve",
+   "transcrever",
+   "discard",
+   "changes"
+  ],
+  "recover": [
+   "recover",
+   "recupera",
+   "recuperar",
+   "recupere",
+   "restore",
+   "restaura",
+   "restaurar",
+   "undelete",
+   "unerase",
+   "salvage"
+  ],
+  "download": [
+   "download",
+   "downloads",
+   "downloading",
+   "baixa",
+   "baixar",
+   "baixe"
+  ],
+  "extract": [
+   "extrai",
+   "extract",
+   "extracts",
+   "unzip",
+   "untar",
+   "descompacta",
+   "descompactar",
+   "decompress"
+  ],
+  "enable": [
+   "enable",
+   "enables",
+   "habilita",
+   "habilitar",
+   "habilite",
+   "ativa",
+   "ativar",
+   "ative",
+   "disable"
+  ],
+  "perf": [
+   "bottleneck",
+   "bottlenecks",
+   "profile",
+   "profiling",
+   "gargalo",
+   "gargalos",
+   "hot path",
+   "cpu profile",
+   "heap profile",
+   "flamegraph",
+   "pprof"
+  ],
+  "routes": [
+   "rota",
+   "rotas",
+   "route",
+   "routes",
+   "routing",
+   "roteamento",
+   "routing table",
+   "tabela de rotas"
+  ],
+  "lineselect": [
+   "linha",
+   "linhas",
+   "line",
+   "lines",
+   "column",
+   "columns",
+   "coluna",
+   "colunas"
+  ],
+  "scope": [
+   "home"
+  ],
+  "content": [
+   "content",
+   "contents",
+   "conteúdo",
+   "conteudo"
+  ],
+  "sort": [
+   "sort",
+   "sorted",
+   "ordena",
+   "ordenar",
+   "ordene",
+   "sort_by",
+   "sort-by"
   ]
  }
 }

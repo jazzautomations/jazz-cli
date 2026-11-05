@@ -71,8 +71,8 @@
    "doc": "trabalho criativo: continua passando pro modelo (handled=false), mas diz POR QUÊ, o que faz offline e como ligar um modelo",
    "expect": {"handled": false, "contains": ["precisa de um modelo", "sem modelo eu resolvo"]}},
   {"id": "impossible-deploy", "cat": "impossível", "fixture": "go", "prompt": "faz deploy na aws com terraform",
-   "doc": "era handled=false; agora o cérebro pega como service_start e a permissão barra",
-   "expect": {"status": "blocked", "intent": "service_start"}},
+   "doc": "era blocked via service_start('aws'); agora 'aws' não é serviço conhecido e a leitura perde confiança — pergunta em vez de agir",
+   "expect": {"handled": false}},
   {"id": "no-method-commit", "cat": "impossível", "fixture": "go", "prompt": "commita tudo com a mensagem 'wip'", "needs": "git",
    "doc": "era handled=false; agora git_commit existe e o eval nega git add (a permissão perguntaria ao vivo)",
    "expect": {"status": "blocked", "intent": "git_commit", "questions": 0},
@@ -102,8 +102,9 @@
    "expect": {"blocked": false}},
 
   {"id": "composite-fail-context", "cat": "composta", "fixture": "py-fail", "prompt": "roda os testes e me mostra o que falhou", "needs": "python3",
-   "expect": {"status": "failed", "intent": "multi", "contains": ["test_soma", ">"], "questions": 1},
-   "expect_missing": {"status": "needs_input", "intent": "multi"}}
+   "doc": "era multi via open_file('falhou') — enchimento falso; agora 'mostra o que falhou' não é leitura de arquivo e fica só run_tests",
+   "expect": {"status": "failed", "intent": "run_tests", "contains": ["test_soma", ">"], "questions": 0},
+   "expect_missing": {"status": "blocked", "intent": "run_tests", "category": "command_missing"}}
 ,
   {"id": "list-files", "cat": "atalho", "fixture": "go", "prompt": "lista os arquivos", "doc": "0.9.1: script:tree_summary via despachante script:*; sem python3 cai no read_file", "expect": {"status": "succeeded", "intent": "list_files", "contains": ["files"], "questions": 0}, "expect_missing": {"status": "succeeded", "intent": "list_files", "contains": ["parser.go"], "questions": 0}},
   {"id": "project-summary", "cat": "atalho", "fixture": "go", "prompt": "resumo do projeto", "needs": "python3", "doc": "0.9.1: script:detect_project; sem python3 cai no env_status", "expect": {"status": "succeeded", "intent": "project_summary", "contains": ["files"], "questions": 0}, "expect_missing": {"status": "succeeded", "intent": "project_summary", "contains": ["projeto"], "questions": 0}},

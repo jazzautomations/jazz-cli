@@ -79,6 +79,18 @@
    3000,
    5432,
    8080
+  ],
+  "dirs": [
+   "src",
+   "docs",
+   "dist",
+   "out",
+   "tmp",
+   "vendor",
+   "web",
+   "images",
+   "backup",
+   "data"
   ]
  },
  "intents": [
@@ -89,6 +101,66 @@
     {
      "all": [
       "open"
+     ],
+     "none": [
+      "blame",
+      "logs",
+      "status",
+      "port",
+      "ifaces",
+      "ipaddr",
+      "envvars",
+      "history",
+      "summary",
+      "mutate",
+      "findattr",
+      "recent",
+      "download",
+      "extract",
+      "enable",
+      "recover",
+      "perf",
+      "diff",
+      "git",
+      "net",
+      "branch",
+      "files",
+      "container",
+      "@container",
+      "host",
+      "@host",
+      "memory",
+      "disk",
+      "cpu",
+      "process",
+      "dep",
+      "version",
+      "todo",
+      "archive",
+      "duplicate",
+      "license",
+      "snapshot",
+      "conflict",
+      "cron",
+      "usage",
+      "listen",
+      "cochange",
+      "fix",
+      "error",
+      "find",
+      "explain",
+      "symnoun",
+      "message",
+      "stale",
+      "jazz",
+      "online",
+      "sysnoun",
+      "tag",
+      "context",
+      "who",
+      "lineselect",
+      "routes",
+      "user"
      ]
     },
     {
@@ -111,7 +183,18 @@
       "format",
       "lint",
       "test",
-      "logs"
+      "logs",
+      "blame",
+      "mutate",
+      "download",
+      "extract",
+      "enable",
+      "recover",
+      "ipaddr",
+      "envvars",
+      "findattr",
+      "tag",
+      "perf"
      ]
     }
    ],
@@ -207,6 +290,16 @@
     {
      "all": [
       "find"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "scope"
      ]
     }
    ],
@@ -247,6 +340,9 @@
      "all": [
       "run",
       "test"
+     ],
+     "none": [
+      "mutate"
      ]
     },
     {
@@ -267,7 +363,9 @@
       "fix",
       "delete",
       "error",
-      "rename"
+      "rename",
+      "mutate",
+      "port"
      ]
     }
    ],
@@ -325,7 +423,9 @@
      ],
      "none": [
       "error",
-      "fix"
+      "fix",
+      "filenoun",
+      "@file"
      ]
     }
    ],
@@ -427,7 +527,20 @@
       "net",
       "online",
       "branch",
-      "@tool"
+      "@tool",
+      "sysnoun",
+      "tag",
+      "ipaddr",
+      "pubnet",
+      "user",
+      "envvars",
+      "mutate",
+      "memory",
+      "disk",
+      "cpu",
+      "process",
+      "ifaces",
+      "summary"
      ]
     },
     {
@@ -448,7 +561,11 @@
       "checkout",
       "undo",
       "install",
-      "update"
+      "update",
+      "tag",
+      "mutate",
+      "blame",
+      "sysnoun"
      ]
     }
    ],
@@ -486,6 +603,13 @@
     {
      "all": [
       "diff"
+     ],
+     "none": [
+      "recover",
+      "rename",
+      "checkout",
+      "findattr",
+      "sort"
      ]
     }
    ],
@@ -663,6 +787,12 @@
    "rules": [
     {
      "all": [
+      "create",
+      "branch"
+     ]
+    },
+    {
+     "all": [
       "branch"
      ],
      "none": [
@@ -835,7 +965,15 @@
      "none": [
       "branch",
       "commit",
-      "container"
+      "container",
+      "recent",
+      "download",
+      "recover",
+      "mutate",
+      "ifaces",
+      "net",
+      "envvars",
+      "findattr"
      ]
     }
    ],
@@ -879,7 +1017,11 @@
      ],
      "none": [
       "container",
-      "branch"
+      "branch",
+      "recover",
+      "service",
+      "@service",
+      "mutate"
      ]
     }
    ],
@@ -913,6 +1055,10 @@
     {
      "all": [
       "fix"
+     ],
+     "none": [
+      "sysnoun",
+      "service"
      ]
     },
     {
@@ -1089,14 +1235,29 @@
      "none": [
       "list",
       "host",
-      "connect"
+      "connect",
+      "process",
+      "files",
+      "mutate",
+      "delete",
+      "create",
+      "rename",
+      "install",
+      "logs",
+      "download",
+      "extract",
+      "recover",
+      "findattr",
+      "net",
+      "routes"
      ]
     },
     {
      "all": [
       "status",
       "env"
-     ]
+     ],
+     "none": []
     },
     {
      "all": [
@@ -1107,6 +1268,30 @@
       "status",
       "version",
       "list"
+     ],
+     "none": [
+      "mutate",
+      "files",
+      "lineselect"
+     ]
+    },
+    {
+     "all": [
+      "sysnoun"
+     ],
+     "any": [
+      "version",
+      "status",
+      "env",
+      "cpu",
+      "net"
+     ],
+     "none": [
+      "mutate",
+      "files",
+      "find",
+      "logs",
+      "version"
      ]
     }
    ],
@@ -1152,7 +1337,8 @@
      ],
      "none": [
       "update",
-      "jazz"
+      "jazz",
+      "sysnoun"
      ]
     },
     {
@@ -1187,7 +1373,11 @@
       "install",
       "update",
       "error",
-      "help"
+      "help",
+      "sysnoun",
+      "mutate",
+      "@service",
+      "@host"
      ]
     }
    ],
@@ -1367,7 +1557,12 @@
      ],
      "none": [
       "list",
-      "net"
+      "net",
+      "container",
+      "@container",
+      "mutate",
+      "context",
+      "enable"
      ]
     }
    ],
@@ -1487,19 +1682,16 @@
     },
     {
      "all": [
-      "list",
-      "env"
-     ]
-    },
-    {
-     "all": [
       "host"
      ],
      "none": [
       "connect",
       "online",
       "status",
-      "@host"
+      "@host",
+      "user",
+      "process",
+      "mutate"
      ]
     }
    ],
@@ -1548,7 +1740,11 @@
       "stop",
       "restart",
       "logs",
-      "container"
+      "container",
+      "enable",
+      "mutate",
+      "error",
+      "sysnoun"
      ]
     }
    ],
@@ -1589,7 +1785,11 @@
       "start",
       "service|@service"
      ],
-     "w": 2
+     "w": 2,
+     "none": [
+      "enable",
+      "mutate"
+     ]
     },
     {
      "all": [
@@ -1599,7 +1799,9 @@
       "container",
       "@container",
       "remote",
-      "push"
+      "push",
+      "enable",
+      "mutate"
      ]
     }
    ],
@@ -1705,7 +1907,13 @@
       "logs"
      ],
      "none": [
-      "history"
+      "history",
+      "find",
+      "mutate",
+      "create",
+      "extract",
+      "sysnoun",
+      "lineselect"
      ]
     }
    ],
@@ -1744,6 +1952,10 @@
      "all": [
       "start",
       "container|@container"
+     ],
+     "none": [
+      "enable",
+      "mutate"
      ]
     },
     {
@@ -1753,7 +1965,9 @@
      ],
      "none": [
       "list",
-      "running"
+      "running",
+      "enable",
+      "mutate"
      ]
     }
    ],
@@ -1830,12 +2044,20 @@
      "all": [
       "stop",
       "container|@container"
+     ],
+     "none": [
+      "recover",
+      "mutate"
      ]
     },
     {
      "all": [
       "delete",
       "container|@container"
+     ],
+     "none": [
+      "recover",
+      "mutate"
      ]
     }
    ],
@@ -1870,7 +2092,13 @@
      ],
      "none": [
       "who",
-      "kill"
+      "kill",
+      "responds",
+      "remote",
+      "host",
+      "@host",
+      "mutate",
+      "ifaces"
      ]
     },
     {
@@ -1878,7 +2106,12 @@
       "listen"
      ],
      "none": [
-      "who"
+      "who",
+      "responds",
+      "remote",
+      "host",
+      "@host",
+      "mutate"
      ]
     }
    ],
@@ -1992,7 +2225,8 @@
       "process"
      ],
      "none": [
-      "kill"
+      "kill",
+      "user"
      ]
     }
    ],
@@ -2133,7 +2367,16 @@
       "fix",
       "create",
       "delete",
-      "@file"
+      "@file",
+      "files",
+      "mutate",
+      "findattr",
+      "envvars",
+      "ipaddr",
+      "duplicate",
+      "user",
+      "sysnoun",
+      "tag"
      ]
     }
    ],
@@ -2165,7 +2408,23 @@
       "files"
      ],
      "none": [
-      "diff"
+      "diff",
+      "mutate",
+      "extract",
+      "findattr",
+      "download",
+      "blame",
+      "ipaddr",
+      "envvars",
+      "enable",
+      "recover",
+      "install",
+      "perf",
+      "status",
+      "scope",
+      "recent",
+      "duplicate",
+      "sort"
      ]
     },
     {
@@ -2178,7 +2437,23 @@
      "none": [
       "delete",
       "create",
-      "diff"
+      "diff",
+      "mutate",
+      "extract",
+      "findattr",
+      "download",
+      "blame",
+      "ipaddr",
+      "envvars",
+      "enable",
+      "recover",
+      "install",
+      "perf",
+      "status",
+      "scope",
+      "recent",
+      "duplicate",
+      "sort"
      ]
     }
    ],
@@ -2213,6 +2488,11 @@
     {
      "all": [
       "help"
+     ],
+     "none": [
+      "@tool",
+      "@service",
+      "mutate"
      ]
     }
    ],
@@ -2778,7 +3058,10 @@
      ],
      "none": [
       "delete",
-      "create"
+      "create",
+      "mutate",
+      "download",
+      "content"
      ]
     }
    ],
@@ -2966,7 +3249,9 @@
      "none": [
       "kill",
       "install",
-      "test"
+      "test",
+      "files",
+      "scope"
      ]
     },
     {
@@ -2976,7 +3261,9 @@
      "none": [
       "kill",
       "install",
-      "test"
+      "test",
+      "files",
+      "scope"
      ]
     }
    ],
@@ -3009,7 +3296,10 @@
      "none": [
       "delete",
       "create",
-      "commit"
+      "commit",
+      "recover",
+      "logs",
+      "scope"
      ]
     },
     {
@@ -3020,7 +3310,8 @@
      "none": [
       "git",
       "commit",
-      "history"
+      "history",
+      "recover"
      ]
     }
    ],
@@ -3052,7 +3343,9 @@
      "none": [
       "create",
       "delete",
-      "install"
+      "install",
+      "download",
+      "mutate"
      ]
     }
    ],
@@ -3201,7 +3494,14 @@
      "none": [
       "test",
       "build",
-      "fix"
+      "fix",
+      "find",
+      "filenoun",
+      "files",
+      "@file",
+      "delete",
+      "mutate",
+      "create"
      ]
     },
     {
@@ -3213,7 +3513,14 @@
       "test",
       "build",
       "fix",
-      "version"
+      "version",
+      "find",
+      "filenoun",
+      "files",
+      "@file",
+      "delete",
+      "mutate",
+      "create"
      ]
     }
    ],
@@ -3246,7 +3553,37 @@
      "none": [
       "kill",
       "port",
-      "connect"
+      "connect",
+      "extract",
+      "@file",
+      "pubnet",
+      "mutate",
+      "enable",
+      "download",
+      "create",
+      "findattr",
+      "filenoun"
+     ]
+    },
+    {
+     "all": [
+      "ipaddr"
+     ],
+     "none": [
+      "extract",
+      "@file",
+      "pubnet",
+      "remote",
+      "connect",
+      "service",
+      "port",
+      "kill",
+      "files",
+      "find",
+      "download",
+      "mutate",
+      "enable",
+      "filenoun"
      ]
     }
    ],
