@@ -269,7 +269,9 @@ func (t *nuTok) has(c string) bool {
 	return false
 }
 
-// nuStem is a light PT/EN suffix stripper (one suffix, stem >= 3 letters).
+// nuStem is a light PT/EN suffix stripper (one suffix, stem >= 3 letters —
+// but >= 4 after a single-letter suffix: "fila"→fil must not reach the stem
+// of "files"→fil, "toda"→tod must not reach the stem of "todos"→tod).
 var nuSuffixes = []string{"amente", "mente", "acoes", "icoes", "coes", "cao", "ando", "endo", "indo", "aram", "eram", "iram",
 	"ados", "adas", "idos", "idas", "ing", "ado", "ada", "ido", "ida", "ed", "ar", "er", "ir", "am", "em", "as", "es", "os", "a", "e", "o", "s"}
 
@@ -278,7 +280,11 @@ func nuStem(w string) string {
 		return w
 	}
 	for _, s := range nuSuffixes {
-		if len(w)-len(s) >= 3 && strings.HasSuffix(w, s) {
+		min := 3
+		if len(s) == 1 {
+			min = 4
+		}
+		if len(w)-len(s) >= min && strings.HasSuffix(w, s) {
 			return w[:len(w)-len(s)]
 		}
 	}

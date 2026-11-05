@@ -154,3 +154,33 @@ func TestNLURespondeIsNotNetStatus(t *testing.T) {
 		}
 	}
 }
+
+// Single-letter suffix strips need a >= 4 stem: short everyday words used to
+// collide into concept stems they never meant ("fila"→fil reached files' stem
+// and answered list_files, "toda"→tod reached list, "peso"→pes reached
+// uptime). The PTY queue prompt "fila tarefa" must reach the model instead.
+func TestNLUShortStemIsNotFiles(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, text := range []string{
+		"fila", "fila tarefa", "fila de tarefa", "toda", "peso", "mesa", "casa", "dedo",
+	} {
+		if in := m.Parse(text, w); in.Confidence >= brReadActMin {
+			t.Errorf("%q foi comido por %s (%.2f, %v) — palavra curta não é prova de intent", text, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// Positives: real listing requests still parse — the stems that matter
+	// ("files"→fil via "es", "arquivo"→arquiv via "o") are unchanged.
+	cases := map[string]string{
+		"lista os arquivos":       "list_files",
+		"mostra as pastas":        "list_files",
+		"quais arquivos tem aqui": "list_files",
+		"files":                   "list_files",
+		"arquivos do projeto":     "list_files",
+		"lista a pasta src":       "list_files",
+	}
+	for text, want := range cases {
+		if got := nuPredict(m.Parse(text, w)); got != want {
+			t.Errorf("%q => %s (%v), want %s", text, got, m.Parse(text, w).Evidence, want)
+		}
+	}
+}
