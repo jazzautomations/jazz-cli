@@ -41,6 +41,8 @@ type olAction struct {
 	In     *Intent // brain: the reading to run without parsing again (P2 menu)
 	Orig   *Intent // brain: the reading before the pick (the forge's label, signals_emit.go)
 	Text   string  // brain: the request that produced the reading
+	Pos    int     // 1-based position the owner picked (olTakePick; 0 = not a pick)
+	Menu   string  // the brain readings the menu offered, "pos:intent,..." (forge provenance)
 }
 
 // olMenuIn is everything the menu is built from (a pure function of it).
@@ -53,6 +55,7 @@ type olMenuIn struct {
 	LastErr  string // last error text of the session (tool output)
 	Root     string
 	HasRg    bool
+	RotSeed  string // session seed rotating menu positions 2..k (brMissActions)
 }
 
 // olMenuMax caps the menu (one screenful, 3-5 items).
@@ -339,12 +342,27 @@ func (a *App) olOffer(title string, items []olAction) {
 }
 
 // olTakePick: the reply picks an item of the pending menu (which is cleared
-// either way). ok=false = send the reply as a normal prompt.
+// either way). ok=false = send the reply as a normal prompt. The pick keeps
+// its 1-based position and the brain readings the menu offered: the forge
+// weighs a correction by where it was picked (Joachims 2005: the top item
+// gets picked for being on top; position ≥2 is evidence).
 func (a *App) olTakePick(reply string) (olAction, bool) {
 	items := a.menu
 	a.menu = nil
 	if i := olPick(items, reply); i >= 0 {
-		return items[i], true
+		act := items[i]
+		act.Pos = i + 1
+		var menu []string
+		for j, it := range items {
+			if it.Kind == "brain" {
+				menu = append(menu, fmt.Sprintf("%d:%s", j+1, it.Intent))
+				if act.Text == "" {
+					act.Text = it.Text // the request the menu was built for (non-brain picks carry no Text)
+				}
+			}
+		}
+		act.Menu = strings.Join(menu, ",")
+		return act, true
 	}
 	return olAction{}, false
 }
@@ -352,6 +370,15 @@ func (a *App) olTakePick(reply string) (olAction, bool) {
 // olRun runs a deterministic action and shows it like a tool call of the
 // model path (call line, result line, then the output as an answer block).
 func (a *App) olRun(ctx context.Context, act olAction) bool {
+	if act.Menu != "" {
+		// the readings the menu offered and the owner did NOT pick are weak
+		// negatives for the forge (a non-brain pick rejects them all).
+		chosen := ""
+		if act.Kind == "brain" && act.In != nil {
+			chosen = act.In.Name
+		}
+		sigMenuSkips(act.Text, act.Menu, chosen, a.sigTTY())
+	}
 	switch act.Kind {
 	case "slash":
 		a.command(act.Cmd)
@@ -368,7 +395,7 @@ func (a *App) olRun(ctx context.Context, act olAction) bool {
 		if act.In == nil {
 			return false
 		}
-		return a.brRunReading(ctx, act.Text, *act.In, act.Orig) // P2: the picked reading runs, no re-parse
+		return a.brRunReading(ctx, act) // P2: the picked reading runs, no re-parse
 	case "edit":
 		msg := "edite o pedido e mande de novo"
 		if act.Cmd != "" {

@@ -55,10 +55,35 @@ func sigEnabled() bool {
 	return !jzUnderTest() || sigTestOn.Load()
 }
 
+// sigRawExtra are the Extra keys whose values are machine tokens the forge
+// needs verbatim (enum, number, session id, "pos:intent" menu): they never
+// quote the request, so they skip redactSecrets. Every OTHER extra value is
+// request-derived (evidence quotes slot values and typo repairs) and gets
+// redacted like the text — a secret typed as a slot must not land in the
+// ledger in clear.
+var sigRawExtra = map[string]bool{
+	"how": true, "status": true, "where": true, "next": true, "reason": true,
+	"intent": true, "confidence": true, "raw": true, "alt": true, "typo_only": true,
+	"method": true, "src": true, "sess": true, "pos": true, "menu": true,
+}
+
+// sigInlineKV catches "NAME=value" secrets that are not at line start —
+// redactSecrets anchors its env-KV pass at line start (right for code, but
+// a request is one line of prose where a pasted "API_KEY=…" hides anywhere).
+// The prefix is optional so a bare API_KEY=/SECRET= matches too.
+var sigInlineKV = lazyRx(`(([A-Z][A-Z0-9_]*)?(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|ACCESS_KEY|PRIVATE_KEY|_DSN|WEBHOOK_URL|DATABASE_URL)[A-Z0-9_]*[ \t]*=[ \t]*["']?)[^\s"'$#]{8,}`)
+
+// sigRedact redacts for the ledger: the anchored pass on the ORIGINAL text
+// (line starts intact — oneLine runs after, in sigOf), then the inline pass
+// for mid-sentence "KEY=value".
+func sigRedact(s string) string {
+	return rdReplaceKeepPH(sigInlineKV.R(), redactSecrets(s), "${1}[REDACTED]")
+}
+
 // sigOf builds one signal from a reading. Pure (no I/O): the tests check
 // what would be written without a ledger.
 func sigOf(kind, text string, in Intent, extra map[string]string) Signal {
-	s := Signal{Kind: kind, Class: "intent", Text: redactSecrets(oneLine(strings.TrimSpace(text), 300)), Extra: map[string]string{}}
+	s := Signal{Kind: kind, Class: "intent", Text: oneLine(sigRedact(strings.TrimSpace(text)), 300), Extra: map[string]string{}}
 	if in.Name != "" {
 		s.Extra["intent"] = in.Name
 		s.Extra["confidence"] = fmt.Sprintf("%.2f", in.Confidence)
@@ -69,7 +94,7 @@ func sigOf(kind, text string, in Intent, extra map[string]string) Signal {
 			s.Extra["alt"] = strings.Join(in.Alt, ",")
 		}
 		if len(in.Evidence) > 0 {
-			s.Extra["evidence"] = oneLine(strings.Join(in.Evidence, " | "), 200)
+			s.Extra["evidence"] = oneLine(sigRedact(strings.Join(in.Evidence, " | ")), 200)
 		}
 		if in.TypoOnly {
 			s.Extra["typo_only"] = "true"
@@ -77,6 +102,9 @@ func sigOf(kind, text string, in Intent, extra map[string]string) Signal {
 	}
 	for k, v := range extra {
 		if v != "" {
+			if !sigRawExtra[k] {
+				v = sigRedact(v)
+			}
 			s.Extra[k] = v
 		}
 	}
@@ -139,8 +167,10 @@ func sigFlush(text string, r brResult, extra map[string]string) {
 // sigPickSignals: the owner picked a reading from the P2 menu (orig = what
 // the brain had read). The pick is the strong label; a confirm box the
 // picked reading may still raise (mutants always ask) is the same decision,
-// so it does not count twice.
-func sigPickSignals(text string, orig *Intent, r brResult) []Signal {
+// so it does not count twice. extra is the pick's provenance (src=tty,
+// sess, pos, menu — set by the interactive caller only): the forge only
+// learns from a human pick at the terminal, never from piped input.
+func sigPickSignals(text string, orig *Intent, r brResult, extra map[string]string) []Signal {
 	r.Confirmed = nil
 	out := brSignals(text, r)
 	read := Intent{}
@@ -149,14 +179,49 @@ func sigPickSignals(text string, orig *Intent, r brResult) []Signal {
 	}
 	s := sigOf("correction", text, read, map[string]string{"how": "menu", "status": string(r.Status)})
 	s.Chosen, s.Verified = r.Intent.Name, r.Handled && r.Status == tkSucceeded
+	for k, v := range extra {
+		if v != "" {
+			s.Extra[k] = v
+		}
+	}
 	return append(out, s)
 }
 
-func sigPick(text string, orig *Intent, r brResult) {
+func sigPick(text string, orig *Intent, r brResult, extra map[string]string) {
 	if !sigEnabled() {
 		return
 	}
-	for _, s := range sigPickSignals(text, orig, r) {
+	for _, s := range sigPickSignals(text, orig, r, extra) {
+		_ = sigAppend(s)
+	}
+}
+
+// sigMenuSkips: the readings the menu offered and the owner did NOT pick —
+// Joachims 2005: skipped options are weak negatives. menu is the pick's
+// provenance ("pos:intent,..."); chosen is the intent he picked ("" when the
+// pick was edit/contextual — every brain reading was rejected, the "nenhuma
+// destas" case). The forge treats a later correction to a skipped reading as
+// a contradiction (spec 0.14b item 6).
+func sigMenuSkips(text, menu, chosen string, extra map[string]string) {
+	if !sigEnabled() || menu == "" || text == "" {
+		return
+	}
+	for _, it := range strings.Split(menu, ",") {
+		i := strings.IndexByte(it, ':')
+		if i < 0 {
+			continue
+		}
+		intent := it[i+1:]
+		if intent == "" || intent == chosen {
+			continue
+		}
+		s := sigOf("menu_skip", text, Intent{}, nil)
+		s.Chosen = intent // the reading the owner saw and rejected
+		for k, v := range extra {
+			if v != "" {
+				s.Extra[k] = v
+			}
+		}
 		_ = sigAppend(s)
 	}
 }

@@ -140,7 +140,9 @@ type nuModel struct {
 	nb       *nuNB
 	loadErr  error
 	cueConcs map[string]bool
-	concs    map[string]bool // concept names (slang may output them directly)
+	concs    map[string]bool   // concept names (slang may output them directly)
+	aliases  map[string]string // owner's personal shortcuts: canon -> intent (alias.go, forge layer 1)
+	embedN   []int             // embedded examples per intent — the NB prior counts only these (spec 0.14b: the overlay never moves the prior)
 }
 
 var (
@@ -159,6 +161,7 @@ func nuGet() *nuModel {
 		nuDef = nuCompile(lx, ds)
 		if nuDef.loadErr == nil && nuForgeOn() {
 			nuLoadOverlay(nuDef)
+			nuLoadAliases(nuDef)
 		}
 	})
 	return nuDef
@@ -226,8 +229,10 @@ func nuCompile(lexJSON, dsJSON []byte) *nuModel {
 	for _, l := range m.cphrase {
 		sort.Slice(l, func(i, j int) bool { return len(l[i].words) > len(l[j].words) })
 	}
+	m.embedN = make([]int, len(m.data.Intents))
 	for i, it := range m.data.Intents {
 		m.byName[it.Name] = i
+		m.embedN[i] = len(it.Examples)
 	}
 	for _, c := range nuCueConcepts {
 		m.cueConcs[c] = true
@@ -945,6 +950,17 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		return in
 	}
 	toks := m.normalize(nuTokenize(text))
+	if len(m.aliases) > 0 {
+		if name, ok := m.aliases[nuCanonText(toks)]; ok {
+			// the owner's personal shortcut (alias.go): his word, his intent.
+			// It classifies, never authorizes — a mutating target still hits
+			// the permission guardrail at execution.
+			in.Name = name
+			in.Confidence = 0.97
+			in.Evidence = append(in.Evidence, "apelido do dono → "+name)
+			return in
+		}
+	}
 	hits := m.spot(toks, w)
 	nuEntityFirst(toks)
 	in.Ents = hits
@@ -1402,9 +1418,21 @@ func (m *nuModel) nuTrain(skip func(intent, ex int) bool) *nuNB {
 		totals = append(totals, tot)
 		nex = append(nex, n)
 	}
+	// Frozen prior (spec 0.14b item 7): only the embedded examples set the
+	// class prior — overlay/forge examples never raise it (the real cause of
+	// "forgetting" is prior drift, so the prior is pinned to the grammar).
+	// Held-out skips (the forge's split) still lower it: the prior tracks
+	// what was actually trained from the embedded set.
+	capped := func(ci int) int {
+		ii := nb.classes[ci]
+		if len(m.embedN) == len(m.data.Intents) && nex[ci] > m.embedN[ii] {
+			return m.embedN[ii]
+		}
+		return nex[ci]
+	}
 	allEx := 0
-	for _, n := range nex {
-		allEx += n
+	for ci := range nex {
+		allEx += capped(ci)
 	}
 	nb.table = make([]int16, len(nb.classes)*nuBuckets)
 	nb.prior = make([]int32, len(nb.classes))
@@ -1433,7 +1461,7 @@ func (m *nuModel) nuTrain(skip func(intent, ex int) bool) *nuNB {
 			}
 			row[b] = int16(v)
 		}
-		nb.prior[ci] = int32(math.Log((float64(nex[ci])+1)/float64(allEx+len(nex))) * nuScale)
+		nb.prior[ci] = int32(math.Log((float64(capped(ci))+1)/float64(allEx+len(nex))) * nuScale)
 	}
 	return nb
 }

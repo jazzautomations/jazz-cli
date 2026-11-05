@@ -62,6 +62,7 @@ uso:
   jazz env [--json] [--refresh]      perfil do ambiente (SO, RAM, ferramentas, hosts SSH, Tailscale, serviços, portas), só leitura
   jazz eval offline [--out DIR]      suíte de tarefas sem modelo (cérebro offline); grava results/offline-*.json
   jazz forge [--dry-run] [--json]    correções do ledger viram exemplos da gramática; só entra o que passa o portão held-out
+  jazz forge --list|--forget T|--add T I|--revert   apelidos pessoais instantâneos (só nesta máquina) e desfazer o último lote
   jazz improve [--apply] [-n N]      lições das últimas execuções: mostra as propostas (com evidência); --apply grava
   jazz improve --harness [--from D]  relatório de falhas recorrentes do harness em .jazz/improve-report.md (só proposta)
   jazz worktree list | merge <nome> [--yes] | rm <nome> [--force]

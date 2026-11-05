@@ -86,14 +86,24 @@ func TestOverlayCap(t *testing.T) {
 	m = nuFreshModel(t)
 	ov := &nuOverlay{Version: 1, Examples: map[string][]string{}}
 	k := 0
-	for _, it := range m.data.Intents[:12] {
+	nMut := 0
+	var safe []string
+	for _, it := range m.data.Intents {
+		if fgIsMutating(it.Name) {
+			nMut++
+			ov.Examples[it.Name] = []string{"pedido mutante zz"}
+			continue
+		}
+		safe = append(safe, it.Name)
+	}
+	for _, name := range safe[:12] {
 		for i := 0; i < nuOverlayPerIntent; i++ {
-			ov.Examples[it.Name] = append(ov.Examples[it.Name], fmt.Sprintf("pedido zz%dq", k))
+			ov.Examples[name] = append(ov.Examples[name], fmt.Sprintf("pedido zz%dq", k))
 			k++
 		}
 	}
 	added, skipped = nuApplyOverlay(m, ov)
-	if added != nuOverlayCap || skipped["cap"] != 12*nuOverlayPerIntent-nuOverlayCap {
+	if added != nuOverlayCap || skipped["cap"] != 12*nuOverlayPerIntent-nuOverlayCap || skipped["mutating"] != nMut {
 		t.Errorf("teto global: added=%d skipped=%v", added, skipped)
 	}
 }
@@ -176,5 +186,27 @@ func TestOverlayOffSwitchesAndPath(t *testing.T) {
 	nuLoadOverlay(m)
 	if len(nuExamplesOf(m, "large_funcs")) != n0 {
 		t.Error("overlay inválido deve ser ignorado")
+	}
+}
+
+// Frozen prior (spec item 7): overlay examples never move the class prior —
+// the NB prior counts only the embedded grammar. Add examples, retrain: the
+// prior is bit-identical.
+func TestOverlayFrozenPrior(t *testing.T) {
+	m := nuFreshModel(t)
+	nb0 := m.nuTrain(nil)
+	p0 := append([]int32{}, nb0.prior...)
+	nuApplyOverlay(m, &nuOverlay{Version: 1, Examples: map[string][]string{
+		"large_funcs": {"lista as funções mais compridas", "quais as funções mais compridas"},
+		"list_files":  {"varre os arquivos daqui"},
+	}})
+	nb1 := m.nuTrain(nil)
+	if len(p0) != len(nb1.prior) {
+		t.Fatal("prior mudou de tamanho com overlay")
+	}
+	for i := range p0 {
+		if p0[i] != nb1.prior[i] {
+			t.Fatalf("prior da classe %d moveu com overlay: %d -> %d", i, p0[i], nb1.prior[i])
+		}
 	}
 }

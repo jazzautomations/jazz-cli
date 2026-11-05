@@ -104,11 +104,11 @@ func TestSignalEmitKinds(t *testing.T) {
 func TestSignalEmitMenuPick(t *testing.T) {
 	orig := Intent{Name: "build", Confidence: 0.42}
 	r := brResult{Handled: true, Status: tkSucceeded, Intent: Intent{Name: "run_tests", Confidence: brLevel0Min}, Confirmed: &Intent{Name: "run_tests"}}
-	ss := sigPickSignals("testa tudo", &orig, r)
+	ss := sigPickSignals("testa tudo", &orig, r, map[string]string{"src": "tty", "pos": "2"})
 	if sigKinds(ss) != "correction" {
 		t.Fatalf("um pick = uma correção: %s", sigKinds(ss))
 	}
-	if ss[0].Chosen != "run_tests" || !ss[0].Verified || ss[0].Extra["how"] != "menu" || ss[0].Extra["intent"] != "build" || ss[0].Extra["confidence"] != "0.42" {
+	if ss[0].Chosen != "run_tests" || !ss[0].Verified || ss[0].Extra["how"] != "menu" || ss[0].Extra["intent"] != "build" || ss[0].Extra["confidence"] != "0.42" || ss[0].Extra["src"] != "tty" || ss[0].Extra["pos"] != "2" {
 		t.Errorf("correção do menu: %+v", ss[0])
 	}
 }

@@ -18,8 +18,17 @@ package main
 // and the embedded grammar runs as shipped. Off with JAZZ_FORGE=off, in
 // --fresh, during `jazz eval offline` and inside test binaries (tests never
 // read the owner's data dir; the overlay tests apply files explicitly).
-// Cost: one small file read at the first nuGet; the naive Bayes trains
-// lazily (classify), so the extra examples are free until then.
+// Cost: with no file, one failed open at the first nuGet. With a file forged
+// against this very grammar (base_sha256 = the embedded intents.json), the
+// forge already deduplicated it against the grammar, so the load only
+// canonicalizes the overlay's own texts and the ~100 negatives — never the
+// ~900 embedded examples. After a grammar upgrade (sha differs) the full
+// index runs once per process to drop what the grammar learned meanwhile.
+// The naive Bayes trains lazily (classify) either way.
+//
+// Mutating intents (fgIsMutating: push, commit, delete, kill, restart…)
+// never take overlay examples, not even from a hand-edited file: the forge
+// classifies, it never moves a reading toward a mutation.
 
 import (
 	"crypto/sha256"
@@ -31,6 +40,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"unicode/utf8"
 )
@@ -57,6 +67,10 @@ type nuOverlayProv struct {
 	Source string `json:"source"`
 	Count  int    `json:"count"`
 	Ts     int64  `json:"ts"`
+	// audit (spec 0.14b item 10): distinct sessions behind it and the
+	// distinguishing words the anti-trigger check passed
+	Sessions int      `json:"sessions,omitempty"`
+	Words    []string `json:"words,omitempty"`
 }
 
 // nuOverlayOff turns the overlay off for the process (the offline eval
@@ -79,10 +93,18 @@ func nuForgeOn() bool {
 // records what it was forged against; a newer grammar still accepts it —
 // the dedup below drops what the grammar learned meanwhile).
 func nuEmbeddedSHA() string {
-	ds, _ := nuFS.ReadFile("nlu/intents.json")
-	h := sha256.Sum256(ds)
-	return hex.EncodeToString(h[:])
+	nuShaOnce.Do(func() {
+		ds, _ := nuFS.ReadFile("nlu/intents.json")
+		h := sha256.Sum256(ds)
+		nuSha = hex.EncodeToString(h[:])
+	})
+	return nuSha
 }
+
+var (
+	nuShaOnce sync.Once
+	nuSha     string
+)
 
 // nuReadOverlay reads and validates an overlay file. A missing file is
 // (nil, nil).
@@ -125,9 +147,18 @@ type nuOverlayIndex struct {
 }
 
 func nuIndexOf(m *nuModel) nuOverlayIndex {
+	return nuIndexWith(m, true)
+}
+
+// nuIndexWith builds the index; examples=false indexes only the negatives
+// (the cheap load path of an overlay forged against this grammar).
+func nuIndexWith(m *nuModel, examples bool) nuOverlayIndex {
 	ix := nuOverlayIndex{ex: map[string]string{}, neg: map[string]bool{}}
 	for _, it := range m.data.Intents {
 		for _, e := range it.Examples {
+			if !examples {
+				break
+			}
 			if c := m.canonOf(e); c != "" {
 				if _, ok := ix.ex[c]; !ok {
 					ix.ex[c] = it.Name
@@ -151,13 +182,15 @@ func nuExampleText(s string) (string, bool) {
 
 // nuApplyOverlay merges ov into m (before the classifier trains). Intent
 // names go in sorted order, so the result never depends on map order.
-// Returns how many examples went in and why the rest did not.
+// Returns how many examples went in and why the rest did not. m is a model
+// of the embedded grammar (the only one the runtime and the forge compile):
+// an overlay stamped with its sha skips re-indexing the embedded examples.
 func nuApplyOverlay(m *nuModel, ov *nuOverlay) (int, map[string]int) {
 	skipped := map[string]int{}
 	if m == nil || ov == nil || m.loadErr != nil {
 		return 0, skipped
 	}
-	ix := nuIndexOf(m)
+	ix := nuIndexWith(m, ov.BaseSHA256 == "" || ov.BaseSHA256 != nuEmbeddedSHA())
 	names := make([]string, 0, len(ov.Examples))
 	for k := range ov.Examples {
 		names = append(names, k)
@@ -168,6 +201,10 @@ func nuApplyOverlay(m *nuModel, ov *nuOverlay) (int, map[string]int) {
 		ii, ok := m.byName[name]
 		if !ok {
 			skipped["intent"] += len(ov.Examples[name])
+			continue
+		}
+		if fgIsMutating(name) {
+			skipped["mutating"] += len(ov.Examples[name])
 			continue
 		}
 		per := 0
