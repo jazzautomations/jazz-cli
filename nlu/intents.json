@@ -2326,6 +2326,11 @@
         {
           "all": [
             "disk"
+          ],
+          "none": [
+            "find",
+            "nameattr",
+            "opinion"
           ]
         }
       ],
@@ -4202,7 +4207,8 @@
             "commit",
             "history",
             "v4_date_normalize",
-            "extractkind"
+            "extractkind",
+            "diskuse"
           ],
           "w": 10
         },
@@ -4237,7 +4243,8 @@
             "commit",
             "history",
             "v4_date_normalize",
-            "extractkind"
+            "extractkind",
+            "diskuse"
           ],
           "w": 0
         },
@@ -4270,7 +4277,8 @@
             "commit",
             "history",
             "v4_date_normalize",
-            "extractkind"
+            "extractkind",
+            "diskuse"
           ],
           "w": 15
         }
