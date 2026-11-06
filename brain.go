@@ -875,6 +875,45 @@ func brStatusLine(r brResult) string {
 	return fmt.Sprintf("· cérebro offline: %s · %s · %d evidência(s) · %d comando(s) · %d pergunta(s)", r.Intent.Name, label, len(r.Task.Evidence), r.Commands, r.Questions)
 }
 
+// brHandoffNote: quando o cérebro recusa, o modelo recebia só o texto cru —
+// agora leva o pacote do que o offline tentou (leitura, slots, por que parou,
+// evidência já coletada), pra não re-rodar nem re-explorar. "" quando não
+// há nada pra carregar (ruído puro).
+func brHandoffNote(text string, r brResult) string {
+	in := r.Intent
+	if !in.Understood() && in.Confidence == 0 && in.Name == "none" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("<system-reminder>The deterministic offline layer already processed this request (no model tokens spent).\n")
+	if in.Name != "" && in.Name != "none" {
+		fmt.Fprintf(&b, "Reading: intent %q (confidence %.2f) — slots %v", in.Name, in.Confidence, in.Slots)
+		if len(in.Missing) > 0 {
+			fmt.Fprintf(&b, ", missing %v", in.Missing)
+		}
+		b.WriteString("\n")
+	}
+	if len(in.Alt) > 0 {
+		fmt.Fprintf(&b, "Alternatives considered: %v.\n", in.Alt)
+	}
+	why := r.MissWhy
+	if r.NoMethod {
+		why += "|no_method"
+	}
+	fmt.Fprintf(&b, "Why it did not finish: %s (%s, %s).\n", why, r.Status, r.Category)
+	if r.Task != nil && len(r.Task.Evidence) > 0 {
+		b.WriteString("Evidence already gathered (verified — do not re-run):\n")
+		for i, ev := range r.Task.Evidence {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(&b, "- %s: %s\n", ev.Kind, oneLine(ev.Text, 160))
+		}
+	}
+	b.WriteString("Do not re-run commands it already ran. If the reading is wrong, start from the raw request. If it stopped on a denied command, the same command will hit the same wall — use --allow-tools/--yolo guidance or another approach.</system-reminder>")
+	return b.String()
+}
+
 // ---------- headless (jazz -p --offline) ----------
 
 // brHeadless answers a -p request offline. nil = the brain did not take it.
@@ -1045,6 +1084,9 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 	sigFlush(prompt, r, brLevel0Extra(ok))
 	if !ok {
 		dbg("brain", map[string]any{"level0": "model", "intent": r.Intent.Name, "status": string(r.Status)})
+		if note := brHandoffNote(prompt, r); note != "" {
+			ag.Note(note)
+		}
 		return nil
 	}
 	if ag.sess != nil { // only an accepted answer becomes part of the session
@@ -1105,7 +1147,10 @@ func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
 	}
 	sigFlush(text, r, extra)
 	if !ok {
-		return false // nothing shown: the model gets the request clean
+		if note := brHandoffNote(text, r); note != "" {
+			a.agent.Note(note)
+		}
+		return false // nothing shown: the model gets the request + what we tried
 	}
 	if brGroundIntents[in.Name] {
 		// interpretive request: the facts go to the model as grounding, the
@@ -1153,6 +1198,9 @@ func (a *App) brInteractive(ctx context.Context, text string) bool {
 	r := brRun(ctx, env, text)
 	sigFlush(text, r, a.sigTTY())
 	if !r.Handled && !a.brMissNow() {
+		if note := brHandoffNote(text, r); note != "" {
+			a.agent.Note(note)
+		}
 		return false // let olBefore probe: a reachable model should answer this
 	}
 	return a.brShow(text, r)
