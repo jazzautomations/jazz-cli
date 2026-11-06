@@ -2293,6 +2293,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"repositório": true, "current": true, "atual": true, "geral": true,
 			"root": true, "aqui": true, "here": true, "isso": true, "isto": true,
 			"arquivos": true, "files": true, "file": true, "arquivo": true,
+			// "directory tree"/"folder structure" = este projeto recursivo,
+			// não um diretório chamado tree; "in its subdirectories" idem
+			"tree": true, "hierarchy": true, "structure": true, "subtree": true,
+			"subdir": true, "subdirs": true, "subdirectory": true,
+			"subdirectories": true, "subfolder": true, "subfolders": true,
 		}
 		fileWords := map[string]bool{
 			"arquivos": true, "files": true, "diretorios": true, "diretórios": true,
@@ -2308,7 +2313,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue
 				}
 				if scopeFillers[u.Fold] {
-					break // "no projeto"/"em geral" falam DESTE escopo, não de um dir
+					taken[i], taken[j] = true, true
+					break // "no projeto"/"directory tree" falam DESTE escopo — consome a frase, não de um dir
 				}
 				taken[i], taken[j] = true, true
 				return u.Raw // tagged entities (@dir, /etc) are exactly the right values
