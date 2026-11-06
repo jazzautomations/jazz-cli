@@ -1,62 +1,71 @@
 {
- "methods": [
-  {
-   "name": "perm_find.script",
-   "intent": "perm_find",
-   "priority": 10,
-   "doc": "script:perm_find: arquivos por permissão, dono, suid/sgid ou executável",
-   "needs": [
-    "bin.python3"
-   ],
-   "steps": [
+  "methods": [
     {
-     "cap": "script:perm_find",
-     "in": {
-      "path": "$slot.dir",
-      "mode": "$slot.mode",
-      "owner": "$slot.owner",
-      "world_writable": "$slot.ww",
-      "suid": "$slot.suid",
-      "sgid": "$slot.sgid",
-      "executable": "$slot.x",
-      "type": "$slot.type"
-     },
-     "out": "res"
-    }
-   ],
-   "verify": [
+      "name": "perm_find.script",
+      "intent": "perm_find",
+      "priority": 10,
+      "doc": "script:perm_find: arquivos por permiss\u00e3o, dono, suid/sgid ou execut\u00e1vel",
+      "needs": [
+        "bin.python3"
+      ],
+      "steps": [
+        {
+          "cap": "script:perm_find",
+          "in": {
+            "path": "$slot.dir",
+            "mode": "$slot.mode",
+            "owner": "$slot.owner",
+            "world_writable": "$slot.ww",
+            "suid": "$slot.suid",
+            "sgid": "$slot.sgid",
+            "executable": "$slot.x",
+            "type": "$slot.type",
+            "group": "$slot.group",
+            "not_owner": "$slot.not_owner",
+            "not_group": "$slot.not_group",
+            "no_owner": "$slot.no_owner",
+            "no_group": "$slot.no_group",
+            "orphan": "$slot.orphan",
+            "not_executable": "$slot.nx",
+            "not_world_writable": "$slot.nww",
+            "not_mode": "$slot.not_mode"
+          },
+          "out": "res"
+        }
+      ],
+      "verify": [
+        {
+          "check": "script_ok",
+          "arg": "$res"
+        }
+      ],
+      "risk": "low",
+      "cost_ms": 1500
+    },
     {
-     "check": "script_ok",
-     "arg": "$res"
+      "name": "perm_find.no_python",
+      "intent": "perm_find",
+      "priority": 1,
+      "doc": "sem python3 o script perm_find n\u00e3o roda",
+      "pre": [
+        {
+          "fact": "bin.python3",
+          "op": "unset"
+        }
+      ],
+      "steps": [
+        {
+          "cap": "report",
+          "in": {
+            "text": "isso usa o script perm_find, que precisa de python3 (n\u00e3o achei no PATH)",
+            "status": "blocked",
+            "category": "command_missing"
+          }
+        }
+      ],
+      "verify": [],
+      "risk": "low",
+      "cost_ms": 1
     }
-   ],
-   "risk": "low",
-   "cost_ms": 1500
-  },
-  {
-   "name": "perm_find.no_python",
-   "intent": "perm_find",
-   "priority": 1,
-   "doc": "sem python3 o script perm_find não roda",
-   "pre": [
-    {
-     "fact": "bin.python3",
-     "op": "unset"
-    }
-   ],
-   "steps": [
-    {
-     "cap": "report",
-     "in": {
-      "text": "isso usa o script perm_find, que precisa de python3 (não achei no PATH)",
-      "status": "blocked",
-      "category": "command_missing"
-     }
-    }
-   ],
-   "verify": [],
-   "risk": "low",
-   "cost_ms": 1
-  }
- ]
+  ]
 }

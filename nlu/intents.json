@@ -4439,6 +4439,23 @@
             "blame"
           ],
           "w": 5
+        },
+        {
+          "all": [
+            "user",
+            "files|filenoun|permattr"
+          ],
+          "none": [
+            "delete",
+            "create",
+            "mutate",
+            "install",
+            "enable",
+            "blame",
+            "status"
+          ],
+          "w": 4,
+          "desc": "owner/group com nome que colide com serviço (apache, www-data)"
         }
       ],
       "slots": {
@@ -4451,7 +4468,8 @@
         "mode": {
           "kinds": [
             "number"
-          ]
+          ],
+          "from": "perm:mode"
         },
         "ww": {
           "kinds": [
@@ -4487,6 +4505,60 @@
           "kinds": [
             "dir"
           ]
+        },
+        "group": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:group"
+        },
+        "not_owner": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:not_owner"
+        },
+        "not_group": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:not_group"
+        },
+        "no_owner": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:no_owner"
+        },
+        "no_group": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:no_group"
+        },
+        "orphan": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:orphan"
+        },
+        "nx": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:not_exec"
+        },
+        "nww": {
+          "kinds": [
+            "text"
+          ],
+          "from": "perm:not_ww"
+        },
+        "not_mode": {
+          "kinds": [
+            "number"
+          ],
+          "from": "perm:not_mode"
         }
       },
       "examples": [
@@ -4717,7 +4789,9 @@
             "env",
             "lineselect",
             "dedup",
-            "session"
+            "session",
+            "permattr",
+            "execperm"
           ],
           "w": 0
         },
@@ -4741,7 +4815,9 @@
             "env",
             "lineselect",
             "dedup",
-            "session"
+            "session",
+            "permattr",
+            "execperm"
           ],
           "w": 5
         },
@@ -4766,7 +4842,9 @@
             "env",
             "lineselect",
             "dedup",
-            "session"
+            "session",
+            "permattr",
+            "execperm"
           ],
           "w": 5
         }

@@ -266,6 +266,17 @@ func TestNLUV5Wiring(t *testing.T) {
 		"find suid binaries":                     "perm_find",
 		"executable files":                       "perm_find",
 		"arquivos do usuário matheus":            "perm_find",
+		// perm_find group/owner negações — cluster 72 falhas do v8
+		"files owned by group staff":       "perm_find",
+		"arquivos do grupo admin":          "perm_find",
+		"files not owned by wnj":           "perm_find",
+		"files with no owner":              "perm_find",
+		"files with no group":              "perm_find",
+		"files owned by user apache":       "perm_find",
+		"files belonging to group developer": "perm_find",
+		"files with permissions not 777":   "perm_find",
+		"files without execute permission": "perm_find",
+		"files not world-writable":         "perm_find",
 		"extrai os ips do log":                   "text_extract",
 		"extract all emails from mbox.txt":       "text_extract",
 		"últimas 10 linhas do app.log":           "line_slice",
@@ -284,6 +295,28 @@ func TestNLUV5Wiring(t *testing.T) {
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {
 			t.Errorf("%q => %s (%.2f, %v), want %s", text, in.Name, in.Confidence, in.Evidence, want)
+		}
+	}
+	// slots do perm_find: owner/group/negações — 'staff' (typo-repair→start)
+	// e 'apache' (@service) têm que passar como nomes de usuário
+	slotw := map[string]map[string]string{
+		"files owned by group staff":       {"group": "staff"},
+		"arquivos do grupo admin":          {"group": "admin"},
+		"files not owned by wnj":           {"not_owner": "wnj"},
+		"files owned by user apache":       {"owner": "apache"},
+		"files with no owner":              {"no_owner": "true"},
+		"files with no group":              {"no_group": "true"},
+		"files with permissions not 777":   {"not_mode": "777"},
+		"files without execute permission": {"nx": "true"},
+		"files not world-writable":         {"nww": "true"},
+		"arquivos com permissão 777":       {"mode": "777"},
+	}
+	for text, wants := range slotw {
+		in := m.Parse(text, w)
+		for k, v := range wants {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", text, k, in.Slots[k], v, in.Slots)
+			}
 		}
 	}
 	under := map[string]float64{

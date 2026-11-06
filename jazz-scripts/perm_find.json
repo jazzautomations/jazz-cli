@@ -1,17 +1,112 @@
-{"name": "perm_find", "version": 1, "run": "python3", "effect": "read",
- "description": "Files/dirs under a path selected by permission bits or owner: exact octal mode, world-writable, suid, sgid, exec",
- "args": {"type": "object", "additionalProperties": false,
-   "properties": {
-     "path": {"type": "string", "description": "directory to scan (default: project root)"},
-     "mode": {"type": "string", "description": "exact octal permission bits to match ('777', '4755')"},
-     "world_writable": {"type": "boolean", "description": "only entries writable by others"},
-     "suid": {"type": "boolean", "description": "only entries with the suid bit"},
-     "sgid": {"type": "boolean", "description": "only entries with the sgid bit"},
-     "executable": {"type": "boolean", "description": "only entries with any execute bit"},
-     "owner": {"type": "string", "description": "only entries owned by this user name"},
-     "type": {"type": "string", "enum": ["any", "file", "dir"], "description": "entry kind (default any)"},
-     "include_hidden": {"type": "boolean", "description": "also scan dot-files and dot-dirs (default false)"},
-     "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "max entries to return (default 200)"}}},
- "output": {"data": {
-   "files": [{"path": "str", "mode": "str", "owner": "str|null", "type": "str"}],
-   "count": "int", "scanned": "int", "truncated": "bool", "text": "str"}}}
+{
+  "name": "perm_find",
+  "version": 1,
+  "run": "python3",
+  "effect": "read",
+  "description": "Files/dirs under a path selected by permission bits or owner: exact octal mode, world-writable, suid, sgid, exec",
+  "args": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "directory to scan (default: project root)"
+      },
+      "mode": {
+        "type": "string",
+        "description": "exact octal permission bits to match ('777', '4755')"
+      },
+      "world_writable": {
+        "type": "boolean",
+        "description": "only entries writable by others"
+      },
+      "suid": {
+        "type": "boolean",
+        "description": "only entries with the suid bit"
+      },
+      "sgid": {
+        "type": "boolean",
+        "description": "only entries with the sgid bit"
+      },
+      "executable": {
+        "type": "boolean",
+        "description": "only entries with any execute bit"
+      },
+      "owner": {
+        "type": "string",
+        "description": "only entries owned by this user name"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "any",
+          "file",
+          "dir"
+        ],
+        "description": "entry kind (default any)"
+      },
+      "include_hidden": {
+        "type": "boolean",
+        "description": "also scan dot-files and dot-dirs (default false)"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5000,
+        "description": "max entries to return (default 200)"
+      },
+      "group": {
+        "type": "string",
+        "description": "group name to match (st_gid)"
+      },
+      "not_owner": {
+        "type": "string",
+        "description": "exclude this owner"
+      },
+      "not_group": {
+        "type": "string",
+        "description": "exclude this group"
+      },
+      "no_owner": {
+        "type": "boolean",
+        "description": "entries whose uid has no account"
+      },
+      "no_group": {
+        "type": "boolean",
+        "description": "entries whose gid has no group"
+      },
+      "orphan": {
+        "type": "boolean",
+        "description": "no valid user OR no valid group"
+      },
+      "not_executable": {
+        "type": "boolean",
+        "description": "exclude entries with any exec bit"
+      },
+      "not_world_writable": {
+        "type": "boolean",
+        "description": "exclude world-writable entries"
+      },
+      "not_mode": {
+        "type": "boolean",
+        "description": "negate the mode match"
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "files": [
+        {
+          "path": "str",
+          "mode": "str",
+          "owner": "str|null",
+          "type": "str"
+        }
+      ],
+      "count": "int",
+      "scanned": "int",
+      "truncated": "bool",
+      "text": "str"
+    }
+  }
+}

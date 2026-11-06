@@ -13,6 +13,10 @@ try:
     import pwd
 except ImportError:
     pwd = None
+try:
+    import grp
+except ImportError:
+    grp = None
 
 
 def as_bool(v, default):
@@ -39,10 +43,21 @@ want_suid = as_bool(ARGS.get("suid"), False)
 want_sgid = as_bool(ARGS.get("sgid"), False)
 want_exec = as_bool(ARGS.get("executable"), False)
 owner = arg("owner")
-if owner is not None:
-    owner = str(owner)
-    if not owner or any(c in owner for c in "/\\ \t"):
-        fail("owner must be a plain user name")
+not_owner = arg("not_owner")
+group = arg("group")
+not_group = arg("not_group")
+no_owner = as_bool(ARGS.get("no_owner"), False)
+no_group = as_bool(ARGS.get("no_group"), False)
+orphan = as_bool(ARGS.get("orphan"), False)
+not_exec = as_bool(ARGS.get("not_executable"), False)
+not_ww = as_bool(ARGS.get("not_world_writable"), False)
+not_mode = as_bool(ARGS.get("not_mode"), False)
+for lbl, val in (("owner", owner), ("not_owner", not_owner),
+                 ("group", group), ("not_group", not_group)):
+    if val is not None:
+        val = str(val)
+        if not val or any(c in val for c in "/\\ \t"):
+            fail("%s must be a plain name" % lbl)
 include_hidden = as_bool(ARGS.get("include_hidden"), False)
 try:
     limit = int(arg("limit", 200))
@@ -50,8 +65,12 @@ except (TypeError, ValueError):
     fail("limit must be an integer")
 limit = max(1, min(limit, 5000))
 
-if exact is None and not (want_ww or want_suid or want_sgid or want_exec or owner):
-    fail("pass a filter: mode, world_writable, suid, sgid, executable or owner")
+if (exact is None and not (want_ww or want_suid or want_sgid or want_exec
+        or owner or not_owner or group or not_group or no_owner or no_group
+        or orphan or not_exec or not_ww)):
+    fail("pass a filter: mode/not_mode, world_writable, suid, sgid, "
+         "executable/not_executable, owner/not_owner, group/not_group, "
+         "no_owner, no_group or orphan")
 
 def bounded_path(value):
     p = os.path.realpath(path_in_root(value))
@@ -75,6 +94,39 @@ if owner:
         owner_uid = pwd.getpwnam(owner).pw_uid
     except KeyError:
         fail("no such user: %s" % owner)
+not_owner_uid = None
+if not_owner:
+    if not pwd:
+        fail("owner lookup unavailable on this platform")
+    try:
+        not_owner_uid = pwd.getpwnam(not_owner).pw_uid
+    except KeyError:
+        fail("no such user: %s" % not_owner)
+group_gid = None
+if group:
+    if not grp:
+        fail("group lookup unavailable on this platform")
+    try:
+        group_gid = grp.getgrnam(group).gr_gid
+    except KeyError:
+        fail("no such group: %s" % group)
+not_group_gid = None
+if not_group:
+    if not grp:
+        fail("group lookup unavailable on this platform")
+    try:
+        not_group_gid = grp.getgrnam(not_group).gr_gid
+    except KeyError:
+        fail("no such group: %s" % not_group)
+
+
+def gname(gid):
+    if not grp:
+        return None
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return None
 
 
 def uname(uid):
@@ -105,7 +157,25 @@ def match(st):
         return False
     if want_exec and not (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
         return False
+    if not_exec and (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
+        return False
+    if not_ww and (m & stat.S_IWOTH):
+        return False
+    if exact is not None and not_mode and stat.S_IMODE(m) == exact:
+        return False
     if owner_uid is not None and st.st_uid != owner_uid:
+        return False
+    if not_owner_uid is not None and st.st_uid == not_owner_uid:
+        return False
+    if group_gid is not None and st.st_gid != group_gid:
+        return False
+    if not_group_gid is not None and st.st_gid == not_group_gid:
+        return False
+    if no_owner and uname(st.st_uid) is not None:
+        return False
+    if no_group and gname(st.st_gid) is not None:
+        return False
+    if orphan and uname(st.st_uid) is not None and gname(st.st_gid) is not None:
         return False
     return True
 

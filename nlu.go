@@ -2242,13 +2242,164 @@ var nuPermWords = map[string][]string{
 	"executable":     {"executavel", "executável", "executaveis", "executáveis", "executable", "executables", "rodavel", "rodável"},
 }
 
-func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
-	if what == "owner" {
-		return nuOwnerArg(toks, taken)
+var nuGroupCues = map[string]bool{
+	"group": true, "groups": true, "grupo": true, "grupos": true, "gid": true,
+}
+
+// nuNegationNear reports whether a negation word appears near the cue —
+// "files not owned by root" (antes) ou "permissions not 777" (depois).
+func nuNegationNear(toks []nuTok, i int) bool {
+	for j := i - 4; j <= i+2 && j < len(toks); j++ {
+		if j < 0 || j == i {
+			continue
+		}
+		switch toks[j].Fold {
+		case "not", "no", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto":
+			return true
+		}
 	}
-	for _, t := range toks {
+	return false
+}
+
+// nuCueFamilyConcs: conceitos que barram candidato a nome de owner/group —
+// palavras da família cue (user/files/permattr), NÃO nomes de serviço/host.
+var nuCueFamilyConcs = map[string]bool{
+	"user": true, "who": true, "files": true, "filenoun": true,
+	"env": true, "permattr": true, "group": true,
+}
+
+// nuOwnerLikeArg: candidate word after a cue — skip fillers, quoted and
+// already-taken tokens, bounded radius (the 'owner is daniel'→is fix).
+func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]bool) string {
+	for i, t := range toks {
+		cue := cues[t.Fold]
+		// 'owned/belonging by' é cue de DONO — nunca de grupo
+		isOwner := len(cues) > 0 && cues["owner"]
+		if !cue && isOwner && t.Fold == "by" && i > 0 && (toks[i-1].Fold == "owned" || toks[i-1].Fold == "belonging") {
+			cue = true
+		}
+		if !cue {
+			continue
+		}
+		if nuNegationNear(toks, i) != neg {
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			if toks[j].Filler || toks[j].Quoted || taken[j] {
+				continue
+			}
+			n := toks[j].Fold
+			// só a família-cue bloqueia nome: stem/typo-repair são palpites
+			// ('staff'→'start') e nomes de serviço são users reais (apache)
+			guessed := toks[j].Weak || toks[j].Fixed != ""
+			cueish := false
+			if !guessed {
+				for _, c := range toks[j].Concs {
+					if nuCueFamilyConcs[c] {
+						cueish = true
+					}
+				}
+			}
+			if n == "" || cueish {
+				continue
+			}
+			// entidade @service/@host PODE ser nome de usuário (apache,
+			// www-data, nginx têm contas reais); só @file é impossível
+			isFile := false
+			for _, tag := range toks[j].Tags {
+				if tag == "@file" {
+					isFile = true
+				}
+			}
+			if isFile {
+				continue
+			}
+			if nuGroupCues[n] {
+				continue // "user group staff" → o 'staff' pertence ao 'group'
+			}
+			taken[i], taken[j] = true, true
+			return n
+		}
+	}
+	return ""
+}
+
+var nuOwnerCues = map[string]bool{
+	"usuario": true, "usuário": true, "usuarios": true, "usuários": true,
+	"user": true, "users": true, "dono": true, "donos": true,
+	"owner": true, "owners": true,
+}
+
+func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "owner":
+		return nuOwnerLikeArg(toks, nuOwnerCues, false, taken)
+	case "not_owner":
+		return nuOwnerLikeArg(toks, nuOwnerCues, true, taken)
+	case "group":
+		return nuOwnerLikeArg(toks, nuGroupCues, false, taken)
+	case "not_group":
+		return nuOwnerLikeArg(toks, nuGroupCues, true, taken)
+	case "no_owner", "no_group", "orphan":
+		want := map[string]bool{
+			"no_owner": what == "no_owner" || what == "orphan",
+			"no_group": what == "no_group" || what == "orphan",
+		}
+		for i := 0; i+1 < len(toks); i++ {
+			n1, n2 := toks[i].Fold, toks[i+1].Fold
+			no := n1 == "no" || n1 == "sem" || n1 == "without"
+			if no && want["no_owner"] && (nuOwnerCues[n2] || n2 == "owner") {
+				taken[i], taken[i+1] = true, true
+				return "true"
+			}
+			if no && want["no_group"] && nuGroupCues[n2] {
+				taken[i], taken[i+1] = true, true
+				return "true"
+			}
+		}
+		return ""
+	case "mode":
+		for i, t := range toks {
+			if (t.Fold == "mode" || t.Fold == "permissions" || t.Fold == "permissao" || t.Fold == "permissões") && !nuNegationNear(toks, i) {
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					if nuIsNumber(toks[j].Fold) {
+						taken[i], taken[j] = true, true
+						return toks[j].Fold
+					}
+				}
+			}
+		}
+		return ""
+	case "not_mode":
+		for i, t := range toks {
+			if (t.Fold == "mode" || t.Fold == "permissions" || t.Fold == "permissao" || t.Fold == "permissões") && nuNegationNear(toks, i) {
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					if nuIsNumber(toks[j].Fold) {
+						taken[i], taken[j] = true, true
+						return toks[j].Fold
+					}
+				}
+			}
+		}
+		return ""
+	case "not_exec", "not_ww":
+		words := map[string][]string{
+			"not_exec": {"executavel", "executável", "executaveis", "executáveis", "executable", "executables", "execute", "execution", "exec", "rodavel", "rodável", "executar"},
+			"not_ww":   {"writable", "world-writable", "escreviveis", "escrevível"},
+		}
+		for i, t := range toks {
+			for _, w := range words[what] {
+				if t.Fold == w && nuNegationNear(toks, i) {
+					taken[i] = true
+					return "true"
+				}
+			}
+		}
+		return ""
+	}
+	for i, t := range toks {
 		for _, w := range nuPermWords[what] {
-			if t.Fold == w {
+			if t.Fold == w && !nuNegationNear(toks, i) {
 				return "true"
 			}
 		}
