@@ -122,7 +122,7 @@ func TestDsBuild(t *testing.T) {
 	w := nuRuntimeWorld(root, epGet(false))
 	p := dsPlan("de34fg", "zzq frobnicate the wossname plugh", 3,
 		[]string{"go version", "go env GOROOT"}, "go env GOROOT")
-	c, why := dsBuild(p, map[string][]mhMethod{}, w)
+	c, why := dsBuild(p, map[string][]mhMethod{}, w, root)
 	if c == nil {
 		t.Fatalf("build falhou: %s", why)
 	}
@@ -157,7 +157,7 @@ func TestDsBuild(t *testing.T) {
 	// só-leitura (build cache) → risco médio
 	p2 := dsPlan("hi56jk", "zzq frobnicate another wossname", 2,
 		[]string{"go test ./..."}, "go vet .")
-	c2, _ := dsBuild(p2, map[string][]mhMethod{}, w)
+	c2, _ := dsBuild(p2, map[string][]mhMethod{}, w, root)
 	if len(c2.Method.Steps) != 2 || c2.Method.Steps[1].In["cmd"] != "go vet ." || c2.Method.Verify[0].Arg != "$r2" {
 		t.Fatalf("verify como passo extra: %+v", c2.Method)
 	}
@@ -174,7 +174,7 @@ func TestDsBuildAttach(t *testing.T) {
 	p := dsPlan("lm78no", "roda os testes do projeto", 2,
 		[]string{"go test ./..."}, "go test ./...")
 	lib := map[string][]mhMethod{} // sem método nenhum: o buraco existe
-	c, why := dsBuild(p, lib, w)
+	c, why := dsBuild(p, lib, w, root)
 	if c == nil {
 		t.Fatalf("build falhou: %s", why)
 	}
@@ -184,7 +184,7 @@ func TestDsBuildAttach(t *testing.T) {
 	}
 	// com a intenção coberta por método, vira learned_* normal
 	lib2 := map[string][]mhMethod{in.Name: {{Name: "x", Intent: in.Name}}}
-	c2, _ := dsBuild(p, lib2, w)
+	c2, _ := dsBuild(p, lib2, w, root)
 	if in.Understood() && in.Name != "none" && !fgIsMutating(in.Name) && c2.Attach != "" && !dsIsLearned(c2.Method.Intent) {
 		t.Errorf("intenção coberta devia virar learned_*: %+v", c2)
 	}
@@ -197,7 +197,7 @@ func TestDsCapPlan(t *testing.T) {
 	// (file_find + for_each delete), não bash literal.
 	p := dsPlan("ca77ps01", "zzq apaga os arquivos temporarios", 3,
 		[]string{"find . -name '*.tmp' -print", "find . -name '*.tmp' -print | xargs rm -f"}, "")
-	c, why := dsBuild(p, map[string][]mhMethod{}, w)
+	c, why := dsBuild(p, map[string][]mhMethod{}, w, root)
 	if c == nil {
 		t.Fatalf("plano mutante não destilou: %s", why)
 	}
@@ -222,7 +222,7 @@ func TestDsCapPlan(t *testing.T) {
 	if !strings.HasSuffix(m.Name, ".skeleton") {
 		t.Errorf("find+rm devia preferir o esqueleto: %s", m.Name)
 	}
-	cp := dsCapPlan(p)
+	cp := dsCapPlan(p, root)
 	if cp == nil || len(cp.Steps) != 3 {
 		t.Fatalf("cap-plan do mesmo plano: %+v", cp)
 	}
@@ -248,7 +248,7 @@ func TestDsCapPlan(t *testing.T) {
 	// esqueleto não pega (o find não é só-leitura), o generalizado sim.
 	p2 := dsPlan("ca77ps02", "zzq limpa os logs velhos", 2,
 		[]string{"find logs -name '*.log' -mtime +30 -type f -delete"}, "")
-	c2, why2 := dsBuild(p2, map[string][]mhMethod{}, w)
+	c2, why2 := dsBuild(p2, map[string][]mhMethod{}, w, root)
 	if c2 == nil {
 		t.Fatalf("find -delete falhou: %s", why2)
 	}
@@ -267,7 +267,7 @@ func TestDsCapPlan(t *testing.T) {
 	// vira file_op delete direto; mv vira file_op rename; mkdir idem.
 	p3 := dsPlan("ca77ps03", "zzq arruma a saida", 4,
 		[]string{"wc -l out.txt", "mv out.txt out.bak", "mkdir -p tmp/keep", "rm -f stale.tmp"}, "")
-	c3, why3 := dsBuild(p3, map[string][]mhMethod{}, w)
+	c3, why3 := dsBuild(p3, map[string][]mhMethod{}, w, root)
 	if c3 == nil {
 		t.Fatalf("plano misto falhou: %s", why3)
 	}
@@ -298,7 +298,7 @@ func TestDsCapPlan(t *testing.T) {
 		{"find . -name '*.log' -print | sort > logs.txt", true},
 	}
 	for _, sv := range saves {
-		cp := dsCapPlan(dsPlan("ca77ps05", "zzq salva a lista", 3, []string{sv.cmd}, ""))
+		cp := dsCapPlan(dsPlan("ca77ps05", "zzq salva a lista", 3, []string{sv.cmd}, ""), root)
 		if cp == nil || len(cp.Steps) != 2 {
 			t.Fatalf("%q não destilou: %+v", sv.cmd, cp)
 		}
@@ -330,7 +330,7 @@ func TestDsCapPlan(t *testing.T) {
 		{"ls -la > out.txt"},
 		{"find . -name '*.log' | tee /tmp/out.txt"},
 	} {
-		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, "")); cp != nil {
+		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, ""), root); cp != nil {
 			t.Errorf("%v não devia virar método de caps: %+v", cmds, cp)
 		}
 	}
@@ -490,7 +490,7 @@ func TestDsGateReplay(t *testing.T) {
 	w := nuRuntimeWorld(t.TempDir(), epGet(false))
 	p := dsPlan("ab12cd34", "zzq frobnicate the wossname plugh", 3,
 		[]string{"go version", "go env GOROOT"}, "go env GOROOT")
-	c, _ := dsBuild(p, map[string][]mhMethod{}, w)
+	c, _ := dsBuild(p, map[string][]mhMethod{}, w, "")
 
 	// replay reprova no segundo passo → rejeita, com a prova dos exits
 	fail2 := func(_ context.Context, cmd string, _ time.Duration) int {
@@ -516,7 +516,7 @@ func TestDsGateNLU(t *testing.T) {
 	w := nuRuntimeWorld(t.TempDir(), epGet(false))
 	p := dsPlan("qr90st12", "zzq frobnicate the wossname plugh", 3,
 		[]string{"go version"}, "go version")
-	c, _ := dsBuild(p, map[string][]mhMethod{}, w)
+	c, _ := dsBuild(p, map[string][]mhMethod{}, w, "")
 	if c.Attach != "" || c.Intent.Name == "" {
 		t.Fatalf("precisava de intenção nova: %+v", c)
 	}

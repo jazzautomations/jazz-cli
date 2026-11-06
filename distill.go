@@ -737,14 +737,26 @@ func dsStripRedirect(t []string) (inner []string, dest string, app bool) {
 	return inner, "", false
 }
 
+// dsCdTarget reconhece um segmento que é só "cd <dir>" — o prefixo
+// mecânico que o modelo põe antes de trabalhar no root.
+func dsCdTarget(s string) (string, bool) {
+	t := shellFields(s)
+	if len(t) == 2 && t[0] == "cd" {
+		return strings.Trim(t[1], `'"`), true
+	}
+	return "", false
+}
+
 // dsCapPlan generaliza o esqueleto: percorre os comandos do plano e
 // reescreve cada mutação conhecida como passos de capacidade verificada —
 // find vira script:file_find (produtor de lista), rm/xargs rm/-delete vira
 // for_each+file_op delete sobre a lista produzida, mv/mkdir literais viram
 // file_op direto, e sonda só-leitura fica learned_cmd. Só emite método
 // quando TODO passo mutante cai numa cap real; um comando sem encaixe
-// devolve nil (o plano não vira método de caps).
-func dsCapPlan(p pcPlan) *mhMethod {
+// devolve nil (o plano não vira método de caps). "cd <root>" e "cd ."
+// são no-op: os passos de cap já rodam no root — cd pra OUTRO lugar
+// muda a semântica e fica sem encaixe (o plano não destila).
+func dsCapPlan(p pcPlan, root string) *mhMethod {
 	if p.Wins < dsMinWins || len(p.Cmds) == 0 || len(p.Cmds) > dsMaxSteps {
 		return nil
 	}
@@ -928,6 +940,10 @@ func dsCapPlan(p pcPlan) *mhMethod {
 		// sequência (; &&): cada comando vale um passo — os passos já rodam
 		// em ordem e abortam na falha, mesma semântica do &&.
 		for _, s := range parts {
+			if cd, ok := dsCdTarget(s); ok && (cd == "." || cd == "" ||
+				filepath.Clean(cd) == filepath.Clean(root)) {
+				continue // "cd <root>;"/"cd ." é no-op: cap roda no root
+			}
 			if !mapSeg(s) {
 				return nil
 			}
@@ -1542,7 +1558,7 @@ func dsSlotsFitSchema(intent string, slots map[string]string) bool {
 // encaixá-lo) a intenção learned_<id>. Quando o texto já lê numa intenção
 // existente SEM método, o método gruda nela — a ponte tapa o buraco em
 // vez de inventar outra palavra.
-func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) {
+func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld, root string) (*dsCand, string) {
 	if why := dsEligible(p); why != "" {
 		// skeleton distillation: a mutating plan can't replay literal
 		// commands, but "find → per-item delete" still becomes a method of
@@ -1555,7 +1571,7 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 		// cap-plan: generalização do esqueleto — cada mutação que cai numa
 		// cap verificada vira passo dela; se tudo encaixar, o plano vira
 		// método de caps em vez de sair do jogo.
-		if cp := dsCapPlan(p); cp != nil {
+		if cp := dsCapPlan(p, root); cp != nil {
 			return dsCapCand(p, cp, ".caps"), ""
 		}
 		return nil, why
@@ -1930,7 +1946,7 @@ func dsList(root string, o dsOpts, w io.Writer) int {
 			fmt.Fprintf(w, "  ✓ %s %q — já aprendido (%d verificações)\n", short, oneLine(p.Task, 60), p.Wins)
 			continue
 		}
-		c, why := dsBuild(p, lib, wr)
+		c, why := dsBuild(p, lib, wr, root)
 		if c == nil {
 			fmt.Fprintf(w, "  - %s %q: %s\n", short, oneLine(p.Task, 60), why)
 			continue
@@ -1982,7 +1998,7 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		if p.DsDrop != "" && p.Wins <= p.DsWins {
 			continue // mesmo veredito na mesma evidência — não reabre o portão
 		}
-		c, why := dsBuild(p, lib, wr)
+		c, why := dsBuild(p, lib, wr, root)
 		if c == nil {
 			if why != "" && p.Wins >= dsMinWins {
 				rep.Dropped = append(rep.Dropped, dsDropped{Plan: p.ID, Task: oneLine(p.Task, 80), Reason: why})

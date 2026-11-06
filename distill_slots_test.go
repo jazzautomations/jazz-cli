@@ -122,7 +122,7 @@ func TestDistillAntiUnify(t *testing.T) {
 		t.Fatalf("slots/bind: %+v %+v", slots, bind)
 	}
 	// e o método sai parametrizado, tipado e guardado por pré-condição
-	c, why := dsBuild(p, map[string][]mhMethod{}, w)
+	c, why := dsBuild(p, map[string][]mhMethod{}, w, root)
 	if c == nil {
 		t.Fatalf("build: %s", why)
 	}
@@ -222,7 +222,7 @@ func TestDistillAntiUnifyAttachSchema(t *testing.T) {
 		Ents: []pcEnt{{Kind: "dir", Name: "src", Raw: "src"}},
 		Cmds: []string{"ls src"},
 	}}
-	c, why := dsBuild(p, map[string][]mhMethod{}, w)
+	c, why := dsBuild(p, map[string][]mhMethod{}, w, "")
 	if c == nil {
 		t.Fatalf("build: %s", why)
 	}
@@ -240,7 +240,7 @@ func TestDistillAntiUnifyAttachSchema(t *testing.T) {
 		Task: "x", Ents: []pcEnt{{Kind: "file", Name: "src", Raw: "src"}}, Cmds: []string{"ls src"},
 	}}
 	if !dsSlotsFitSchema("file_find", map[string]string{"file": "file"}) {
-		c2, _ := dsBuild(p2, map[string][]mhMethod{}, w)
+		c2, _ := dsBuild(p2, map[string][]mhMethod{}, w, "")
 		if c2 != nil && c2.Attach == "file_find" && strings.Contains(c2.Method.Steps[0].In["cmd"], "$slot.") {
 			t.Fatalf("slot incompatível virou placeholder no attach: %+v", c2.Method)
 		}
