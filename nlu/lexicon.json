@@ -282,7 +282,17 @@
     "with",
     "within",
     "without",
-    "you"
+    "you",
+    "residing",
+    "entire",
+    "whole",
+    "recursive",
+    "recursively",
+    "current",
+    "given",
+    "particular",
+    "certain",
+    "only"
   ],
   "slang": {
     "roda ai": "run",
@@ -658,7 +668,11 @@
       "usages",
       "referencias",
       "ocorrencias",
-      "rastreia"
+      "rastreia",
+      "locate",
+      "look for",
+      "looking for",
+      "searched"
     ],
     "run": [
       "roda",
@@ -1145,7 +1159,10 @@
       "listagem",
       "quais",
       "todas",
-      "todos"
+      "todos",
+      "listing",
+      "enumerate",
+      "enumerates"
     ],
     "service": [
       "servico",
@@ -1341,7 +1358,13 @@
       "pasta",
       "diretorio",
       "folder",
-      "dir"
+      "dir",
+      "directory",
+      "directories",
+      "tree",
+      "subdir",
+      "subdirectory",
+      "subdirectories"
     ],
     "help": [
       "ajuda",
@@ -2043,7 +2066,20 @@
       "weeks",
       "world writable",
       "world-writable",
-      "writable"
+      "writable",
+      "size",
+      "sized",
+      "bytes",
+      "kilobytes",
+      "megabytes",
+      "inode",
+      "inodes",
+      "smaller",
+      "regular",
+      "hard link",
+      "hard links",
+      "symlink",
+      "symlinks"
     ],
     "mutate": [
       "change",
@@ -2298,7 +2334,13 @@
       "ext",
       "terminados",
       "ending",
-      "ends with"
+      "ends with",
+      "starting",
+      "begins",
+      "matching",
+      "matches",
+      "pattern",
+      "whose names"
     ],
     "newest": [
       "último",
