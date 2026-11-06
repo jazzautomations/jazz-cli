@@ -553,6 +553,71 @@ type dsCand struct {
 	Bind   map[string]string // valores do plano base p/ cada $slot.x (replay do portão)
 }
 
+// dsSkeleton: a mutating plan whose shape is "find produces → per-item
+// delete" promotes to a method of verified caps instead of literal bash —
+// the trajectory taught the STRUCTURE; the caps re-run confinement,
+// permission and per-item verification at execution. nil = no skeleton.
+func dsSkeleton(p pcPlan) *mhMethod {
+	if p.Wins < dsMinWins {
+		return nil
+	}
+	findCmd, del := "", false
+	for _, c := range p.Cmds {
+		t := shellFields(c)
+		if len(t) == 0 {
+			continue
+		}
+		switch filepath.Base(t[0]) {
+		case "find":
+			if findCmd == "" && IsReadOnly(c) {
+				findCmd = c
+			}
+		case "rm":
+			del = true
+		}
+		if strings.Contains(c, "-delete") || strings.Contains(c, "xargs rm") {
+			del = true
+		}
+	}
+	if findCmd == "" || !del {
+		return nil
+	}
+	// find args → file_find slots: bare path arg → dir, -name glob → name,
+	// -type f|d → type, -maxdepth N → max_depth
+	in := map[string]string{"limit": "32"}
+	t := shellFields(findCmd)
+	for i := 1; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") && in["path"] == "" && !strings.HasPrefix(t[i-1], "-") {
+			in["path"] = strings.TrimPrefix(a, "./")
+		}
+		if i+1 < len(t) {
+			switch a {
+			case "-name", "-iname":
+				in["name"] = strings.Trim(t[i+1], `'"`)
+			case "-type":
+				if t[i+1] == "f" || t[i+1] == "d" {
+					in["type"] = map[string]string{"f": "file", "d": "dir"}[t[i+1]]
+				}
+			case "-maxdepth":
+				in["max_depth"] = t[i+1]
+			}
+		}
+	}
+	return &mhMethod{
+		Priority: 7,
+		Doc:      "esqueleto aprendido (jazz distill): " + oneLine(p.Task, 80),
+		Steps: []mhStep{
+			{Cap: "script:file_find", In: in, Out: "cand"},
+			{Cap: "for_each", In: map[string]string{"from": "$cand", "do": "file_op", "op": "delete", "max": "32"}},
+		},
+		Verify: []mhCheck{{Check: "list_gone", Arg: "$cand"}},
+		Needs:  []string{"bin.python3"},
+		Risk:   "high",
+		CostMS: 8000,
+	}
+}
+
 // dsEligible barra um plano antes do desenho do método: repetido,
 // trajetória de bash registrada, tudo dentro das barras de comando e de
 // replay. "" = elegível.
@@ -854,6 +919,20 @@ func dsSlotsFitSchema(intent string, slots map[string]string) bool {
 // vez de inventar outra palavra.
 func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) {
 	if why := dsEligible(p); why != "" {
+		// skeleton distillation: a mutating plan can't replay literal
+		// commands, but "find → per-item delete" still becomes a method of
+		// VERIFIED caps — the online run taught the structure, not the bash.
+		if strings.Contains(why, "muta estado") {
+			if sk := dsSkeleton(p); sk != nil {
+				c := &dsCand{Plan: p, Method: *sk}
+				name := dsLearnedPrefix + p.ID
+				c.Method.Name = name + ".skeleton"
+				c.Method.Intent = name
+				c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{p.Task}}
+				c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+				return c, ""
+			}
+		}
 		return nil, why
 	}
 	c := &dsCand{Plan: p}
