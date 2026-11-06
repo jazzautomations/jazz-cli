@@ -190,6 +190,117 @@ func TestDsBuildAttach(t *testing.T) {
 	}
 }
 
+func TestDsCapPlan(t *testing.T) {
+	root := t.TempDir()
+	w := nuRuntimeWorld(root, epGet(false))
+	// find produz, rm consome a lista: vira método de caps
+	// (file_find + for_each delete), não bash literal.
+	p := dsPlan("ca77ps01", "zzq apaga os arquivos temporarios", 3,
+		[]string{"find . -name '*.tmp' -print", "find . -name '*.tmp' -print | xargs rm -f"}, "")
+	c, why := dsBuild(p, map[string][]mhMethod{}, w)
+	if c == nil {
+		t.Fatalf("plano mutante não destilou: %s", why)
+	}
+	m := c.Method
+	var sawFind, sawEach bool
+	for _, st := range m.Steps {
+		sawFind = sawFind || st.Cap == "script:file_find"
+		sawEach = sawEach || st.Cap == "for_each" && st.In["do"] == "file_op" && st.In["op"] == "delete"
+	}
+	if !sawFind || !sawEach {
+		t.Fatalf("esperava file_find + for_each delete: %+v", m.Steps)
+	}
+	if len(m.Verify) != 1 || m.Verify[0].Check != "list_gone" {
+		t.Fatalf("verify: %+v", m.Verify)
+	}
+	if why := dsValidMethod(m, func(string) bool { return true }); why != "" {
+		t.Errorf("método de caps não valida na carga: %s", why)
+	}
+
+	// find + rm separado cai no esqueleto primeiro; o generalizado cobre o
+	// que o esqueleto não pega — aqui: o deletor dentro do próprio pipeline.
+	if !strings.HasSuffix(m.Name, ".skeleton") {
+		t.Errorf("find+rm devia preferir o esqueleto: %s", m.Name)
+	}
+	cp := dsCapPlan(p)
+	if cp == nil || len(cp.Steps) != 3 {
+		t.Fatalf("cap-plan do mesmo plano: %+v", cp)
+	}
+	if cp.Steps[0].Cap != "script:file_find" || cp.Steps[0].In["name"] != "*.tmp" ||
+		cp.Steps[0].In["limit"] != "32" || cp.Steps[0].Out != "cand" {
+		t.Fatalf("produtor: %+v", cp.Steps[0])
+	}
+	fe := cp.Steps[2]
+	if fe.Cap != "for_each" || fe.In["from"] != "$cand2" || fe.In["do"] != "file_op" ||
+		fe.In["op"] != "delete" || fe.In["max"] != "32" {
+		t.Fatalf("for_each: %+v", fe)
+	}
+	if cp.Verify[0].Check != "list_gone" || cp.Verify[0].Arg != "$cand2" ||
+		cp.Risk != "high" || len(cp.Needs) != 1 || cp.Needs[0] != "bin.python3" {
+		t.Fatalf("verify/risco/deps: %+v", cp)
+	}
+	cp.Name, cp.Intent = "learned_x.caps", "learned_x" // quem nomeia é dsBuild
+	if why := dsValidMethod(*cp, func(string) bool { return true }); why != "" {
+		t.Errorf("cap-plan não valida na carga: %s", why)
+	}
+
+	// o próprio find -delete é produtor+deletor num comando só — o
+	// esqueleto não pega (o find não é só-leitura), o generalizado sim.
+	p2 := dsPlan("ca77ps02", "zzq limpa os logs velhos", 2,
+		[]string{"find logs -name '*.log' -mtime +30 -type f -delete"}, "")
+	c2, why2 := dsBuild(p2, map[string][]mhMethod{}, w)
+	if c2 == nil {
+		t.Fatalf("find -delete falhou: %s", why2)
+	}
+	m2 := c2.Method
+	if !strings.HasSuffix(m2.Name, ".caps") || len(m2.Steps) != 2 || m2.Steps[1].In["op"] != "delete" {
+		t.Fatalf("find -delete: %+v", m2)
+	}
+	if got := m2.Steps[0].In["older_min"]; got != "44640" { // -mtime +30 → 31*1440min
+		t.Errorf("-mtime +30 virou older_min %q", got)
+	}
+	if why := dsValidMethod(m2, func(string) bool { return true }); why != "" {
+		t.Errorf("find -delete não valida: %s", why)
+	}
+
+	// sonda só-leitura fica learned_cmd; rm com alvo literal e sem lista
+	// vira file_op delete direto; mv vira file_op rename; mkdir idem.
+	p3 := dsPlan("ca77ps03", "zzq arruma a saida", 4,
+		[]string{"wc -l out.txt", "mv out.txt out.bak", "mkdir -p tmp/keep", "rm -f stale.tmp"}, "")
+	c3, why3 := dsBuild(p3, map[string][]mhMethod{}, w)
+	if c3 == nil {
+		t.Fatalf("plano misto falhou: %s", why3)
+	}
+	m3 := c3.Method
+	if len(m3.Steps) != 4 || m3.Steps[0].Cap != "learned_cmd" || m3.Steps[0].In["cmd"] != "wc -l out.txt" {
+		t.Fatalf("plano misto: %+v", m3.Steps)
+	}
+	if m3.Steps[1].In["op"] != "rename" || m3.Steps[1].In["to"] != "out.bak" ||
+		m3.Steps[2].In["op"] != "mkdir" || m3.Steps[3].In["op"] != "delete" {
+		t.Fatalf("file_ops: %+v", m3.Steps)
+	}
+	if len(m3.Verify) != 3 || m3.Verify[0].Check != "file_gone" || m3.Verify[2].Check != "file_gone" {
+		t.Fatalf("verifies: %+v", m3.Verify)
+	}
+	if why := dsValidMethod(m3, func(string) bool { return true }); why != "" {
+		t.Errorf("método misto não valida: %s", why)
+	}
+
+	// sem encaixe o generalizado não destila: recursivo, exec não-rm,
+	// mutação sem cap equivalente, xargs rm solto (sem produtor).
+	for _, cmds := range [][]string{
+		{"rm -rf dir"},
+		{"find . -exec grep -l x {} +"},
+		{"cp a b"},
+		{"find . -name '*.tmp' -print", "chmod 600 x"},
+		{"find . -name '*.tmp' -print", "xargs rm"},
+	} {
+		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, "")); cp != nil {
+			t.Errorf("%v não devia virar método de caps: %+v", cmds, cp)
+		}
+	}
+}
+
 // ---------- overlay: IO e validação na carga ----------
 
 func TestDsOverlayRoundTrip(t *testing.T) {

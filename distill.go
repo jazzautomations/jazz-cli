@@ -54,6 +54,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -312,9 +313,11 @@ var dsIntentNameRe = lazyRx(`^learned_[a-z0-9_]{1,48}$`)
 func dsIntentNameOK(name string) bool { return dsIntentNameRe.MatchString(name) }
 
 // dsValidMethod valida um método do overlay na carga — editado à mão ou
-// não, a mesma barra: só passos learned_cmd, só checks exit_zero/cmd_ran,
-// intenção conhecida (gramática ou aprendida), nunca mutante, nada de
-// registro de comandos embutidos (Cmds é do acervo, não do overlay).
+// não, a mesma barra: passos learned_cmd dentro do reproduzível, ou passos
+// de capacidade espelhando os shapes que o destilador emite (dsCapStepOK);
+// checks exit_zero/cmd_ran sempre, e os checks de filesystem/script só num
+// método de caps; intenção conhecida (gramática ou aprendida), nunca
+// mutante, nada de registro de comandos embutidos (Cmds é do acervo).
 func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 	if m.Name == "" || m.Intent == "" || strings.ContainsAny(m.Name+m.Intent, " \t\n") {
 		return "nome ou intenção inválido"
@@ -332,52 +335,64 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 		return "número de passos fora do permitido"
 	}
 	outs := map[string]bool{}
-	for i, st := range m.Steps {
+	lists := map[string]bool{} // outs de produtores de lista (script:*)
+	capM := false
+	for _, st := range m.Steps {
 		if st.Cap != "learned_cmd" {
-			return fmt.Sprintf("passo %d usa capacidade %q — o overlay só carrega learned_cmd", i+1, st.Cap)
+			capM = true
+			break
 		}
-		cmd := st.In["cmd"]
-		eff := cmd
-		if refs := dsSlotNames(cmd); len(refs) > 0 {
-			// template parametrizado: cada placeholder precisa estar
-			// declarado e guardado por pré-condição, nunca pode ser a
-			// palavra de comando, e a substituição (aqui uma sonda "x")
-			// continua dentro da barra de replay.
-			if dsSlotInCmdWord(cmd) {
-				return fmt.Sprintf("passo %d: slot na palavra de comando", i+1)
-			}
-			for _, n := range refs {
-				if _, ok := m.Slots[n]; !ok {
-					return fmt.Sprintf("passo %d: $slot.%s não declarado em slots", i+1, n)
+	}
+	for i, st := range m.Steps {
+		if st.Cap == "learned_cmd" {
+			cmd := st.In["cmd"]
+			eff := cmd
+			if refs := dsSlotNames(cmd); len(refs) > 0 {
+				// template parametrizado: cada placeholder precisa estar
+				// declarado e guardado por pré-condição, nunca pode ser a
+				// palavra de comando, e a substituição (aqui uma sonda "x")
+				// continua dentro da barra de replay.
+				if dsSlotInCmdWord(cmd) {
+					return fmt.Sprintf("passo %d: slot na palavra de comando", i+1)
 				}
-				if !dsPreHas(m.Pre, "slot."+n) {
-					return fmt.Sprintf("passo %d: $slot.%s sem pré-condição slot.%s set", i+1, n, n)
+				for _, n := range refs {
+					if _, ok := m.Slots[n]; !ok {
+						return fmt.Sprintf("passo %d: $slot.%s não declarado em slots", i+1, n)
+					}
+					if !dsPreHas(m.Pre, "slot."+n) {
+						return fmt.Sprintf("passo %d: $slot.%s sem pré-condição slot.%s set", i+1, n, n)
+					}
+					eff = strings.ReplaceAll(eff, "$slot."+n, "x")
 				}
-				eff = strings.ReplaceAll(eff, "$slot."+n, "x")
 			}
-		}
-		if why := dsCmdOK(eff); why != "" {
+			if why := dsCmdOK(eff); why != "" {
+				return fmt.Sprintf("passo %d: %s", i+1, why)
+			}
+			// literal ou template já expandido pela sonda: fora do replay-safe
+			// não carrega — um overlay adulterado não vira bypass da cerca.
+			if !dsReplaySafe(eff) {
+				return fmt.Sprintf("passo %d: comando fora do reproduzível", i+1)
+			}
+			for k := range st.In {
+				if k != "cmd" {
+					return fmt.Sprintf("passo %d: entrada desconhecida %q", i+1, k)
+				}
+			}
+		} else if why := dsCapStepOK(st, outs, lists); why != "" {
 			return fmt.Sprintf("passo %d: %s", i+1, why)
-		}
-		// literal ou template já expandido pela sonda: fora do replay-safe
-		// não carrega — um overlay adulterado não vira bypass da cerca.
-		if !dsReplaySafe(eff) {
-			return fmt.Sprintf("passo %d: comando fora do reproduzível", i+1)
-		}
-		for k := range st.In {
-			if k != "cmd" {
-				return fmt.Sprintf("passo %d: entrada desconhecida %q", i+1, k)
-			}
 		}
 		if st.Out != "" {
 			outs[st.Out] = true
+			if strings.HasPrefix(st.Cap, "script:") {
+				lists[st.Out] = true
+			}
 		}
 	}
 	if len(m.Verify) == 0 {
 		return "método aprendido sem verificação"
 	}
 	for _, v := range m.Verify {
-		if v.Check != "exit_zero" && v.Check != "cmd_ran" {
+		if v.Check != "exit_zero" && v.Check != "cmd_ran" && !(capM && dsCapChecks[v.Check]) {
 			return "verificador não permitido: " + v.Check
 		}
 		arg, _ := strings.CutPrefix(v.Arg, "$")
@@ -393,6 +408,77 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 	for n, k := range m.Slots {
 		if !dsSlotNameRe.MatchString(n) || !dsKindOK(k) {
 			return "slot mal declarado: " + n
+		}
+	}
+	return ""
+}
+
+// dsCapKeys: as únicas capacidades que um método destilado pode usar e as
+// entradas conhecidas de cada uma — espelhadas dos métodos reais
+// (delete_file.each: file_find produz, for_each ramifica pra file_op;
+// rename.op/create.file: file_op age confinado no projeto).
+var dsCapKeys = map[string]map[string]bool{
+	"script:file_find": smSet("path", "name", "name_re", "ext", "type", "sort",
+		"min_size", "max_size", "newer_min", "older_min", "empty", "exclude",
+		"include_hidden", "time_field", "min_depth", "max_depth", "limit"),
+	"for_each": smSet("from", "do", "op", "max", "to", "content"),
+	"file_op":  smSet("op", "path", "to", "content"),
+}
+
+// dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
+// destilada pode pedir (direto ou via for_each).
+var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename")
+
+// dsCapChecks: verificadores extra que um método de caps pode usar — todos
+// só-leitura e provam efeito em filesystem ou no resultado do script
+// (brVerify); num método só de learned_cmd seguem valendo só
+// exit_zero/cmd_ran.
+var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "script_ok", "script_exit_zero")
+
+// dsCapStepOK valida um passo de capacidade de método aprendido: cap da
+// lista, chaves conhecidas, valores literais ou $out produzido antes
+// (nunca $slot — método de caps não tem slot de texto), e o shape
+// específico de cada cap (for_each consome uma lista produzida por
+// script:* e só ramifica file_op; file_op exige op real e path).
+func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
+	keys, ok := dsCapKeys[st.Cap]
+	if !ok {
+		return "capacidade não destilável: " + st.Cap
+	}
+	for k, v := range st.In {
+		if !keys[k] {
+			return fmt.Sprintf("capacidade %s: entrada desconhecida %q", st.Cap, k)
+		}
+		if strings.Contains(v, "$slot.") {
+			return "capacidade " + st.Cap + ": método de caps não usa $slot"
+		}
+		if strings.ContainsAny(v, "\n\r\x00") {
+			return "capacidade " + st.Cap + ": valor com byte de controle"
+		}
+		if strings.HasPrefix(v, "$") && !outs[strings.TrimPrefix(v, "$")] {
+			return fmt.Sprintf("capacidade %s: %s aponta um passo inexistente", st.Cap, k)
+		}
+	}
+	switch st.Cap {
+	case "for_each":
+		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
+			return "capacidade for_each: from não é uma lista produzida por script"
+		}
+		if st.In["do"] != "file_op" {
+			return "capacidade for_each: do tem que ser file_op"
+		}
+		if !dsFileOpOps[st.In["op"]] {
+			return "capacidade for_each: op desconhecido " + st.In["op"]
+		}
+	case "file_op":
+		if !dsFileOpOps[st.In["op"]] {
+			return "capacidade file_op: op desconhecido " + st.In["op"]
+		}
+		if strings.TrimSpace(st.In["path"]) == "" {
+			return "capacidade file_op: falta path"
+		}
+		if st.In["op"] == "rename" && strings.TrimSpace(st.In["to"]) == "" {
+			return "capacidade file_op: rename sem to"
 		}
 	}
 	return ""
@@ -616,6 +702,437 @@ func dsSkeleton(p pcPlan) *mhMethod {
 		Risk:   "high",
 		CostMS: 8000,
 	}
+}
+
+// dsCapPlan generaliza o esqueleto: percorre os comandos do plano e
+// reescreve cada mutação conhecida como passos de capacidade verificada —
+// find vira script:file_find (produtor de lista), rm/xargs rm/-delete vira
+// for_each+file_op delete sobre a lista produzida, mv/mkdir literais viram
+// file_op direto, e sonda só-leitura fica learned_cmd. Só emite método
+// quando TODO passo mutante cai numa cap real; um comando sem encaixe
+// devolve nil (o plano não vira método de caps).
+func dsCapPlan(p pcPlan) *mhMethod {
+	if p.Wins < dsMinWins || len(p.Cmds) == 0 || len(p.Cmds) > dsMaxSteps {
+		return nil
+	}
+	var steps []mhStep
+	var verify []mhCheck
+	gone := map[string]bool{} // outs de produtores já consumidos por delete
+	last, prod, fop, caps := "", 0, 0, 0
+	script := false
+	emitFind := func(in map[string]string) {
+		prod++
+		last = "cand"
+		if prod > 1 {
+			last = fmt.Sprintf("cand%d", prod)
+		}
+		steps = append(steps, mhStep{Cap: "script:file_find", In: in, Out: last})
+		script, caps = true, caps+1
+	}
+	emitEach := func() {
+		steps = append(steps, mhStep{Cap: "for_each",
+			In: map[string]string{"from": "$" + last, "do": "file_op", "op": "delete", "max": "32"}})
+		gone[last], caps = true, caps+1
+	}
+	emitOp := func(in map[string]string, check string) {
+		fop++
+		out := fmt.Sprintf("f%d", fop)
+		steps = append(steps, mhStep{Cap: "file_op", In: in, Out: out})
+		verify = append(verify, mhCheck{Check: check, Arg: "$" + out})
+		caps++
+	}
+	literal := func(c string) bool { // sonda: fica learned_cmd quando reproduzível
+		if dsCmdOK(c) != "" || !dsReplaySafe(c) {
+			return false
+		}
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": c}})
+		return true
+	}
+	// mapSeg mapeia UM comando (já separado) para os passos de cap; false =
+	// sem encaixe e o plano inteiro não destila.
+	mapSeg := func(s string) bool {
+		t := shellFields(s)
+		if len(t) == 0 {
+			return false
+		}
+		switch filepath.Base(t[0]) {
+		case "find":
+			in, del, ok := dsFindIn(t)
+			if !ok { // find com flag sem encaixe: read-only fica literal
+				return literal(s)
+			}
+			emitFind(in)
+			if del {
+				emitEach()
+			}
+		case "rm":
+			args, ok := dsRmArgs(t)
+			if !ok {
+				return false
+			}
+			if last != "" && !gone[last] {
+				emitEach() // alvos do rm eram a lista produzida
+				return true
+			}
+			if len(args) == 0 {
+				return last != "" // rm sem alvo: vale só se já consumiu a lista
+			}
+			for _, a := range args {
+				if !dsPathLit(a) {
+					return false
+				}
+				emitOp(map[string]string{"op": "delete", "path": a}, "file_gone")
+			}
+		case "mv":
+			args, ok := dsMvArgs(t)
+			if !ok {
+				return false
+			}
+			// o val do file_op rename é a origem — sumir dela prova o rename
+			emitOp(map[string]string{"op": "rename", "path": args[0], "to": args[1]}, "file_gone")
+		case "mkdir":
+			args, ok := dsMkdirArgs(t)
+			if !ok {
+				return false
+			}
+			for _, a := range args {
+				if !dsPathLit(a) {
+					return false
+				}
+				emitOp(map[string]string{"op": "mkdir", "path": a}, "file_exists")
+			}
+		default:
+			return literal(s)
+		}
+		return true
+	}
+	for _, c := range p.Cmds {
+		var parts []string
+		for _, s := range reSplit.Split(c, -1) {
+			if s = strings.TrimSpace(s); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		if len(parts) == 0 {
+			return nil
+		}
+		if strings.Contains(c, "|") {
+			// o único pipeline com encaixe: find … | xargs rm (produtor e
+			// deletor na mesma linha); todo o resto fica literal ou nada.
+			if len(parts) == 2 {
+				l, r := shellFields(parts[0]), shellFields(parts[1])
+				if len(l) > 0 && len(r) > 0 && filepath.Base(l[0]) == "find" &&
+					filepath.Base(r[0]) == "xargs" && dsXargsRm(r) {
+					in, del, ok := dsFindIn(l)
+					if !ok || del {
+						return nil
+					}
+					emitFind(in)
+					emitEach()
+					continue
+				}
+			}
+			if !literal(c) {
+				return nil
+			}
+			continue
+		}
+		// sequência (; &&): cada comando vale um passo — os passos já rodam
+		// em ordem e abortam na falha, mesma semântica do &&.
+		for _, s := range parts {
+			if !mapSeg(s) {
+				return nil
+			}
+		}
+	}
+	if caps == 0 {
+		return nil // sem passo de cap não é cap-plan — o caminho literal cobre
+	}
+	for l := range gone {
+		verify = append(verify, mhCheck{Check: "list_gone", Arg: "$" + l})
+	}
+	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v &&
+		dsCmdOK(v) == "" && dsReplaySafe(v) {
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": v}, Out: "vrf"})
+		verify = append(verify, mhCheck{Check: "exit_zero", Arg: "$vrf"})
+	}
+	if len(verify) == 0 || len(steps) > dsMaxSteps {
+		return nil
+	}
+	risk := "med"
+	for _, st := range steps {
+		if st.Cap == "for_each" || (st.Cap == "file_op" && st.In["op"] == "delete") {
+			risk = "high"
+		}
+	}
+	m := &mhMethod{
+		Priority: 7,
+		Doc:      "caps aprendidas (jazz distill): " + oneLine(p.Task, 80),
+		Steps:    steps,
+		Verify:   verify,
+		Risk:     risk,
+		CostMS:   len(steps) * 2000,
+	}
+	if script {
+		m.Needs = []string{"bin.python3"}
+	}
+	return m
+}
+
+// dsPathLit: alvo literal de file_op — caminho relativo simples, sem os
+// metacaracteres que indicariam expansão de shell ou fuga do projeto
+// (brSafePath confina de novo na execução; aqui é só higiene do aprendido).
+func dsPathLit(s string) bool {
+	if s == "" || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "~") || filepath.IsAbs(s) {
+		return false
+	}
+	if strings.Contains(s, "..") || strings.ContainsAny(s, "$`*?(){}[]'\"\\") {
+		return false
+	}
+	return true
+}
+
+// dsRmArgs: rm só vira cap com flags benignos (-f/-v/-d); -r/-R/-i não têm
+// encaixe (file_op delete não é recursivo, -i é interativo). Retorna os
+// alvos posicionais.
+func dsRmArgs(t []string) ([]string, bool) {
+	return dsFlagArgs(t, "fvd")
+}
+
+// dsMvArgs: "mv [-f|-v] origem destino" — no-clobber/update/interativo não
+// têm encaixe no file_op rename, nem fan-out pra diretório (>2 alvos).
+func dsMvArgs(t []string) ([]string, bool) {
+	args, ok := dsFlagArgs(t, "fv")
+	if !ok || len(args) != 2 || !dsPathLit(args[0]) || !dsPathLit(args[1]) {
+		return nil, false
+	}
+	return args, true
+}
+
+// dsMkdirArgs: "mkdir [-p|-v] dir…" — modo/dono não têm encaixe.
+func dsMkdirArgs(t []string) ([]string, bool) {
+	args, ok := dsFlagArgs(t, "pv")
+	if !ok || len(args) == 0 {
+		return nil, false
+	}
+	return args, true
+}
+
+// dsFlagArgs separa flags de uma letra (todos precisam estar em allow) dos
+// argumentos posicionais; "--" encerra os flags.
+func dsFlagArgs(t []string, allow string) ([]string, bool) {
+	var args []string
+	for i := 1; i < len(t); i++ {
+		a := t[i]
+		if a == "--" {
+			args = append(args, t[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") {
+			for _, f := range a[1:] {
+				if !strings.ContainsRune(allow, f) {
+					return nil, false
+				}
+			}
+			continue
+		}
+		args = append(args, a)
+	}
+	return args, true
+}
+
+// dsXargsRm: "xargs [flags] rm [flags benignos]" — os alvos vêm da entrada,
+// então depois do rm só flags são aceitos.
+func dsXargsRm(t []string) bool {
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch a {
+		case "-n", "-I", "-P", "-d", "-s", "-L", "--max-args", "--max-procs", "--delimiter", "--max-lines":
+			i++ // flag com argumento próprio
+		}
+	}
+	if i >= len(t) || filepath.Base(t[i]) != "rm" {
+		return false
+	}
+	for i++; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			return false // alvo literal não vem da lista produzida
+		}
+		for _, f := range a[1:] {
+			if f != 'f' && f != 'v' && f != 'd' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// dsFindIn: os argumentos de um find (tokens depois do "find") viram as
+// entradas do script:file_find — espelha os slots do delete_file.each.
+// del = o próprio find já deletava (-delete, -exec rm). ok=false = sobrou
+// flag sem encaixe (o comando fica literal quando dá, senão não destila).
+func dsFindIn(t []string) (in map[string]string, del, ok bool) {
+	in = map[string]string{"limit": "32"}
+	paths := 0
+	num := func(s string) bool {
+		n, err := strconv.Atoi(s)
+		return err == nil && n >= 0
+	}
+	arg := func(i int) string {
+		if i+1 < len(t) {
+			return t[i+1]
+		}
+		return ""
+	}
+	for i := 1; i < len(t); i++ {
+		a := t[i]
+		switch {
+		case a == "-delete":
+			del = true
+		case a == "-exec" || a == "-execdir":
+			// só "-exec rm [-f|-v] {} ;|+" — qualquer outro exec não destila
+			j := i + 1
+			if j >= len(t) || filepath.Base(t[j]) != "rm" {
+				return nil, false, false
+			}
+			for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
+				if t[j] != "-f" && t[j] != "-v" && t[j] != "--" && !strings.Contains(t[j], "{}") {
+					return nil, false, false
+				}
+			}
+			if j >= len(t) {
+				return nil, false, false
+			}
+			del, i = true, j
+		case a == "-name" || a == "-iname":
+			if arg(i) == "" || in["name"] != "" {
+				return nil, false, false
+			}
+			in["name"], i = arg(i), i+1
+		case a == "-type":
+			switch arg(i) {
+			case "f":
+				in["type"] = "file"
+			case "d":
+				in["type"] = "dir"
+			default:
+				return nil, false, false
+			}
+			i++
+		case a == "-maxdepth" || a == "-mindepth":
+			if !num(arg(i)) {
+				return nil, false, false
+			}
+			in[map[string]string{"-maxdepth": "max_depth", "-mindepth": "min_depth"}[a]], i = arg(i), i+1
+		case a == "-size":
+			n, sign, okSz := dsFindSize(arg(i))
+			if !okSz {
+				return nil, false, false
+			}
+			if sign == '+' {
+				in["min_size"] = strconv.FormatInt(n, 10)
+			} else {
+				in["max_size"] = strconv.FormatInt(n, 10)
+			}
+			i++
+		case a == "-mtime" || a == "-mmin":
+			f := int64(1)
+			if a == "-mtime" {
+				f = 1440 // dias → minutos do newer_min/older_min
+			}
+			v, key := arg(i), "older_min"
+			var n int64
+			var err error
+			switch {
+			case strings.HasPrefix(v, "+"):
+				n, err = strconv.ParseInt(v[1:], 10, 64)
+				n++
+			case strings.HasPrefix(v, "-"):
+				n, err = strconv.ParseInt(v[1:], 10, 64)
+				key = "newer_min"
+			default:
+				n, err = strconv.ParseInt(v, 10, 64)
+			}
+			if err != nil || n < 0 {
+				return nil, false, false
+			}
+			in[key], i = strconv.FormatInt(n*f, 10), i+1
+		case a == "-empty":
+			in["empty"] = "true"
+		case a == "!" || a == "-not":
+			// negação só vale como exclusão de nome/caminho
+			if i+2 >= len(t) || in["exclude"] != "" ||
+				(t[i+1] != "-name" && t[i+1] != "-iname" && t[i+1] != "-path") {
+				return nil, false, false
+			}
+			in["exclude"], i = t[i+2], i+2
+		case a == "-print" || a == "-print0" || a == "-xdev" || a == "-mount" ||
+			a == "-quit" || a == "-true" || a == "-depth":
+			// neutros: saída e travessia não mudam o conjunto produzido
+		case strings.HasPrefix(a, "-"):
+			return nil, false, false // flag sem encaixe
+		default:
+			// raiz da busca: um único caminho posicional
+			if paths > 0 {
+				return nil, false, false
+			}
+			paths++
+			if p := strings.TrimPrefix(a, "./"); p != "" && p != "." {
+				in["path"] = p
+			}
+		}
+	}
+	return in, del, true
+}
+
+// dsFindSize: "-size +12k" → bytes do filtro; unidades do find (c=1, w=2,
+// k=1024, M, G; b e sem sufixo = blocos de 512). Só as formas relativas
+// (+N / -N) viram min_size/max_size — o tamanho exato é semântica de
+// arredondamento do find que o file_find não tem.
+func dsFindSize(v string) (int64, byte, bool) {
+	if v == "" || (v[0] != '+' && v[0] != '-') {
+		return 0, 0, false
+	}
+	sign, s := v[0], v[1:]
+	unit := int64(512)
+	if len(s) > 0 {
+		switch s[len(s)-1] {
+		case 'c':
+			unit, s = 1, s[:len(s)-1]
+		case 'w':
+			unit, s = 2, s[:len(s)-1]
+		case 'k':
+			unit, s = 1<<10, s[:len(s)-1]
+		case 'M':
+			unit, s = 1<<20, s[:len(s)-1]
+		case 'G':
+			unit, s = 1<<30, s[:len(s)-1]
+		case 'b':
+			s = s[:len(s)-1]
+		}
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 {
+		return 0, 0, false
+	}
+	return n * unit, sign, true
+}
+
+// dsCapCand embrulha um método de caps (esqueleto ou generalizado) na
+// candidata: intenção learned_<id>, atalho exato do texto do plano.
+func dsCapCand(p pcPlan, m *mhMethod, tag string) *dsCand {
+	c := &dsCand{Plan: p, Method: *m}
+	name := dsLearnedPrefix + p.ID
+	c.Method.Name = name + tag
+	c.Method.Intent = name
+	c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{p.Task}}
+	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+	return c
 }
 
 // dsEligible barra um plano antes do desenho do método: repetido,
@@ -924,14 +1441,14 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 		// VERIFIED caps — the online run taught the structure, not the bash.
 		if strings.Contains(why, "muta estado") {
 			if sk := dsSkeleton(p); sk != nil {
-				c := &dsCand{Plan: p, Method: *sk}
-				name := dsLearnedPrefix + p.ID
-				c.Method.Name = name + ".skeleton"
-				c.Method.Intent = name
-				c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{p.Task}}
-				c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
-				return c, ""
+				return dsCapCand(p, sk, ".skeleton"), ""
 			}
+		}
+		// cap-plan: generalização do esqueleto — cada mutação que cai numa
+		// cap verificada vira passo dela; se tudo encaixar, o plano vira
+		// método de caps em vez de sair do jogo.
+		if cp := dsCapPlan(p); cp != nil {
+			return dsCapCand(p, cp, ".caps"), ""
 		}
 		return nil, why
 	}
