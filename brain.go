@@ -85,14 +85,50 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 // Parts with no task evidence ("porra e o zz9?" → "porra") are noise, not a
 // request: they are discarded here so they cannot veto the split or become
 // an action of their own.
-var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+)`)
+var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+|,\s*and\s+|\s+and\s+then\s+|\s+then\s+|\s+and\s+)`)
+
+// brMaskQuotes blanks quoted spans ('...', "...", `...`) so a conjunction
+// inside a file name ("rock and roll.txt") never becomes a split point.
+// The mask preserves offsets — splitting the mask cuts the original right.
+func brMaskQuotes(text string) string {
+	b := []byte(text)
+	var q byte
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case q == 0 && (c == '\'' || c == '"' || c == '`'):
+			q = c
+		case q != 0 && c == q:
+			q = 0
+		case q != 0:
+			b[i] = ' '
+		}
+	}
+	return string(b)
+}
 
 func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	var out []string
-	for _, p := range brMultiRe.Split(text, 5) {
-		if p = strings.TrimSpace(p); p != "" && m.taskEvidence(p, w) {
+	masked := brMaskQuotes(text)
+	var cuts [][2]int
+	for _, loc := range brMultiRe.FindAllStringIndex(masked, -1) {
+		cuts = append(cuts, [2]int{loc[0], loc[1]})
+		if len(cuts) >= 4 {
+			break
+		}
+	}
+	if len(cuts) == 0 {
+		return nil
+	}
+	prev := 0
+	for _, c := range cuts {
+		if p := strings.TrimSpace(text[prev:c[0]]); p != "" && m.taskEvidence(p, w) {
 			out = append(out, p)
 		}
+		prev = c[1]
+	}
+	if p := strings.TrimSpace(text[prev:]); p != "" && m.taskEvidence(p, w) {
+		out = append(out, p)
 	}
 	if len(out) < 2 {
 		return nil
