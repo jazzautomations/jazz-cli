@@ -2301,7 +2301,7 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			for j := i + 1; j < len(toks) && j <= i+3; j++ {
 				u := &toks[j]
-				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") {
+				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
 				}
 				if scopeFillers[u.Fold] {
