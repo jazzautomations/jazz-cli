@@ -355,12 +355,14 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 				}
 				eff = strings.ReplaceAll(eff, "$slot."+n, "x")
 			}
-			if !dsReplaySafe(eff) {
-				return fmt.Sprintf("passo %d: template fora do reproduzível", i+1)
-			}
 		}
 		if why := dsCmdOK(eff); why != "" {
 			return fmt.Sprintf("passo %d: %s", i+1, why)
+		}
+		// literal ou template já expandido pela sonda: fora do replay-safe
+		// não carrega — um overlay adulterado não vira bypass da cerca.
+		if !dsReplaySafe(eff) {
+			return fmt.Sprintf("passo %d: comando fora do reproduzível", i+1)
 		}
 		for k := range st.In {
 			if k != "cmd" {
