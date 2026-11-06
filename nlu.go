@@ -3170,6 +3170,8 @@ var nuExtWords = map[string]bool{
 	"html": true, "css": true, "sql": true, "db": true, "sqlite": true,
 	"zip": true, "tar": true, "gz": true, "pdf": true, "png": true, "jpg": true,
 	"jpeg": true, "gif": true, "mp3": true, "mp4": true, "wav": true,
+	"php": true, "htm": true, "jsx": true, "tsx": true,
+	"vue": true, "kt": true, "scala": true, "lua": true,
 }
 
 // nuArchiveName reports whether a token names an archive by extension.
