@@ -8,7 +8,7 @@ WORK = os.environ.get('JAZZ_WORK', '/tmp/v5-work')
 CORPUS = os.environ.get('BENCH_CORPUS', WORK + '/corpus/corpus-2k5.jsonl')
 JH_ROOT = os.environ.get('BENCH_JH', WORK + '/jh')
 FIXTURE = os.environ.get('BENCH_FIXTURE', WORK + '/fixture')
-BIN = os.environ.get('BENCH_BIN', '/home/h/.local/bin/jazz')
+BIN = os.environ.get('BENCH_BIN', 'jazz')
 OUT = os.environ.get('BENCH_OUT', WORK + '/results.jsonl')
 # seed dir with learned methods: its data/forge/methods.overlay.json and
 # trusted.json are copied into every per-row JAZZ_HOME before the run
