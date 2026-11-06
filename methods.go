@@ -325,6 +325,7 @@ func init() {
 		"need":         brNeed,
 		"take":         brTake,
 		"for_each":     brForEach,
+		"save_list":    brSaveList,
 		"learned_cmd":  brLearnedCmd,
 		"read_file":    brReadFile,
 		"run_tests":    brRunTests,
@@ -546,6 +547,55 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s) — primeira: %s", done, failed, firstWhy)}
 	}
 	return brStep{obs: rvNoCmd(), ok: true}
+}
+
+// brSaveList escreve a lista produzida inteira num arquivo confinado —
+// "find X e salva a lista em out.txt" sem redirect de shell: path preso
+// no root, permissão de write, e lista vazia não cria arquivo nenhum.
+func brSaveList(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	v := cx.subst(in["from"])
+	m, _ := v.(map[string]any)
+	data, _ := m["data"].(map[string]any)
+	var items []any
+	for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+		if arr, ok := data[k].([]any); ok {
+			items = arr
+			break
+		}
+	}
+	if len(items) == 0 {
+		return brStep{obs: obs, why: "o produtor não encontrou nada pra salvar"}
+	}
+	abs, rel, err := brSafePath(cx.env.Root, cx.str(in, "path"))
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	if ok, why := cx.brPermit("write " + rel); !ok {
+		obs.Denied, obs.Output = true, why
+		return brStep{obs: obs, why: why}
+	}
+	var lines []string
+	for _, it := range items {
+		if s := brItemPath(it); s != "" {
+			lines = append(lines, s)
+		}
+	}
+	if len(lines) == 0 {
+		return brStep{obs: obs, why: "a lista produzida não tem paths pra salvar"}
+	}
+	if in["sort"] == "true" {
+		sort.Strings(lines)
+	}
+	if err = os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return brStep{obs: obs, why: "não criei o diretório: " + err.Error()}
+	}
+	if err = os.WriteFile(abs, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		return brStep{obs: obs, why: "não escrevi: " + err.Error()}
+	}
+	cx.task.AddEvidence("plan", fmt.Sprintf("save_list %s: %d linha(s)", rel, len(lines)))
+	obs.Output = fmt.Sprintf("%s: %d linha(s) salvas", rel, len(lines))
+	return brStep{val: rel, obs: obs, ok: true}
 }
 
 // brItemPath lifts a path out of a producer item — scripts emit either

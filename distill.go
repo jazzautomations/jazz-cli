@@ -421,8 +421,9 @@ var dsCapKeys = map[string]map[string]bool{
 	"script:file_find": smSet("path", "name", "name_re", "ext", "type", "sort",
 		"min_size", "max_size", "newer_min", "older_min", "empty", "exclude",
 		"include_hidden", "time_field", "min_depth", "max_depth", "limit"),
-	"for_each": smSet("from", "do", "op", "max", "to", "content"),
-	"file_op":  smSet("op", "path", "to", "content"),
+	"for_each":  smSet("from", "do", "op", "max", "to", "content"),
+	"save_list": smSet("from", "path", "sort"),
+	"file_op":   smSet("op", "path", "to", "content"),
 }
 
 // dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
@@ -469,6 +470,13 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		}
 		if !dsFileOpOps[st.In["op"]] {
 			return "capacidade for_each: op desconhecido " + st.In["op"]
+		}
+	case "save_list":
+		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
+			return "capacidade save_list: from não é uma lista produzida por script"
+		}
+		if strings.TrimSpace(st.In["path"]) == "" {
+			return "capacidade save_list: falta path"
 		}
 	case "file_op":
 		if !dsFileOpOps[st.In["op"]] {
@@ -704,6 +712,31 @@ func dsSkeleton(p pcPlan) *mhMethod {
 	}
 }
 
+// dsStripRedirect separa o redirect de stdout do resto do comando:
+// "find … > out.txt" → (campos do find, "out.txt", append). Os de erro
+// (2>, 2>&1, >&2) são descartados — não são conteúdo de lista. Sem
+// redirect de stdout: dest vazio.
+func dsStripRedirect(t []string) (inner []string, dest string, app bool) {
+	for i := 0; i < len(t); i++ {
+		a := t[i]
+		if a == ">" || a == ">>" {
+			if i+1 >= len(t) {
+				return inner, "", false
+			}
+			return inner, t[i+1], a == ">>"
+		}
+		if a == "2>" || a == "2>>" {
+			i++ // o alvo do erro não é campo do comando
+			continue
+		}
+		if a == "2>&1" || a == ">&2" || a == "1>&2" {
+			continue
+		}
+		inner = append(inner, a)
+	}
+	return inner, "", false
+}
+
 // dsCapPlan generaliza o esqueleto: percorre os comandos do plano e
 // reescreve cada mutação conhecida como passos de capacidade verificada —
 // find vira script:file_find (produtor de lista), rm/xargs rm/-delete vira
@@ -741,6 +774,18 @@ func dsCapPlan(p pcPlan) *mhMethod {
 		verify = append(verify, mhCheck{Check: check, Arg: "$" + out})
 		caps++
 	}
+	sav := 0
+	emitSave := func(dest string, sorted bool) {
+		sav++
+		out := fmt.Sprintf("s%d", sav)
+		in := map[string]string{"from": "$" + last, "path": dest}
+		if sorted {
+			in["sort"] = "true"
+		}
+		steps = append(steps, mhStep{Cap: "save_list", In: in, Out: out})
+		verify = append(verify, mhCheck{Check: "file_exists", Arg: "$" + out})
+		caps++
+	}
 	literal := func(c string) bool { // sonda: fica learned_cmd quando reproduzível
 		if dsCmdOK(c) != "" || !dsReplaySafe(c) {
 			return false
@@ -752,6 +797,22 @@ func dsCapPlan(p pcPlan) *mhMethod {
 	// sem encaixe e o plano inteiro não destila.
 	mapSeg := func(s string) bool {
 		t := shellFields(s)
+		inner, dest, _ := dsStripRedirect(t)
+		if dest != "" {
+			// "find … > arquivo" salva a lista produzida — só esse
+			// produtor tem cap; o resto não finge encaixe.
+			if len(inner) > 0 && filepath.Base(inner[0]) == "find" && dsPathLit(dest) {
+				in, del, ok := dsFindIn(inner)
+				if !ok || del {
+					return false
+				}
+				emitFind(in)
+				emitSave(dest, false)
+				return true
+			}
+			return false
+		}
+		t = inner
 		if len(t) == 0 {
 			return false
 		}
@@ -817,19 +878,46 @@ func dsCapPlan(p pcPlan) *mhMethod {
 			return nil
 		}
 		if strings.Contains(c, "|") {
-			// o único pipeline com encaixe: find … | xargs rm (produtor e
-			// deletor na mesma linha); todo o resto fica literal ou nada.
+			// pipelines com encaixe: find … | xargs rm (produtor+deletor),
+			// find … | tee arq e find … | sort > arq (produtor+save_list).
+			// Todo o resto fica literal ou nada.
 			if len(parts) == 2 {
 				l, r := shellFields(parts[0]), shellFields(parts[1])
-				if len(l) > 0 && len(r) > 0 && filepath.Base(l[0]) == "find" &&
-					filepath.Base(r[0]) == "xargs" && dsXargsRm(r) {
-					in, del, ok := dsFindIn(l)
-					if !ok || del {
-						return nil
+				rIn, rDest, _ := dsStripRedirect(r)
+				if len(l) > 0 && len(rIn) > 0 && filepath.Base(l[0]) == "find" {
+					switch filepath.Base(rIn[0]) {
+					case "xargs":
+						if !dsXargsRm(rIn) {
+							break
+						}
+						in, del, ok := dsFindIn(l)
+						if !ok || del {
+							return nil
+						}
+						emitFind(in)
+						emitEach()
+						continue
+					case "tee":
+						if len(rIn) == 2 && rDest == "" && dsPathLit(rIn[1]) {
+							in, del, ok := dsFindIn(l)
+							if !ok || del {
+								return nil
+							}
+							emitFind(in)
+							emitSave(rIn[1], false)
+							continue
+						}
+					case "sort":
+						if len(rIn) == 1 && rDest != "" && dsPathLit(rDest) {
+							in, del, ok := dsFindIn(l)
+							if !ok || del {
+								return nil
+							}
+							emitFind(in)
+							emitSave(rDest, true)
+							continue
+						}
 					}
-					emitFind(in)
-					emitEach()
-					continue
 				}
 			}
 			if !literal(c) {

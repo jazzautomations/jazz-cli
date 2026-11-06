@@ -286,14 +286,49 @@ func TestDsCapPlan(t *testing.T) {
 		t.Errorf("método misto não valida: %s", why)
 	}
 
+	// redirect de stdout: "find … > lista.txt", "find | tee lista.txt" e
+	// "find | sort > lista.txt" viram file_find + save_list — o arquivo
+	// escrito é a prova (file_exists sobre o out do save_list).
+	saves := []struct {
+		cmd    string
+		sorted bool
+	}{
+		{"find . -name '*.log' -print > logs.txt", false},
+		{"find . -name '*.log' -print | tee logs.txt", false},
+		{"find . -name '*.log' -print | sort > logs.txt", true},
+	}
+	for _, sv := range saves {
+		cp := dsCapPlan(dsPlan("ca77ps05", "zzq salva a lista", 3, []string{sv.cmd}, ""))
+		if cp == nil || len(cp.Steps) != 2 {
+			t.Fatalf("%q não destilou: %+v", sv.cmd, cp)
+		}
+		sl := cp.Steps[1]
+		if sl.Cap != "save_list" || sl.In["from"] != "$cand" || sl.In["path"] != "logs.txt" {
+			t.Fatalf("%q → save_list errado: %+v", sv.cmd, sl)
+		}
+		if (sl.In["sort"] == "true") != sv.sorted {
+			t.Fatalf("%q → sort=%q", sv.cmd, sl.In["sort"])
+		}
+		if len(cp.Verify) != 1 || cp.Verify[0].Check != "file_exists" || cp.Verify[0].Arg != "$"+sl.Out {
+			t.Fatalf("%q → verify: %+v", sv.cmd, cp.Verify)
+		}
+		cp.Name, cp.Intent = "learned_x.caps", "learned_x"
+		if why := dsValidMethod(*cp, func(string) bool { return true }); why != "" {
+			t.Errorf("%q → método não valida: %s", sv.cmd, why)
+		}
+	}
+
 	// sem encaixe o generalizado não destila: recursivo, exec não-rm,
-	// mutação sem cap equivalente, xargs rm solto (sem produtor).
+	// mutação sem cap equivalente, xargs rm solto (sem produtor),
+	// redirect de não-produtor e tee pra path inseguro.
 	for _, cmds := range [][]string{
 		{"rm -rf dir"},
 		{"find . -exec grep -l x {} +"},
 		{"cp a b"},
 		{"find . -name '*.tmp' -print", "chmod 600 x"},
 		{"find . -name '*.tmp' -print", "xargs rm"},
+		{"ls -la > out.txt"},
+		{"find . -name '*.log' | tee /tmp/out.txt"},
 	} {
 		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, "")); cp != nil {
 			t.Errorf("%v não devia virar método de caps: %+v", cmds, cp)
