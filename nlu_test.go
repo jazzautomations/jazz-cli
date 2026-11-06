@@ -549,3 +549,29 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 		}
 	}
 }
+
+// text_replace: sufixo de backup não é escopo nem nome-alvo; lista de
+// extensões vira name_re; "file names" continua nome-alvo (recusa honesta
+// no portão de método).
+func TestNLUTextReplaceSlots(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse("Replace 'company' with 'newcompany' in all files under current directory and keep backups with .bakup extension", w)
+	if in.Name != "text_replace" || in.Confidence < nuMinConf {
+		t.Fatalf("backup => %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	if in.Slots["backup"] != ".bakup" || in.Slots["namefile"] != "" || in.Slots["ext"] == "bakup" {
+		t.Errorf("backup slots errados: %v", in.Slots)
+	}
+	in = m.Parse("Replace all occurrences of '2013 Magento Inc.' with '2012 Magento Inc.' in all files with '.php', '.xml' and '.phtml' extensions under current directory tree", w)
+	if in.Slots["exts"] != `\.(php|xml|phtml)$` || in.Slots["to"] != "2012 Magento Inc." {
+		t.Errorf("multi-ext slots errados: %v", in.Slots)
+	}
+	for _, s := range []string{
+		"Replace spaces in file names with underscores in all files",
+		"Replace 'a' with 'b' in file names",
+	} {
+		if in = m.Parse(s, w); in.Slots["namefile"] == "" {
+			t.Errorf("%q devia marcar namefile: %v", s, in.Slots)
+		}
+	}
+}

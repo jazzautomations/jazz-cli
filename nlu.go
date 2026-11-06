@@ -1822,10 +1822,13 @@ var nuWithWords = map[string]bool{
 // o separador e o to é o que segue o separador — devolve a frase inteira
 // quando ela é multi-palavra ("local host"→"local.host").
 func nuReplacePart(toks []nuTok, res []int, to bool) string {
+	// O separador from→to é o PRIMEIRO "with/por" — "with '.php' extension"
+	// lá no fim da frase é seletor de escopo, não o destino da troca.
 	mark := -1
 	for i := range toks {
 		if nuWithWords[toks[i].Fold] && i > 0 {
 			mark = i
+			break
 		}
 	}
 	// citadas em ordem: "replace 'a' with 'b'" → a,b
@@ -1917,10 +1920,82 @@ func nuReplFlag(toks []nuTok, what string) string {
 	case "namefile":
 		// "in file names", "dos nomes de arquivo" — o alvo é o NOME, não o
 		// conteúdo: text_replace é a ferramenta errada, recusa honesta.
+		// Exceção: "keep backups with .bakup extension" — a palavra
+		// "extension" descreve o sufixo do backup, não um alvo de nome.
+		// "extension" só é nome-alvo quando não descreve um sufixo real:
+		// com .xxx presente (ou backup na frase) ela é seletor, não alvo.
+		extTok := false
+		bak := false
 		for i := range toks {
-			if toks[i].has("nameattr") {
-				return "1"
+			f := toks[i].Fold
+			if strings.HasPrefix(f, ".") && len(f) > 1 {
+				extTok = true
 			}
+			switch f {
+			case "backup", "backups", "cópia", "copia", "cópias", "copias":
+				bak = true
+			}
+		}
+		for i := range toks {
+			if !toks[i].has("nameattr") {
+				continue
+			}
+			if extTok || bak {
+				switch toks[i].Fold {
+				case "extension", "extensions", "ext", "extensão", "extensões", "extensao", "extensoes", "suffix", "sufixo":
+					continue
+				}
+			}
+			return "1"
+		}
+	case "backup":
+		// "keep backups with .bakup extension" / "guarda backup .orig" —
+		// devolve o sufixo (com ponto) pra backup_ext do text_op.
+		seen := false
+		for i := range toks {
+			switch toks[i].Fold {
+			case "backup", "backups", "cópia", "copia", "cópias", "copias":
+				seen = true
+				continue
+			}
+			if !seen {
+				continue
+			}
+			f := toks[i].Fold
+			if strings.HasPrefix(f, ".") && len(f) > 1 {
+				return f
+			}
+			if nuExtWords[f] && toks[i].Quoted {
+				return "." + f
+			}
+		}
+	case "exts":
+		// "in '.php', '.xml' and '.phtml' files" — várias extensões viram
+		// alternância ancorada pro name_re do file_find.
+		var exts []string
+		for i := range toks {
+			f := toks[i].Fold
+			var e string
+			if strings.HasPrefix(f, "*.") || (strings.HasPrefix(f, ".") && len(f) > 1) {
+				e = strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
+			} else if nuExtWords[f] && toks[i].Quoted {
+				e = f
+			}
+			if e == "" {
+				continue
+			}
+			dup := false
+			for _, x := range exts {
+				if x == e {
+					dup = true
+				}
+			}
+			if !dup {
+				exts = append(exts, regexp.QuoteMeta(e))
+			}
+		}
+		if len(exts) > 1 {
+			return `\.(` + strings.Join(exts, "|") + `)$`
 		}
 	}
 	return ""
@@ -2310,9 +2385,27 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 	case "min_size", "max_size":
 		return nuFindSize(toks, what == "min_size", taken)
 	case "ext":
+		// "backups with .bakup extension" — o .bakup é sufixo do backup,
+		// não escopo de busca: pula .xxx seguido de "extension" quando um
+		// backup-word aparece antes.
+		bakAt := -1
+		for i := range toks {
+			switch toks[i].Fold {
+			case "backup", "backups", "cópia", "copia", "cópias", "copias":
+				if bakAt < 0 {
+					bakAt = i
+				}
+			}
+		}
 		for i := range toks {
 			f := toks[i].Fold
 			if strings.HasPrefix(f, "*.") || (strings.HasPrefix(f, ".") && len(f) > 1) {
+				if bakAt >= 0 && i > bakAt && i+1 < len(toks) {
+					switch toks[i+1].Fold {
+					case "extension", "extensions", "ext", "extensão", "extensões", "extensao", "extensoes", "suffix", "sufixo":
+						continue
+					}
+				}
 				taken[i] = true
 				return strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
 			}
@@ -2427,6 +2520,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// "directory tree downwards" = este projeto recursivo
 			"downwards": true, "downward": true, "upwards": true,
 			"upward": true, "recursively": true, "recursive": true,
+			// "in all files" / "em todos os arquivos" — quantificador de
+			// escopo, não nome de pasta; consumido como este-projeto
+			"all": true, "every": true, "each": true, "any": true,
+			"todos": true, "todas": true, "todo": true, "toda": true,
+			"cada": true, "qualquer": true, "quaisquer": true,
+			// "in text files" = arquivos de texto em geral, não dir "text"
+			"text": true, "texto": true,
 		}
 		fileWords := map[string]bool{
 			"arquivos": true, "files": true, "diretorios": true, "diretórios": true,
@@ -2461,7 +2561,15 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"ext2": true, "ext3": true, "ext4": true, "ntfs": true,
 			"fat32": true, "vfat": true, "btrfs": true, "xfs": true,
 			"output": true, "input": true, "given": true, "specified": true,
+			"regular": true, "normal": true, "standard": true, "certain": true,
+			"particular": true, "specific": true, "common": true,
 			"where": true, "path": true, "location": true, "place": true,
+		}
+		// a conjunction/verb closes the scope phrase — words after "under X
+		// and keep Y" are the next clause, not part of the dir name
+		clauseBoundaries := map[string]bool{
+			"and": true, "or": true, "but": true, "then": true,
+			"e": true, "ou": true, "mas": true, "então": true, "entao": true,
 		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
@@ -2473,8 +2581,14 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			for j := i + 1; j < len(toks) && j <= i+3; j++ {
 				u := &toks[j]
+				if clauseBoundaries[u.Fold] {
+					break
+				}
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
+				}
+				if strings.HasPrefix(u.Fold, ".") || nuExtWords[u.Fold] {
+					continue // ".txt files" é seletor do slot ext, não dir
 				}
 				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
 					continue // a window, a verb or a shell var is never a dir — leave it for the time slots or unfed
@@ -2490,7 +2604,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				taken[i], taken[j] = true, true
 				return u.Raw // tagged entities (@dir, /etc) are exactly the right values
 			}
-			break
+			// sem break: uma cue que só achou escopo/janela ("in all files")
+			// não pode esconder a próxima ("under /myprojects")
 		}
 		// X "de/do/of" <file-word>: "o tmp de arquivos", "a pasta logs of files"
 		for i := 0; i+2 < len(toks); i++ {

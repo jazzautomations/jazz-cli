@@ -5391,9 +5391,7 @@
       "container",
       "service",
       "permattr",
-      "install",
-      "nameattr",
-      "stdin"
+      "install"
      ]
     }
    ],
@@ -5453,6 +5451,24 @@
       "text"
      ],
      "from": "repl:namefile"
+    },
+    "backup": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:backup"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "from": "find:dir_cued"
+    },
+    "exts": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:exts"
     }
    },
    "examples": [

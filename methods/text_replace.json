@@ -36,7 +36,8 @@
       "from_str": "$slot.from",
       "to_str": "$slot.to",
       "first_per_line": "$slot.first",
-      "ignore_case": "$slot.icase"
+      "ignore_case": "$slot.icase",
+      "backup_ext": "$slot.backup"
      },
      "out": "t"
     }
@@ -50,6 +51,76 @@
    ],
    "risk": "medium",
    "cost_ms": 30
+  },
+  {
+   "name": "text_replace.exts",
+   "intent": "text_replace",
+   "priority": 9,
+   "doc": "'troca X por Y nos .php, .xml e .phtml': name_re alternation produz, for_each aplica, list_lacks prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    },
+    {
+     "fact": "slot.exts",
+     "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namefile",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "type": "file",
+      "limit": "32",
+      "name_re": "$slot.exts"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "text_op",
+      "op": "replace",
+      "from_str": "$slot.from",
+      "to_str": "$slot.to",
+      "first_per_line": "$slot.first",
+      "ignore_case": "$slot.icase",
+      "max": "32",
+      "backup_ext": "$slot.backup"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_lacks",
+     "arg": "$cand",
+     "arg2": "$slot.from"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 200
   },
   {
    "name": "text_replace.each",
@@ -106,7 +177,8 @@
       "to_str": "$slot.to",
       "first_per_line": "$slot.first",
       "ignore_case": "$slot.icase",
-      "max": "32"
+      "max": "32",
+      "backup_ext": "$slot.backup"
      }
     }
    ],
@@ -129,6 +201,18 @@
     "bin.python3"
    ],
    "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.exts",
+     "op": "unset"
+    },
     {
      "fact": "slot.file",
      "op": "unset"
@@ -173,7 +257,85 @@
       "to_str": "$slot.to",
       "first_per_line": "$slot.first",
       "ignore_case": "$slot.icase",
-      "max": "256"
+      "max": "256",
+      "backup_ext": "$slot.backup"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_lacks",
+     "arg": "$cand",
+     "arg2": "$slot.from"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "text_replace.dir",
+   "intent": "text_replace",
+   "priority": 6,
+   "doc": "'troca X por Y nos arquivos em src/': file_find dentro do dir pedido, for_each, list_lacks prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.exts",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namefile",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256",
+      "path": "$slot.dir"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "text_op",
+      "op": "replace",
+      "from_str": "$slot.from",
+      "to_str": "$slot.to",
+      "first_per_line": "$slot.first",
+      "ignore_case": "$slot.icase",
+      "max": "256",
+      "backup_ext": "$slot.backup"
      }
     }
    ],

@@ -262,6 +262,20 @@ func (cx *brCtx) str(in map[string]string, k string) string {
 	return ""
 }
 
+// substStr interpolates "$slot.x"/"$var" refs embedded inside a template
+// string ("*.$slot.ext" → "*.log"). Only applied to authored method inputs
+// that don't start with "$" — a $-prefixed value may be user text ($kf).
+var reSlotRef = regexp.MustCompile(`\$[a-zA-Z_][a-zA-Z0-9_.]*`)
+
+func (cx *brCtx) substStr(v string) string {
+	return reSlotRef.ReplaceAllStringFunc(v, func(m string) string {
+		if s, ok := cx.subst(m).(string); ok {
+			return s
+		}
+		return m
+	})
+}
+
 // runCmd runs a command through the permission check and the shell.
 func (cx *brCtx) runCmd(cmd string, timeout time.Duration) (out string, exit int, obs rvObs) {
 	return cx.runCmdAs(cmd, timeout, false)
@@ -1361,8 +1375,13 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 	var kv []string
 	for k, v := range in {
 		x := cx.subst(v)
-		if s, ok := x.(string); ok && s == "" {
-			continue // empty slot: let the schema apply the default or the required error
+		if s, ok := x.(string); ok {
+			if s == "" {
+				continue // empty slot: let the schema apply the default or the required error
+			}
+			if !strings.HasPrefix(v, "$") {
+				x = cx.substStr(s) // "*.$slot.ext" → "*.log"
+			}
 		}
 		args[k] = x
 		kv = append(kv, k+"="+oneLine(fmt.Sprint(x), 60))
