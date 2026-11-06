@@ -9,10 +9,14 @@ import (
 
 // cmdCatalog: a estante da Alexandria — o que o cérebro offline sabe fazer,
 // agrupado por domínio, com os métodos que servem cada intenção, os slots
-// que ela pede e os aprendidos (distill) marcados.
-func cmdCatalog(w io.Writer) int {
+// que ela pede e os aprendidos (distill) marcados. `jazz catalog <intent>`
+// abre o cartão: o que faz, o que precisa, e — honestamente — o que não faz.
+func cmdCatalog(w io.Writer, args []string) int {
 	m := nuGet()
 	lib, _ := mhLibrary()
+	if len(args) > 0 {
+		return catalogCard(w, m, lib, args[0])
+	}
 
 	type entry struct {
 		name, desc string
@@ -90,6 +94,80 @@ func cmdCatalog(w io.Writer) int {
 		fmt.Fprintln(w)
 	}
 	fmt.Fprintf(w, "%d intenções · %d métodos aprendidos\n", total, learned)
+	return 0
+}
+
+// catalogCard: a ficha completa de uma intenção — descrição, slots, métodos
+// com pré-condições e limites, e o que ela não cobre.
+func catalogCard(w io.Writer, m *nuModel, lib map[string][]mhMethod, name string) int {
+	var def *nuIntentDef
+	for i := range m.data.Intents {
+		if m.data.Intents[i].Name == name {
+			def = &m.data.Intents[i]
+			break
+		}
+	}
+	if def == nil {
+		fmt.Fprintf(w, "%q não é uma intenção conhecida — jazz catalog lista todas\n", name)
+		return 2
+	}
+	fmt.Fprintf(w, "%s — %s\n\ndomínio: %s\n", def.Name, def.Desc, catalogDomain(name))
+	if len(def.Slots) > 0 {
+		var req, opt []string
+		for s, d := range def.Slots {
+			if d.Required {
+				req = append(req, s)
+			} else {
+				opt = append(opt, s)
+			}
+		}
+		sort.Strings(req)
+		sort.Strings(opt)
+		if len(req) > 0 {
+			fmt.Fprintf(w, "precisa: %s\n", strings.Join(req, ", "))
+		}
+		if len(opt) > 0 {
+			fmt.Fprintf(w, "opcionais: %s\n", strings.Join(opt, ", "))
+		}
+	}
+	ms := lib[name]
+	fmt.Fprintf(w, "\n%d método(s):\n", len(ms))
+	for _, me := range ms {
+		tag := ""
+		if strings.HasPrefix(me.Name, dsLearnedPrefix) {
+			tag = " [aprendido]"
+		}
+		fmt.Fprintf(w, "  · %s%s (risco %s)\n", me.Name, tag, me.Risk)
+		if me.Doc != "" {
+			fmt.Fprintf(w, "    %s\n", me.Doc)
+		}
+		var pres []string
+		for _, c := range me.Pre {
+			p := c.Fact + " " + c.Op
+			if c.Val != "" {
+				p += " " + c.Val
+			}
+			pres = append(pres, p)
+		}
+		if len(pres) > 0 {
+			fmt.Fprintf(w, "    pré: %s\n", strings.Join(pres, "; "))
+		}
+		if len(me.Needs) > 0 {
+			fmt.Fprintf(w, "    depende: %s\n", strings.Join(me.Needs, ", "))
+		}
+	}
+	if len(def.Examples) > 0 {
+		fmt.Fprintf(w, "\nexemplos que ela entende:\n")
+		for _, e := range def.Examples[:min(4, len(def.Examples))] {
+			fmt.Fprintf(w, "  %q\n", e)
+		}
+	}
+	if len(def.Negatives) > 0 {
+		fmt.Fprintf(w, "\nnão é isso (negatives):\n")
+		for _, e := range def.Negatives[:min(3, len(def.Negatives))] {
+			fmt.Fprintf(w, "  %q\n", e)
+		}
+	}
 	return 0
 }
 
