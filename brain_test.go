@@ -589,3 +589,91 @@ func TestBrainGitLog(t *testing.T) {
 		t.Fatalf("%s\n%s", r.Status, r.Text)
 	}
 }
+
+// Anaphora chain: "busca X e apaga eles" — o produtor emite path=, o
+// consumidor roda uma vez por arquivo, cada um verificado. O arquivo que
+// não casa sobrevive.
+func TestBrainChainAnaphoraDeletesProduced(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "a1.txt", "1\n", "a2.txt", "2\n", "keep.go", "package x\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "busca arquivos chamados *.txt e apaga eles")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"a1.txt", "a2.txt"} {
+		if _, err := os.Stat(filepath.Join(root, f)); !os.IsNotExist(err) {
+			t.Errorf("%s devia ter sido apagado:\n%s", f, r.Text)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.go")); err != nil {
+		t.Errorf("keep.go sumiu — a cadeia apagou fora do produto:\n%s", r.Text)
+	}
+}
+
+// EN: "and delete them" segue a mesma cadeia.
+func TestBrainChainAnaphoraEN(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "x1.log", "1\n", "x2.log", "2\n", "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "find files named *.log and delete them")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"x1.log", "x2.log"} {
+		if _, err := os.Stat(filepath.Join(root, f)); !os.IsNotExist(err) {
+			t.Errorf("%s devia ter sido apagado:\n%s", f, r.Text)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Errorf("keep.txt sumiu:\n%s", r.Text)
+	}
+}
+
+// Produtor vazio: "nada pra delete" honesto — e nada se apaga.
+func TestBrainChainEmptyProducerHonest(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "busca arquivos chamados *.zzz e apaga eles")
+	if r.Status != tkFailed || !strings.Contains(r.Text, "nada pra") {
+		t.Fatalf("produtor vazio devia falhar honesto, veio %s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Errorf("keep.txt sumiu num pedido sem produção")
+	}
+}
+
+// Aspas protegem: "rock and roll" não é conjunção — single intent.
+func TestBrainChainQuotedAndNoSplit(t *testing.T) {
+	root := brFixture(t, `"rock and roll.txt"`, "r\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, `busca arquivos chamados "rock and roll.txt"`)
+	if r.Intent.Name == "multi" {
+		t.Fatalf("aspas deviam impedir split: %s", r.Intent.Name)
+	}
+}
+
+// Harvest: path= extraído; truncated:true nunca alimenta cadeia.
+func TestBrainHarvestPaths(t *testing.T) {
+	r := brResult{Text: "files (2):\n  path=a.txt size=0\n  path=b.txt size=0\ntruncated: false\n"}
+	got := brHarvestPaths(r)
+	if len(got) != 2 || got[0] != "a.txt" || got[1] != "b.txt" {
+		t.Fatalf("harvest: %v", got)
+	}
+	r2 := brResult{Text: "path=a.txt\ntruncated: true\n"}
+	if brHarvestPaths(r2) != nil {
+		t.Fatal("truncated tem que virar nil — conjunto parcial não encadeia")
+	}
+	r3 := brResult{Text: "path=../evil\npath=/abs\npath=~home\npath=ok.txt\n"}
+	got3 := brHarvestPaths(r3)
+	if len(got3) != 1 || got3[0] != "ok.txt" {
+		t.Fatalf("paths inseguros deviam ser filtrados: %v", got3)
+	}
+}

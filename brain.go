@@ -65,16 +65,29 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 	// to the single parse instead of running two half-requests
 	if parts := brSplitMulti(text, nuGet(), w); len(parts) >= 2 && len(parts) <= 4 {
 		var ins []Intent
-		for _, p := range parts {
+		chain := make([]bool, len(parts))
+		for i, p := range parts {
 			pi := nuGet().Parse(p, w)
 			if !pi.Understood() || pi.Name == "none" || pi.Confidence < brLevel0Min {
+				// anaphora clause: "e apaga eles" parses weak because the
+				// pronoun carries no target. Strip it and re-read — the
+				// bare consumer ("apaga") is enough when chaining is real.
+				if stripped, ana := brStripAnaphora(p); ana {
+					if si := nuGet().Parse(stripped, w); si.Understood() && si.Confidence >= brLevel0Min {
+						if _, ok := brChainConsumers[si.Name]; ok && i > 0 {
+							ins = append(ins, si)
+							chain[i] = true
+							continue
+						}
+					}
+				}
 				ins = nil
 				break
 			}
 			ins = append(ins, pi)
 		}
 		if len(ins) == len(parts) {
-			return brRunMulti(ctx, env, parts, ins)
+			return brRunMulti(ctx, env, parts, ins, chain)
 		}
 	}
 	return brRunIntent(ctx, env, text, in, res)
@@ -136,14 +149,93 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	return out
 }
 
+// brChainConsumers: intents that may consume a producer's file list through
+// an anaphora ("apaga eles" → one run per produced path). Value = the slot
+// the produced path fills. Allowlist on purpose: only read/verify-shaped or
+// explicitly-gated ops chain; rename/run/commit never do.
+var brChainConsumers = map[string]string{
+	"delete_file": "target",
+}
+
+// brProducerIntents: intents whose verified output carries `path=` lines the
+// chain can consume.
+var brProducerIntents = map[string]bool{
+	"file_find": true, "perm_find": true, "fs_recent": true,
+}
+
+var brAnaphoraRe = regexp.MustCompile(`(?i)\b(eles|elas|deles|delas|neles|nelas|them|those|these)\b`)
+
+// brStripAnaphora removes standalone anaphora tokens; (text, true) means a
+// pronoun was there and the rest is a re-parseable clause.
+func brStripAnaphora(text string) (string, bool) {
+	if !brAnaphoraRe.MatchString(text) {
+		return text, false
+	}
+	return strings.Join(strings.Fields(brAnaphoraRe.ReplaceAllString(text, " ")), " "), true
+}
+
+// brHarvestPaths pulls bounded, root-safe paths out of a producer's
+// evidence. nil on truncation — a partial set must never chain.
+func brHarvestPaths(r brResult) []string {
+	var out []string
+	truncated := false
+	src := r.Text
+	if r.Task != nil {
+		for _, ev := range r.Task.Evidence {
+			src += "\n" + ev.Text
+		}
+	}
+	for _, ln := range strings.Split(src, "\n") {
+		ln = strings.TrimSpace(ln)
+		if strings.HasPrefix(ln, "truncated: true") {
+			truncated = true
+		}
+		if strings.HasPrefix(ln, "path=") {
+			p := strings.TrimSpace(strings.TrimPrefix(ln, "path="))
+			if sp := strings.IndexByte(p, ' '); sp >= 0 {
+				p = p[:sp]
+			}
+			if p != "" && p != "." && !strings.Contains(p, "..") &&
+				!strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~") {
+				out = append(out, p)
+			}
+		}
+		if len(out) >= 32 {
+			truncated = true
+		}
+	}
+	if truncated {
+		return nil
+	}
+	return out
+}
+
 // brRunMulti runs each understood part in sequence and merges the results;
 // the worst status wins so a denied part never hides behind a green one.
-func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent) brResult {
+// chain[i] marks anaphora consumers fed by the last successful producer.
+func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, chain []bool) brResult {
 	res := brResult{Handled: true, Intent: Intent{Name: "multi", Confidence: 1}}
 	var texts []string
+	var produced []string
 	missed := false
 	for i, in := range ins {
-		r := brRunIntent(ctx, env, parts[i], in, brResult{})
+		var r brResult
+		if i < len(chain) && chain[i] {
+			slot := brChainConsumers[in.Name]
+			if len(produced) == 0 {
+				r = brResult{Handled: true, Intent: in, Status: tkFailed,
+					Text: "nada pra " + in.Name + " — o passo anterior não produziu arquivos"}
+			} else {
+				r = brRunEach(ctx, env, parts[i], in, slot, produced)
+			}
+		} else {
+			r = brRunIntent(ctx, env, parts[i], in, brResult{})
+		}
+		if brProducerIntents[in.Name] && r.Status == tkSucceeded {
+			produced = brHarvestPaths(r)
+		} else if r.Status != tkSucceeded {
+			produced = nil // a failed producer feeds nothing downstream
+		}
 		res.Sub = append(res.Sub, r)
 		if !r.Handled && !missed { // the menu of a failed part needs its reading
 			res.Intent, res.Miss, missed = r.Intent, r.Miss, true
@@ -161,6 +253,35 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent) b
 		texts = append(texts, "» "+strings.TrimSpace(parts[i])+"\n"+t)
 	}
 	res.Text = strings.Join(texts, "\n\n")
+	return res
+}
+
+// brRunEach fans a consumer intent out over produced paths — one real run
+// per file, each through the normal gates (permission, confinement, verify).
+// The worst status wins so one denied delete never hides behind green ones.
+func brRunEach(ctx context.Context, env *brEnv, text string, in Intent, slot string, paths []string) brResult {
+	res := brResult{Handled: true, Intent: in, Status: tkSucceeded}
+	var texts []string
+	for _, p := range paths {
+		ci := in
+		slots := make(map[string]string, len(in.Slots)+1)
+		for k, v := range in.Slots {
+			slots[k] = v
+		}
+		slots[slot] = p
+		ci.Slots = slots
+		ci.Missing = nil
+		r := brRunIntent(ctx, env, text+" ["+p+"]", ci, brResult{})
+		res.Sub = append(res.Sub, r)
+		res.Handled = res.Handled && r.Handled
+		res.Questions += r.Questions
+		res.Commands += r.Commands
+		if brStatusRank(r.Status) > brStatusRank(res.Status) {
+			res.Status = r.Status
+		}
+		texts = append(texts, "» "+p+"\n"+r.Text)
+	}
+	res.Text = strings.Join(texts, "\n")
 	return res
 }
 
