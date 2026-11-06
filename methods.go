@@ -218,6 +218,7 @@ type brStep struct {
 	ok   bool
 	why  string
 	stop tkStatus // a step may end the task (report, question)
+	skip bool     // o item não é aplicável (binário, grande demais) — for_each conta à parte
 }
 
 func (cx *brCtx) say(f string, a ...any) {
@@ -499,7 +500,7 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 	if inner == nil {
 		return brStep{obs: rvNoCmd(), why: "for_each: capacidade desconhecida " + in["do"]}
 	}
-	done, failed := 0, 0
+	done, failed, skipped := 0, 0, 0
 	firstWhy := ""
 	if len(items) > max {
 		failed = len(items) - max // excedente conta como não-feito, honesto
@@ -523,9 +524,15 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 		delete(ii, "do")
 		delete(ii, "slot")
 		delete(ii, "max")
-		ii["path"] = path
+		// "./$kf": arquivos cujo nome começa com $ não podem ir crus — o
+		// subst do cap os leria como variável e esvaziaria o path.
+		ii["path"] = "./" + path
 		r := inner(cx, ii)
 		if !r.ok {
+			if r.skip {
+				skipped++
+				continue // não-aplicável não é falha — o lote segue honesto
+			}
 			failed++
 			if firstWhy == "" {
 				firstWhy = path + ": " + r.why
@@ -545,9 +552,12 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 		}
 		done++
 	}
-	cx.task.AddEvidence("plan", fmt.Sprintf("for_each %s: %d feito(s), %d falha(s)", in["do"], done, failed))
+	cx.task.AddEvidence("plan", fmt.Sprintf("for_each %s: %d feito(s), %d falha(s), %d pulado(s)", in["do"], done, failed, skipped))
+	if done == 0 && skipped > 0 && failed == 0 {
+		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("nenhum item aplicável — %d pulado(s)", skipped)}
+	}
 	if failed > 0 {
-		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s) — primeira: %s", done, failed, firstWhy)}
+		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s), %d pulado(s) — primeira: %s", done, failed, skipped, firstWhy)}
 	}
 	return brStep{obs: rvNoCmd(), ok: true}
 }
@@ -997,10 +1007,10 @@ func brTextOp(cx *brCtx, in map[string]string) brStep {
 		return brStep{obs: obs, why: "replace " + rel + ": " + err.Error()}
 	}
 	if len(data) > 8<<20 {
-		return brStep{obs: obs, why: "replace " + rel + ": arquivo grande demais (>8MB)"}
+		return brStep{obs: obs, why: "replace " + rel + ": arquivo grande demais (>8MB)", skip: true}
 	}
 	if bytes.IndexByte(data, 0) >= 0 {
-		return brStep{obs: obs, why: "replace " + rel + ": arquivo binário"}
+		return brStep{obs: obs, why: "replace " + rel + ": arquivo binário", skip: true}
 	}
 	hay, cnt := string(data), 0
 	var out string
@@ -2256,8 +2266,8 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 					continue
 				}
 				data, err := os.ReadFile(filepath.Join(cx.env.Root, filepath.FromSlash(p)))
-				if err != nil {
-					return false, false, "não consegui ler o item produzido: " + p
+				if err != nil || bytes.IndexByte(data, 0) >= 0 {
+					continue // ilegível ou binário: o replace também pula — mesmo universo
 				}
 				if strings.Contains(string(data), needle) {
 					bad++

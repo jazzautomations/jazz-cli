@@ -1902,6 +1902,26 @@ func nuReplFlag(toks []nuTok, what string) string {
 				return "true"
 			}
 		}
+	case "stdin":
+		// "in standard input", "from stdin", "inputfile" — origem não é
+		// arquivo do projeto: nenhum método text_replace aplica (recusa
+		// honesta, não sucesso vacuo).
+		for i := range toks {
+			if toks[i].has("stdin") || toks[i].Fold == "stdin" || toks[i].Fold == "inputfile" {
+				return "1"
+			}
+			if toks[i].Fold == "standard" && i+1 < len(toks) && toks[i+1].Fold == "input" {
+				return "1"
+			}
+		}
+	case "namefile":
+		// "in file names", "dos nomes de arquivo" — o alvo é o NOME, não o
+		// conteúdo: text_replace é a ferramenta errada, recusa honesta.
+		for i := range toks {
+			if toks[i].has("nameattr") {
+				return "1"
+			}
+		}
 	}
 	return ""
 }

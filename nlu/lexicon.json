@@ -2984,6 +2984,15 @@
    "trocar",
    "troque",
    "trocando"
+  ],
+  "stdin": [
+   "stdin",
+   "standard input",
+   "standard-input",
+   "inputfile",
+   "entrada padrao",
+   "entrada padrão",
+   "standard_input"
   ]
  }
 }

@@ -17,6 +17,14 @@
     {
      "fact": "slot.to",
      "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namefile",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -67,6 +75,14 @@
     {
      "fact": "slot.ext",
      "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namefile",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -103,6 +119,73 @@
    ],
    "risk": "medium",
    "cost_ms": 200
+  },
+  {
+   "name": "text_replace.all",
+   "intent": "text_replace",
+   "priority": 7,
+   "doc": "'troca X por Y em todos os arquivos': file_find por tipo produz, for_each aplica text_op, list_lacks prova o lote",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namefile",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "text_op",
+      "op": "replace",
+      "from_str": "$slot.from",
+      "to_str": "$slot.to",
+      "first_per_line": "$slot.first",
+      "ignore_case": "$slot.icase",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_lacks",
+     "arg": "$cand",
+     "arg2": "$slot.from"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
   }
  ]
 }

@@ -5391,7 +5391,9 @@
       "container",
       "service",
       "permattr",
-      "install"
+      "install",
+      "nameattr",
+      "stdin"
      ]
     }
    ],
@@ -5439,6 +5441,18 @@
       "text"
      ],
      "from": "repl:icase"
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
+    },
+    "namefile": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:namefile"
     }
    },
    "examples": [
