@@ -66,7 +66,7 @@ const (
 	dsMaxSteps       = 8
 	// dsCapGen: a geração das caps destiláveis — sobe quando uma família
 	// nova entra (copy/link/to_dir etc) e reabre os carimbos antigos.
-	dsCapGen        = 2
+	dsCapGen        = 3
 	dsMaxCmd        = 240
 	dsMaxCand       = 4   // orçamento do portão por rodada
 	dsMaxMethods    = 100 // teto do overlay inteiro
@@ -1302,6 +1302,7 @@ func dsXargsCpMv(t []string) (op, dir string, ok bool) {
 func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok bool) {
 	in = map[string]string{"limit": "32"}
 	paths := 0
+	sawPrune := false
 	num := func(s string) bool {
 		n, err := strconv.Atoi(s)
 		return err == nil && n >= 0
@@ -1360,11 +1361,71 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 				return nil, false, "", "", false
 			}
 			del, i = true, j
-		case a == "-name" || a == "-iname":
-			if arg(i) == "" || in["name"] != "" {
+		case a == "-name" || a == "-iname" || a == "-path":
+			if arg(i) == "" {
+				return nil, false, "", "", false
+			}
+			// "-name|-path X -prune": podar subárvore. file_find já pula
+			// .git/node_modules/vendor — podar o pulado é neutro; podar
+			// outro nome vira o exclude de basename/relpath.
+			if arg(i+1) == "-prune" {
+				tgt := strings.TrimPrefix(arg(i), "./")
+				if !dsFindSkips(tgt) {
+					if in["exclude"] != "" {
+						return nil, false, "", "", false
+					}
+					in["exclude"] = tgt
+				}
+				sawPrune, i = true, i+2
+				continue
+			}
+			// "-path" sozinho é glob em relpath — sem input no file_find
+			if a == "-path" || in["name"] != "" {
 				return nil, false, "", "", false
 			}
 			in["name"], i = arg(i), i+1
+		case a == "-prune":
+			// "-prune" sem -name/-path antes poda tudo — sem sentido aqui
+			return nil, false, "", "", false
+		case a == "-o":
+			// "-name X -prune -o <resto>": o OR de top-level depois do
+			// grupo de poda é neutro — o resto é o predicado real
+			if !sawPrune {
+				return nil, false, "", "", false
+			}
+			sawPrune = false
+		case a == "(" || a == "\\(":
+			// \( -name g1 -o -name g2 \) → name_re com a união dos globs
+			var globs []string
+			j := i + 1
+			for j+1 < len(t) && (t[j] == "-name" || t[j] == "-iname") {
+				globs = append(globs, t[j+1])
+				j += 2
+				if j < len(t) && t[j] == "-o" {
+					j++
+					continue
+				}
+				break
+			}
+			if len(globs) < 1 || j >= len(t) || (t[j] != ")" && t[j] != "\\)") {
+				return nil, false, "", "", false
+			}
+			if len(globs) == 1 {
+				if in["name"] != "" {
+					return nil, false, "", "", false
+				}
+				in["name"] = globs[0]
+			} else {
+				if in["name"] != "" || in["name_re"] != "" {
+					return nil, false, "", "", false
+				}
+				re, okRe := dsGlobAlt(globs)
+				if !okRe {
+					return nil, false, "", "", false
+				}
+				in["name_re"] = re
+			}
+			i = j
 		case a == "-type":
 			switch arg(i) {
 			case "f":
@@ -1439,6 +1500,50 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 		}
 	}
 	return in, del, xop, xdir, true
+}
+
+// dsFindSkips: dirs que o file_find já pula na travessia (espelha SKIP_DIRS
+// do core.py + o conjunto local do script) — podar o que já se pula é neutro.
+func dsFindSkips(name string) bool {
+	name = strings.TrimSuffix(name, "/")
+	switch name {
+	case ".git", ".hg", ".svn", ".tox", ".venv", ".cache",
+		"node_modules", "vendor", "dist", "build", "target",
+		"__pycache__", "venv", "env", "coverage", "third_party", "Pods":
+		return true
+	}
+	return false
+}
+
+// dsGlobAlt: globs de -name viram uma regex de basename para name_re —
+// "*.{log,bak}" já chega separado pelo find; cada glob vira um ramo
+// ancorado: "*.log" → ".*\.log$". Rejeita globs com classes/colchetes
+// raros que mudariam a leitura.
+func dsGlobAlt(globs []string) (string, bool) {
+	if len(globs) > 8 {
+		return "", false
+	}
+	arms := make([]string, 0, len(globs))
+	for _, g := range globs {
+		var b strings.Builder
+		b.WriteString(".*")
+		for _, r := range g {
+			switch r {
+			case '*':
+				b.WriteString(".*")
+			case '?':
+				b.WriteByte('.')
+			case '.', '+', '(', ')', '|', '^', '$', '[', ']', '{', '}', '\\':
+				b.WriteByte('\\')
+				b.WriteRune(r)
+			default:
+				b.WriteRune(r)
+			}
+		}
+		b.WriteByte('$')
+		arms = append(arms, b.String())
+	}
+	return "(?:" + strings.Join(arms, "|") + ")", true
 }
 
 // dsFindSize: "-size +12k" → bytes do filtro; unidades do find (c=1, w=2,

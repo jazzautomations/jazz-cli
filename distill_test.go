@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -379,6 +380,32 @@ func TestDsCapPlan(t *testing.T) {
 		{[]string{"find . -name '*.bak' -exec cp {} backups/ \\;"}, func(m *mhMethod) string {
 			if len(m.Steps) != 2 || m.Steps[1].In["op"] != "copy" || m.Steps[1].In["to_dir"] != "backups/" {
 				return "find -exec cp"
+			}
+			return ""
+		}},
+		// -name .git -prune: podar o que o file_find já pula é neutro
+		{[]string{"find . -name .git -prune -o -type f -name '*.log' -delete"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[0].Cap != "script:file_find" ||
+				m.Steps[0].In["name"] != "*.log" || m.Steps[0].In["type"] != "file" {
+				return fmt.Sprintf("prune .git: %+v", m.Steps)
+			}
+			if m.Steps[0].In["exclude"] != "" {
+				return "exclude não devia existir p/ .git"
+			}
+			return ""
+		}},
+		// -path ./node_modules -prune: dir não-pulado vira exclude
+		{[]string{"find . -path './customcache' -prune -o -type f -delete"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[0].In["exclude"] != "customcache" {
+				return fmt.Sprintf("prune exclude: %+v", m.Steps)
+			}
+			return ""
+		}},
+		// \( -name a -o -name b \) → name_re com a união
+		{[]string{"find . \\( -name '*.log' -o -name '*.bak' \\) -type f -delete"}, func(m *mhMethod) string {
+			re := m.Steps[0].In["name_re"]
+			if !strings.Contains(re, `.*\.log$`) || !strings.Contains(re, `.*\.bak$`) {
+				return fmt.Sprintf("alternation name_re=%q", re)
 			}
 			return ""
 		}},
