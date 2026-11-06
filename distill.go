@@ -66,7 +66,7 @@ const (
 	dsMaxSteps       = 8
 	// dsCapGen: a geração das caps destiláveis — sobe quando uma família
 	// nova entra (copy/link/to_dir etc) e reabre os carimbos antigos.
-	dsCapGen        = 3
+	dsCapGen        = 4
 	dsMaxCmd        = 240
 	dsMaxCand       = 4   // orçamento do portão por rodada
 	dsMaxMethods    = 100 // teto do overlay inteiro
@@ -430,6 +430,10 @@ var dsCapKeys = map[string]map[string]bool{
 	"script:file_find": smSet("path", "name", "name_re", "ext", "type", "sort",
 		"min_size", "max_size", "newer_min", "older_min", "empty", "exclude",
 		"include_hidden", "time_field", "min_depth", "max_depth", "limit"),
+	"script:perm_find": smSet("path", "type", "limit", "include_hidden",
+		"mode", "not_mode", "world_writable", "not_world_writable",
+		"suid", "sgid", "executable", "not_executable", "owner",
+		"not_owner", "group", "not_group", "no_owner", "no_group", "orphan"),
 	"for_each":  smSet("from", "do", "op", "max", "to", "to_dir", "content"),
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
@@ -798,13 +802,13 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 	gone := map[string]bool{} // outs de produtores já consumidos por delete
 	last, prod, fop, caps := "", 0, 0, 0
 	script := false
-	emitFind := func(in map[string]string) {
+	emitFind := func(in map[string]string, scr string) {
 		prod++
 		last = "cand"
 		if prod > 1 {
 			last = fmt.Sprintf("cand%d", prod)
 		}
-		steps = append(steps, mhStep{Cap: "script:file_find", In: in, Out: last})
+		steps = append(steps, mhStep{Cap: scr, In: in, Out: last})
 		script, caps = true, caps+1
 	}
 	emitEach := func() {
@@ -859,11 +863,11 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			// "find … > arquivo" salva a lista produzida — só esse
 			// produtor tem cap; o resto não finge encaixe.
 			if len(inner) > 0 && filepath.Base(inner[0]) == "find" && dsPathLit(dest) {
-				in, del, _, _, ok := dsFindIn(inner)
+				in, scr, del, _, _, ok := dsFindIn(inner)
 				if !ok || del {
 					return false
 				}
-				emitFind(in)
+				emitFind(in, scr)
 				emitSave(dest, false)
 				return true
 			}
@@ -875,11 +879,11 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		}
 		switch filepath.Base(t[0]) {
 		case "find":
-			in, del, xop, xdir, ok := dsFindIn(t)
+			in, scr, del, xop, xdir, ok := dsFindIn(t)
 			if !ok { // find com flag sem encaixe: read-only fica literal
 				return literal(s)
 			}
-			emitFind(in)
+			emitFind(in, scr)
 			switch {
 			case del:
 				emitEach()
@@ -998,41 +1002,41 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 					switch filepath.Base(rIn[0]) {
 					case "xargs":
 						if dsXargsRm(rIn) {
-							in, del, _, _, ok := dsFindIn(l)
+							in, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
-							emitFind(in)
+							emitFind(in, scr)
 							emitEach()
 							continue
 						}
 						if xop, dir, ok := dsXargsCpMv(rIn); ok {
-							in, del, _, _, ok2 := dsFindIn(l)
+							in, scr, del, _, _, ok2 := dsFindIn(l)
 							if !ok2 || del {
 								return nil
 							}
-							emitFind(in)
+							emitFind(in, scr)
 							emitEachTo(xop, dir)
 							continue
 						}
 						break
 					case "tee":
 						if len(rIn) == 2 && rDest == "" && dsPathLit(rIn[1]) {
-							in, del, _, _, ok := dsFindIn(l)
+							in, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
-							emitFind(in)
+							emitFind(in, scr)
 							emitSave(rIn[1], false)
 							continue
 						}
 					case "sort":
 						if len(rIn) == 1 && rDest != "" && dsPathLit(rDest) {
-							in, del, _, _, ok := dsFindIn(l)
+							in, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
-							emitFind(in)
+							emitFind(in, scr)
 							emitSave(rDest, true)
 							continue
 						}
@@ -1299,7 +1303,18 @@ func dsXargsCpMv(t []string) (op, dir string, ok bool) {
 // entradas do script:file_find — espelha os slots do delete_file.each.
 // del = o próprio find já deletava (-delete, -exec rm). ok=false = sobrou
 // flag sem encaixe (o comando fica literal quando dá, senão não destila).
-func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok bool) {
+// dsPermKeys: predicados que só o script:perm_find entende — se um find
+// mistura esses com filtros de nome/tamanho/tempo, não cabe em nenhum
+// script sozinho e falha honesto.
+var dsPermKeys = map[string]bool{
+	"mode": true, "not_mode": true, "world_writable": true,
+	"not_world_writable": true, "suid": true, "sgid": true,
+	"executable": true, "not_executable": true, "owner": true,
+	"not_owner": true, "group": true, "not_group": true,
+	"no_owner": true, "no_group": true, "orphan": true,
+}
+
+func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir string, ok bool) {
 	in = map[string]string{"limit": "32"}
 	paths := 0
 	sawPrune := false
@@ -1321,7 +1336,7 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 		case a == "-exec" || a == "-execdir":
 			j := i + 1
 			if j >= len(t) {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			ecmd := filepath.Base(t[j])
 			if ecmd == "cp" || ecmd == "mv" {
@@ -1332,7 +1347,7 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 					if strings.HasPrefix(a2, "-") {
 						for _, f := range a2[1:] {
 							if f != 'f' && f != 'v' && f != 'n' {
-								return nil, false, "", "", false
+								return nil, "", false, "", "", false
 							}
 						}
 						continue
@@ -1343,27 +1358,27 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 					lit = append(lit, a2)
 				}
 				if j >= len(t) || len(lit) != 1 || !dsPathLit(lit[0]) {
-					return nil, false, "", "", false
+					return nil, "", false, "", "", false
 				}
 				xop = map[string]string{"cp": "copy", "mv": "rename"}[ecmd]
 				xdir, i = lit[0], j
 				continue
 			}
 			if ecmd != "rm" {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
 				if t[j] != "-f" && t[j] != "-v" && t[j] != "--" && !strings.Contains(t[j], "{}") {
-					return nil, false, "", "", false
+					return nil, "", false, "", "", false
 				}
 			}
 			if j >= len(t) {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			del, i = true, j
 		case a == "-name" || a == "-iname" || a == "-path":
 			if arg(i) == "" {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			// "-name|-path X -prune": podar subárvore. file_find já pula
 			// .git/node_modules/vendor — podar o pulado é neutro; podar
@@ -1372,7 +1387,7 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 				tgt := strings.TrimPrefix(arg(i), "./")
 				if !dsFindSkips(tgt) {
 					if in["exclude"] != "" {
-						return nil, false, "", "", false
+						return nil, "", false, "", "", false
 					}
 					in["exclude"] = tgt
 				}
@@ -1381,17 +1396,17 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 			}
 			// "-path" sozinho é glob em relpath — sem input no file_find
 			if a == "-path" || in["name"] != "" {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			in["name"], i = arg(i), i+1
 		case a == "-prune":
 			// "-prune" sem -name/-path antes poda tudo — sem sentido aqui
-			return nil, false, "", "", false
+			return nil, "", false, "", "", false
 		case a == "-o":
 			// "-name X -prune -o <resto>": o OR de top-level depois do
 			// grupo de poda é neutro — o resto é o predicado real
 			if !sawPrune {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			sawPrune = false
 		case a == "(" || a == "\\(":
@@ -1408,20 +1423,20 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 				break
 			}
 			if len(globs) < 1 || j >= len(t) || (t[j] != ")" && t[j] != "\\)") {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			if len(globs) == 1 {
 				if in["name"] != "" {
-					return nil, false, "", "", false
+					return nil, "", false, "", "", false
 				}
 				in["name"] = globs[0]
 			} else {
 				if in["name"] != "" || in["name_re"] != "" {
-					return nil, false, "", "", false
+					return nil, "", false, "", "", false
 				}
 				re, okRe := dsGlobAlt(globs)
 				if !okRe {
-					return nil, false, "", "", false
+					return nil, "", false, "", "", false
 				}
 				in["name_re"] = re
 			}
@@ -1433,18 +1448,18 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 			case "d":
 				in["type"] = "dir"
 			default:
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			i++
 		case a == "-maxdepth" || a == "-mindepth":
 			if !num(arg(i)) {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			in[map[string]string{"-maxdepth": "max_depth", "-mindepth": "min_depth"}[a]], i = arg(i), i+1
 		case a == "-size":
 			n, sign, okSz := dsFindSize(arg(i))
 			if !okSz {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			if sign == '+' {
 				in["min_size"] = strconv.FormatInt(n, 10)
@@ -1471,27 +1486,61 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 				n, err = strconv.ParseInt(v, 10, 64)
 			}
 			if err != nil || n < 0 {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			in[key], i = strconv.FormatInt(n*f, 10), i+1
 		case a == "-empty":
 			in["empty"] = "true"
-		case a == "!" || a == "-not":
-			// negação só vale como exclusão de nome/caminho
-			if i+2 >= len(t) || in["exclude"] != "" ||
-				(t[i+1] != "-name" && t[i+1] != "-iname" && t[i+1] != "-path") {
-				return nil, false, "", "", false
+		case a == "-perm" || a == "-user" || a == "-group" || a == "-nouser" || a == "-nogroup":
+			key, adv := dsPermFlag(t, i)
+			if key == "" {
+				return nil, "", false, "", "", false
 			}
-			in["exclude"], i = t[i+2], i+2
+			if in[key] != "" {
+				return nil, "", false, "", "", false
+			}
+			v := "true"
+			if key == "mode" || key == "owner" || key == "group" {
+				v = arg(i)
+			}
+			in[key], i = v, i+adv
+		case a == "!" || a == "-not":
+			// negação vale pra exclusão de nome/caminho e pra predicados perm
+			if i+2 >= len(t) {
+				return nil, "", false, "", "", false
+			}
+			switch t[i+1] {
+			case "-name", "-iname", "-path":
+				if in["exclude"] != "" {
+					return nil, "", false, "", "", false
+				}
+				in["exclude"], i = t[i+2], i+2
+			case "-perm", "-user", "-group":
+				key, _ := dsPermFlag(t, i+1)
+				nkey := map[string]string{
+					"mode": "not_mode", "owner": "not_owner", "group": "not_group",
+					"world_writable": "not_world_writable", "executable": "not_executable",
+				}[key]
+				if nkey == "" || in[nkey] != "" {
+					return nil, "", false, "", "", false
+				}
+				v := "true"
+				if nkey == "not_mode" || nkey == "not_owner" || nkey == "not_group" {
+					v = t[i+2]
+				}
+				in[nkey], i = v, i+2
+			default:
+				return nil, "", false, "", "", false
+			}
 		case a == "-print" || a == "-print0" || a == "-xdev" || a == "-mount" ||
 			a == "-quit" || a == "-true" || a == "-depth":
 			// neutros: saída e travessia não mudam o conjunto produzido
 		case strings.HasPrefix(a, "-"):
-			return nil, false, "", "", false // flag sem encaixe
+			return nil, "", false, "", "", false // flag sem encaixe
 		default:
 			// raiz da busca: um único caminho posicional
 			if paths > 0 {
-				return nil, false, "", "", false
+				return nil, "", false, "", "", false
 			}
 			paths++
 			if p := strings.TrimPrefix(a, "./"); p != "" && p != "." {
@@ -1499,7 +1548,61 @@ func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok 
 			}
 		}
 	}
-	return in, del, xop, xdir, true
+	// predicados perm roteiam pro perm_find; misturados com filtros de
+	// nome/tamanho/tempo não cabem em nenhum script sozinho
+	ff, pf := false, false
+	for k := range in {
+		if k == "limit" || k == "path" || k == "type" {
+			continue // chaves que os dois scripts compartilham
+		}
+		if dsPermKeys[k] {
+			pf = true
+		} else {
+			ff = true
+		}
+	}
+	if pf && ff {
+		return nil, "", false, "", "", false
+	}
+	scr = "script:file_find"
+	if pf {
+		scr = "script:perm_find"
+	}
+	return in, scr, del, xop, xdir, true
+}
+
+// dsPermFlag: um predicado de permissão/dono do find vira a chave do
+// perm_find; devolve "" quando a forma não tem predicado equivalente
+// (máscara simbólica fora de o+w/*+x, -perm /qualquer-um, etc). adv = 1
+// quando o predicado carrega um argumento (o "644" do -perm 644).
+func dsPermFlag(t []string, i int) (key string, adv int) {
+	a := t[i]
+	switch a {
+	case "-nouser":
+		return "no_owner", 0
+	case "-nogroup":
+		return "no_group", 0
+	case "-user":
+		return "owner", 1
+	case "-group":
+		return "group", 1
+	case "-perm":
+		if i+1 >= len(t) {
+			return "", 0
+		}
+		v := t[i+1]
+		if nuOctalShaped(v) {
+			return "mode", 1
+		}
+		// "-perm -o+w" = world_writable; "-perm -u+x" ⊆ "algum bit exec"
+		if v == "-o+w" {
+			return "world_writable", 1
+		}
+		if strings.HasSuffix(v, "+x") && len(v) >= 3 && v[0] == '-' {
+			return "executable", 1
+		}
+	}
+	return "", 0
 }
 
 // dsFindSkips: dirs que o file_find já pula na travessia (espelha SKIP_DIRS

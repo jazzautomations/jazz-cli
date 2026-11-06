@@ -409,6 +409,25 @@ func TestDsCapPlan(t *testing.T) {
 			}
 			return ""
 		}},
+		// predicados de permissão/dono roteiam pro script:perm_find
+		{[]string{"find . -type f -perm 777 -delete"}, func(m *mhMethod) string {
+			if m.Steps[0].Cap != "script:perm_find" || m.Steps[0].In["mode"] != "777" {
+				return fmt.Sprintf("perm 777: %+v", m.Steps)
+			}
+			return ""
+		}},
+		{[]string{"find . -user daniel -exec rm {} \\;"}, func(m *mhMethod) string {
+			if m.Steps[0].Cap != "script:perm_find" || m.Steps[0].In["owner"] != "daniel" {
+				return fmt.Sprintf("user: %+v", m.Steps)
+			}
+			return ""
+		}},
+		{[]string{"find . -type f ! -perm -o+w -delete"}, func(m *mhMethod) string {
+			if m.Steps[0].Cap != "script:perm_find" || m.Steps[0].In["not_world_writable"] != "true" {
+				return fmt.Sprintf("!perm o+w: %+v", m.Steps)
+			}
+			return ""
+		}},
 	} {
 		cp := dsCapPlan(dsPlan("ca77ps06", "zzq copia e move", 3, tc.cmds, ""), root)
 		if cp == nil {
