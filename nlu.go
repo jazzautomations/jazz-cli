@@ -2346,6 +2346,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			if !dirCues[t.Fold] || taken[i] {
 				continue
 			}
+			// "no owner"/"no group": EN negation, not the PT "em+o" preposition
+			if t.Fold == "no" && i+1 < len(toks) && nuNegatableNouns[toks[i+1].Fold] {
+				continue
+			}
 			for j := i + 1; j < len(toks) && j <= i+3; j++ {
 				u := &toks[j]
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
@@ -2602,6 +2606,10 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 		if !cue && isOwner && t.Fold == "by" && i > 0 && (toks[i-1].Fold == "owned" || toks[i-1].Fold == "belonging") {
 			cue = true
 		}
+		// "belong to <name>" — o nome segue a preposição sem palavra-cue
+		if !cue && isOwner && t.Fold == "to" && i > 0 && (toks[i-1].Fold == "belong" || toks[i-1].Fold == "belongs" || toks[i-1].Fold == "belonged") {
+			cue = true
+		}
 		if !cue {
 			continue
 		}
@@ -2609,10 +2617,15 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 			continue
 		}
 		for j := i + 1; j < len(toks) && j <= i+4; j++ {
-			if toks[j].Filler || toks[j].Quoted || taken[j] {
+			if toks[j].Filler || taken[j] {
 				continue
 			}
 			n := toks[j].Fold
+			if n == "or" || n == "and" || n == "e" || n == "ou" || strings.Contains(n, "/") ||
+				n == "under" || n == "in" || n == "on" || n == "at" || n == "from" ||
+				n == "to" || n == "into" || n == "dentro" || n == "para" {
+				continue // a conjunction, a preposition or a path is never a user/group name
+			}
 			// só a família-cue bloqueia nome: stem/typo-repair são palpites
 			// ('staff'→'start') e nomes de serviço são users reais (apache)
 			guessed := toks[j].Weak || toks[j].Fixed != ""

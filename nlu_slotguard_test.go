@@ -45,4 +45,24 @@ func TestNLUSlotGuards(t *testing.T) {
 	if v := in.Slots["limit"]; v != "" && !nuIsNumber(v) {
 		t.Errorf("limit=%q not numeric", v)
 	}
+	// owner/group names: quoted names, conjunctions, paths and the
+	// "no owner" EN-negation that the PT "no" preposition must not eat
+	ownerw := map[string]map[string]string{
+		"files owned by user 'takuya'":                    {"owner": "takuya"},
+		"files that belong to the group adm":              {"group": "adm"},
+		"files which belong to id":                        {"owner": "id"},
+		"files with no owner or group":                    {"orphan": "true"},
+		"files not owned by 'daniel' in the logs dir":     {"not_owner": "daniel"},
+	}
+	for text, wants := range ownerw {
+		in := m.Parse(text, w)
+		for k, v := range wants {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+		if in.Slots["dir"] == "owner" || in.Slots["owner"] == "or" || in.Slots["group"] == "or" {
+			t.Errorf("%q poisoned: %v", text, in.Slots)
+		}
+	}
 }
