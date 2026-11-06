@@ -33,13 +33,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
 
 const (
-	pcMinSteps      = 12   // shorter runs are not worth a template
+	pcMinSteps      = 12   // shorter runs are not worth a template (JAZZ_PC_MIN_STEPS overrides; harvest uses lower)
 	pcMaxInject     = 3    // TOCOMAS: k=3 beats more context
 	pcMaxChars      = 2100 // ≈ 600 tokens at 3.5 chars/token
 	pcMaxPlans      = 100  // per project
@@ -409,7 +410,7 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 			dbg("plan_cache", map[string]any{"score_error": err.Error()})
 		}
 	}
-	if !verified || steps < pcMinSteps || ctx.Err() != nil || a.mode() == "plan" {
+	if !verified || steps < pcStepsFloor() || ctx.Err() != nil || a.mode() == "plan" {
 		return
 	}
 	p := a.pcBuild(lt, steps)
@@ -422,6 +423,15 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 	}
 	dbg("plan_cache", map[string]any{"stored": p.ID, "steps": steps, "hint": p.Hint != ""})
 	dsNote(a, root, p) // a ponte online→offline avisa quando o plano vira candidato
+}
+
+// pcStepsFloor: JAZZ_PC_MIN_STEPS > pcMinSteps. The harvest pipeline lowers it
+// so a verified short procedure can still become a witness.
+func pcStepsFloor() int {
+	if v, err := strconv.Atoi(os.Getenv("JAZZ_PC_MIN_STEPS")); err == nil && v > 0 {
+		return v
+	}
+	return pcMinSteps
 }
 
 // pcScore counts a verified win or a failure on the plans injected in a turn;
