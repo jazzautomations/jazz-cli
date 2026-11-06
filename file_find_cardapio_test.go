@@ -97,7 +97,9 @@ func TestFileFindCardapio(t *testing.T) {
 		t.Errorf("max_size: %v", v)
 	}
 
-	// skipped and hidden entries never appear; outside root and missing filters refuse
+	// skipped and hidden entries never appear; outside root and bad filters refuse.
+	// Bare path is now a legitimate unfiltered find-all (bounded by limit) —
+	// the corpus asks "find all files under current directory".
 	v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj", "type": "file", "min_size": 0})
 	for _, f := range scDataOf(v)["files"].([]any) {
 		p := f.(map[string]any)["path"].(string)
@@ -105,8 +107,10 @@ func TestFileFindCardapio(t *testing.T) {
 			t.Errorf("skipped/hidden/symlink leaked: %s", p)
 		}
 	}
+	if v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj"}); !scOK(v) {
+		t.Errorf("unfiltered find-all must be allowed: %v", v)
+	}
 	for _, args := range []map[string]any{
-		{"path": "proj"},
 		{"path": "proj", "ext": "go", "min_size": 100, "max_size": 5},
 		{"path": "proj", "ext": "g o"},
 		{"path": "proj/srclink", "type": "dir"},
