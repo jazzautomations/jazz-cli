@@ -90,8 +90,12 @@ type pcPlan struct {
 	// DsDrop/DsWins guardam o último veredito do portão de destilação e os
 	// wins que o plano tinha na hora: o mesmo veredito na mesma evidência
 	// não gasta portão de novo; evidência nova (wins/testemunhas) reabre.
+	// DsGen é a geração de plataforma do veredito (dsCapGen): uma cap nova
+	// sobe a geração e reabre todos os carimbos — o "muta estado" de hoje
+	// pode ter encaixe amanhã.
 	DsDrop string `json:"dsdrop,omitempty"`
 	DsWins int    `json:"dswins,omitempty"`
+	DsGen  int    `json:"dsgen,omitempty"`
 	NSteps int    `json:"n_steps"` // model steps of the run that produced it
 	Wins   int    `json:"wins"`
 	Fails  int    `json:"fails"`

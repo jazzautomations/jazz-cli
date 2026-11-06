@@ -64,12 +64,15 @@ const (
 	dsOverlayMaxByte = 1 << 20
 	dsMinWins        = 2 // um procedimento aprende-se quando verificou e se repetiu
 	dsMaxSteps       = 8
-	dsMaxCmd         = 240
-	dsMaxCand        = 4   // orçamento do portão por rodada
-	dsMaxMethods     = 100 // teto do overlay inteiro
-	dsMaxIntents     = 50
-	dsLearnedPrefix  = "learned_"
-	dsCmdTimeout     = 10 * time.Minute // como proj_cmd: um passo de build/teste pode demorar
+	// dsCapGen: a geração das caps destiláveis — sobe quando uma família
+	// nova entra (copy/link/to_dir etc) e reabre os carimbos antigos.
+	dsCapGen        = 2
+	dsMaxCmd        = 240
+	dsMaxCand       = 4   // orçamento do portão por rodada
+	dsMaxMethods    = 100 // teto do overlay inteiro
+	dsMaxIntents    = 50
+	dsLearnedPrefix = "learned_"
+	dsCmdTimeout    = 10 * time.Minute // como proj_cmd: um passo de build/teste pode demorar
 )
 
 // dsIntent é uma intenção aprendida: nome learned_*, sem regras, só
@@ -2248,14 +2251,14 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		if learned[p.ID] {
 			continue
 		}
-		if p.DsDrop != "" && p.Wins <= p.DsWins {
-			continue // mesmo veredito na mesma evidência — não reabre o portão
+		if p.DsDrop != "" && p.Wins <= p.DsWins && p.DsGen == dsCapGen {
+			continue // mesmo veredito, mesma evidência, mesma geração de caps
 		}
 		c, why := dsBuild(p, lib, wr, root)
 		if c == nil {
 			if why != "" && p.Wins >= dsMinWins {
 				rep.Dropped = append(rep.Dropped, dsDropped{Plan: p.ID, Task: oneLine(p.Task, 80), Reason: why})
-				plans[i].DsDrop, plans[i].DsWins, dirty = why, p.Wins, true
+				plans[i].DsDrop, plans[i].DsWins, plans[i].DsGen, dirty = why, p.Wins, dsCapGen, true
 			}
 			continue
 		}
@@ -2290,7 +2293,7 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		if !g.Accept {
 			rep.Dropped = append(rep.Dropped, dsDropped{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 80), Reason: g.Reason})
 			if i, ok := idxByID[c.Plan.ID]; ok {
-				plans[i].DsDrop, plans[i].DsWins, dirty = g.Reason, c.Plan.Wins, true
+				plans[i].DsDrop, plans[i].DsWins, plans[i].DsGen, dirty = g.Reason, c.Plan.Wins, dsCapGen, true
 			}
 			continue
 		}
