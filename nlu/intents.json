@@ -4316,6 +4316,47 @@
       "@quoted"
      ],
      "w": 5
+    },
+    {
+     "all": [
+      "count",
+      "files"
+     ],
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "download",
+      "net",
+      "remote",
+      "user",
+      "opinion",
+      "blame",
+      "session",
+      "who",
+      "error",
+      "branch",
+      "version",
+      "diff",
+      "undo",
+      "commit",
+      "history",
+      "v4_date_normalize",
+      "diskuse",
+      "run",
+      "cron",
+      "content",
+      "symnoun",
+      "lineselect",
+      "@quoted"
+     ],
+     "w": 5,
+     "any": [
+      "nameattr"
+     ]
     }
    ],
    "slots": {

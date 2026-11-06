@@ -2162,8 +2162,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				taken[i] = true
 				return "size"
 			case "newest", "latest", "oldest", "ultimo", "último", "ultima", "última",
-			"ultimos", "últimos", "ultimas", "últimas", "recente", "recentes",
-			"antigo", "antiga", "velho", "velha":
+				"ultimos", "últimos", "ultimas", "últimas", "recente", "recentes",
+				"antigo", "antiga", "velho", "velha":
 				taken[i] = true
 				return "mtime"
 			case "mais":
@@ -2698,6 +2698,15 @@ func nuExtractPat(toks []nuTok) string {
 // "primeiras 20" → start=1,end=20, "linhas 5 a 20" → start=5,end=20,
 // "linha 42" → start=end=42.
 func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
+	// "line 111 with 2 lines of context": a janela é a linha ± o contexto.
+	if what == "start" || what == "end" {
+		if st, en, ok := nuSliceContext(toks, taken); ok {
+			if what == "start" {
+				return st
+			}
+			return en
+		}
+	}
 	numAfter := func(i int) string {
 		for j := i + 1; j < len(toks) && j < i+4; j++ {
 			if nuIsNumber(toks[j].Fold) {
@@ -2757,6 +2766,50 @@ func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
 		return nums[0]
 	}
 	return ""
+}
+
+// nuSliceContext: "line 111 with 2 lines of context" / "linha 10 com 3 de
+// contexto" → janela [L-C, L+C]. Só dispara com a palavra context/contexto
+// explícita — um segundo número solto não vira raio.
+func nuSliceContext(toks []nuTok, taken map[int]bool) (string, string, bool) {
+	ctxIdx, lineIdx := -1, -1
+	var lineNo, ctxNo, lineTok, ctxTok int
+	for i, t := range toks {
+		switch t.Fold {
+		case "context", "contexto":
+			ctxIdx = i
+		case "linha", "line":
+			if lineIdx < 0 {
+				lineIdx = i
+			}
+		}
+	}
+	if ctxIdx < 0 || lineIdx < 0 {
+		return "", "", false
+	}
+	// o número do contexto é o que vem antes de "context" ("2 lines of context")
+	for j := ctxIdx - 1; j >= 0 && j >= ctxIdx-4; j-- {
+		if n, err := strconv.Atoi(toks[j].Fold); err == nil && nuIsNumber(toks[j].Fold) {
+			ctxNo, ctxTok = n, j
+			break
+		}
+	}
+	// a linha-âncora é o número que vem depois de "line"
+	for j := lineIdx + 1; j < len(toks) && j <= lineIdx+3; j++ {
+		if n, err := strconv.Atoi(toks[j].Fold); err == nil && nuIsNumber(toks[j].Fold) {
+			lineNo, lineTok = n, j
+			break
+		}
+	}
+	if lineNo <= 0 || ctxNo <= 0 || lineTok == ctxTok {
+		return "", "", false
+	}
+	lo := lineNo - ctxNo
+	if lo < 1 {
+		lo = 1
+	}
+	taken[lineTok], taken[ctxTok], taken[ctxIdx], taken[lineIdx] = true, true, true, true
+	return strconv.Itoa(lo), strconv.Itoa(lineNo + ctxNo), true
 }
 
 // nuExtWords are plain words that name an extension ("find log files").

@@ -314,6 +314,23 @@ func TestNLUV5Wiring(t *testing.T) {
 	slotw["busca arquivos modificados entre 2 e 10 minutos"] = map[string]string{"newer": "10", "older": "2"}
 	slotw["find files modified between 2 and 10 minutes ago"] = map[string]string{"newer": "10", "older": "2"}
 	slotw["find files accessed 2 to 6 minutes ago"] = map[string]string{"newer": "6", "older": "2", "tfield": "atime"}
+	slicew := map[string]map[string]string{
+		"Search for line 111 in file active_record.rb with 2 lines of context": {"start": "109", "end": "113", "file": "active_record.rb"},
+		"linha 10 do x com 3 linhas de contexto":                               {"start": "7", "end": "13"},
+		"mostra as linhas 5 a 20 do parser.go":                                 {"start": "5", "end": "20", "file": "parser.go"},
+	}
+	for text, wants := range slicew {
+		in := m.Parse(text, w)
+		if in.Name != "line_slice" {
+			t.Errorf("%q → %s, want line_slice", text, in.Name)
+			continue
+		}
+		for k, v := range wants {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
 	for text, wants := range slotw {
 		in := m.Parse(text, w)
 		for k, v := range wants {
