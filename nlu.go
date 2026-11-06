@@ -1666,6 +1666,9 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					if nuIsNumber(toks[i].Fold) && !(kinds["number"] || kinds["text"]) {
 						continue
 					}
+					if kinds["number"] && !kinds["text"] && !nuIsNumber(toks[i].Fold) {
+						continue // a number slot takes digits only, never a leftover name
+					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
 					if !kinds["text"] || len(parts) >= 4 {
