@@ -87,9 +87,14 @@ type pcPlan struct {
 	// Witnesses are the variants that merged into this plan before the
 	// current trajectory — the proof a distill slot needs (distill.go).
 	Witnesses []pcWitness `json:"witnesses,omitempty"`
-	NSteps    int         `json:"n_steps"` // model steps of the run that produced it
-	Wins      int         `json:"wins"`
-	Fails     int         `json:"fails"`
+	// DsDrop/DsWins guardam o último veredito do portão de destilação e os
+	// wins que o plano tinha na hora: o mesmo veredito na mesma evidência
+	// não gasta portão de novo; evidência nova (wins/testemunhas) reabre.
+	DsDrop string `json:"dsdrop,omitempty"`
+	DsWins int    `json:"dswins,omitempty"`
+	NSteps int    `json:"n_steps"` // model steps of the run that produced it
+	Wins   int    `json:"wins"`
+	Fails  int    `json:"fails"`
 	// lesson reuse (lessons_reuse.go): task class and repo signature
 	Kind    string `json:"kind,omitempty"` // bgClassify: size + kind, e.g. "M/bugfix"
 	Repo    string `json:"repo,omitempty"` // lrRepoSig of the project when stored

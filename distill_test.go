@@ -645,6 +645,43 @@ func TestDsVariantAliases(t *testing.T) {
 	}
 }
 
+// TestDsDropStamp: o veredito do portão carimba o plano — a rodada
+// seguinte pula o reprovado na mesma evidência (o orçamento anda) e um
+// win novo reabre a candidatura.
+func TestDsDropStamp(t *testing.T) {
+	overlay := dsTestHome(t)
+	root := t.TempDir()
+	// trajetória que não re-verifica: a checagem falha no replay.
+	p := dsPlan("ff00aa11", "zzq wibble the wobble", 3,
+		[]string{"go version"}, "grep -q zzz arquivo-inexistente.txt")
+	if err := pcSave(root, []pcPlan{p}); err != nil {
+		t.Fatal(err)
+	}
+	o := dsOpts{Overlay: overlay, Seed: 7}
+	rep, err := dsRun(context.Background(), root, o)
+	if err != nil || rep.Accept {
+		t.Fatalf("run devia rejeitar: %+v err=%v", rep, err)
+	}
+	got := pcLoad(root)
+	if len(got) != 1 || got[0].DsDrop == "" || got[0].DsWins != 3 {
+		t.Fatalf("carimbo não gravou: %+v", got)
+	}
+	// mesma evidência: sai da fila, nem candidatura abre
+	rep2, err := dsRun(context.Background(), root, o)
+	if err != nil || rep2.Accept || len(rep2.Dropped) != 0 {
+		t.Fatalf("carimbado devia pular em silêncio: %+v err=%v", rep2, err)
+	}
+	// win novo é evidência nova: reabre e o portão decide de novo
+	got[0].Wins = 4
+	if err := pcSave(root, got); err != nil {
+		t.Fatal(err)
+	}
+	rep3, err := dsRun(context.Background(), root, o)
+	if err != nil || rep3.Accept || len(rep3.Dropped) != 1 {
+		t.Fatalf("win novo devia reabrir a candidatura: %+v err=%v", rep3, err)
+	}
+}
+
 func TestDsRunDrops(t *testing.T) {
 	overlay := dsTestHome(t)
 	root := t.TempDir()

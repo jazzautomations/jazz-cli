@@ -1876,14 +1876,29 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		}
 	}
 	var cands []*dsCand
-	for _, p := range plans {
+	dirty := false
+	defer func() {
+		if dirty && !o.DryRun {
+			if err := pcSave(root, plans); err != nil {
+				dbg("distill", map[string]any{"carimbo": "não gravou", "err": err.Error()})
+			}
+		}
+	}()
+	idxByID := map[string]int{}
+	for i := range plans {
+		idxByID[plans[i].ID] = i
+		p := plans[i]
 		if learned[p.ID] {
 			continue
+		}
+		if p.DsDrop != "" && p.Wins <= p.DsWins {
+			continue // mesmo veredito na mesma evidência — não reabre o portão
 		}
 		c, why := dsBuild(p, lib, wr)
 		if c == nil {
 			if why != "" && p.Wins >= dsMinWins {
 				rep.Dropped = append(rep.Dropped, dsDropped{Plan: p.ID, Task: oneLine(p.Task, 80), Reason: why})
+				plans[i].DsDrop, plans[i].DsWins, dirty = why, p.Wins, true
 			}
 			continue
 		}
@@ -1917,6 +1932,9 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		g := dsGate(ctx, root, c, run, o.Seed, ov)
 		if !g.Accept {
 			rep.Dropped = append(rep.Dropped, dsDropped{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 80), Reason: g.Reason})
+			if i, ok := idxByID[c.Plan.ID]; ok {
+				plans[i].DsDrop, plans[i].DsWins, dirty = g.Reason, c.Plan.Wins, true
+			}
 			continue
 		}
 		rep.Added = append(rep.Added, g)
