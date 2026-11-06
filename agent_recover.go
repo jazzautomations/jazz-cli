@@ -219,8 +219,10 @@ func rcErrLine(text string) string {
 	return ""
 }
 
-// rcVerifyRE: bash commands that check work (build, test, lint, type-check).
-var rcVerifyRE = lazyRx(`\b(go (test|build|vet)|cargo (test|build|check|clippy)|pytest|py\.test|python[0-9.]* -m (pytest|unittest)|unittest|npm (test|run (test|build|lint|check|typecheck))|pnpm (test|run|build|lint)|yarn (test|build|lint)|bun test|tsc\b|eslint|ruff|mypy|make( |$)|ctest|mvn (test|verify|package)|gradle(w)? (test|build|check)|rspec|phpunit|dotnet (test|build)|zig build|mix test|deno test|jest|vitest)`)
+// rcVerifyRE: bash commands that check work (build, test, lint, type-check,
+// and filesystem checks — for file ops, `test -f x`/`wc -l`/`stat` ARE the
+// objective verification, same bar as a green `go build`).
+var rcVerifyRE = lazyRx(`\b(go (test|build|vet)|cargo (test|build|check|clippy)|pytest|py\.test|python[0-9.]* -m (pytest|unittest)|unittest|npm (test|run (test|build|lint|check|typecheck))|pnpm (test|run|build|lint)|yarn (test|build|lint)|bun test|tsc\b|eslint|ruff|mypy|make( |$)|ctest|mvn (test|verify|package)|gradle(w)? (test|build|check)|rspec|phpunit|dotnet (test|build)|zig build|mix test|deno test|jest|vitest)|\b(test +-|\[ +-|wc +-|stat +|sha[0-9]+sum|md5sum|cmp +|diff +|ls +(-[a-z]+ +)?[./~*\w])`)
 
 func rcIsVerifyCmd(cmd string) bool { return rcVerifyRE.MatchString(cmd) }
 
