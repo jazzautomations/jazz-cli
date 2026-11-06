@@ -2126,6 +2126,50 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				return f
 			}
 		}
+	case "name_re":
+		// "names match regex '^x$'" / "nome casa regex 'x'" — only runs when a
+		// regex/match cue is present, otherwise plain 'name' owns the pattern
+		cue := false
+		for _, t := range toks {
+			switch t.Fold {
+			case "regex", "regexp", "regular", "expressao", "expressão", "match", "matching", "matches", "casa", "case", "pattern", "padrão", "padrao":
+				cue = true
+			}
+		}
+		if !cue {
+			return ""
+		}
+		for i, t := range toks {
+			if t.Quoted && t.Fold != "" {
+				taken[i] = true
+				return t.Fold
+			}
+		}
+		for i := len(toks) - 1; i >= 0; i-- {
+			t := &toks[i]
+			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) {
+				taken[i] = true
+				return t.Fold
+			}
+		}
+	case "exclude":
+		// "except git files" / "exceto os .o" — the pattern follows the cue
+		for i, t := range toks {
+			switch t.Fold {
+			case "except", "exceto", "excluding", "excluindo", "without", "ignoring", "ignore", "not":
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					f := toks[j].Fold
+					if f != "" && !toks[j].Filler && len(toks[j].Concs) == 0 && !nuIsNumber(f) {
+						if nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") {
+							taken[i], taken[j] = true, true
+							return f
+						}
+					}
+				}
+			}
+		}
+	case "min_depth", "max_depth":
+		return nuFindDepth(toks, what == "min_depth", taken)
 	case "empty":
 		for _, t := range toks {
 			switch t.Fold {
@@ -2236,6 +2280,48 @@ var nuSizeUnit = map[string]int64{
 }
 
 var nuSizeRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)(b|kb|mb|gb|kib|mib|gib|k|m|g|bytes?)?$`)
+
+// nuFindDepth turns "minimum 1 level down" / "2 níveis de profundidade" /
+// "only the top level" into min_depth/max_depth. The comparative cue picks
+// the bound: minimum/more/at least -> min_depth; level N alone or
+// "at most/only" -> max_depth.
+func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
+	cue, minSeen, maxSeen := -1, false, false
+	for i, t := range toks {
+		switch t.Fold {
+		case "level", "levels", "nível", "níveis", "nivel", "niveis", "depth", "profundidade", "deep":
+			if cue < 0 {
+				cue = i
+			}
+		case "minimum", "minimo", "mínimo", "least", "at least", "more", "mais", "over", "acima", "deeper":
+			minSeen = true
+		case "maximum", "maximo", "máximo", "most", "at most", "only", "ate", "até", "up to", "below", "abaixo", "shallow":
+			maxSeen = true
+		}
+	}
+	if cue < 0 {
+		return ""
+	}
+	if wantMin != minSeen || (minSeen && maxSeen) {
+		return ""
+	}
+	if !minSeen && !maxSeen && !wantMin {
+		// "level 2" with no comparative is an upper bound
+	} else if !wantMin && !maxSeen {
+		return ""
+	}
+	for i, t := range toks {
+		if t.Fold == "" || !nuIsNumber(t.Fold) {
+			continue
+		}
+		if i < cue-2 || i > cue+2 {
+			continue
+		}
+		taken[i] = true
+		return t.Fold
+	}
+	return ""
+}
 
 // nuFindSize turns "maiores que 10MB" / "larger than 100k" into bytes for
 // min_size/max_size; the comparative cue picks the direction, so plain

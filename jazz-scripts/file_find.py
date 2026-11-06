@@ -34,6 +34,24 @@ def as_bool(v, default):
 name = arg("name")
 if name is not None:
     name = str(name)
+name_re = arg("name_re")
+if name_re is not None:
+    name_re = str(name_re)
+    if len(name_re) > 200:
+        fail("name_re too long")
+    try:
+        name_re = re.compile(name_re)
+    except re.error as e:
+        fail("name_re is not a valid regex: %s" % e)
+exclude = arg("exclude")
+if exclude is not None:
+    exclude = str(exclude).lower()
+    if not exclude or len(exclude) > 120:
+        fail("exclude must be a short glob like '.git*' or '*_test.go'")
+min_depth = as_int("min_depth", 0, 0, 200)
+max_depth = as_int("max_depth", 200, 0, 200)
+if min_depth > max_depth:
+    fail("min_depth is greater than max_depth")
 ext = arg("ext")
 if ext is not None:
     ext = str(ext).lower().lstrip("*.")
@@ -77,14 +95,25 @@ if os.path.islink(top_arg):
 top = bounded_path(arg("path", "."))
 if not os.path.exists(top):
     fail("path not found: %s" % rel(top))
-if not (name or ext or kind != "any" or min_size or max_size != (1 << 40)
-        or newer_ts or older_ts or empty_only or sort_by != "name"):
-    fail("pass at least one filter: name, ext, type, size, mtime, empty or sort")
+if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
+        or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"):
+    fail("pass at least one filter: name, name_re, exclude, ext, type, size, mtime, depth, empty or sort")
 
 if name:
     name_l = name.lower()
     if not any(c in name_l for c in "*?["):
         name_l = "*" + name_l + "*"
+if name_re and name:
+    # regex named the real pattern; a residual 'name' ("names match
+    # expression") is cue noise — regex wins
+    name = None
+
+
+def depth_of(p):
+    rel_p = os.path.relpath(p, top)
+    if rel_p == ".":
+        return 0
+    return rel_p.count(os.sep) + 1
 
 
 def match(p, base, st):
@@ -92,11 +121,20 @@ def match(p, base, st):
     is_file = stat.S_ISREG(st.st_mode)
     if not (is_dir or is_file):
         return False  # symlink, fifo, socket: not a find hit
+    d = depth_of(p)
+    if not (min_depth <= d <= max_depth):
+        return False
     if kind == "file" and not is_file:
         return False
     if kind == "dir" and not is_dir:
         return False
     if name and not fnmatch.fnmatch(base.lower(), name_l):
+        return False
+    if name_re and not name_re.search(base):
+        return False
+    if exclude and (fnmatch.fnmatch(base.lower(), exclude)
+                    or fnmatch.fnmatch(p.lower(), exclude)
+                    or fnmatch.fnmatch(p.lower(), "*" + exclude + "*")):
         return False
     if ext and (is_dir or not base.lower().endswith("." + ext)):
         return False

@@ -4208,7 +4208,9 @@
             "history",
             "v4_date_normalize",
             "extractkind",
-            "diskuse"
+            "diskuse",
+            "run",
+            "cron"
           ],
           "w": 10
         },
@@ -4244,7 +4246,9 @@
             "history",
             "v4_date_normalize",
             "extractkind",
-            "diskuse"
+            "diskuse",
+            "run",
+            "cron"
           ],
           "w": 0
         },
@@ -4278,7 +4282,9 @@
             "history",
             "v4_date_normalize",
             "extractkind",
-            "diskuse"
+            "diskuse",
+            "run",
+            "cron"
           ],
           "w": 15
         }
@@ -4346,6 +4352,30 @@
             "text"
           ],
           "from": "find:max_size"
+        },
+        "name_re": {
+          "kinds": [
+            "text"
+          ],
+          "from": "find:name_re"
+        },
+        "exclude": {
+          "kinds": [
+            "text"
+          ],
+          "from": "find:exclude"
+        },
+        "min_depth": {
+          "kinds": [
+            "number"
+          ],
+          "from": "find:min_depth"
+        },
+        "max_depth": {
+          "kinds": [
+            "number"
+          ],
+          "from": "find:max_depth"
         }
       },
       "examples": [
