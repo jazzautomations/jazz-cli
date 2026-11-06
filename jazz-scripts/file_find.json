@@ -71,6 +71,33 @@
           "mtime"
         ],
         "description": "sort hits by name (default), size desc or mtime desc"
+      },
+      "name_re": {
+        "type": "string",
+        "description": "regex applied to the base name"
+      },
+      "exclude": {
+        "type": "string",
+        "description": "glob pattern to prune from results"
+      },
+      "time_field": {
+        "type": "string",
+        "enum": [
+          "mtime",
+          "atime",
+          "ctime"
+        ],
+        "description": "which timestamp the window applies to"
+      },
+      "min_depth": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "minimum depth below path"
+      },
+      "max_depth": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "maximum depth below path"
       }
     }
   },

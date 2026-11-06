@@ -465,7 +465,7 @@ func (m *nuModel) matchPhrase(idx map[string][]nuPhrase, toks []nuTok, i int) (n
 // nuNameShaped: a path, file name, identifier or number — never stemmed or
 // typo-repaired.
 func nuNameShaped(s string) bool {
-	if strings.ContainsAny(s, "./_\\:@=") {
+	if strings.ContainsAny(s, "./_\\:@=^$*+?[](){}|") {
 		return true
 	}
 	digits, upperInside := false, false
@@ -2170,6 +2170,17 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "min_depth", "max_depth":
 		return nuFindDepth(toks, what == "min_depth", taken)
+	case "tfield":
+		for i, t := range toks {
+			switch t.Fold {
+			case "accessed", "access", "acessado", "acessada", "acessados", "acessadas", "atime":
+				taken[i] = true
+				return "atime"
+			case "ctime", "changed":
+				taken[i] = true
+				return "ctime"
+			}
+		}
 	case "empty":
 		for _, t := range toks {
 			switch t.Fold {

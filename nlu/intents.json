@@ -430,7 +430,6 @@
             "build"
           ],
           "none": [
-            "@file",
             "error",
             "execperm",
             "filenoun",
@@ -2456,7 +2455,6 @@
             "fix",
             "create",
             "delete",
-            "@file",
             "files",
             "mutate",
             "findattr",
@@ -3274,8 +3272,7 @@
             "listen",
             "process",
             "filenoun",
-            "files",
-            "@file"
+            "files"
           ]
         },
         {
@@ -3290,8 +3287,7 @@
             "listen",
             "process",
             "filenoun",
-            "files",
-            "@file"
+            "files"
           ]
         },
         {
@@ -3306,8 +3302,7 @@
             "listen",
             "process",
             "filenoun",
-            "files",
-            "@file"
+            "files"
           ]
         },
         {
@@ -3322,8 +3317,7 @@
             "listen",
             "process",
             "filenoun",
-            "files",
-            "@file"
+            "files"
           ]
         }
       ],
@@ -3474,6 +3468,7 @@
         {
           "all": [
             "archive",
+            "filenoun|open|content",
             "@file|filenoun|open|content"
           ],
           "none": [
@@ -3636,7 +3631,6 @@
             "find",
             "filenoun",
             "files",
-            "@file",
             "delete",
             "mutate",
             "create"
@@ -3655,7 +3649,6 @@
             "find",
             "filenoun",
             "files",
-            "@file",
             "delete",
             "mutate",
             "create"
@@ -3693,7 +3686,6 @@
             "port",
             "connect",
             "extract",
-            "@file",
             "pubnet",
             "mutate",
             "enable",
@@ -3713,7 +3705,6 @@
           ],
           "none": [
             "extract",
-            "@file",
             "pubnet",
             "remote",
             "connect",
@@ -4203,7 +4194,6 @@
             "version",
             "diff",
             "undo",
-            "journal",
             "commit",
             "history",
             "v4_date_normalize",
@@ -4241,7 +4231,6 @@
             "version",
             "diff",
             "undo",
-            "journal",
             "commit",
             "history",
             "v4_date_normalize",
@@ -4277,7 +4266,6 @@
             "version",
             "diff",
             "undo",
-            "journal",
             "commit",
             "history",
             "v4_date_normalize",
@@ -4376,6 +4364,12 @@
             "number"
           ],
           "from": "find:max_depth"
+        },
+        "tfield": {
+          "kinds": [
+            "text"
+          ],
+          "from": "find:tfield"
         }
       },
       "examples": [
@@ -4517,6 +4511,7 @@
         {
           "all": [
             "count",
+            "logs|filenoun|content",
             "logs|filenoun|@file|content"
           ],
           "none": [
@@ -4703,6 +4698,7 @@
         {
           "all": [
             "who|usage",
+            "filenoun|files",
             "filenoun|files|@file"
           ],
           "none": [
@@ -4753,7 +4749,8 @@
           "all": [
             "process",
             "have|open",
-            "files|filenoun|@dir|@file"
+            "files|filenoun",
+            "files|filenoun|@file"
           ],
           "none": [
             "blame",
@@ -4839,7 +4836,7 @@
         {
           "all": [
             "duplicate",
-            "files|filenoun|@dir"
+            "files|filenoun"
           ],
           "none": [
             "delete",
@@ -4940,7 +4937,6 @@
             "recover",
             "rename",
             "filenoun",
-            "@file",
             "create",
             "delete",
             "dotenv",
@@ -4991,7 +4987,7 @@
         {
           "all": [
             "image",
-            "prune|delete|clean"
+            "prune|delete"
           ],
           "none": [
             "recover",
@@ -5039,7 +5035,6 @@
             "session"
           ],
           "none": [
-            "file",
             "port",
             "service",
             "container",
@@ -5064,7 +5059,6 @@
             "status"
           ],
           "none": [
-            "file",
             "port",
             "service",
             "container",
@@ -5085,14 +5079,12 @@
             "env"
           ],
           "none": [
-            "file",
             "port",
             "service",
             "container",
             "blame",
             "kill",
             "self",
-            "tool",
             "create",
             "delete",
             "mutate",

@@ -1307,7 +1307,12 @@
       "mounts",
       "particao",
       "ssd",
-      "storage"
+      "storage",
+      "disk space",
+      "free space",
+      "space available",
+      "space left",
+      "disk usage"
     ],
     "memory": [
       "memoria",
@@ -1364,7 +1369,11 @@
       "tree",
       "subdir",
       "subdirectory",
-      "subdirectories"
+      "subdirectories",
+      "files/directories",
+      "file/directory",
+      "regular files",
+      "normal files"
     ],
     "help": [
       "ajuda",
@@ -2091,7 +2100,18 @@
       "regexp",
       "regular expression",
       "expressão regular",
-      "expressao regular"
+      "expressao regular",
+      "accessed",
+      "acessado",
+      "acessada",
+      "atime",
+      "ctime",
+      "hidden",
+      "dotfiles",
+      "symbolic link",
+      "symbolic links",
+      "soft link",
+      "soft links"
     ],
     "mutate": [
       "change",

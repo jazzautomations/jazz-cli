@@ -74,6 +74,11 @@ if older_min is not None:
     older_ts = now - as_int("older_min", 0, 0, 10 * 365 * 24 * 60) * 60
 if newer_ts and older_ts and newer_ts >= older_ts:
     fail("newer_min must be a wider window than older_min")
+TFIELD = {"mtime": "st_mtime", "atime": "st_atime", "ctime": "st_ctime"}
+tfield = str(arg("time_field", "mtime")).lower()
+if tfield not in TFIELD:
+    fail("time_field must be mtime, atime or ctime")
+TSKEY = TFIELD[tfield]
 empty_only = as_bool(ARGS.get("empty"), False)
 include_hidden = as_bool(ARGS.get("include_hidden"), False)
 sort_by = str(arg("sort", "name")).lower()
@@ -140,9 +145,9 @@ def match(p, base, st):
         return False
     if is_file and not (min_size <= st.st_size <= max_size):
         return False
-    if newer_ts and st.st_mtime < newer_ts:
+    if newer_ts and getattr(st, TSKEY) < newer_ts:
         return False
-    if older_ts and st.st_mtime > older_ts:
+    if older_ts and getattr(st, TSKEY) > older_ts:
         return False
     if empty_only:
         if is_file:
