@@ -2230,9 +2230,9 @@ func nuOwnerArg(toks []nuTok, taken map[int]bool) string {
 
 var nuSizeUnit = map[string]int64{
 	"b": 1, "byte": 1, "bytes": 1,
-	"k": 1 << 10, "kb": 1 << 10, "kib": 1 << 10,
-	"m": 1 << 20, "mb": 1 << 20, "mib": 1 << 20,
-	"g": 1 << 30, "gb": 1 << 30, "gib": 1 << 30,
+	"k": 1 << 10, "kb": 1 << 10, "kib": 1 << 10, "kilobyte": 1 << 10, "kilobytes": 1 << 10, "kbyte": 1 << 10, "kbytes": 1 << 10,
+	"m": 1 << 20, "mb": 1 << 20, "mib": 1 << 20, "megabyte": 1 << 20, "megabytes": 1 << 20, "mbyte": 1 << 20, "mbytes": 1 << 20,
+	"g": 1 << 30, "gb": 1 << 30, "gib": 1 << 30, "gigabyte": 1 << 30, "gigabytes": 1 << 30, "gbyte": 1 << 30, "gbytes": 1 << 30,
 }
 
 var nuSizeRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)(b|kb|mb|gb|kib|mib|gib|k|m|g|bytes?)?$`)
@@ -2241,16 +2241,26 @@ var nuSizeRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)(b|kb|mb|gb|kib|mib|gib|k|m|g
 // min_size/max_size; the comparative cue picks the direction, so plain
 // "maiores arquivos" stays a sort, not a filter.
 func nuFindSize(toks []nuTok, min bool, taken map[int]bool) string {
-	minSeen, maxSeen := false, false
+	minSeen, maxSeen, exact := false, false, false
 	for _, t := range toks {
 		switch t.Fold {
 		case "maior", "maiores", "larger", "bigger", "over", "above", "acima", "exceeding", "least", "more", "minimo", "mínimo", "minimum":
 			minSeen = true
 		case "menor", "menores", "smaller", "under", "below", "less", "ate", "até", "abaixo", "maximo", "máximo", "maximum":
 			maxSeen = true
+		case "size", "sized", "tamanho", "bytes", "kilobytes", "megabytes", "gigabytes":
+			exact = true // a size cue without a comparative is an exact-size ask
+		}
+		if m := nuSizeRe.FindStringSubmatch(t.Fold); m != nil && m[2] != "" {
+			exact = true // "10mb" carries its own unit: self-evident size
 		}
 	}
-	if min != minSeen || minSeen == maxSeen {
+	if minSeen == maxSeen {
+		if !exact {
+			return ""
+		}
+		// exact size: min and max converge on the same value
+	} else if min != minSeen {
 		return ""
 	}
 	for i, t := range toks {

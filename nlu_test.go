@@ -431,6 +431,13 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 		{"files modified in the last 3 days", "file_find", "newer=4320"},
 		{"arquivos modificados há menos de 7 dias", "file_find", "newer=10080"},
 		{"arquivos modificados há mais de 30 dias", "file_find", "older=43200"},
+		// tamanho exato converge min=max; comparativo escolhe a direção
+		{"find all the files which have the size 40 bytes", "file_find", "min_size=40"},
+		{"files smaller than 2 kilobytes", "file_find", "max_size=2048"},
+		{"arquivos maiores que 10mb", "file_find", "min_size=10485760"},
+		// vocabulário EN de busca em árvore de diretórios
+		{"List files ending in .html in the current directory tree", "list_files", ""},
+		{"Remove regular files in the current directory tree", "delete_file", ""},
 		{"quem está logado", "logged_in", ""},
 		{"who is logged in", "logged_in", ""},
 		{"lista as sessões ativas", "logged_in", ""},
