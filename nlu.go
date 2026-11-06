@@ -2271,7 +2271,12 @@ func nuOwnerArg(toks []nuTok, taken map[int]bool) string {
 		if !cue {
 			continue
 		}
-		for j := i + 1; j < len(toks); j++ {
+		// candidato: primeira palavra "limpa" num raio curto — fillers
+		// ("owner is daniel"→is), aspas e tokens já consumidos vazavam
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			if toks[j].Filler || toks[j].Quoted || taken[j] {
+				continue
+			}
 			n := toks[j].Fold
 			if len(n) < 2 || len(toks[j].Concs) > 0 || len(toks[j].Tags) > 0 {
 				continue
