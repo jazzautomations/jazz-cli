@@ -588,16 +588,16 @@ func brSafePath(root, p string) (abs, rel string, err error) {
 		return "", "", errors.New("sem caminho")
 	}
 	if filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
-		return "", "", errors.New("caminho fora do projeto: " + p)
+		return "", "", errors.New("caminho fora do projeto: " + p + " — rode jazz -C <pasta> para agir lá, ou peça um caminho dentro do projeto")
 	}
 	rel = filepath.Clean(filepath.FromSlash(p))
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", errors.New("caminho fora do projeto: " + p)
+		return "", "", errors.New("caminho fora do projeto: " + p + " — rode jazz -C <pasta> para agir lá, ou peça um caminho dentro do projeto")
 	}
 	rootAbs, _ := filepath.Abs(root)
 	abs, _ = filepath.Abs(filepath.Join(rootAbs, rel))
 	if abs != rootAbs && !strings.HasPrefix(abs, rootAbs+string(filepath.Separator)) {
-		return "", "", errors.New("caminho fora do projeto: " + p)
+		return "", "", errors.New("caminho fora do projeto: " + p + " — rode jazz -C <pasta> para agir lá, ou peça um caminho dentro do projeto")
 	}
 	return abs, rel, nil
 }

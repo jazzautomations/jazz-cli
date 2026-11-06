@@ -7,7 +7,7 @@ MAX_BYTES = 262144
 def bounded_path(value):
     p = os.path.realpath(path_in_root(value))
     if os.path.commonpath([os.path.realpath(ROOT), p]) != os.path.realpath(ROOT):
-        fail("path outside project root")
+        fail("path outside project root — use jazz -C <dir> to run there, or pass a path inside the project")
     return p
 
 def source():
