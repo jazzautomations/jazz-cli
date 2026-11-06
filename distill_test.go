@@ -318,13 +318,90 @@ func TestDsCapPlan(t *testing.T) {
 		}
 	}
 
-	// sem encaixe o generalizado não destila: recursivo, exec não-rm,
-	// mutação sem cap equivalente, xargs rm solto (sem produtor),
-	// redirect de não-produtor e tee pra path inseguro.
+	// cp/ln/mv-multi/xargs-cp-mv: as famílias de nb-file-ops viram caps —
+	// file_op copy/link/symlink, rename por item via to_dir e o fan-out
+	// produzido pelo find conferido por list_present.
+	for _, tc := range []struct {
+		cmds  []string
+		check func(*mhMethod) string
+	}{
+		{[]string{"cp a.txt b.txt"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "file_op" || st.In["op"] != "copy" || st.In["to"] != "b.txt" {
+				return "cp 2-arg"
+			}
+			return ""
+		}},
+		{[]string{"cp -r src/ dst/"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "file_op" || st.In["op"] != "copy" || st.In["to"] != "dst/" {
+				return "cp -r"
+			}
+			return ""
+		}},
+		{[]string{"cp a.txt b.txt c.txt dest/"}, func(m *mhMethod) string {
+			if len(m.Steps) != 3 || m.Steps[0].In["op"] != "copy" || m.Steps[0].In["to_dir"] != "dest/" {
+				return "cp multi to_dir"
+			}
+			return ""
+		}},
+		{[]string{"mv a.txt b.txt c.txt dest/"}, func(m *mhMethod) string {
+			if len(m.Steps) != 3 || m.Steps[0].In["op"] != "rename" || m.Steps[0].In["to_dir"] != "dest/" {
+				return "mv multi to_dir"
+			}
+			return ""
+		}},
+		{[]string{"ln -s /var/cache/x pkg.deb"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "file_op" || st.In["op"] != "symlink" || st.In["path"] != "pkg.deb" || st.In["to"] != "/var/cache/x" {
+				return "ln -s"
+			}
+			return ""
+		}},
+		{[]string{"find . -name '*.png' -print | xargs -I{} cp {} images/"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[1].Cap != "for_each" || m.Steps[1].In["op"] != "copy" ||
+				m.Steps[1].In["to_dir"] != "images/" {
+				return "xargs -I{} cp"
+			}
+			for _, v := range m.Verify {
+				if v.Check == "list_present" && v.Arg2 == "images/" {
+					return ""
+				}
+			}
+			return "xargs cp sem list_present"
+		}},
+		{[]string{"find . -name '*.log' -print | xargs mv -t logs/"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[1].In["op"] != "rename" || m.Steps[1].In["to_dir"] != "logs/" {
+				return "xargs mv -t"
+			}
+			return ""
+		}},
+		{[]string{"find . -name '*.bak' -exec cp {} backups/ \\;"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[1].In["op"] != "copy" || m.Steps[1].In["to_dir"] != "backups/" {
+				return "find -exec cp"
+			}
+			return ""
+		}},
+	} {
+		cp := dsCapPlan(dsPlan("ca77ps06", "zzq copia e move", 3, tc.cmds, ""), root)
+		if cp == nil {
+			t.Fatalf("%v não destilou", tc.cmds)
+		}
+		if why := tc.check(cp); why != "" {
+			t.Errorf("%v → %s: %+v", tc.cmds, why, cp.Steps)
+		}
+		cp.Name, cp.Intent = "learned_x.caps", "learned_x"
+		if why := dsValidMethod(*cp, func(string) bool { return true }); why != "" {
+			t.Errorf("%v → método não valida: %s", tc.cmds, why)
+		}
+	}
+
+	// sem encaixe o generalizado não destila: rm recursivo, exec não-rm/
+	// não-cp/mv, mutação sem cap equivalente, xargs rm solto (sem
+	// produtor), redirect de não-produtor e tee pra path inseguro.
 	for _, cmds := range [][]string{
 		{"rm -rf dir"},
 		{"find . -exec grep -l x {} +"},
-		{"cp a b"},
 		{"find . -name '*.tmp' -print", "chmod 600 x"},
 		{"find . -name '*.tmp' -print", "xargs rm"},
 		{"ls -la > out.txt"},

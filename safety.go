@@ -551,7 +551,10 @@ func gitDanger(args []string) string {
 
 var (
 	readOnlyCmd    = lazyRx(`^(ls|ll|la|cat|head|tail|wc|pwd|echo|printf|which|type|file|stat|du|df|tree|rg|grep|egrep|fgrep|fd|fdfind|find|sort|uniq|cut|diff|cmp|whoami|uname|id|uptime|free|ps|jq|realpath|readlink|dirname|basename|nproc|pgrep|pidof|true|false|test|\[|sha256sum|md5sum|cksum|column|tr|nl|seq|go\s+(version|env|list|doc|vet)|python3?\s+(--version|-V)|node\s+(--version|-v)|git\s+(status|diff|log|show|rev-parse|ls-files|blame|describe|shortlog|grep|ls-tree|cat-file)|git\s+branch(\s+(-a|-r|-v|-vv|-l|--list|--show-current|--all|--remotes))*|git\s+tag(\s+(-l|--list))?|git\s+remote(\s+(-v|show|get-url)(\s+\S+)?)?)(\s|$)`)
-	readOnlyBadArg = lazyRx(`(^|\s)(-o|--output|--output=\S*|-fprint\w*|-fls|-ok\w*|-exec\w*|-delete|--pre(=\S*)?|-toolexec|-vettool\S*|--exec\S*|-w|--write)(\s|$)`)
+	// find's mutating/action flags are global (no other allowlisted command
+	// uses them); file-output flags like -o/-w stay per-command in
+	// roUnsafeArgs because find's -o is OR and grep -w is word-match
+	readOnlyBadArg = lazyRx(`(^|\s)(-fprint\w*|-fls|-ok\w*|-exec\w*|-delete|--pre(=\S*)?|-toolexec|-vettool\S*|--exec\S*)(\s|$)`)
 )
 
 var (
@@ -571,7 +574,10 @@ var (
 // isReadOnlySh is a conservative check: true only for plainly read-only
 // commands (POSIX shell syntax). IsReadOnly (winsafety.go) wraps it.
 func isReadOnlySh(cmd string) bool {
-	if strings.ContainsAny(cmd, "\n\r(){}`$>") || strings.Contains(cmd, "<<") || strings.Contains(cmd, "<(") {
+	// bare ( ) are subshells/functions — reject; but \( \) are find's escaped
+	// grouping literals, harmless and read-only (find -delete/-exec stays
+	// guarded below)
+	if shUnescaped(cmd, "()") || strings.ContainsAny(cmd, "\n\r{}`$>") || strings.Contains(cmd, "<<") || strings.Contains(cmd, "<(") {
 		return false
 	}
 	if readOnlyBadArg.MatchString(cmd) || reSortOutFile.MatchString(cmd) {
@@ -602,6 +608,25 @@ func isReadOnlySh(cmd string) bool {
 		}
 	}
 	return true
+}
+
+// shUnescaped reports whether any of chars appears not preceded by a
+// backslash (an odd-length backslash run). Escaped chars are shell literals,
+// not syntax.
+func shUnescaped(s, chars string) bool {
+	for i := 0; i < len(s); i++ {
+		if !strings.ContainsRune(chars, rune(s[i])) {
+			continue
+		}
+		bs := 0
+		for j := i - 1; j >= 0 && s[j] == '\\'; j-- {
+			bs++
+		}
+		if bs%2 == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // roUnsafeArgs reports options of allowlisted commands that run a program or

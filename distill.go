@@ -399,6 +399,12 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 		if !outs[arg] {
 			return "verificador aponta um passo inexistente: " + v.Arg
 		}
+		if v.Arg2 != "" && v.Check != "list_present" {
+			return "verificador com arg2 inesperado: " + v.Check
+		}
+		if v.Check == "list_present" && !dsPathLit(v.Arg2) {
+			return "verificador list_present: dir não literal"
+		}
 	}
 	for _, c := range m.Pre {
 		if c.Fact == "" || (c.Op != "" && c.Op != "set" && c.Op != "unset" && c.Op != "eq" && c.Op != "ne") {
@@ -421,20 +427,21 @@ var dsCapKeys = map[string]map[string]bool{
 	"script:file_find": smSet("path", "name", "name_re", "ext", "type", "sort",
 		"min_size", "max_size", "newer_min", "older_min", "empty", "exclude",
 		"include_hidden", "time_field", "min_depth", "max_depth", "limit"),
-	"for_each":  smSet("from", "do", "op", "max", "to", "content"),
+	"for_each":  smSet("from", "do", "op", "max", "to", "to_dir", "content"),
 	"save_list": smSet("from", "path", "sort"),
-	"file_op":   smSet("op", "path", "to", "content"),
+	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
 }
 
 // dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
 // destilada pode pedir (direto ou via for_each).
-var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename")
+var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename",
+	"copy", "link", "symlink")
 
 // dsCapChecks: verificadores extra que um método de caps pode usar — todos
 // só-leitura e provam efeito em filesystem ou no resultado do script
 // (brVerify); num método só de learned_cmd seguem valendo só
 // exit_zero/cmd_ran.
-var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "script_ok", "script_exit_zero")
+var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present", "script_ok", "script_exit_zero")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
 // lista, chaves conhecidas, valores literais ou $out produzido antes
@@ -471,6 +478,12 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		if !dsFileOpOps[st.In["op"]] {
 			return "capacidade for_each: op desconhecido " + st.In["op"]
 		}
+		switch st.In["op"] {
+		case "rename", "copy", "link", "symlink":
+			if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
+				return "capacidade for_each: " + st.In["op"] + " sem to/to_dir"
+			}
+		}
 	case "save_list":
 		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
 			return "capacidade save_list: from não é uma lista produzida por script"
@@ -485,8 +498,15 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		if strings.TrimSpace(st.In["path"]) == "" {
 			return "capacidade file_op: falta path"
 		}
-		if st.In["op"] == "rename" && strings.TrimSpace(st.In["to"]) == "" {
-			return "capacidade file_op: rename sem to"
+		switch st.In["op"] {
+		case "rename":
+			if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
+				return "capacidade file_op: rename sem to/to_dir"
+			}
+		case "copy", "link", "symlink":
+			if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
+				return "capacidade file_op: " + st.In["op"] + " sem to/to_dir"
+			}
 		}
 	}
 	return ""
@@ -789,6 +809,18 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			In: map[string]string{"from": "$" + last, "do": "file_op", "op": "delete", "max": "32"}})
 		gone[last], caps = true, caps+1
 	}
+	dstdirs := map[string]string{} // produtor → dir do fan-out (list_present)
+	emitEachTo := func(op, dir string) {
+		steps = append(steps, mhStep{Cap: "for_each",
+			In: map[string]string{"from": "$" + last, "do": "file_op", "op": op,
+				"to_dir": dir, "max": "32"}})
+		if op == "rename" {
+			gone[last] = true // move: a origem some (list_gone já cobre)
+		} else {
+			dstdirs[last] = dir
+		}
+		caps++
+	}
 	emitOp := func(in map[string]string, check string) {
 		fop++
 		out := fmt.Sprintf("f%d", fop)
@@ -824,7 +856,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			// "find … > arquivo" salva a lista produzida — só esse
 			// produtor tem cap; o resto não finge encaixe.
 			if len(inner) > 0 && filepath.Base(inner[0]) == "find" && dsPathLit(dest) {
-				in, del, ok := dsFindIn(inner)
+				in, del, _, _, ok := dsFindIn(inner)
 				if !ok || del {
 					return false
 				}
@@ -840,13 +872,16 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		}
 		switch filepath.Base(t[0]) {
 		case "find":
-			in, del, ok := dsFindIn(t)
+			in, del, xop, xdir, ok := dsFindIn(t)
 			if !ok { // find com flag sem encaixe: read-only fica literal
 				return literal(s)
 			}
 			emitFind(in)
-			if del {
+			switch {
+			case del:
 				emitEach()
+			case xop != "":
+				emitEachTo(xop, xdir)
 			}
 		case "rm":
 			args, ok := dsRmArgs(t)
@@ -867,12 +902,59 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 				emitOp(map[string]string{"op": "delete", "path": a}, "file_gone")
 			}
 		case "mv":
-			args, ok := dsMvArgs(t)
+			args, ok := dsFlagArgs(t, "fv")
+			if !ok || len(args) < 2 {
+				return false
+			}
+			if len(args) == 2 {
+				if !dsPathLit(args[0]) || !dsPathLit(args[1]) {
+					return false
+				}
+				// o val do file_op rename é a origem — sumir dela prova o rename
+				emitOp(map[string]string{"op": "rename", "path": args[0], "to": args[1]}, "file_gone")
+				return true
+			}
+			// mv multi-fonte: último arg é o dir — fan-out literal de renames
+			dir := args[len(args)-1]
+			if !dsPathLit(dir) {
+				return false
+			}
+			for _, a := range args[:len(args)-1] {
+				if !dsPathLit(a) {
+					return false
+				}
+				emitOp(map[string]string{"op": "rename", "path": a, "to_dir": dir}, "file_gone")
+			}
+		case "cp":
+			// -r/-R ok: brCopyTree copia árvore confinada dos dois lados
+			args, ok := dsFlagArgs(t, "rvfRn")
+			if !ok || len(args) < 2 {
+				return false
+			}
+			if len(args) == 2 {
+				if !dsPathLit(args[0]) || !dsPathLit(args[1]) {
+					return false
+				}
+				emitOp(map[string]string{"op": "copy", "path": args[0], "to": args[1]}, "file_exists")
+				return true
+			}
+			dir := args[len(args)-1]
+			if !dsPathLit(dir) {
+				return false
+			}
+			for _, a := range args[:len(args)-1] {
+				if !dsPathLit(a) {
+					return false
+				}
+				emitOp(map[string]string{"op": "copy", "path": a, "to_dir": dir}, "file_exists")
+			}
+		case "ln":
+			op, args, ok := dsLnArgs(t)
 			if !ok {
 				return false
 			}
-			// o val do file_op rename é a origem — sumir dela prova o rename
-			emitOp(map[string]string{"op": "rename", "path": args[0], "to": args[1]}, "file_gone")
+			// ln <alvo> <link>: path é o link criado (confinado), to é o alvo
+			emitOp(map[string]string{"op": op, "path": args[1], "to": args[0]}, "file_exists")
 		case "mkdir":
 			args, ok := dsMkdirArgs(t)
 			if !ok {
@@ -891,8 +973,11 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 	}
 	for _, c := range p.Cmds {
 		var parts []string
-		for _, s := range reSplit.Split(c, -1) {
-			if s = strings.TrimSpace(s); s != "" {
+		// \; (o terminador do find -exec) não é separador de sequência —
+		// protege antes do split e devolve como token ";" pro mapSeg.
+		protected := strings.ReplaceAll(c, "\\;", "\x00")
+		for _, s := range reSplit.Split(protected, -1) {
+			if s = strings.TrimSpace(strings.ReplaceAll(s, "\x00", ";")); s != "" {
 				parts = append(parts, s)
 			}
 		}
@@ -909,19 +994,28 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 				if len(l) > 0 && len(rIn) > 0 && filepath.Base(l[0]) == "find" {
 					switch filepath.Base(rIn[0]) {
 					case "xargs":
-						if !dsXargsRm(rIn) {
-							break
+						if dsXargsRm(rIn) {
+							in, del, _, _, ok := dsFindIn(l)
+							if !ok || del {
+								return nil
+							}
+							emitFind(in)
+							emitEach()
+							continue
 						}
-						in, del, ok := dsFindIn(l)
-						if !ok || del {
-							return nil
+						if xop, dir, ok := dsXargsCpMv(rIn); ok {
+							in, del, _, _, ok2 := dsFindIn(l)
+							if !ok2 || del {
+								return nil
+							}
+							emitFind(in)
+							emitEachTo(xop, dir)
+							continue
 						}
-						emitFind(in)
-						emitEach()
-						continue
+						break
 					case "tee":
 						if len(rIn) == 2 && rDest == "" && dsPathLit(rIn[1]) {
-							in, del, ok := dsFindIn(l)
+							in, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
@@ -931,7 +1025,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 						}
 					case "sort":
 						if len(rIn) == 1 && rDest != "" && dsPathLit(rDest) {
-							in, del, ok := dsFindIn(l)
+							in, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
@@ -964,6 +1058,9 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 	}
 	for l := range gone {
 		verify = append(verify, mhCheck{Check: "list_gone", Arg: "$" + l})
+	}
+	for l, dir := range dstdirs {
+		verify = append(verify, mhCheck{Check: "list_present", Arg: "$" + l, Arg2: dir})
 	}
 	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v &&
 		dsCmdOK(v) == "" && dsReplaySafe(v) {
@@ -1032,6 +1129,46 @@ func dsMkdirArgs(t []string) ([]string, bool) {
 	return args, true
 }
 
+// dsLnArgs: "ln [-s|-f|-v] alvo link" — só link simbólico ou hard de um
+// alvo pra um nome; -P/-L/-b/-t/-i não têm encaixe. O link (criado no
+// projeto) é literal; o alvo pode ser literal OU absoluto simples (o
+// texto do link aponta pra fora sem escrever fora).
+func dsLnArgs(t []string) (string, []string, bool) {
+	op := "link"
+	args := []string{}
+	for i := 1; i < len(t); i++ {
+		a := t[i]
+		if a == "--" {
+			args = append(args, t[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") {
+			for _, f := range a[1:] {
+				switch f {
+				case 's':
+					op = "symlink"
+				case 'f', 'v', 'n':
+				default:
+					return "", nil, false
+				}
+			}
+			continue
+		}
+		args = append(args, a)
+	}
+	if len(args) != 2 || !dsPathLit(args[1]) {
+		return "", nil, false
+	}
+	// alvo do link: literal relativo OU absoluto sem metacaracteres —
+	// confinado é o link, não o texto que ele carrega.
+	if !dsPathLit(args[0]) {
+		if !filepath.IsAbs(args[0]) || strings.ContainsAny(args[0], "$`*?(){}[]'\"\\") || strings.Contains(args[0], "..") {
+			return "", nil, false
+		}
+	}
+	return op, args, true
+}
+
 // dsFlagArgs separa flags de uma letra (todos precisam estar em allow) dos
 // argumentos posicionais; "--" encerra os flags.
 func dsFlagArgs(t []string, allow string) ([]string, bool) {
@@ -1086,11 +1223,80 @@ func dsXargsRm(t []string) bool {
 	return true
 }
 
+// dsXargsCpMv: "xargs [flags] (cp|mv) [-t dir | -I{} … {} dir]" — o
+// fan-out de move/copy pra um dir alimentado pela lista produzida.
+// devolve o op do file_op e o dir destino; ok=false = sem encaixe.
+func dsXargsCpMv(t []string) (op, dir string, ok bool) {
+	i := 1
+	repl := ""
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		// "-I{}" grudado: o valor vem no mesmo token
+		if strings.HasPrefix(a, "-I") && len(a) > 2 {
+			repl = a[2:]
+			continue
+		}
+		switch a {
+		case "-I", "-n", "-P", "-d", "-s", "-L", "--max-args", "--max-procs", "--delimiter", "--max-lines", "-i":
+			if i+1 < len(t) {
+				if a == "-I" || a == "-i" {
+					repl = t[i+1]
+				}
+				i++
+			}
+		}
+	}
+	if i >= len(t) {
+		return "", "", false
+	}
+	cmd := filepath.Base(t[i])
+	if cmd != "cp" && cmd != "mv" {
+		return "", "", false
+	}
+	op = map[string]string{"cp": "copy", "mv": "rename"}[cmd]
+	rest := t[i+1:]
+	if repl != "" {
+		// "xargs -I{} cp {} dir": o {} é o item, o outro arg literal é o dir
+		var lit []string
+		for _, a := range rest {
+			if strings.HasPrefix(a, "-") {
+				for _, f := range a[1:] {
+					if f != 'f' && f != 'v' && f != 'n' {
+						return "", "", false
+					}
+				}
+				continue
+			}
+			if a == repl {
+				continue
+			}
+			lit = append(lit, a)
+		}
+		if len(lit) != 1 || !dsPathLit(lit[0]) {
+			return "", "", false
+		}
+		return op, lit[0], true
+	}
+	// "xargs cp -t dir": o -t leva o dir; sem -t não há encaixe
+	for j, a := range rest {
+		if (a == "-t" || a == "--target-directory") && j+1 < len(rest) {
+			if !dsPathLit(rest[j+1]) {
+				return "", "", false
+			}
+			return op, rest[j+1], true
+		}
+	}
+	return "", "", false
+}
+
 // dsFindIn: os argumentos de um find (tokens depois do "find") viram as
 // entradas do script:file_find — espelha os slots do delete_file.each.
 // del = o próprio find já deletava (-delete, -exec rm). ok=false = sobrou
 // flag sem encaixe (o comando fica literal quando dá, senão não destila).
-func dsFindIn(t []string) (in map[string]string, del, ok bool) {
+func dsFindIn(t []string) (in map[string]string, del bool, xop, xdir string, ok bool) {
 	in = map[string]string{"limit": "32"}
 	paths := 0
 	num := func(s string) bool {
@@ -1109,23 +1315,51 @@ func dsFindIn(t []string) (in map[string]string, del, ok bool) {
 		case a == "-delete":
 			del = true
 		case a == "-exec" || a == "-execdir":
-			// só "-exec rm [-f|-v] {} ;|+" — qualquer outro exec não destila
 			j := i + 1
-			if j >= len(t) || filepath.Base(t[j]) != "rm" {
-				return nil, false, false
+			if j >= len(t) {
+				return nil, false, "", "", false
+			}
+			ecmd := filepath.Base(t[j])
+			if ecmd == "cp" || ecmd == "mv" {
+				// "-exec (cp|mv) [-f|-v|-n] {} dir ;|+" — fan-out pra dir
+				var lit []string
+				for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
+					a2 := t[j]
+					if strings.HasPrefix(a2, "-") {
+						for _, f := range a2[1:] {
+							if f != 'f' && f != 'v' && f != 'n' {
+								return nil, false, "", "", false
+							}
+						}
+						continue
+					}
+					if strings.Contains(a2, "{}") {
+						continue
+					}
+					lit = append(lit, a2)
+				}
+				if j >= len(t) || len(lit) != 1 || !dsPathLit(lit[0]) {
+					return nil, false, "", "", false
+				}
+				xop = map[string]string{"cp": "copy", "mv": "rename"}[ecmd]
+				xdir, i = lit[0], j
+				continue
+			}
+			if ecmd != "rm" {
+				return nil, false, "", "", false
 			}
 			for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
 				if t[j] != "-f" && t[j] != "-v" && t[j] != "--" && !strings.Contains(t[j], "{}") {
-					return nil, false, false
+					return nil, false, "", "", false
 				}
 			}
 			if j >= len(t) {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			del, i = true, j
 		case a == "-name" || a == "-iname":
 			if arg(i) == "" || in["name"] != "" {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			in["name"], i = arg(i), i+1
 		case a == "-type":
@@ -1135,18 +1369,18 @@ func dsFindIn(t []string) (in map[string]string, del, ok bool) {
 			case "d":
 				in["type"] = "dir"
 			default:
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			i++
 		case a == "-maxdepth" || a == "-mindepth":
 			if !num(arg(i)) {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			in[map[string]string{"-maxdepth": "max_depth", "-mindepth": "min_depth"}[a]], i = arg(i), i+1
 		case a == "-size":
 			n, sign, okSz := dsFindSize(arg(i))
 			if !okSz {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			if sign == '+' {
 				in["min_size"] = strconv.FormatInt(n, 10)
@@ -1173,7 +1407,7 @@ func dsFindIn(t []string) (in map[string]string, del, ok bool) {
 				n, err = strconv.ParseInt(v, 10, 64)
 			}
 			if err != nil || n < 0 {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			in[key], i = strconv.FormatInt(n*f, 10), i+1
 		case a == "-empty":
@@ -1182,18 +1416,18 @@ func dsFindIn(t []string) (in map[string]string, del, ok bool) {
 			// negação só vale como exclusão de nome/caminho
 			if i+2 >= len(t) || in["exclude"] != "" ||
 				(t[i+1] != "-name" && t[i+1] != "-iname" && t[i+1] != "-path") {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			in["exclude"], i = t[i+2], i+2
 		case a == "-print" || a == "-print0" || a == "-xdev" || a == "-mount" ||
 			a == "-quit" || a == "-true" || a == "-depth":
 			// neutros: saída e travessia não mudam o conjunto produzido
 		case strings.HasPrefix(a, "-"):
-			return nil, false, false // flag sem encaixe
+			return nil, false, "", "", false // flag sem encaixe
 		default:
 			// raiz da busca: um único caminho posicional
 			if paths > 0 {
-				return nil, false, false
+				return nil, false, "", "", false
 			}
 			paths++
 			if p := strings.TrimPrefix(a, "./"); p != "" && p != "." {
@@ -1201,7 +1435,7 @@ func dsFindIn(t []string) (in map[string]string, del, ok bool) {
 			}
 		}
 	}
-	return in, del, true
+	return in, del, xop, xdir, true
 }
 
 // dsFindSize: "-size +12k" → bytes do filtro; unidades do find (c=1, w=2,

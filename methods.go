@@ -54,6 +54,7 @@ type mhStep struct {
 type mhCheck struct {
 	Check string `json:"check"`
 	Arg   string `json:"arg"`
+	Arg2  string `json:"arg2,omitempty"` // ex.: dir alvo do list_present
 }
 
 // mhMethod is one way of doing an intent.
@@ -598,6 +599,39 @@ func brSaveList(cx *brCtx, in map[string]string) brStep {
 	return brStep{val: rel, obs: obs, ok: true}
 }
 
+// brCopyTree copia arquivo ou diretório (recursivo) — ambos os lados já
+// passaram pelo brSafePath do chamador. Preserva permissão do fonte.
+func brCopyTree(src, dst string) error {
+	fi, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dst, data, fi.Mode().Perm())
+	}
+	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		to := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(to, 0o755)
+		}
+		return brCopyTree(p, to)
+	})
+}
+
 // brItemPath lifts a path out of a producer item — scripts emit either
 // bare strings or objects with a "path" field.
 func brItemPath(it any) string {
@@ -805,11 +839,24 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 	if err != nil {
 		return brStep{obs: obs, why: err.Error()}
 	}
-	toAbs, toRel := "", ""
-	if op == "rename" {
+	toAbs, toRel, target := "", "", ""
+	// to_dir: destino é <dir>/<basename(path)> — o fan-out de mv/cp
+	// ("move todos os .png pra images/") repassa o dir por item.
+	if d := cx.str(in, "to_dir"); d != "" {
+		dAbs, dRel, e := brSafePath(cx.env.Root, d)
+		if e != nil {
+			return brStep{obs: obs, why: "destino: " + e.Error()}
+		}
+		toAbs, toRel = filepath.Join(dAbs, filepath.Base(abs)), filepath.ToSlash(filepath.Join(dRel, filepath.Base(rel)))
+	} else if op == "rename" || op == "copy" {
 		toAbs, toRel, err = brSafePath(cx.env.Root, cx.str(in, "to"))
 		if err != nil {
 			return brStep{obs: obs, why: "destino: " + err.Error()}
+		}
+	} else if op == "link" || op == "symlink" {
+		target = cx.str(in, "to")
+		if target == "" {
+			return brStep{obs: obs, why: "link sem alvo"}
 		}
 	}
 	var synth, done string
@@ -835,6 +882,15 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 	case "rename":
 		synth = "mv " + rel + " " + toRel
 		done = "renomeado"
+	case "copy":
+		synth = "cp -r " + rel + " " + toRel
+		done = "copiado"
+	case "link":
+		synth = "ln " + target + " " + rel
+		done = "link criado"
+	case "symlink":
+		synth = "ln -s " + target + " " + rel
+		done = "link simbólico criado"
 	default:
 		return brStep{obs: obs, why: "file_op desconhecido: " + op}
 	}
@@ -860,6 +916,12 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		err = os.Remove(abs)
 	case "rename":
 		err = os.Rename(abs, toAbs)
+	case "copy":
+		err = brCopyTree(abs, toAbs)
+	case "link":
+		err = os.Link(target, abs)
+	case "symlink":
+		err = os.Symlink(target, abs)
 	}
 	if err != nil {
 		return brStep{obs: obs, why: op + " " + rel + ": " + err.Error()}
@@ -868,10 +930,13 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		cx.env.AfterWrite(synth)
 	}
 	shown := rel
-	if op == "rename" {
+	if op == "rename" || op == "copy" {
 		shown = rel + " → " + toRel
 	}
-	if op == "mkdir" || op == "delete" {
+	if op == "link" || op == "symlink" {
+		shown = rel + " → " + target
+	}
+	if op == "mkdir" || op == "delete" || op == "link" || op == "symlink" {
 		cx.say("%s: %s", done, shown)
 	} else if fi, e := os.Stat(abs); e == nil {
 		cx.say("%s: %s (%d bytes)", done, shown, fi.Size())
@@ -886,6 +951,12 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 	cx.task.AddEvidence("file", fmt.Sprintf("%s %s", op, shown))
 	if cx.env.AfterWrite != nil {
 		cx.say("(/undo desfaz)")
+	}
+	// copy/link: o val é o DESTINO — verificar file_exists no fim da cap
+	// prova o artefato criado (pro rename o val da origem já prova via
+	// file_gone, e pra copy a origem continua existindo mesmo).
+	if op == "copy" {
+		return brStep{val: toRel, obs: obs, ok: true}
 	}
 	return brStep{val: rel, obs: obs, ok: true}
 }
@@ -2028,7 +2099,9 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 		switch c.Check {
 		case "file_exists":
 			rel, _ := arg.(string)
-			fi, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(rel)))
+			// Lstat: um symlink criado pela cap verifica mesmo se o alvo
+			// ainda não existir — quem existe é o link.
+			fi, err := os.Lstat(filepath.Join(cx.env.Root, filepath.FromSlash(rel)))
 			if rel == "" || err != nil {
 				return false, false, "o arquivo não existe: " + rel
 			}
@@ -2070,6 +2143,41 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("%d item(ns) da lista ainda existe(m)", left)
 			}
 			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados ausentes", len(items)))
+		case "list_present":
+			// fan-out de cópia/move: cada item produzido pousou como
+			// <arg2>/<base(item)> — prova o destino, não a origem.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			dir, _ := cx.subst(c.Arg2).(string)
+			dAbs, dRel, dErr := brSafePath(cx.env.Root, dir)
+			if dErr != nil || dRel == "" {
+				return false, false, "dir do list_present fora do projeto: " + dir
+			}
+			missing := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" {
+					missing++
+					continue
+				}
+				if _, err := os.Lstat(filepath.Join(dAbs, filepath.Base(filepath.FromSlash(p)))); err != nil {
+					missing++
+				}
+			}
+			if missing > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) não pousaram em %s", missing, dRel)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados em %s", len(items), dRel))
 		case "read_ok":
 			if _, isStr := arg.(string); !isStr {
 				return false, false, "o conteúdo não foi lido"
