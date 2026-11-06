@@ -1130,9 +1130,29 @@ func dsCapCand(p pcPlan, m *mhMethod, tag string) *dsCand {
 	name := dsLearnedPrefix + p.ID
 	c.Method.Name = name + tag
 	c.Method.Intent = name
-	c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{p.Task}}
+	c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: dsVariantTexts(p)}
 	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
 	return c
+}
+
+// dsVariantTexts: os textos que o plano já viu dar certo — o pedido e as
+// testemunhas que fundiram no mesmo shape. Cada um vira exemplo (classifi-
+// cador) e atalho (alias) na intenção aprendida: cada variante conhecida
+// aumenta a cobertura da pedra sem custo de modelo.
+func dsVariantTexts(p pcPlan) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(t string) {
+		if x, ok := nuExampleText(t); ok && !seen[x] {
+			seen[x] = true
+			out = append(out, x)
+		}
+	}
+	add(p.Task)
+	for _, w := range p.Witnesses {
+		add(w.Task)
+	}
+	return out
 }
 
 // dsEligible barra um plano antes do desenho do método: repetido,
@@ -1460,11 +1480,7 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 		name = in.Name
 	} else {
 		name = dsLearnedPrefix + p.ID
-		ex := p.Task
-		if t, ok := nuExampleText(ex); ok {
-			ex = t
-		}
-		c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{ex}}
+		c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: dsVariantTexts(p)}
 	}
 	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
 	// anti-unificação: testemunhas do mesmo Shape provam os $slot.x; numa
@@ -1929,6 +1945,26 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 			// intenção, com a entidade preenchendo o slot (nlu.go Parse).
 			if len(c.Method.Slots) > 0 && c.Plan.Shape != "" && c.Plan.Shape != canon {
 				ov.Aliases[c.Plan.Shape] = nuAlias{Text: c.Plan.Shape, Intent: c.Alias.Intent, Ts: c.Alias.Ts}
+			}
+			// cada variante vista dar certo (testemunhas do mesmo shape)
+			// vira atalho também — canon literal, e a forma mascarada dela
+			// quando há slot pra receber a entidade. Cobertura real sem
+			// uma chamada de modelo a mais.
+			for _, vt := range c.Intent.Examples {
+				vc := m.canonOf(vt)
+				if vc == "" || vc == canon {
+					continue
+				}
+				if _, dup := ov.Aliases[vc]; !dup {
+					ov.Aliases[vc] = nuAlias{Text: vt, Intent: c.Alias.Intent, Ts: c.Alias.Ts}
+				}
+				if len(c.Method.Slots) > 0 {
+					if vs, _ := pcShapeEnts(vt, wr); vs != "" && vs != vc {
+						if _, dup := ov.Aliases[vs]; !dup {
+							ov.Aliases[vs] = nuAlias{Text: vs, Intent: c.Alias.Intent, Ts: c.Alias.Ts}
+						}
+					}
+				}
 			}
 		}
 		ov.Prov = append(ov.Prov, dsProv{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 120), Intent: g.Intent, Method: c.Method.Name, Wins: c.Plan.Wins, Ts: now})

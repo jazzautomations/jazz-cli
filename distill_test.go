@@ -605,6 +605,46 @@ func TestDsRunEndToEnd(t *testing.T) {
 	}
 }
 
+// TestDsVariantAliases: testemunhas do mesmo shape viram exemplos e
+// atalhos da intenção aprendida — cada variante conhecida lê direto nela.
+func TestDsVariantAliases(t *testing.T) {
+	overlay := dsTestHome(t)
+	root := t.TempDir()
+	p := dsPlan("ab12cd34", "zzq frobnicate the wossname plugh", 3,
+		[]string{"go version"}, "go version")
+	p.Witnesses = []pcWitness{
+		{Task: "zzq frobnicate the thingamajig plugh", Cmds: p.Cmds},
+		{Task: "zzq frobnicate the doodad plugh", Cmds: p.Cmds},
+	}
+	if err := pcSave(root, []pcPlan{p}); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := dsRun(context.Background(), root, dsOpts{Overlay: overlay, Seed: 7})
+	if err != nil || !rep.Accept || len(rep.Added) != 1 {
+		t.Fatalf("run: %+v err=%v", rep, err)
+	}
+	ov, err := dsReadOverlay(overlay)
+	if err != nil || ov == nil || len(ov.Intents) != 1 {
+		t.Fatalf("overlay: %v %+v", err, ov)
+	}
+	if len(ov.Intents[0].Examples) != 3 {
+		t.Fatalf("exemplos da intenção deviam cobrir as variantes: %+v", ov.Intents[0].Examples)
+	}
+	lx, _ := nuFS.ReadFile("nlu/lexicon.json")
+	ds, _ := nuFS.ReadFile("nlu/intents.json")
+	m := nuCompile(lx, ds)
+	dsApplyNLU(m, ov)
+	want := 1 + len(p.Witnesses) // canon do pedido + um por testemunha
+	if len(ov.Aliases) < want {
+		t.Fatalf("atalhos deviam cobrir as %d variantes: %+v", want, ov.Aliases)
+	}
+	for _, w := range p.Witnesses {
+		if in := m.Parse(w.Task, nuWorldFromDef(m.data.World)); in.Name != "learned_ab12cd34" {
+			t.Fatalf("variante %q devia ler na intenção aprendida: %+v", w.Task, in)
+		}
+	}
+}
+
 func TestDsRunDrops(t *testing.T) {
 	overlay := dsTestHome(t)
 	root := t.TempDir()
