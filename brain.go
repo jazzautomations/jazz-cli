@@ -100,6 +100,10 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 // an action of their own.
 var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\s+|\s+e\s+|,\s*and\s+|\s+and\s+then\s+|\s+then\s+|\s+and\s+)`)
 
+// brRangeLeft: a conjunction after "between N" / "entre N" is the second
+// arm of a range, never a split point ("entre 2 e 10 minutos").
+var brRangeLeft = regexp.MustCompile(`(?i)\b(between|entre)\s+\S+\s*$`)
+
 // brMaskQuotes blanks quoted spans ('...', "...", `...`) so a conjunction
 // inside a file name ("rock and roll.txt") never becomes a split point.
 // The mask preserves offsets — splitting the mask cuts the original right.
@@ -125,6 +129,9 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	masked := brMaskQuotes(text)
 	var cuts [][2]int
 	for _, loc := range brMultiRe.FindAllStringIndex(masked, -1) {
+		if brRangeLeft.MatchString(text[:loc[0]]) {
+			continue // "entre 2 e 10" — o e pertence à faixa
+		}
 		cuts = append(cuts, [2]int{loc[0], loc[1]})
 		if len(cuts) >= 4 {
 			break
@@ -809,6 +816,7 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 			continue
 		}
 		tried++
+		cx.mslots = m.Slots // tipos dos slots do método em execução (distill)
 		if t.Status == tkInvestigating || t.Status == tkRecovering || t.Status == tkNeedsInput || t.Status == tkBlocked {
 			t.must(tkPlanning, "método "+m.Name)
 		}

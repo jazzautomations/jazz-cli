@@ -1053,20 +1053,45 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		return in
 	}
 	toks := m.normalize(nuTokenize(text))
+	hits := m.spot(toks, w)
+	nuEntityFirst(toks)
+	in.Ents = hits
 	if len(m.aliases) > 0 {
-		if name, ok := m.aliases[nuCanonText(toks)]; ok {
+		canon := nuCanonText(toks)
+		name, ok := m.aliases[canon]
+		if !ok && len(hits) > 0 {
+			// a learned masked shape ("comprime @dir") hits any variant —
+			// "comprime src" — the literal canon never does (distill.go)
+			if sc := nuShapeCanon(toks, hits); sc != canon {
+				name, ok = m.aliases[sc]
+			}
+		}
+		if ok {
 			// the owner's personal shortcut (alias.go): his word, his intent.
 			// It classifies, never authorizes — a mutating target still hits
 			// the permission guardrail at execution.
 			in.Name = name
 			in.Confidence = 0.97
 			in.Evidence = append(in.Evidence, "apelido do dono → "+name)
+			// the shortcut fills slots too: an intent with a schema gets
+			// the values of the entities the text named (distill slots)
+			if di, has := m.byName[name]; has && len(m.data.Intents[di].Slots) > 0 {
+				used := map[string]bool{}
+				matches, _ := m.rules(toks)
+				best, bs := -1, 0
+				for i, x := range matches {
+					if x.intent == di && (best < 0 || x.score > bs) {
+						best, bs = i, x.score
+					}
+				}
+				if best >= 0 {
+					used = matches[best].used
+				}
+				in.Slots, in.Missing, in.Hint, _ = m.fill(&m.data.Intents[di], toks, hits, used, w)
+			}
 			return in
 		}
 	}
-	hits := m.spot(toks, w)
-	nuEntityFirst(toks)
-	in.Ents = hits
 	for i := range toks {
 		if toks[i].Fixed != "" {
 			in.Evidence = append(in.Evidence, fmt.Sprintf("'%s' lido como '%s' (erro de digitação)", toks[i].Raw, toks[i].Fixed))
@@ -1294,6 +1319,47 @@ func nuCanonText(toks []nuTok) string {
 		b.WriteString(f)
 	}
 	return b.String()
+}
+
+// nuShapeCanon is nuCanonText with every token a spotted entity covers
+// replaced by "@<kind>" — "comprime docs" reads "comprime @dir". Two
+// requests that differ only in entity values share the shape (plan-cache
+// merge, learned-alias lookup and the distill slot proof all key on it).
+func nuShapeCanon(toks []nuTok, hits []nuHit) string {
+	cover := make([]int, len(toks))
+	for i := range cover {
+		cover[i] = -1
+	}
+	for hi, h := range hits {
+		n := len(strings.Fields(fzFold(h.Name)))
+		if n < 1 {
+			n = 1
+		}
+		for j := h.tok; j < len(toks) && j < h.tok+n; j++ {
+			if cover[j] < 0 {
+				cover[j] = hi
+			}
+		}
+	}
+	var out []string
+	prev := -1
+	for i, t := range toks {
+		h := cover[i]
+		if h < 0 {
+			f := t.Fold
+			if t.Fixed != "" {
+				f = t.Fixed
+			}
+			out = append(out, f)
+			prev = -1
+			continue
+		}
+		if h != prev { // adjacent entities of one kind keep their slots apart
+			out = append(out, "@"+hits[h].Kind)
+			prev = h
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // nuVerbConcepts are actions: a verb of another clause ("roda os testes e
@@ -2196,6 +2262,14 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 // file_find's newer_min/older_min. The direction cue decides which slot
 // takes the value; without one neither does.
 func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
+	// faixa explícita: "2 to 6 minutes ago" / "between 2 and 6 minutes" —
+	// a idade fica entre os dois: newer recebe o teto, older o piso.
+	if lo, hi, ok := nuFindRange(toks, taken); ok {
+		if newer {
+			return hi
+		}
+		return lo
+	}
 	olderSeen, newerSeen := false, false
 	for _, u := range toks {
 		switch u.Fold {
@@ -2233,6 +2307,54 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		}
 	}
 	return ""
+}
+
+// nuFindRange detects "N to M <unit>" / "between N and M <unit>" time ranges
+// and returns (lo, hi) in minutes. Only fires on an explicit range cue —
+// "to", "-", "a", "até", or "between … and" — so a lone "N minutes" never
+// becomes a range.
+func nuFindRange(toks []nuTok, taken map[int]bool) (string, string, bool) {
+	for i := 0; i+3 < len(toks); i++ {
+		if !nuIsNumber(toks[i].Fold) || !nuIsNumber(toks[i+2].Fold) {
+			continue
+		}
+		sep := toks[i+1].Fold
+		rangeCue := sep == "to" || sep == "a" || sep == "até" || sep == "ate" || sep == "-"
+		if !rangeCue && (sep == "and" || sep == "e") {
+			rangeCue = i > 0 && (toks[i-1].Fold == "between" || toks[i-1].Fold == "entre")
+		}
+		if !rangeCue {
+			continue
+		}
+		mult := 0
+		switch toks[i+3].Fold {
+		case "min", "mins", "minuto", "minutos", "minute", "minutes", "m":
+			mult = 1
+		case "h", "hora", "horas", "hour", "hours":
+			mult = 60
+		case "d", "dia", "dias", "day", "days":
+			mult = 1440
+		case "semana", "semanas", "week", "weeks", "w":
+			mult = 10080
+		}
+		if mult == 0 {
+			continue
+		}
+		lo, err1 := strconv.Atoi(toks[i].Fold)
+		hi, err2 := strconv.Atoi(toks[i+2].Fold)
+		if err1 != nil || err2 != nil || lo == hi {
+			continue
+		}
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		taken[i], taken[i+1], taken[i+2], taken[i+3] = true, true, true, true
+		if i > 0 && (toks[i-1].Fold == "between" || toks[i-1].Fold == "entre") {
+			taken[i-1] = true // o cue não vira name
+		}
+		return strconv.Itoa(lo * mult), strconv.Itoa(hi * mult), true
+	}
+	return "", "", false
 }
 
 var nuPermWords = map[string][]string{

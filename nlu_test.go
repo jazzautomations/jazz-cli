@@ -311,6 +311,9 @@ func TestNLUV5Wiring(t *testing.T) {
 		"files not world-writable":         {"nww": "true"},
 		"arquivos com permissão 777":       {"mode": "777"},
 	}
+	slotw["busca arquivos modificados entre 2 e 10 minutos"] = map[string]string{"newer": "10", "older": "2"}
+	slotw["find files modified between 2 and 10 minutes ago"] = map[string]string{"newer": "10", "older": "2"}
+	slotw["find files accessed 2 to 6 minutes ago"] = map[string]string{"newer": "6", "older": "2", "tfield": "atime"}
 	for text, wants := range slotw {
 		in := m.Parse(text, w)
 		for k, v := range wants {
