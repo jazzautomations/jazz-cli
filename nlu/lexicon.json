@@ -535,7 +535,11 @@
     "older than": "older",
     "newer than": "newer",
     "younger than": "newer",
-    "in the past": "last"
+    "in the past": "last",
+    "set up": "instalar",
+    "setup": "instalar",
+    "name server": "resolver",
+    "name servers": "resolver"
   },
   "concepts": {
     "open": [

@@ -1078,7 +1078,11 @@
           ],
           "none": [
             "sysnoun",
-            "service"
+            "service",
+            "ipaddr",
+            "pubnet",
+            "remote",
+            "host"
           ]
         },
         {
@@ -1090,7 +1094,11 @@
             "logs",
             "open",
             "run",
-            "service"
+            "service",
+            "ipaddr",
+            "pubnet",
+            "remote",
+            "host"
           ]
         }
       ],
@@ -1760,12 +1768,28 @@
           "all": [
             "status",
             "service|@service"
+          ],
+          "none": [
+            "ipaddr",
+            "net",
+            "pubnet",
+            "remote",
+            "host",
+            "install"
           ]
         },
         {
           "all": [
             "@service",
             "running"
+          ],
+          "none": [
+            "ipaddr",
+            "net",
+            "pubnet",
+            "remote",
+            "host",
+            "install"
           ]
         },
         {
@@ -1785,7 +1809,13 @@
             "enable",
             "mutate",
             "error",
-            "sysnoun"
+            "sysnoun",
+            "ipaddr",
+            "net",
+            "pubnet",
+            "remote",
+            "host",
+            "install"
           ]
         }
       ],
@@ -3665,7 +3695,11 @@
             "download",
             "create",
             "findattr",
-            "filenoun"
+            "filenoun",
+            "service",
+            "remote",
+            "host",
+            "fix"
           ]
         },
         {
@@ -3686,7 +3720,9 @@
             "download",
             "mutate",
             "enable",
-            "filenoun"
+            "filenoun",
+            "host",
+            "fix"
           ]
         }
       ],
@@ -4164,7 +4200,9 @@
             "undo",
             "journal",
             "commit",
-            "history"
+            "history",
+            "v4_date_normalize",
+            "extractkind"
           ],
           "w": 10
         },
@@ -4197,7 +4235,9 @@
             "undo",
             "journal",
             "commit",
-            "history"
+            "history",
+            "v4_date_normalize",
+            "extractkind"
           ],
           "w": 0
         },
@@ -4228,7 +4268,9 @@
             "undo",
             "journal",
             "commit",
-            "history"
+            "history",
+            "v4_date_normalize",
+            "extractkind"
           ],
           "w": 15
         }
@@ -4639,7 +4681,9 @@
             "perf",
             "cpu",
             "env",
-            "lineselect"
+            "lineselect",
+            "dedup",
+            "session"
           ],
           "w": 0
         },
@@ -4661,7 +4705,9 @@
             "perf",
             "cpu",
             "env",
-            "lineselect"
+            "lineselect",
+            "dedup",
+            "session"
           ],
           "w": 5
         },
@@ -4683,7 +4729,9 @@
             "perf",
             "cpu",
             "env",
-            "lineselect"
+            "lineselect",
+            "dedup",
+            "session"
           ],
           "w": 5
         }
@@ -4960,7 +5008,11 @@
             "blame",
             "kill",
             "dedup",
-            "user"
+            "user",
+            "run",
+            "remote",
+            "connect",
+            "keynoun"
           ]
         },
         {
@@ -4982,7 +5034,11 @@
             "kill",
             "download",
             "net",
-            "dedup"
+            "dedup",
+            "run",
+            "remote",
+            "connect",
+            "keynoun"
           ]
         },
         {
@@ -5003,7 +5059,11 @@
             "delete",
             "mutate",
             "dedup",
-            "user"
+            "user",
+            "run",
+            "remote",
+            "connect",
+            "keynoun"
           ]
         }
       ],

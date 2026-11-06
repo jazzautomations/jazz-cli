@@ -299,6 +299,13 @@ func TestNLUV5Wiring(t *testing.T) {
 		// "users logged in" não é file_users (não existe método de sessões)
 		"Print a list of unique users who are logged in": nuMinConf,
 		"Print a column of CPU usage numbers":            nuMinConf,
+		// ssh-login é connect/exec composto, não "quem está logado"
+		"Login to \"user@host\" with key \"keyFile\" and execute \"./script\"": nuMinConf,
+		// `date` literal é comando de data, não busca por janela temporal
+		"date --date=\"222 days ago\" +\"%m\"": nuMinConf,
+		// "name server" é termo DNS (dig); 'server' como @file não pode
+		// derrubar o veto — consulta a servidor não é inventário local
+		"Request IP address of 'myip.opendns.com' from name server 'resolver1.opendns.com'": nuMinConf,
 	}
 	for text, max := range under {
 		if in := m.Parse(text, w); in.Confidence >= max {
