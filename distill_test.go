@@ -428,6 +428,57 @@ func TestDsCapPlan(t *testing.T) {
 			}
 			return ""
 		}},
+		// sed -i literal → text_op replace; verificadores leem o arquivo
+		// e provam que o texto novo entrou e o velho saiu.
+		{[]string{"sed -i 's/foo/bar/g' a.txt"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "text_op" || st.In["op"] != "replace" || st.In["path"] != "a.txt" ||
+				st.In["from_str"] != "foo" || st.In["to_str"] != "bar" {
+				return fmt.Sprintf("sed -i: %+v", st)
+			}
+			var sawIn, sawOut bool
+			for _, v := range m.Verify {
+				sawIn = sawIn || v.Check == "file_contains" && v.Arg2 == "bar"
+				sawOut = sawOut || v.Check == "file_lacks" && v.Arg2 == "foo"
+			}
+			if !sawIn || !sawOut {
+				return "sed -i sem verifies"
+			}
+			return ""
+		}},
+		{[]string{"sed -i 's/TODO/done/' a.txt b.txt"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[0].Cap != "text_op" ||
+				m.Steps[0].In["first_per_line"] != "true" || m.Steps[1].In["path"] != "b.txt" {
+				return fmt.Sprintf("sed multi first_per_line: %+v", m.Steps)
+			}
+			return ""
+		}},
+		{[]string{"sed -i 's/Foo/bar/gi' a.txt"}, func(m *mhMethod) string {
+			if m.Steps[0].In["ignore_case"] != "true" {
+				return fmt.Sprintf("sed -gi: %+v", m.Steps[0].In)
+			}
+			return ""
+		}},
+		{[]string{"sed -i.bak 's/x/y/g' a.txt"}, func(m *mhMethod) string {
+			if m.Steps[0].In["backup_ext"] != ".bak" {
+				return fmt.Sprintf("sed -i.bak: %+v", m.Steps[0].In)
+			}
+			return ""
+		}},
+		{[]string{"find . -name '*.txt' -exec sed -i 's/foo/bar/g' {} \\;"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[1].Cap != "for_each" ||
+				m.Steps[1].In["do"] != "text_op" || m.Steps[1].In["from_str"] != "foo" {
+				return fmt.Sprintf("find -exec sed: %+v", m.Steps)
+			}
+			return ""
+		}},
+		{[]string{"find . -name '*.md' -print | xargs sed -i 's/old/new/g'"}, func(m *mhMethod) string {
+			if len(m.Steps) != 2 || m.Steps[1].In["do"] != "text_op" ||
+				m.Steps[1].In["from_str"] != "old" {
+				return fmt.Sprintf("xargs sed: %+v", m.Steps)
+			}
+			return ""
+		}},
 	} {
 		cp := dsCapPlan(dsPlan("ca77ps06", "zzq copia e move", 3, tc.cmds, ""), root)
 		if cp == nil {
@@ -718,6 +769,137 @@ func TestDsLearnedCmdExec(t *testing.T) {
 	}
 	if n := len(rec.cmds) - before; n != 0 {
 		t.Errorf("comando recusado não pode rodar: %v", rec.cmds[before:])
+	}
+}
+
+// ---------- execução: text_op ----------
+
+func TestBrTextOp(t *testing.T) {
+	root := t.TempDir()
+	env, _ := brTestEnv(t, root, map[string]brFakeOut{}, -1)
+	mk := func() *brCtx {
+		task := newTask("x", "learned_ab12cd", nil, nil)
+		task.must(tkInvestigating, "teste")
+		return &brCtx{ctx: context.Background(), env: env,
+			task: task, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+
+	// replace global literal
+	write("a.txt", "foo foo\nfoo\n")
+	st := brTextOp(mk(), map[string]string{"op": "replace", "path": "a.txt",
+		"from_str": "foo", "to_str": "bar"})
+	if !st.ok || read("a.txt") != "bar bar\nbar\n" {
+		t.Fatalf("replace global: ok=%v body=%q", st.ok, read("a.txt"))
+	}
+	if st.val != "a.txt" {
+		t.Fatalf("val devia ser o path: %q", st.val)
+	}
+
+	// first_per_line: só a primeira de cada linha
+	write("b.txt", "foo foo\nfoo foo\n")
+	st = brTextOp(mk(), map[string]string{"op": "replace", "path": "b.txt",
+		"from_str": "foo", "to_str": "bar", "first_per_line": "true"})
+	if !st.ok || read("b.txt") != "bar foo\nbar foo\n" {
+		t.Fatalf("first_per_line: %q", read("b.txt"))
+	}
+
+	// ignore_case
+	write("c.txt", "Foo FOO foo\n")
+	st = brTextOp(mk(), map[string]string{"op": "replace", "path": "c.txt",
+		"from_str": "foo", "to_str": "x", "ignore_case": "true"})
+	if !st.ok || read("c.txt") != "x x x\n" {
+		t.Fatalf("ignore_case: %q", read("c.txt"))
+	}
+
+	// backup_ext deixa o original em .bak
+	write("d.txt", "foo\n")
+	st = brTextOp(mk(), map[string]string{"op": "replace", "path": "d.txt",
+		"from_str": "foo", "to_str": "bar", "backup_ext": ".bak"})
+	if !st.ok || read("d.txt") != "bar\n" || read("d.txt.bak") != "foo\n" {
+		t.Fatalf("backup_ext: d=%q bak=%q", read("d.txt"), read("d.txt.bak"))
+	}
+
+	// zero match: sucede honesto, sem tocar o arquivo
+	write("e.txt", "nada aqui\n")
+	st = brTextOp(mk(), map[string]string{"op": "replace", "path": "e.txt",
+		"from_str": "foo", "to_str": "bar"})
+	if !st.ok || read("e.txt") != "nada aqui\n" {
+		t.Fatalf("zero-match devia ser ok sem mexer: %+v %q", st, read("e.txt"))
+	}
+
+	// recusas: binário, fora do root, from vazio, path inexistente
+	write("bin.dat", "a\x00b")
+	if st = brTextOp(mk(), map[string]string{"op": "replace", "path": "bin.dat",
+		"from_str": "a", "to_str": "x"}); st.ok {
+		t.Error("binário devia recusar")
+	}
+	if st = brTextOp(mk(), map[string]string{"op": "replace", "path": "../x",
+		"from_str": "a", "to_str": "x"}); st.ok {
+		t.Error("fora do root devia recusar")
+	}
+	if st = brTextOp(mk(), map[string]string{"op": "replace", "path": "a.txt",
+		"from_str": "", "to_str": "x"}); st.ok {
+		t.Error("from_str vazio devia recusar")
+	}
+	if st = brTextOp(mk(), map[string]string{"op": "replace", "path": "nope.txt",
+		"from_str": "a", "to_str": "x"}); st.ok {
+		t.Error("arquivo inexistente devia recusar")
+	}
+
+	// Permit nega → arquivo intacto
+	env.Permit = func(context.Context, string) (bool, string) { return false, "negado" }
+	write("f.txt", "foo\n")
+	if st = brTextOp(mk(), map[string]string{"op": "replace", "path": "f.txt",
+		"from_str": "foo", "to_str": "bar"}); st.ok || read("f.txt") != "foo\n" {
+		t.Fatalf("Permit negado devia bloquear e não tocar: %+v %q", st, read("f.txt"))
+	}
+	env.Permit = func(context.Context, string) (bool, string) { return true, "" }
+
+	// método destilado inteiro executa e verifica o arquivo real
+	write("g.txt", "hello world\n")
+	m := mhMethod{Name: "learned_ab12cd.caps", Intent: "learned_ab12cd",
+		Steps: []mhStep{{Cap: "text_op", Out: "t1", In: map[string]string{
+			"op": "replace", "path": "g.txt", "from_str": "world", "to_str": "terra"}}},
+		Verify: []mhCheck{
+			{Check: "file_contains", Arg: "$t1", Arg2: "terra"},
+			{Check: "file_lacks", Arg: "$t1", Arg2: "world"},
+		}}
+	task := newTask("z", "learned_ab12cd", nil, nil)
+	task.must(tkInvestigating, "teste")
+	cx := &brCtx{ctx: context.Background(), env: env,
+		task: task, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	brExecute(cx, []mhMethod{m})
+	if cx.task.Status != tkSucceeded || read("g.txt") != "hello terra\n" {
+		t.Fatalf("método text_op devia verificar: %s body=%q", cx.task.Status, read("g.txt"))
+	}
+
+	// verify pega o replace que não aconteceu (método mentiroso reprova)
+	write("h.txt", "sem o termo\n")
+	m2 := mhMethod{Name: "learned_cd34ef.caps", Intent: "learned_cd34ef",
+		Steps: []mhStep{{Cap: "text_op", Out: "t1", In: map[string]string{
+			"op": "replace", "path": "h.txt", "from_str": "xyz", "to_str": "abc"}}},
+		Verify: []mhCheck{{Check: "file_contains", Arg: "$t1", Arg2: "abc"}}}
+	task2 := newTask("w", "learned_cd34ef", nil, nil)
+	task2.must(tkInvestigating, "teste")
+	cx2 := &brCtx{ctx: context.Background(), env: env,
+		task: task2, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	brExecute(cx2, []mhMethod{m2})
+	if cx2.task.Status == tkSucceeded {
+		t.Fatal("verify falso devia reprovar o método")
 	}
 }
 

@@ -66,7 +66,7 @@ const (
 	dsMaxSteps       = 8
 	// dsCapGen: a geração das caps destiláveis — sobe quando uma família
 	// nova entra (copy/link/to_dir etc) e reabre os carimbos antigos.
-	dsCapGen        = 4
+	dsCapGen        = 5
 	dsMaxCmd        = 240
 	dsMaxCand       = 4   // orçamento do portão por rodada
 	dsMaxMethods    = 100 // teto do overlay inteiro
@@ -402,11 +402,16 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 		if !outs[arg] {
 			return "verificador aponta um passo inexistente: " + v.Arg
 		}
-		if v.Arg2 != "" && v.Check != "list_present" {
+		if v.Arg2 != "" && v.Check != "list_present" &&
+			v.Check != "file_contains" && v.Check != "file_lacks" && v.Check != "list_lacks" {
 			return "verificador com arg2 inesperado: " + v.Check
 		}
 		if v.Check == "list_present" && !dsPathLit(v.Arg2) {
 			return "verificador list_present: dir não literal"
+		}
+		if (v.Check == "file_contains" || v.Check == "file_lacks" || v.Check == "list_lacks") &&
+			strings.ContainsAny(v.Arg2, "\x00\n\r") {
+			return "verificador " + v.Check + ": agulha com byte de controle"
 		}
 	}
 	for _, c := range m.Pre {
@@ -434,9 +439,12 @@ var dsCapKeys = map[string]map[string]bool{
 		"mode", "not_mode", "world_writable", "not_world_writable",
 		"suid", "sgid", "executable", "not_executable", "owner",
 		"not_owner", "group", "not_group", "no_owner", "no_group", "orphan"),
-	"for_each":  smSet("from", "do", "op", "max", "to", "to_dir", "content"),
+	"for_each":  smSet("from", "do", "op", "max", "to", "to_dir", "content",
+		"from_str", "to_str", "ignore_case", "first_per_line", "backup_ext"),
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
+	"text_op": smSet("op", "path", "to", "from_str", "to_str",
+		"ignore_case", "first_per_line", "backup_ext"),
 }
 
 // dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
@@ -448,7 +456,8 @@ var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename"
 // só-leitura e provam efeito em filesystem ou no resultado do script
 // (brVerify); num método só de learned_cmd seguem valendo só
 // exit_zero/cmd_ran.
-var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present", "script_ok", "script_exit_zero")
+var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present",
+	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
 // lista, chaves conhecidas, valores literais ou $out produzido antes
@@ -479,17 +488,26 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
 			return "capacidade for_each: from não é uma lista produzida por script"
 		}
-		if st.In["do"] != "file_op" {
-			return "capacidade for_each: do tem que ser file_op"
-		}
-		if !dsFileOpOps[st.In["op"]] {
-			return "capacidade for_each: op desconhecido " + st.In["op"]
-		}
-		switch st.In["op"] {
-		case "rename", "copy", "link", "symlink":
-			if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
-				return "capacidade for_each: " + st.In["op"] + " sem to/to_dir"
+		switch st.In["do"] {
+		case "file_op":
+			if !dsFileOpOps[st.In["op"]] {
+				return "capacidade for_each: op desconhecido " + st.In["op"]
 			}
+			switch st.In["op"] {
+			case "rename", "copy", "link", "symlink":
+				if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
+					return "capacidade for_each: " + st.In["op"] + " sem to/to_dir"
+				}
+			}
+		case "text_op":
+			if st.In["op"] != "replace" {
+				return "capacidade for_each: text_op só ramifica replace"
+			}
+			if st.In["from_str"] == "" {
+				return "capacidade for_each: replace sem from_str"
+			}
+		default:
+			return "capacidade for_each: do tem que ser file_op ou text_op"
 		}
 	case "save_list":
 		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
@@ -514,6 +532,19 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 			if strings.TrimSpace(st.In["to"]) == "" && strings.TrimSpace(st.In["to_dir"]) == "" {
 				return "capacidade file_op: " + st.In["op"] + " sem to/to_dir"
 			}
+		}
+	case "text_op":
+		if st.In["op"] != "replace" {
+			return "capacidade text_op: op desconhecido " + st.In["op"]
+		}
+		if strings.TrimSpace(st.In["path"]) == "" {
+			return "capacidade text_op: falta path"
+		}
+		if st.In["from_str"] == "" {
+			return "capacidade text_op: replace sem from_str"
+		}
+		if st.In["to"] != "" && !dsPathLit(st.In["to"]) {
+			return "capacidade text_op: destino não literal"
 		}
 	}
 	return ""
@@ -835,6 +866,36 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		verify = append(verify, mhCheck{Check: check, Arg: "$" + out})
 		caps++
 	}
+	top := 0
+	// textVerif prova o replace: o texto novo aparece; o velho só sai de
+	// cena quando não é substring do novo ("a"→"ab" ainda "contém" a).
+	textVerif := func(out, from, to string) {
+		if to != "" {
+			verify = append(verify, mhCheck{Check: "file_contains", Arg: "$" + out, Arg2: to})
+		}
+		if !strings.Contains(to, from) {
+			verify = append(verify, mhCheck{Check: "file_lacks", Arg: "$" + out, Arg2: from})
+		}
+	}
+	emitText := func(in map[string]string) {
+		top++
+		out := fmt.Sprintf("t%d", top)
+		steps = append(steps, mhStep{Cap: "text_op", In: in, Out: out})
+		textVerif(out, in["from_str"], in["to_str"])
+		caps++
+	}
+	lacks := map[string]string{} // produtor → agulha que sumiu (list_lacks)
+	emitEachText := func(xin map[string]string) {
+		in := map[string]string{"from": "$" + last, "do": "text_op", "max": "32"}
+		for k, v := range xin {
+			in[k] = v
+		}
+		steps = append(steps, mhStep{Cap: "for_each", In: in, Out: ""})
+		if f, t := xin["from_str"], xin["to_str"]; f != "" && !strings.Contains(t, f) {
+			lacks[last] = f
+		}
+		caps++
+	}
 	sav := 0
 	emitSave := func(dest string, sorted bool) {
 		sav++
@@ -863,7 +924,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			// "find … > arquivo" salva a lista produzida — só esse
 			// produtor tem cap; o resto não finge encaixe.
 			if len(inner) > 0 && filepath.Base(inner[0]) == "find" && dsPathLit(dest) {
-				in, scr, del, _, _, ok := dsFindIn(inner)
+				in, _, scr, del, _, _, ok := dsFindIn(inner)
 				if !ok || del {
 					return false
 				}
@@ -879,7 +940,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		}
 		switch filepath.Base(t[0]) {
 		case "find":
-			in, scr, del, xop, xdir, ok := dsFindIn(t)
+			in, xin, scr, del, xop, xdir, ok := dsFindIn(t)
 			if !ok { // find com flag sem encaixe: read-only fica literal
 				return literal(s)
 			}
@@ -887,6 +948,8 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			switch {
 			case del:
 				emitEach()
+			case xin != nil:
+				emitEachText(xin)
 			case xop != "":
 				emitEachTo(xop, xdir)
 			}
@@ -962,6 +1025,46 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 			}
 			// ln <alvo> <link>: path é o link criado (confinado), to é o alvo
 			emitOp(map[string]string{"op": op, "path": args[1], "to": args[0]}, "file_exists")
+		case "sed":
+			// sed -i[.bak] 's/a/b/g' arq [arq…]: cada arquivo literal é um
+			// text_op — sem -i (stdout) o mapSeg não encaixa e cai literal.
+			if len(t) < 3 {
+				return false
+			}
+			var flags, files []string
+			var expr string
+			for _, a := range t[1:] {
+				switch {
+				case a == "-i" || strings.HasPrefix(a, "-i"):
+					flags = append(flags, a)
+				case a == "-e":
+				case strings.HasPrefix(a, "-"):
+					return false
+				case expr == "" && (len(a) > 2 && a[0] == 's'):
+					expr = a
+				default:
+					files = append(files, a)
+				}
+			}
+			if len(flags) == 0 || expr == "" || len(files) == 0 {
+				return false // sem -i o sed só emite no stdout — não edita
+			}
+			// flags+expr validam juntos pelo dsSedArgs (mesmo shape)
+			sargs := append(append([]string{"sed"}, flags...), expr)
+			sin, sok := dsSedArgs(sargs)
+			if !sok {
+				return false
+			}
+			for _, f := range files {
+				if !dsPathLit(f) {
+					return false
+				}
+				fin := map[string]string{"path": f}
+				for k, v := range sin {
+					fin[k] = v
+				}
+				emitText(fin)
+			}
 		case "mkdir":
 			args, ok := dsMkdirArgs(t)
 			if !ok {
@@ -1002,7 +1105,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 					switch filepath.Base(rIn[0]) {
 					case "xargs":
 						if dsXargsRm(rIn) {
-							in, scr, del, _, _, ok := dsFindIn(l)
+							in, _, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
@@ -1011,7 +1114,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 							continue
 						}
 						if xop, dir, ok := dsXargsCpMv(rIn); ok {
-							in, scr, del, _, _, ok2 := dsFindIn(l)
+							in, _, scr, del, _, _, ok2 := dsFindIn(l)
 							if !ok2 || del {
 								return nil
 							}
@@ -1019,10 +1122,19 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 							emitEachTo(xop, dir)
 							continue
 						}
+						if xin, ok := dsXargsSed(rIn); ok {
+							in, _, scr, del, _, _, ok2 := dsFindIn(l)
+							if !ok2 || del {
+								return nil
+							}
+							emitFind(in, scr)
+							emitEachText(xin)
+							continue
+						}
 						break
 					case "tee":
 						if len(rIn) == 2 && rDest == "" && dsPathLit(rIn[1]) {
-							in, scr, del, _, _, ok := dsFindIn(l)
+							in, _, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
@@ -1032,7 +1144,7 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 						}
 					case "sort":
 						if len(rIn) == 1 && rDest != "" && dsPathLit(rDest) {
-							in, scr, del, _, _, ok := dsFindIn(l)
+							in, _, scr, del, _, _, ok := dsFindIn(l)
 							if !ok || del {
 								return nil
 							}
@@ -1068,6 +1180,9 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 	}
 	for l, dir := range dstdirs {
 		verify = append(verify, mhCheck{Check: "list_present", Arg: "$" + l, Arg2: dir})
+	}
+	for l, needle := range lacks {
+		verify = append(verify, mhCheck{Check: "list_lacks", Arg: "$" + l, Arg2: needle})
 	}
 	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v &&
 		dsCmdOK(v) == "" && dsReplaySafe(v) {
@@ -1314,7 +1429,7 @@ var dsPermKeys = map[string]bool{
 	"no_owner": true, "no_group": true, "orphan": true,
 }
 
-func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir string, ok bool) {
+func dsFindIn(t []string) (in, xin map[string]string, scr string, del bool, xop, xdir string, ok bool) {
 	in = map[string]string{"limit": "32"}
 	paths := 0
 	sawPrune := false
@@ -1336,7 +1451,7 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 		case a == "-exec" || a == "-execdir":
 			j := i + 1
 			if j >= len(t) {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			ecmd := filepath.Base(t[j])
 			if ecmd == "cp" || ecmd == "mv" {
@@ -1347,7 +1462,7 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 					if strings.HasPrefix(a2, "-") {
 						for _, f := range a2[1:] {
 							if f != 'f' && f != 'v' && f != 'n' {
-								return nil, "", false, "", "", false
+								return nil, nil, "", false, "", "", false
 							}
 						}
 						continue
@@ -1358,27 +1473,52 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 					lit = append(lit, a2)
 				}
 				if j >= len(t) || len(lit) != 1 || !dsPathLit(lit[0]) {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				xop = map[string]string{"cp": "copy", "mv": "rename"}[ecmd]
 				xdir, i = lit[0], j
 				continue
 			}
+			if ecmd == "sed" {
+				// "-exec sed -i 's/a/b/g' {} ;|+": cada item recebe o
+				// text_op replace — {} é o único arg-arquivo permitido.
+				var sargs []string
+				seenPh := false
+				for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
+					if strings.Contains(t[j], "{}") {
+						if t[j] != "{}" || seenPh {
+							return nil, nil, "", false, "", "", false
+						}
+						seenPh = true
+						continue
+					}
+					sargs = append(sargs, t[j])
+				}
+				if j >= len(t) || !seenPh {
+					return nil, nil, "", false, "", "", false
+				}
+				sin, sok := dsSedArgs(append([]string{"sed"}, sargs...))
+				if !sok {
+					return nil, nil, "", false, "", "", false
+				}
+				xop, xin, i = "replace", sin, j
+				continue
+			}
 			if ecmd != "rm" {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			for j++; j < len(t) && t[j] != ";" && t[j] != "+"; j++ {
 				if t[j] != "-f" && t[j] != "-v" && t[j] != "--" && !strings.Contains(t[j], "{}") {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 			}
 			if j >= len(t) {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			del, i = true, j
 		case a == "-name" || a == "-iname" || a == "-path":
 			if arg(i) == "" {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			// "-name|-path X -prune": podar subárvore. file_find já pula
 			// .git/node_modules/vendor — podar o pulado é neutro; podar
@@ -1387,7 +1527,7 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 				tgt := strings.TrimPrefix(arg(i), "./")
 				if !dsFindSkips(tgt) {
 					if in["exclude"] != "" {
-						return nil, "", false, "", "", false
+						return nil, nil, "", false, "", "", false
 					}
 					in["exclude"] = tgt
 				}
@@ -1396,17 +1536,17 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 			}
 			// "-path" sozinho é glob em relpath — sem input no file_find
 			if a == "-path" || in["name"] != "" {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			in["name"], i = arg(i), i+1
 		case a == "-prune":
 			// "-prune" sem -name/-path antes poda tudo — sem sentido aqui
-			return nil, "", false, "", "", false
+			return nil, nil, "", false, "", "", false
 		case a == "-o":
 			// "-name X -prune -o <resto>": o OR de top-level depois do
 			// grupo de poda é neutro — o resto é o predicado real
 			if !sawPrune {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			sawPrune = false
 		case a == "(" || a == "\\(":
@@ -1423,20 +1563,20 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 				break
 			}
 			if len(globs) < 1 || j >= len(t) || (t[j] != ")" && t[j] != "\\)") {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			if len(globs) == 1 {
 				if in["name"] != "" {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				in["name"] = globs[0]
 			} else {
 				if in["name"] != "" || in["name_re"] != "" {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				re, okRe := dsGlobAlt(globs)
 				if !okRe {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				in["name_re"] = re
 			}
@@ -1448,18 +1588,18 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 			case "d":
 				in["type"] = "dir"
 			default:
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			i++
 		case a == "-maxdepth" || a == "-mindepth":
 			if !num(arg(i)) {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			in[map[string]string{"-maxdepth": "max_depth", "-mindepth": "min_depth"}[a]], i = arg(i), i+1
 		case a == "-size":
 			n, sign, okSz := dsFindSize(arg(i))
 			if !okSz {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			if sign == '+' {
 				in["min_size"] = strconv.FormatInt(n, 10)
@@ -1486,7 +1626,7 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 				n, err = strconv.ParseInt(v, 10, 64)
 			}
 			if err != nil || n < 0 {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			in[key], i = strconv.FormatInt(n*f, 10), i+1
 		case a == "-empty":
@@ -1494,10 +1634,10 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 		case a == "-perm" || a == "-user" || a == "-group" || a == "-nouser" || a == "-nogroup":
 			key, adv := dsPermFlag(t, i)
 			if key == "" {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			if in[key] != "" {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			v := "true"
 			if key == "mode" || key == "owner" || key == "group" {
@@ -1507,12 +1647,12 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 		case a == "!" || a == "-not":
 			// negação vale pra exclusão de nome/caminho e pra predicados perm
 			if i+2 >= len(t) {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			switch t[i+1] {
 			case "-name", "-iname", "-path":
 				if in["exclude"] != "" {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				in["exclude"], i = t[i+2], i+2
 			case "-perm", "-user", "-group":
@@ -1522,7 +1662,7 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 					"world_writable": "not_world_writable", "executable": "not_executable",
 				}[key]
 				if nkey == "" || in[nkey] != "" {
-					return nil, "", false, "", "", false
+					return nil, nil, "", false, "", "", false
 				}
 				v := "true"
 				if nkey == "not_mode" || nkey == "not_owner" || nkey == "not_group" {
@@ -1530,17 +1670,17 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 				}
 				in[nkey], i = v, i+2
 			default:
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 		case a == "-print" || a == "-print0" || a == "-xdev" || a == "-mount" ||
 			a == "-quit" || a == "-true" || a == "-depth":
 			// neutros: saída e travessia não mudam o conjunto produzido
 		case strings.HasPrefix(a, "-"):
-			return nil, "", false, "", "", false // flag sem encaixe
+			return nil, nil, "", false, "", "", false // flag sem encaixe
 		default:
 			// raiz da busca: um único caminho posicional
 			if paths > 0 {
-				return nil, "", false, "", "", false
+				return nil, nil, "", false, "", "", false
 			}
 			paths++
 			if p := strings.TrimPrefix(a, "./"); p != "" && p != "." {
@@ -1562,13 +1702,117 @@ func dsFindIn(t []string) (in map[string]string, scr string, del bool, xop, xdir
 		}
 	}
 	if pf && ff {
-		return nil, "", false, "", "", false
+		return nil, nil, "", false, "", "", false
 	}
 	scr = "script:file_find"
 	if pf {
 		scr = "script:perm_find"
 	}
-	return in, scr, del, xop, xdir, true
+	return in, xin, scr, del, xop, xdir, true
+}
+
+// dsSedExpr: uma expressão "s/a/b/flags" literal do sed vira os inputs do
+// text_op replace — só formas puramente literais (nada de &, \1, classes
+// [ ], âncoras ^$ ou .* do lado do padrão, que mudariam a leitura).
+// flags: g (todas), i (ignore_case), vazio (primeira por linha); outras
+// formas (Nd, /re/d, y//) não são replace — não encaixam.
+func dsSedExpr(e string) (in map[string]string, ok bool) {
+	if len(e) < 5 || e[0] != 's' {
+		return nil, false
+	}
+	d := e[1]
+	if d == '\\' || d == '/' && false {
+		return nil, false
+	}
+	parts := strings.Split(e[2:], string(d))
+	if len(parts) < 3 {
+		return nil, false
+	}
+	from, to, flags := parts[0], parts[1], parts[2]
+	if from == "" || strings.ContainsAny(from, "\\&^$*+?[](){}|") {
+		return nil, false // padrão não-literal — leitura diferente
+	}
+	if strings.ContainsAny(to, "\\&") {
+		return nil, false // & expande o match, \1 backref — não literal
+	}
+	in = map[string]string{"op": "replace", "from_str": from, "to_str": to}
+	switch flags {
+	case "g":
+	case "gi", "ig":
+		in["ignore_case"] = "true"
+	case "i":
+		in["ignore_case"], in["first_per_line"] = "true", "true"
+	case "":
+		in["first_per_line"] = "true"
+	default:
+		return nil, false
+	}
+	return in, true
+}
+
+// dsXargsSed: "xargs [-I{}] sed -i 's/a/b/g'" → os inputs do text_op que
+// cada item produzido alimenta (path vem do item, não do comando).
+func dsXargsSed(t []string) (in map[string]string, ok bool) {
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch a {
+		case "-I", "-n", "-P", "-d", "-s", "-L", "-i":
+			if i+1 < len(t) {
+				i++
+			}
+		case "-0", "--null", "-r", "--no-run-if-empty", "-t":
+		default:
+			return nil, false
+		}
+	}
+	if i >= len(t) || filepath.Base(t[i]) != "sed" {
+		return nil, false
+	}
+	return dsSedArgs(t[i:])
+}
+
+// dsSedArgs: "sed [-i[.bak]] [-e] 's/a/b/g'" → inputs do text_op.
+// Só -i (edição in-place, sufixo opcional de backup) e -e valem;
+// -n/-r/-E/scripts múltiplos mudam a leitura — não encaixam.
+func dsSedArgs(t []string) (in map[string]string, ok bool) {
+	var expr, bak string
+	for i := 1; i < len(t); i++ {
+		a := t[i]
+		switch {
+		case a == "-e" && i+1 < len(t):
+			i++
+			continue // a expressão vem no arg seguinte — cai no default
+		case a == "-i" || strings.HasPrefix(a, "-i"):
+			if len(a) > 2 {
+				bak = a[2:]
+				if !dsPathLit("x" + bak) || strings.ContainsAny(bak, "/\\") {
+					return nil, false
+				}
+			}
+		case strings.HasPrefix(a, "-"):
+			return nil, false
+		default:
+			if expr != "" {
+				return nil, false // mais de uma expressão/arquivo sobrando
+			}
+			expr = a
+		}
+	}
+	if expr == "" {
+		return nil, false
+	}
+	in, ok = dsSedExpr(expr)
+	if !ok {
+		return nil, false
+	}
+	if bak != "" {
+		in["backup_ext"] = bak
+	}
+	return in, true
 }
 
 // dsPermFlag: um predicado de permissão/dono do find vira a chave do

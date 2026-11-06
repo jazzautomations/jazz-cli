@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -345,6 +346,7 @@ func init() {
 		"say":          brSay,
 		"report":       brReport,
 		"file_op":      brFileOp,
+		"text_op":      brTextOp,
 		"git_op":       brGitOp,
 		"proc_kill":    brProcKill,
 		"pkg_cmd":      brPkgCmd,
@@ -959,6 +961,92 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		return brStep{val: toRel, obs: obs, ok: true}
 	}
 	return brStep{val: rel, obs: obs, ok: true}
+}
+
+// brTextOp: in-file text transforms confined like file_op — "replace" is
+// the sed -i family: literal from_str→to_str per file, atomic write via
+// tmp+rename inside the same dir so the checkpoint can undo.
+func brTextOp(cx *brCtx, in map[string]string) brStep {
+	op, obs := in["op"], rvNoCmd()
+	if op != "replace" {
+		return brStep{obs: obs, why: "text_op desconhecido: " + op}
+	}
+	abs, rel, err := brSafePath(cx.env.Root, cx.str(in, "path"))
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	from := cx.str(in, "from_str")
+	if from == "" {
+		return brStep{obs: obs, why: "replace sem texto de origem"}
+	}
+	to := cx.str(in, "to_str")
+	toAbs, toRel := abs, rel
+	if d := cx.str(in, "to"); d != "" {
+		toAbs, toRel, err = brSafePath(cx.env.Root, d)
+		if err != nil {
+			return brStep{obs: obs, why: "destino: " + err.Error()}
+		}
+	}
+	synth := "sed -i 's/" + from + "/" + to + "/g' " + rel
+	if ok, why := cx.brPermit(synth); !ok {
+		obs.Denied, obs.Output = true, why
+		return brStep{obs: obs, why: why}
+	}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return brStep{obs: obs, why: "replace " + rel + ": " + err.Error()}
+	}
+	if len(data) > 8<<20 {
+		return brStep{obs: obs, why: "replace " + rel + ": arquivo grande demais (>8MB)"}
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return brStep{obs: obs, why: "replace " + rel + ": arquivo binário"}
+	}
+	hay, cnt := string(data), 0
+	var out string
+	switch {
+	case in["ignore_case"] == "true":
+		// literal case-insensitive: quote the needle, fold via regexp
+		re := regexp.MustCompile("(?i)" + regexp.QuoteMeta(from))
+		out = re.ReplaceAllString(hay, to)
+		cnt = len(re.FindAllStringIndex(hay, -1))
+	case in["first_per_line"] == "true":
+		// sed s/a/b/ sem flag g: primeira ocorrência POR LINHA
+		lines := strings.Split(hay, "\n")
+		for i, l := range lines {
+			if strings.Contains(l, from) {
+				lines[i] = strings.Replace(l, from, to, 1)
+				cnt++
+			}
+		}
+		out = strings.Join(lines, "\n")
+	default:
+		cnt = strings.Count(hay, from)
+		out = strings.ReplaceAll(hay, from, to)
+	}
+	if cnt == 0 {
+		cx.say("%s: %q não aparece — nada a substituir", rel, from)
+		return brStep{val: toRel, obs: obs, ok: true}
+	}
+	if b := cx.str(in, "backup_ext"); b != "" {
+		if bAbs, _, e := brSafePath(cx.env.Root, rel+b); e == nil {
+			os.WriteFile(bAbs, data, 0o644)
+		}
+	}
+	tmp := toAbs + ".jazz.tmp"
+	if err = os.WriteFile(tmp, []byte(out), 0o644); err == nil {
+		err = os.Rename(tmp, toAbs)
+	}
+	if err != nil {
+		return brStep{obs: obs, why: "replace " + rel + ": " + err.Error()}
+	}
+	if cx.env.AfterWrite != nil {
+		cx.env.AfterWrite(synth)
+		cx.say("(/undo desfaz)")
+	}
+	cx.say("substituído: %s → %s (%d ocorrência(s))", rel, toRel, cnt)
+	cx.task.AddEvidence("file", fmt.Sprintf("replace %s", rel))
+	return brStep{val: toRel, obs: obs, ok: true}
 }
 
 // brGitOp runs git write subcommands through the normal permission path:
@@ -2143,6 +2231,42 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("%d item(ns) da lista ainda existe(m)", left)
 			}
 			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados ausentes", len(items)))
+		case "list_lacks":
+			// replace fan-out: nenhum item produzido pode conter a agulha.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			needle, _ := cx.subst(c.Arg2).(string)
+			if needle == "" {
+				return false, false, "list_lacks sem agulha"
+			}
+			bad := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(cx.env.Root, filepath.FromSlash(p)))
+				if err != nil {
+					return false, false, "não consegui ler o item produzido: " + p
+				}
+				if strings.Contains(string(data), needle) {
+					bad++
+				}
+			}
+			if bad > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) ainda contém %q", bad, needle)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) sem %q", len(items), needle))
 		case "list_present":
 			// fan-out de cópia/move: cada item produzido pousou como
 			// <arg2>/<base(item)> — prova o destino, não a origem.
@@ -2178,6 +2302,30 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("%d item(ns) não pousaram em %s", missing, dRel)
 			}
 			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados em %s", len(items), dRel))
+		case "file_contains", "file_lacks":
+			// arg=path, arg2=needle — a escrita do replace prova-se lendo
+			rel, _ := arg.(string)
+			needle, _ := cx.subst(c.Arg2).(string)
+			if rel == "" || needle == "" {
+				return false, false, "file_contains sem caminho ou agulha"
+			}
+			fAbs, fRel, fErr := brSafePath(cx.env.Root, rel)
+			if fErr != nil {
+				return false, false, fErr.Error()
+			}
+			data, err := os.ReadFile(fAbs)
+			if err != nil {
+				return false, false, "não consegui ler " + fRel
+			}
+			has := strings.Contains(string(data), needle)
+			if c.Check == "file_contains" && !has {
+				return false, false, fmt.Sprintf("%s não contém %q", fRel, needle)
+			}
+			if c.Check == "file_lacks" && has {
+				return false, false, fmt.Sprintf("%s ainda contém %q", fRel, needle)
+			}
+			proofs = append(proofs, fmt.Sprintf("%s %s %q", fRel,
+				map[string]string{"file_contains": "contém", "file_lacks": "não contém"}[c.Check], needle))
 		case "read_ok":
 			if _, isStr := arg.(string); !isStr {
 				return false, false, "o conteúdo não foi lido"
