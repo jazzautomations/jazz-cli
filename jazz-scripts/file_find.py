@@ -102,7 +102,9 @@ if not os.path.exists(top):
     fail("path not found: %s" % rel(top))
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
         or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"):
-    fail("pass at least one filter: name, name_re, exclude, ext, type, size, mtime, depth, empty or sort")
+    # "find all files under X" is a literal request — unbounded in intent,
+    # still bounded by limit/MAX_SCAN like every other query
+    name = "*"
 
 if name:
     name_l = name.lower()

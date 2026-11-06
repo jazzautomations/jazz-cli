@@ -2424,14 +2424,47 @@ var nuGroupCues = map[string]bool{
 
 // nuNegationNear reports whether a negation word appears near the cue —
 // "files not owned by root" (antes) ou "permissions not 777" (depois).
+// "no" is two-faced: EN negation ("with no owner") but PT "em+o" ("777 no
+// projeto" = in the project) — it only negates when the next token is a
+// negatable noun of the domain; a plain noun like "projeto" makes it a
+// preposition.
+// nuOctalShaped: 3-4 digits all 0-7 — a permission mode literal (777, 600,
+// 4755). Only perm_find's helpers use it, so a bare octal reads as mode.
+func nuOctalShaped(s string) bool {
+	if len(s) < 3 || len(s) > 4 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '7' {
+			return false
+		}
+	}
+	return true
+}
+
+var nuNegatableNouns = map[string]bool{
+	"owner": true, "dono": true, "group": true, "grupo": true,
+	"permission": true, "permissions": true, "permissao": true,
+	"permissão": true, "permissões": true, "mode": true,
+	"writable": true, "executable": true, "executables": true,
+	"executavel": true, "executável": true, "executaveis": true,
+	"executáveis": true, "execute": true, "exec": true,
+	"rodavel": true, "rodável": true, "user": true, "usuario": true,
+	"usuário": true, "access": true,
+}
+
 func nuNegationNear(toks []nuTok, i int) bool {
 	for j := i - 4; j <= i+2 && j < len(toks); j++ {
 		if j < 0 || j == i {
 			continue
 		}
 		switch toks[j].Fold {
-		case "not", "no", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto":
+		case "not", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto":
 			return true
+		case "no":
+			if j+1 < len(toks) && nuNegatableNouns[toks[j+1].Fold] {
+				return true
+			}
 		}
 	}
 	return false
@@ -2545,6 +2578,13 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 			}
 		}
+		// "which files are 777": bare octal — no cue word needed
+		for i, t := range toks {
+			if !taken[i] && nuOctalShaped(t.Fold) && !nuNegationNear(toks, i) {
+				taken[i] = true
+				return t.Fold
+			}
+		}
 		return ""
 	case "not_mode":
 		for i, t := range toks {
@@ -2555,6 +2595,12 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 						return toks[j].Fold
 					}
 				}
+			}
+		}
+		for i, t := range toks {
+			if !taken[i] && nuOctalShaped(t.Fold) && nuNegationNear(toks, i) {
+				taken[i] = true
+				return t.Fold
 			}
 		}
 		return ""
