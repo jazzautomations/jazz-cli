@@ -14,6 +14,7 @@ import (
 var nuValidTags = map[string]bool{
 	"@file": true, "@symbol": true, "@tool": true, "@host": true,
 	"@service": true, "@container": true, "@number": true, "@test": true,
+	"@quoted": true,
 }
 
 // cue words the slot helpers scan by Fold — they must never carry a

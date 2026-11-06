@@ -350,7 +350,7 @@ func nuTokenize(text string) []nuTok {
 			if j < len(rs) && j > i+1 && (i == 0 || unicode.IsSpace(rs[i-1])) {
 				q := strings.TrimSpace(string(rs[i+1 : j]))
 				if q != "" {
-					out = append(out, nuTok{Raw: q, Fold: fzFold(q), Quoted: true})
+					out = append(out, nuTok{Raw: q, Fold: fzFold(q), Quoted: true, Tags: []string{"@quoted"}})
 				}
 				i = j + 1
 				continue
