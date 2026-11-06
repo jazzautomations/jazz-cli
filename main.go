@@ -529,6 +529,8 @@ func main() {
 			pfQuit(cmdForge(rest[1:], os.Stdout)) // jazz forge: correções → exemplos da gramática (forge.go)
 		case "distill":
 			pfQuit(cmdDistill(root, rest[1:], os.Stdout)) // jazz distill: planos verificados → métodos offline (distill.go)
+		case "catalog", "estante":
+			pfQuit(cmdCatalog(os.Stdout)) // jazz catalog: a estante do cérebro offline (catalog.go)
 		}
 	}
 	if *allowOutside {
