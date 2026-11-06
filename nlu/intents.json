@@ -1115,7 +1115,8 @@
     "dir": {
      "kinds": [
       "dir"
-     ]
+     ],
+     "from": "find:dir_cued"
     },
     "min_size": {
      "kinds": [
@@ -4521,7 +4522,8 @@
     "dir": {
      "kinds": [
       "dir"
-     ]
+     ],
+     "from": "find:dir_cued"
     },
     "min_size": {
      "kinds": [
@@ -4698,7 +4700,8 @@
     "dir": {
      "kinds": [
       "dir"
-     ]
+     ],
+     "from": "find:dir_cued"
     },
     "group": {
      "kinds": [

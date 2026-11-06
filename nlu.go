@@ -2272,6 +2272,66 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			return ""
 		}
+	case "dir_cued":
+		// "na pasta downloads" / "tmp de arquivos" / "logs of files" — the
+		// scope is the word joined to a dir cue or glued to "de/of files".
+		// Bare lowercase words aren't name-shaped, so only cued reads count;
+		// a dir that doesn't exist fails honestly at runtime ("path not
+		// found") instead of poisoning the parse with unfed.
+		dirCues := map[string]bool{
+			"pasta": true, "pastas": true, "diretorio": true, "diretório": true,
+			"diretorios": true, "diretórios": true, "folder": true, "folders": true,
+			"directory": true, "directories": true,
+			"em": true, "no": true, "na": true, "nos": true, "nas": true,
+			"in": true, "inside": true, "under": true, "within": true, "dentro": true,
+		}
+		scopeFillers := map[string]bool{
+			"projeto": true, "project": true, "repo": true, "repositorio": true,
+			"repositório": true, "current": true, "atual": true, "geral": true,
+			"root": true, "aqui": true, "here": true, "isso": true, "isto": true,
+			"arquivos": true, "files": true, "file": true, "arquivo": true,
+		}
+		fileWords := map[string]bool{
+			"arquivos": true, "files": true, "diretorios": true, "diretórios": true,
+			"pastas": true, "folders": true, "dirs": true, "directories": true,
+		}
+		for i, t := range toks {
+			if !dirCues[t.Fold] || taken[i] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") {
+					continue
+				}
+				if scopeFillers[u.Fold] {
+					break // "no projeto"/"em geral" falam DESTE escopo, não de um dir
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw // tagged entities (@dir, /etc) are exactly the right values
+			}
+			break
+		}
+		// X "de/do/of" <file-word>: "o tmp de arquivos", "a pasta logs of files"
+		for i := 0; i+2 < len(toks); i++ {
+			if !fileWords[toks[i+2].Fold] {
+				continue
+			}
+			mid := toks[i+1].Fold
+			if mid != "de" && mid != "do" && mid != "da" && mid != "of" {
+				continue
+			}
+			u := &toks[i]
+			if u.Filler || u.Slang || taken[i] || scopeFillers[u.Fold] || fileWords[u.Fold] {
+				continue
+			}
+			if nuIsNumber(u.Fold) || len(u.Concs) > 0 || len(u.Tags) > 0 {
+				continue
+			}
+			taken[i] = true
+			return u.Raw
+		}
+		return ""
 	case "mass":
 		// separa "apaga o arquivo mais novo" (um alvo descrito — fill+take)
 		// de "apaga todos os .tmp" (conjunto — for_each). Massa quando há
