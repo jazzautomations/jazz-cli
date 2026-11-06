@@ -1438,6 +1438,11 @@ func nuSvcOnly(kinds map[string]bool) bool {
 // one of them; a bare name does name a tool candidate ("tenho o kubectl
 // instalado?" — checking existence is the script's job, not the index's).
 func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
+	// a purely numeric slot takes digits only — a name-shaped leftover
+	// ("regular/normal") is never a limit or a port
+	if (kinds["number"] || kinds["port"]) && !kinds["text"] {
+		return nuIsNumber(t.Fold)
+	}
 	fileish := kinds["file"] || kinds["test"] || kinds["dir"] || kinds["symbol"]
 	// a pure extension word (".conf") is a filter, never a file/dir name —
 	// "arquivos .conf" describes a set of files, not a directory ".conf"
@@ -2303,6 +2308,22 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"arquivos": true, "files": true, "diretorios": true, "diretórios": true,
 			"pastas": true, "folders": true, "dirs": true, "directories": true,
 		}
+		// a unit after "in" is a format ("space in megabytes"), a time word is
+		// a window ("in the last week") — neither names a directory. Units are
+		// consumed as phrasing; time words stay free for the newer/older slots.
+		unitWords := map[string]bool{
+			"bytes": true, "byte": true, "kilobytes": true, "megabytes": true,
+			"gigabytes": true, "terabytes": true, "kb": true, "mb": true,
+			"gb": true, "tb": true, "kbytes": true, "mbytes": true, "gbytes": true,
+		}
+		timeWords := map[string]bool{
+			"last": true, "past": true, "next": true, "previous": true,
+			"future": true, "recent": true, "today": true, "yesterday": true,
+			"tomorrow": true, "ago": true, "week": true, "weeks": true,
+			"month": true, "months": true, "year": true, "years": true,
+			"day": true, "days": true, "hour": true, "hours": true,
+			"minute": true, "minutes": true, "second": true, "seconds": true,
+		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
 				continue
@@ -2311,6 +2332,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				u := &toks[j]
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
+				}
+				if timeWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
+					continue // a window or a shell var is never a dir — leave it for the time slots or unfed
+				}
+				if unitWords[u.Fold] {
+					taken[i], taken[j] = true, true
+					continue // a format spec is explained phrasing, not a path
 				}
 				if scopeFillers[u.Fold] {
 					taken[i], taken[j] = true, true
