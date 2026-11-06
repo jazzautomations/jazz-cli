@@ -428,12 +428,20 @@ func TestDsApplyNLU(t *testing.T) {
 	ov := &dsOverlay{
 		Intents: []dsIntent{{Name: "learned_ab12cd", Desc: "x", Examples: []string{task}}},
 	}
+	embedded := len(m.data.Intents)
 	dsApplyNLU(m, ov)
 	if _, ok := m.byName["learned_ab12cd"]; !ok {
 		t.Fatal("intenção aprendida não entrou no modelo")
 	}
-	if m.embedN[len(m.embedN)-1] != 0 {
-		t.Error("intenção aprendida não pode mover a prior")
+	// prior tampado: classe nova compete quando os tokens casam, mas o
+	// teto de 3 nunca supera a massa embutida das intenções da gramática
+	if pr := m.embedN[len(m.embedN)-1]; pr <= 0 || pr > 3 {
+		t.Errorf("prior da aprendida fora do teto: %d", pr)
+	}
+	for i := 0; i < embedded; i++ {
+		if m.embedN[i] != len(m.data.Intents[i].Examples) {
+			t.Fatalf("prior da intenção embutida %s mexeu", m.data.Intents[i].Name)
+		}
 	}
 	// atalho: a mesma frase bate exato em 0.97
 	ov.Aliases = map[string]nuAlias{m.canonOf(task): {Text: task, Intent: "learned_ab12cd"}}

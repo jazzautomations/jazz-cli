@@ -558,7 +558,17 @@ func dsAddIntent(m *nuModel, it dsIntent) bool {
 		Name: it.Name, Desc: it.Desc, Examples: exs, Slots: it.Slots,
 	})
 	m.byName[it.Name] = len(m.data.Intents) - 1
-	m.embedN = append(m.embedN, 0)
+	// Prior modesto e tampado: o freeze da spec 0.14b existe pra impedir
+	// que exemplos de overlay inflem o prior de uma intenção da gramática
+	// — uma intenção APRENDIDA é classe nova, não tem massa embutida pra
+	// proteger. Sem prior ela só aparecia como "talvez X, 0.03" e nunca
+	// vencia o argmax; com prior ≤3 ela compete quando os tokens casam de
+	// verdade e nunca supera uma intenção embutida por prior sozinho.
+	pr := len(exs)
+	if pr > 3 {
+		pr = 3
+	}
+	m.embedN = append(m.embedN, pr)
 	return true
 }
 
@@ -1234,9 +1244,18 @@ func dsCapCand(p pcPlan, m *mhMethod, tag string) *dsCand {
 	name := dsLearnedPrefix + p.ID
 	c.Method.Name = name + tag
 	c.Method.Intent = name
-	c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: dsVariantTexts(p)}
-	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+	c.Intent = dsIntent{Name: name, Desc: oneLine(dsCleanTask(p.Task), 80), Examples: dsVariantTexts(p)}
+	c.Alias = nuAlias{Text: dsCleanTask(p.Task), Intent: name, Ts: p.Time}
 	return c
+}
+
+// dsCleanTask tira o sufixo de estilo que a colheita podia colar no texto
+// da tarefa ("[estilo: ...]"): o atalho e o exemplo têm que ser o pedido
+// que o usuário digitaria, não a instrução do professor.
+var dsHintSuffix = lazyRx(`\s*\[(?:estilo|style)[^\]]*\]\s*$`)
+
+func dsCleanTask(t string) string {
+	return strings.TrimSpace(dsHintSuffix.ReplaceAllString(t, ""))
 }
 
 // dsVariantTexts: os textos que o plano já viu dar certo — o pedido e as
@@ -1247,7 +1266,7 @@ func dsVariantTexts(p pcPlan) []string {
 	var out []string
 	seen := map[string]bool{}
 	add := func(t string) {
-		if x, ok := nuExampleText(t); ok && !seen[x] {
+		if x, ok := nuExampleText(dsCleanTask(t)); ok && !seen[x] {
 			seen[x] = true
 			out = append(out, x)
 		}
@@ -1584,9 +1603,9 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld, root string) (*dsC
 		name = in.Name
 	} else {
 		name = dsLearnedPrefix + p.ID
-		c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: dsVariantTexts(p)}
+		c.Intent = dsIntent{Name: name, Desc: oneLine(dsCleanTask(p.Task), 80), Examples: dsVariantTexts(p)}
 	}
-	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+	c.Alias = nuAlias{Text: dsCleanTask(p.Task), Intent: name, Ts: p.Time}
 	// anti-unificação: testemunhas do mesmo Shape provam os $slot.x; numa
 	// intenção existente eles ainda precisam mapear no schema dela.
 	tmpl, slots, bind := dsAntiUnify(p)
