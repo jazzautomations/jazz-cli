@@ -68,19 +68,19 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		chain := make([]bool, len(parts))
 		for i, p := range parts {
 			pi := nuGet().Parse(p, w)
-			if !pi.Understood() || pi.Name == "none" || pi.Confidence < brLevel0Min {
-				// anaphora clause: "e apaga eles" parses weak because the
-				// pronoun carries no target. Strip it and re-read — the
-				// bare consumer ("apaga") is enough when chaining is real.
-				if stripped, ana := brStripAnaphora(p); ana {
-					if si := nuGet().Parse(stripped, w); si.Understood() && si.Confidence >= brLevel0Min {
-						if _, ok := brChainConsumers[si.Name]; ok && i > 0 {
-							ins = append(ins, si)
-							chain[i] = true
-							continue
-						}
+			// anaphora clause: "e apaga eles" can parse CONFIDENT now that
+			// filter slots eat the pronoun (name=eles) — check the strip
+			// before trusting the confident read, so chaining still wins.
+			if stripped, ana := brStripAnaphora(p); ana && i > 0 {
+				if si := nuGet().Parse(stripped, w); si.Understood() && si.Confidence >= brLevel0Min {
+					if _, ok := brChainConsumers[si.Name]; ok {
+						ins = append(ins, si)
+						chain[i] = true
+						continue
 					}
 				}
+			}
+			if !pi.Understood() || pi.Name == "none" || pi.Confidence < brLevel0Min {
 				ins = nil
 				break
 			}

@@ -311,36 +311,44 @@ func (cx *brCtx) runCmdAs(cmd string, timeout time.Duration, read bool) (out str
 	return out, exit, obs
 }
 
-// brCaps are the implementations of the brain capabilities.
-var brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
-	"resolve_name": brResolve,
-	"choose":       brChoose,
-	"ask_slot":     brAskSlot,
-	"refill":       brRefill,
-	"take":         brTake,
-	"learned_cmd":  brLearnedCmd,
-	"read_file":    brReadFile,
-	"run_tests":    brRunTests,
-	"test_context": brTestContext,
-	"git_status":   brGitStatus,
-	"env_status":   brEnvStatus,
-	"self_info":    brSelfInfo,
-	"tool_report":  brToolReport,
-	"tool_status":  brToolStatus,
-	"host_report":  brHostReport,
-	"host_list":    brHostList,
-	"systemd":      brSystemd,
-	"net_status":   brNetStatus,
-	"proj_cmd":     brProjCmd,
-	"read_cmd":     brReadCmd,
-	"say":          brSay,
-	"report":       brReport,
-	"file_op":      brFileOp,
-	"git_op":       brGitOp,
-	"proc_kill":    brProcKill,
-	"pkg_cmd":      brPkgCmd,
-	"container_op": brContainerOp,
-	"undo":         brUndo,
+// brCaps are the implementations of the brain capabilities. Filled in
+// init() — for_each resolves caps through brCap at runtime, and a var
+// literal would create an initialization cycle (brCaps→brForEach→brCap).
+var brCaps map[string]func(cx *brCtx, in map[string]string) brStep
+
+func init() {
+	brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
+		"resolve_name": brResolve,
+		"choose":       brChoose,
+		"ask_slot":     brAskSlot,
+		"refill":       brRefill,
+		"need":         brNeed,
+		"take":         brTake,
+		"for_each":     brForEach,
+		"learned_cmd":  brLearnedCmd,
+		"read_file":    brReadFile,
+		"run_tests":    brRunTests,
+		"test_context": brTestContext,
+		"git_status":   brGitStatus,
+		"env_status":   brEnvStatus,
+		"self_info":    brSelfInfo,
+		"tool_report":  brToolReport,
+		"tool_status":  brToolStatus,
+		"host_report":  brHostReport,
+		"host_list":    brHostList,
+		"systemd":      brSystemd,
+		"net_status":   brNetStatus,
+		"proj_cmd":     brProjCmd,
+		"read_cmd":     brReadCmd,
+		"say":          brSay,
+		"report":       brReport,
+		"file_op":      brFileOp,
+		"git_op":       brGitOp,
+		"proc_kill":    brProcKill,
+		"pkg_cmd":      brPkgCmd,
+		"container_op": brContainerOp,
+		"undo":         brUndo,
+	}
 }
 
 // brRefill re-reads the request under another intent's slot schema and
@@ -431,6 +439,126 @@ func brTake(cx *brCtx, in map[string]string) brStep {
 	cx.task.AddEvidence("plan", fmt.Sprintf("%s = %s", slot, val))
 	cx.say("→ %s", val)
 	return brStep{val: val, obs: rvNoCmd(), ok: true}
+}
+
+// brNeed gates a method on slot groups: "a|b" is satisfied when at least
+// one named slot exists. Unlike refill it reads no text — the primary
+// parse's slots are trusted as-is (FillAs can poison generic name slots
+// with cue words like "chamados").
+func brNeed(cx *brCtx, in map[string]string) brStep {
+	for _, grp := range strings.Split(in["slots"], ",") {
+		if grp == "" {
+			continue
+		}
+		sat := false
+		for _, k := range strings.Split(grp, "|") {
+			if cx.task.Slots[strings.TrimSpace(k)] != "" {
+				sat = true
+			}
+		}
+		if !sat {
+			return brStep{obs: rvNoCmd(), why: "o pedido não traz o que preciso (" + grp + ")"}
+		}
+	}
+	return brStep{obs: rvNoCmd(), ok: true}
+}
+
+// brForEach: the bounded fan-out for "apaga todos os .tmp" — runs the inner
+// cap once per produced path. Every item passes through the inner cap's own
+// gates (file_op → brSafePath + brPermit + confinamento), paths with ../
+// absoluto ou ~ são ignorados, resultado truncado recusa (um conjunto
+// parcial nunca vira alvo), e cada delete confere que o arquivo sumiu.
+func brForEach(cx *brCtx, in map[string]string) brStep {
+	v := cx.subst(in["from"])
+	m, _ := v.(map[string]any)
+	data, _ := m["data"].(map[string]any)
+	if tr, _ := data["truncated"].(bool); tr {
+		return brStep{obs: rvNoCmd(), why: "resultado truncado — recuso agir num conjunto parcial"}
+	}
+	var items []any
+	for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+		if arr, ok := data[k].([]any); ok {
+			items = arr
+			break
+		}
+	}
+	if len(items) == 0 {
+		return brStep{obs: rvNoCmd(), why: "o produtor não encontrou nada pra agir"}
+	}
+	max := 32
+	if s := in["max"]; s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			max = n
+		}
+	}
+	inner := brCap(in["do"])
+	if inner == nil {
+		return brStep{obs: rvNoCmd(), why: "for_each: capacidade desconhecida " + in["do"]}
+	}
+	done, failed := 0, 0
+	firstWhy := ""
+	if len(items) > max {
+		failed = len(items) - max // excedente conta como não-feito, honesto
+		firstWhy = fmt.Sprintf("%d itens além do teto %d", len(items)-max, max)
+		items = items[:max]
+	}
+	for _, it := range items {
+		path := brItemPath(it)
+		if path == "" || strings.Contains(path, "..") || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "~") {
+			failed++
+			if firstWhy == "" {
+				firstWhy = "item sem path seguro"
+			}
+			continue
+		}
+		ii := make(map[string]string, len(in))
+		for k, v := range in {
+			ii[k] = v
+		}
+		delete(ii, "from")
+		delete(ii, "do")
+		delete(ii, "slot")
+		delete(ii, "max")
+		ii["path"] = path
+		r := inner(cx, ii)
+		if !r.ok {
+			failed++
+			if firstWhy == "" {
+				firstWhy = path + ": " + r.why
+			}
+			continue
+		}
+		if in["do"] == "file_op" && in["op"] == "delete" {
+			if abs, _, err := brSafePath(cx.env.Root, path); err == nil {
+				if _, e := os.Stat(abs); e == nil {
+					failed++
+					if firstWhy == "" {
+						firstWhy = path + " continua lá"
+					}
+					continue
+				}
+			}
+		}
+		done++
+	}
+	cx.task.AddEvidence("plan", fmt.Sprintf("for_each %s: %d feito(s), %d falha(s)", in["do"], done, failed))
+	if failed > 0 {
+		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s) — primeira: %s", done, failed, firstWhy)}
+	}
+	return brStep{obs: rvNoCmd(), ok: true}
+}
+
+// brItemPath lifts a path out of a producer item — scripts emit either
+// bare strings or objects with a "path" field.
+func brItemPath(it any) string {
+	switch x := it.(type) {
+	case string:
+		return x
+	case map[string]any:
+		p, _ := x["path"].(string)
+		return p
+	}
+	return ""
 }
 
 // brCap resolves a capability name: the named Go caps above, or `script:<n>`
@@ -1864,6 +1992,34 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, "o arquivo ainda existe: " + rel
 			}
 			proofs = append(proofs, rel+" não existe mais")
+		case "list_gone":
+			// every path a producer listed must be gone (mass-delete proof)
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			left := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") {
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(p))); err == nil {
+					left++
+				}
+			}
+			if left > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) da lista ainda existe(m)", left)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados ausentes", len(items)))
 		case "read_ok":
 			if _, isStr := arg.(string); !isStr {
 				return false, false, "o conteúdo não foi lido"

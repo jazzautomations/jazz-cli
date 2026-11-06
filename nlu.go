@@ -2254,6 +2254,60 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				return "true"
 			}
 		}
+	case "name_cued":
+		// delete_file's name is a FILTER, not the leftover-name sponge that
+		// file_find uses: it only fills when a nameattr cue ("chamados X",
+		// "named X") is present — a bare filename is target material.
+		for i, t := range toks {
+			if !t.has("nameattr") {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if taken[j] || u.Filler || u.Slang {
+					continue
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+			return ""
+		}
+	case "mass":
+		// separa "apaga o arquivo mais novo" (um alvo descrito — fill+take)
+		// de "apaga todos os .tmp" (conjunto — for_each). Massa quando há
+		// quantificador universal, ou plural de arquivos com filtro real;
+		// "apaga os arquivos" sem filtro é ambíguo e vai perguntar.
+		for _, t := range toks {
+			switch t.Fold {
+			case "todos", "todas", "todo", "toda", "all", "every", "cada", "qualquer", "quaisquer", "tudinho":
+				return "1"
+			}
+		}
+		hasPlural := false
+		for _, t := range toks {
+			switch t.Fold {
+			case "arquivos", "files", "diretorios", "diretórios", "pastas", "folders", "directories", "dirs":
+				hasPlural = true
+			}
+		}
+		if !hasPlural {
+			return ""
+		}
+		probe := map[int]bool{}
+		for _, w := range []string{"ext", "newer", "older", "empty", "min_size", "max_size", "name_re", "exclude", "min_depth", "max_depth"} {
+			if nuFindArg(toks, w, probe) != "" {
+				return "1"
+			}
+		}
+		for _, t := range toks {
+			if t.has("nameattr") {
+				return "1"
+			}
+		}
+		if nuFindArg(toks, "type", probe) == "dir" {
+			return "1" // "apaga os diretórios" — recorte por tipo é filtro real
+		}
+		return ""
 	}
 	return ""
 }

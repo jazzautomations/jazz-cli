@@ -2954,6 +2954,17 @@
    "lower case",
    "capitals",
    "capital letters"
+  ],
+  "listverb": [
+   "lista",
+   "listar",
+   "liste",
+   "list",
+   "listagem",
+   "listing",
+   "enumerate",
+   "enumerates",
+   "quais"
   ]
  }
 }

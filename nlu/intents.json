@@ -1042,6 +1042,29 @@
       "@service",
       "mutate"
      ]
+    },
+    {
+     "all": [
+      "delete",
+      "files"
+     ],
+     "none": [
+      "container",
+      "branch",
+      "recover",
+      "service",
+      "@service",
+      "mutate",
+      "listverb",
+      "find",
+      "count",
+      "permattr",
+      "extract",
+      "symnoun",
+      "@quoted",
+      "open"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -1052,6 +1075,95 @@
      ],
      "required": true,
      "shape": "name"
+    },
+    "name": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:name_cued"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "type": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:type"
+    },
+    "newer": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:newer"
+    },
+    "older": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:older"
+    },
+    "empty": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:empty"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ]
+    },
+    "min_size": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:min_size"
+    },
+    "max_size": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:max_size"
+    },
+    "name_re": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:name_re"
+    },
+    "exclude": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:exclude"
+    },
+    "min_depth": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:min_depth"
+    },
+    "max_depth": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:max_depth"
+    },
+    "tfield": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:tfield"
+    },
+    "mass": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:mass"
     }
    },
    "examples": [

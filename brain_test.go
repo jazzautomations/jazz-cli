@@ -660,6 +660,75 @@ func TestBrainChainQuotedAndNoSplit(t *testing.T) {
 	}
 }
 
+// Mass-delete: "apaga todos os .tmp" — o filtro vai pro file_find e o
+// for_each apaga um por um, com verificação da lista inteira.
+func TestBrainMassDeleteEach(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "m1.tmp", "1\n", "m2.tmp", "2\n", "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "apaga todos os arquivos .tmp")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"m1.tmp", "m2.tmp"} {
+		if _, err := os.Stat(filepath.Join(root, f)); !os.IsNotExist(err) {
+			t.Errorf("%s devia ter sido apagado:\n%s", f, r.Text)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Errorf("keep.txt sumiu no mass-delete:\n%s", r.Text)
+	}
+}
+
+// EN: "delete all *.log files" segue o mesmo caminho.
+func TestBrainMassDeleteEN(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "e1.log", "1\n", "e2.log", "2\n", "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "delete all the .log files")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"e1.log", "e2.log"} {
+		if _, err := os.Stat(filepath.Join(root, f)); !os.IsNotExist(err) {
+			t.Errorf("%s devia ter sido apagado:\n%s", f, r.Text)
+		}
+	}
+}
+
+// Filtro sem correspondência: nada se apaga e o cérebro não inventa alvo.
+func TestBrainMassDeleteNoMatch(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "apaga todos os arquivos .zzz")
+	if r.Status == tkSucceeded {
+		t.Fatalf("sem alvo devia não concluir, veio %s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Error("keep.txt sumiu num mass-delete sem alvos")
+	}
+}
+
+// "lista os arquivos apagados" é leitura, não mass-delete.
+func TestBrainMassDeleteListVeto(t *testing.T) {
+	root := brFixture(t, "keep.txt", "k\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "lista os arquivos apagados")
+	if r.Intent.Name == "delete_file" {
+		t.Fatalf("leitura virou delete:\n%s", r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Error("keep.txt sumiu num pedido de leitura")
+	}
+}
+
 // Harvest: path= extraído; truncated:true nunca alimenta cadeia.
 func TestBrainHarvestPaths(t *testing.T) {
 	r := brResult{Text: "files (2):\n  path=a.txt size=0\n  path=b.txt size=0\ntruncated: false\n"}
