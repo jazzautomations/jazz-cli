@@ -222,7 +222,9 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 	}
 	right := map[string]string{
 		// modificação de arquivo é busca, não status de ambiente/ferramenta
-		"find all the files in the file system which have been modified in the last day": "find",
+		// file_find é a resposta melhor: descoberta de arquivo por mtime,
+		// não busca de conteúdo ('find' cobre texto dentro de arquivos)
+		"find all the files in the file system which have been modified in the last day": "file_find",
 		// procurar repositório é find, não git_status
 		"find the official code repository for each paper in this list": "find",
 		// quantidade de cpu é ambiente, não ferramenta
@@ -416,6 +418,12 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 		{"docker image prune", "container_prune", ""},
 		{"Display source and mount point of the file system containing /some/path", "disk_usage", "path=/some/path"},
 		{"espaço em disco", "disk_usage", ""},
+		// janelas temporais: direção vem do comparativo, não de 'ago'/'há'
+		{"files modified less than 7 days ago", "file_find", "newer=10080"},
+		{"files modified more than 30 days ago", "file_find", "older=43200"},
+		{"files modified in the last 3 days", "file_find", "newer=4320"},
+		{"arquivos modificados há menos de 7 dias", "file_find", "newer=10080"},
+		{"arquivos modificados há mais de 30 dias", "file_find", "older=43200"},
 		{"quem está logado", "logged_in", ""},
 		{"who is logged in", "logged_in", ""},
 		{"lista as sessões ativas", "logged_in", ""},

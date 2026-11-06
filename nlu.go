@@ -2144,9 +2144,9 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 	olderSeen, newerSeen := false, false
 	for _, u := range toks {
 		switch u.Fold {
-		case "older", "antigos", "antigo", "antiga", "velhos", "velho", "velha", "before", "antes", "ago", "atras", "atrás", "ha", "há":
+		case "older", "antigos", "antigo", "antiga", "velhos", "velho", "velha", "before", "antes", "more", "mais":
 			olderSeen = true
-		case "ultimos", "últimos", "ultimas", "últimas", "last", "past", "within", "newer":
+		case "ultimos", "últimos", "ultimas", "últimas", "last", "past", "within", "newer", "less", "menos", "recent", "recente", "recentes":
 			newerSeen = true
 		}
 	}

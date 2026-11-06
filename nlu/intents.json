@@ -523,6 +523,9 @@
           "all": [
             "git",
             "status"
+          ],
+          "none": [
+            "findattr"
           ]
         },
         {
@@ -553,7 +556,8 @@
             "cpu",
             "process",
             "ifaces",
-            "summary"
+            "summary",
+            "findattr"
           ]
         },
         {
@@ -579,7 +583,8 @@
             "sysnoun",
             "tag",
             "undo",
-            "update"
+            "update",
+            "findattr"
           ]
         }
       ],
@@ -2788,7 +2793,8 @@
             "port",
             "kill",
             "container",
-            "service"
+            "service",
+            "findattr"
           ]
         }
       ],
@@ -4148,7 +4154,17 @@
             "user",
             "opinion",
             "blame",
-            "session"
+            "session",
+            "who",
+            "error",
+            "branch",
+            "git",
+            "version",
+            "diff",
+            "undo",
+            "journal",
+            "commit",
+            "history"
           ],
           "w": 10
         },
@@ -4171,7 +4187,17 @@
             "user",
             "opinion",
             "blame",
-            "session"
+            "session",
+            "who",
+            "error",
+            "branch",
+            "git",
+            "version",
+            "diff",
+            "undo",
+            "journal",
+            "commit",
+            "history"
           ],
           "w": 0
         },
@@ -4192,7 +4218,17 @@
             "user",
             "opinion",
             "blame",
-            "session"
+            "session",
+            "who",
+            "error",
+            "branch",
+            "git",
+            "version",
+            "diff",
+            "undo",
+            "journal",
+            "commit",
+            "history"
           ],
           "w": 15
         }
