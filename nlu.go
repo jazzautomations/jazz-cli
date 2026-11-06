@@ -2303,6 +2303,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"tree": true, "hierarchy": true, "structure": true, "subtree": true,
 			"subdir": true, "subdirs": true, "subdirectory": true,
 			"subdirectories": true, "subfolder": true, "subfolders": true,
+			// "directory tree downwards" = este projeto recursivo
+			"downwards": true, "downward": true, "upwards": true,
+			"upward": true, "recursively": true, "recursive": true,
 		}
 		fileWords := map[string]bool{
 			"arquivos": true, "files": true, "diretorios": true, "diretórios": true,
@@ -2324,6 +2327,21 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"day": true, "days": true, "hour": true, "hours": true,
 			"minute": true, "minutes": true, "second": true, "seconds": true,
 		}
+		// words that can never name a directory — verbs, degree/size words,
+		// filesystem types — are skipped, not returned for an honest miss
+		notDirWords := map[string]bool{
+			"found": true, "located": true, "matching": true, "residing": true,
+			"were": true, "was": true, "are": true, "being": true, "been": true,
+			"existing": true, "present": true,
+			"minimum": true, "maximum": true, "min": true, "max": true,
+			"level": true, "levels": true, "depth": true, "depths": true,
+			"pesada": true, "pesado": true, "heavy": true, "large": true,
+			"small": true, "bigger": true, "smaller": true, "larger": true,
+			"ext2": true, "ext3": true, "ext4": true, "ntfs": true,
+			"fat32": true, "vfat": true, "btrfs": true, "xfs": true,
+			"output": true, "input": true, "given": true, "specified": true,
+			"where": true, "path": true, "location": true, "place": true,
+		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
 				continue
@@ -2333,8 +2351,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
 				}
-				if timeWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
-					continue // a window or a shell var is never a dir — leave it for the time slots or unfed
+				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
+					continue // a window, a verb or a shell var is never a dir — leave it for the time slots or unfed
 				}
 				if unitWords[u.Fold] {
 					taken[i], taken[j] = true, true
