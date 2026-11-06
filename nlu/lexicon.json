@@ -504,7 +504,16 @@
     "quem editou": "editou",
     "last edited": "editou",
     "last editor": "editou",
-    "mais recente": "ultimo"
+    "mais recente": "ultimo",
+    "logged in": "logado",
+    "signed in": "logado",
+    "está logado": "logado",
+    "tá logado": "logado",
+    "ta logado": "logado",
+    "is logged": "logado",
+    "está conectado": "conectado",
+    "sem repetição": "unique",
+    "sem repetir": "unique"
   },
   "concepts": {
     "open": [
@@ -2348,6 +2357,34 @@
       "caller",
       "chama",
       "chamam"
+    ],
+    "session": [
+      "logada",
+      "logadas",
+      "logado",
+      "logados",
+      "logged",
+      "login",
+      "logins",
+      "sessao",
+      "session",
+      "sessions",
+      "sessoes",
+      "sessão",
+      "sessões"
+    ],
+    "dedup": [
+      "dedup",
+      "dedupe",
+      "distinct",
+      "distintas",
+      "distintos",
+      "unicas",
+      "unicos",
+      "uniq",
+      "unique",
+      "únicas",
+      "únicos"
     ]
   }
 }

@@ -416,6 +416,11 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 		{"docker image prune", "container_prune", ""},
 		{"Display source and mount point of the file system containing /some/path", "disk_usage", "path=/some/path"},
 		{"espaço em disco", "disk_usage", ""},
+		{"quem está logado", "logged_in", ""},
+		{"who is logged in", "logged_in", ""},
+		{"lista as sessões ativas", "logged_in", ""},
+		{"últimos logins", "logged_in", ""},
+		{"who else is on this machine", "logged_in", ""},
 	} {
 		in := m.Parse(tc.s, w)
 		if got := nuPredict(in); got != tc.want {
@@ -448,5 +453,15 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 	in := m.Parse("lista os arquivos .conf", w)
 	if in.Slots["dir"] == ".conf" || in.Slots["dir"] == "conf" {
 		t.Errorf("'.conf' voltou a encher slot dir: %v", in.Slots)
+	}
+	// os donos legítimos do "quem" não podem vazar pro logged_in
+	for _, tc := range []struct{ s, want string }{
+		{"quem está usando a porta 8080", "port_owner"},
+		{"quem está usando o arquivo db.sqlite", "file_users"},
+		{"quem é você", "self_info"},
+	} {
+		if got := nuPredict(m.Parse(tc.s, w)); got != tc.want {
+			t.Errorf("%q => %s — logged_in roubou o dono certo", tc.s, got)
+		}
 	}
 }

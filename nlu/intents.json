@@ -4147,7 +4147,8 @@
             "remote",
             "user",
             "opinion",
-            "blame"
+            "blame",
+            "session"
           ],
           "w": 10
         },
@@ -4169,7 +4170,8 @@
             "remote",
             "user",
             "opinion",
-            "blame"
+            "blame",
+            "session"
           ],
           "w": 0
         },
@@ -4189,7 +4191,8 @@
             "remote",
             "user",
             "opinion",
-            "blame"
+            "blame",
+            "session"
           ],
           "w": 15
         }
@@ -4532,7 +4535,8 @@
             "symnoun",
             "@symbol",
             "project",
-            "cpu"
+            "cpu",
+            "session"
           ],
           "w": 10
         }
@@ -4888,6 +4892,86 @@
         "apaga o arquivo image.png",
         "limpa a pasta tmp"
       ]
+    },
+    {
+      "name": "logged_in",
+      "desc": "usuários com sessão aberta na máquina",
+      "examples": [
+        "quem está logado",
+        "who is logged in",
+        "quem tá logado na máquina",
+        "lista as sessões ativas",
+        "show active sessions",
+        "quais usuários estão logados",
+        "who is connected",
+        "mostra os usuários logados",
+        "active user sessions",
+        "últimos logins",
+        "who else is on this machine",
+        "tem alguém logado?"
+      ],
+      "rules": [
+        {
+          "all": [
+            "who",
+            "session"
+          ],
+          "none": [
+            "file",
+            "port",
+            "service",
+            "container",
+            "blame",
+            "kill",
+            "dedup",
+            "user"
+          ]
+        },
+        {
+          "all": [
+            "session"
+          ],
+          "any": [
+            "list",
+            "running",
+            "newest",
+            "status"
+          ],
+          "none": [
+            "file",
+            "port",
+            "service",
+            "container",
+            "blame",
+            "kill",
+            "download",
+            "net",
+            "dedup"
+          ]
+        },
+        {
+          "all": [
+            "who",
+            "env"
+          ],
+          "none": [
+            "file",
+            "port",
+            "service",
+            "container",
+            "blame",
+            "kill",
+            "self",
+            "tool",
+            "create",
+            "delete",
+            "mutate",
+            "dedup",
+            "user"
+          ]
+        }
+      ],
+      "slots": {}
     }
   ]
 }

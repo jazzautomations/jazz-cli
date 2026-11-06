@@ -1,0 +1,19 @@
+{"methods": [
+ {"name": "logged_in.who", "intent": "logged_in", "priority": 10,
+  "doc": "who: sessões abertas (usuário, tty, desde quando) — só leitura",
+  "cmds": ["who"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "who"}, "out": "w"}],
+  "verify": [{"check": "exit_zero", "arg": "$w"}],
+  "risk": "low", "cost_ms": 200},
+ {"name": "logged_in.users", "intent": "logged_in", "priority": 5,
+  "doc": "users: só os logins — fallback do who",
+  "cmds": ["users"],
+  "steps": [{"cap": "read_cmd", "in": {"cmd": "users"}, "out": "u"}],
+  "verify": [{"check": "exit_zero", "arg": "$u"}],
+  "risk": "low", "cost_ms": 200},
+ {"name": "logged_in.none", "intent": "logged_in", "priority": 1,
+  "doc": "sem who nem users não dá pra listar sessões",
+  "steps": [{"cap": "report", "in": {"text": "sem 'who' nem 'users' no PATH — não dá pra listar sessões abertas", "status": "blocked", "category": "command_missing"}}],
+  "verify": [],
+  "risk": "low", "cost_ms": 1}
+]}

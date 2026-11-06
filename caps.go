@@ -585,6 +585,10 @@ var cbReadCmds = map[string]bool{
 	"df -h":                                  true,
 	"free -m":                                true,
 	"uptime":                                 true,
+	"who":                                    true,
+	"w":                                      true,
+	"users":                                  true,
+	"last -n 10":                             true,
 	"ss -tln":                                true,
 	"ps -eo pid,comm,%mem,%cpu --sort=-%mem": true,
 }
