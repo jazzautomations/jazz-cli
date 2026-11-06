@@ -1590,6 +1590,10 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			switch {
 			case sd.From == "rename_from" || sd.From == "rename_to":
 				v = nuRenamePart(toks, res, sd.From == "rename_to")
+			case sd.From == "repl_from" || sd.From == "repl_to":
+				v = nuReplacePart(toks, res, sd.From == "repl_to")
+			case strings.HasPrefix(sd.From, "repl:"):
+				v = nuReplFlag(toks, sd.From[5:])
 			case strings.HasPrefix(sd.From, "find:"):
 				v = nuFindArg(toks, sd.From[5:], taken)
 			case strings.HasPrefix(sd.From, "perm:"):
@@ -1803,6 +1807,103 @@ func nuRenamePart(toks []nuTok, res []int, to bool) string {
 		}
 	}
 	return last
+}
+
+// nuWithWords: os separadores entre o texto velho e o novo — "replace A
+// with B", "troca A por B", "substitui A para B", "swap A for B".
+var nuWithWords = map[string]bool{
+	"with": true, "by": true, "por": true, "para": true, "com": true,
+	"to": true, "for": true, "into": true, "->": true, "=>": true,
+}
+
+// nuReplacePart: o texto velho (from) ou o novo (to) de um pedido de
+// substituição. Aspas ganham sempre: 1ª citada = from, a citada após o
+// separador (ou a 2ª) = to. Sem aspas, o from é o trecho entre o verbo e
+// o separador e o to é o que segue o separador — devolve a frase inteira
+// quando ela é multi-palavra ("local host"→"local.host").
+func nuReplacePart(toks []nuTok, res []int, to bool) string {
+	mark := -1
+	for i := range toks {
+		if nuWithWords[toks[i].Fold] && i > 0 {
+			mark = i
+		}
+	}
+	// citadas em ordem: "replace 'a' with 'b'" → a,b
+	var q []int
+	for i := range toks {
+		if toks[i].Quoted {
+			q = append(q, i)
+		}
+	}
+	if to {
+		for _, i := range q {
+			if mark < 0 || i > mark {
+				return toks[i].Raw
+			}
+		}
+		if len(q) > 1 {
+			return toks[q[1]].Raw
+		}
+		// sem aspas: o trecho após o último separador
+		if mark >= 0 {
+			var parts []string
+			for i := mark + 1; i < len(toks); i++ {
+				if !toks[i].Filler && !nuWithWords[toks[i].Fold] {
+					parts = append(parts, toks[i].Raw)
+				}
+			}
+			return strings.TrimSpace(strings.Join(parts, " "))
+		}
+		return ""
+	}
+	// from: a citada antes do separador (ou a 1ª de todas)
+	for _, i := range q {
+		if mark < 0 || i < mark {
+			return toks[i].Raw
+		}
+	}
+	if len(q) > 1 {
+		return toks[q[0]].Raw
+	}
+	// sem aspas: o trecho não-arquivo entre o verbo e o separador
+	for _, i := range res {
+		if mark >= 0 && i >= mark {
+			break
+		}
+		t := toks[i]
+		if t.Filler || t.Quoted || nuWithWords[t.Fold] || t.has("replace") {
+			continue
+		}
+		if t.has("file") || nuNameShaped(t.Raw) && strings.Contains(t.Raw, ".") {
+			continue // o arquivo não é o texto velho
+		}
+		return t.Raw
+	}
+	return ""
+}
+
+// nuReplFlag: flags do replace — "first occurrence/only the first" →
+// first_per_line; "case-insensitive/ignoring case" → ignore_case.
+func nuReplFlag(toks []nuTok, what string) string {
+	switch what {
+	case "first":
+		for i := range toks {
+			if toks[i].Fold == "first" || toks[i].Fold == "primeira" ||
+				toks[i].Fold == "primeiro" {
+				return "true"
+			}
+		}
+	case "icase":
+		for i := range toks {
+			if toks[i].Fold == "case-insensitive" || toks[i].Fold == "case-insensitively" {
+				return "true"
+			}
+			if toks[i].Fold == "ignoring" || toks[i].Fold == "ignorando" {
+				return "true"
+			}
+		}
+	}
+	return ""
 }
 
 // nuMessage: a quoted text, or what follows "mensagem"/"msg"/"-m"/":".

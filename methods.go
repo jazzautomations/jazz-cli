@@ -1005,12 +1005,12 @@ func brTextOp(cx *brCtx, in map[string]string) brStep {
 	hay, cnt := string(data), 0
 	var out string
 	switch {
-	case in["ignore_case"] == "true":
+	case cx.str(in, "ignore_case") == "true":
 		// literal case-insensitive: quote the needle, fold via regexp
 		re := regexp.MustCompile("(?i)" + regexp.QuoteMeta(from))
 		out = re.ReplaceAllString(hay, to)
 		cnt = len(re.FindAllStringIndex(hay, -1))
-	case in["first_per_line"] == "true":
+	case cx.str(in, "first_per_line") == "true":
 		// sed s/a/b/ sem flag g: primeira ocorrência POR LINHA
 		lines := strings.Split(hay, "\n")
 		for i, l := range lines {

@@ -1,0 +1,108 @@
+{
+ "methods": [
+  {
+   "name": "text_replace.file",
+   "intent": "text_replace",
+   "priority": 10,
+   "doc": "sed -i literal num arquivo: text_op replace confinado, com leitura objetiva do pós-estado (o /undo cobre)",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "text_op",
+     "in": {
+      "op": "replace",
+      "path": "$slot.file",
+      "from_str": "$slot.from",
+      "to_str": "$slot.to",
+      "first_per_line": "$slot.first",
+      "ignore_case": "$slot.icase"
+     },
+     "out": "t"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_contains",
+     "arg": "$t",
+     "arg2": "$slot.to"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 30
+  },
+  {
+   "name": "text_replace.each",
+   "intent": "text_replace",
+   "priority": 8,
+   "doc": "'troca X por Y em todos os .log': file_find produz, for_each aplica text_op por arquivo (teto 32), list_lacks prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "text_op",
+      "op": "replace",
+      "from_str": "$slot.from",
+      "to_str": "$slot.to",
+      "first_per_line": "$slot.first",
+      "ignore_case": "$slot.icase",
+      "max": "32"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_lacks",
+     "arg": "$cand",
+     "arg2": "$slot.from"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 200
+  }
+ ]
+}

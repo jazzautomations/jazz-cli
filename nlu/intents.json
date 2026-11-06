@@ -3862,7 +3862,8 @@
      ],
      "none": [
       "create",
-      "delete"
+      "delete",
+      "replace"
      ]
     },
     {
@@ -3872,7 +3873,8 @@
      ],
      "none": [
       "create",
-      "delete"
+      "delete",
+      "replace"
      ],
      "w": 5
     }
@@ -4787,7 +4789,8 @@
       "create",
       "mutate",
       "sysnoun",
-      "envvars"
+      "envvars",
+      "replace"
      ],
      "w": 0
     },
@@ -4803,7 +4806,8 @@
       "delete",
       "create",
       "mutate",
-      "install"
+      "install",
+      "replace"
      ],
      "w": 0
     }
@@ -5371,6 +5375,89 @@
     }
    ],
    "slots": {}
+  },
+  {
+   "name": "text_replace",
+   "desc": "substituir texto dentro de arquivo(s) — 'troca A por B em arq', 'replace all X with Y in *.txt'",
+   "rules": [
+    {
+     "all": [
+      "replace"
+     ],
+     "none": [
+      "rename",
+      "delete",
+      "branch",
+      "container",
+      "service",
+      "permattr",
+      "install"
+     ]
+    }
+   ],
+   "slots": {
+    "file": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    },
+    "from": {
+     "kinds": [
+      "text"
+     ],
+     "required": true,
+     "from": "repl_from"
+    },
+    "to": {
+     "kinds": [
+      "text"
+     ],
+     "required": true,
+     "from": "repl_to"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "mass": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:mass"
+    },
+    "first": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:first"
+    },
+    "icase": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:icase"
+    }
+   },
+   "examples": [
+    "troca 'foo' por 'bar' em config.txt",
+    "replace 'localhost' with '127.0.0.1' in app.conf",
+    "substitui 'debug' por 'release' no build.sh",
+    "replace all instances of 'old_name' with 'new_name' in index.html",
+    "troca 'erro' por 'aviso' em todos os .log",
+    "replace 'a' with 'b' in every .txt file",
+    "substitui a primeira ocorrência de 'x' por 'y' no main.go",
+    "replace the first occurrence of 'foo' with 'bar' in each .txt file"
+   ],
+   "negatives": [
+    "troca o nome de a.txt para b.txt",
+    "rename config.yaml to settings.yaml",
+    "apaga os arquivos .bak",
+    "count occurrences of TODO in main.go",
+    "change permissions to 755"
+   ]
   }
  ]
 }
