@@ -51,7 +51,23 @@ const (
 	hdTimeout       = 90 * time.Second
 	hdMaxTrailChars = 9000
 	pcMaxCmds       = 12 // full command lines kept for the distill bridge
+	pcMaxWitness    = 4  // shape variants kept per plan (distill slots)
 )
+
+// pcEnt is one spotted entity of a request: the slot a distill can learn.
+type pcEnt struct {
+	Kind string `json:"kind"` // dir, file, test, symbol, service...
+	Name string `json:"name"` // resolved name
+	Raw  string `json:"raw"`  // what the user typed (fill semantics)
+}
+
+// pcWitness is one earlier variant of the same shape: its literal request,
+// its entity values and the exact commands that run verified.
+type pcWitness struct {
+	Task string   `json:"task"`
+	Ents []pcEnt  `json:"ents,omitempty"`
+	Cmds []string `json:"cmds,omitempty"`
+}
 
 // pcPlan is one stored plan template.
 type pcPlan struct {
@@ -59,15 +75,20 @@ type pcPlan struct {
 	Time   int64    `json:"time"`
 	Task   string   `json:"task"` // the request, clipped
 	Keys   []string `json:"keys"` // normalized keywords of the request
+	Shape  string   `json:"shape,omitempty"`
+	Ents   []pcEnt  `json:"ents,omitempty"` // entities of the request, in order
 	Files  []string `json:"files,omitempty"`
 	Steps  []string `json:"steps,omitempty"` // approach: the actions that changed or checked something
 	Cmds   []string `json:"cmds,omitempty"`  // the full bash command lines behind Steps (distill.go replays these)
 	Dead   []string `json:"dead,omitempty"`  // dead ends to skip
 	Verify string   `json:"verify,omitempty"`
 	Hint   string   `json:"hint,omitempty"` // hindsight note (A3)
-	NSteps int      `json:"n_steps"`        // model steps of the run that produced it
-	Wins   int      `json:"wins"`
-	Fails  int      `json:"fails"`
+	// Witnesses are the variants that merged into this plan before the
+	// current trajectory — the proof a distill slot needs (distill.go).
+	Witnesses []pcWitness `json:"witnesses,omitempty"`
+	NSteps    int         `json:"n_steps"` // model steps of the run that produced it
+	Wins      int         `json:"wins"`
+	Fails     int         `json:"fails"`
 	// lesson reuse (lessons_reuse.go): task class and repo signature
 	Kind    string `json:"kind,omitempty"` // bgClassify: size + kind, e.g. "M/bugfix"
 	Repo    string `json:"repo,omitempty"` // lrRepoSig of the project when stored
@@ -431,7 +452,29 @@ func pcScore(root string, ids []string, win bool) error {
 	return pcSave(root, keep)
 }
 
-// pcStore adds p, or refreshes a plan for the same task (keyword Jaccard ≥ 0.7).
+// pcAddWitness records a displaced variant of a merged plan (cap
+// pcMaxWitness, newest first dropped last). skipTask dedups the variant
+// that is the stored trajectory itself.
+func pcAddWitness(ws []pcWitness, w pcWitness, skipTask string) []pcWitness {
+	if w.Task == "" || w.Task == skipTask {
+		return ws
+	}
+	for _, x := range ws {
+		if x.Task == w.Task {
+			return ws
+		}
+	}
+	ws = append(ws, w)
+	if len(ws) > pcMaxWitness {
+		ws = ws[len(ws)-pcMaxWitness:]
+	}
+	return ws
+}
+
+// pcStore adds p, or refreshes a plan for the same task — same keywords
+// (Jaccard ≥ 0.7) or the same masked shape ("comprime @dir" covers
+// "comprime docs" and "comprime src"). A displaced variant is kept as a
+// witness: it is the proof distill needs before parameterizing commands.
 // A plan reused in this turn already got its win from pcScore.
 func pcStore(root string, p pcPlan, reused []string) error {
 	if why := h2PlanPoison(p); why != "" {
@@ -441,7 +484,8 @@ func pcStore(root string, p pcPlan, reused []string) error {
 	plans := pcLoad(root)
 	was := smSet(reused...)
 	for i, old := range plans {
-		if pcJaccard(old.Keys, p.Keys) < 0.7 {
+		sameShape := old.Shape != "" && old.Shape == p.Shape
+		if !sameShape && pcJaccard(old.Keys, p.Keys) < 0.7 {
 			continue
 		}
 		if !was[old.ID] {
@@ -449,8 +493,17 @@ func pcStore(root string, p pcPlan, reused []string) error {
 		}
 		if p.NSteps <= old.NSteps || old.NSteps == 0 { // keep the shorter trajectory
 			hint := old.Hint
+			old.Witnesses = pcAddWitness(old.Witnesses, pcWitness{Task: old.Task, Ents: old.Ents, Cmds: old.Cmds}, p.Task)
 			old.Task, old.Keys, old.Files, old.Steps, old.Cmds, old.Dead, old.Verify, old.NSteps = p.Task, p.Keys, p.Files, p.Steps, p.Cmds, p.Dead, p.Verify, p.NSteps
+			// Shape/Ents descrevem a trajetória guardada: trocam juntos
+			// (p.Task ficou), nunca com os dados do plano que não entrou.
+			old.Shape, old.Ents = p.Shape, p.Ents
 			old.Hint = hint
+		} else { // the stored trajectory stays; the new variant is the witness
+			old.Witnesses = pcAddWitness(old.Witnesses, pcWitness{Task: p.Task, Ents: p.Ents, Cmds: p.Cmds}, old.Task)
+		}
+		if old.Shape == "" { // plano antigo sem metadado: deriva do texto guardado
+			old.Shape, old.Ents = pcShapeEnts(old.Task, nuRuntimeWorld(root, nil))
 		}
 		if p.Hint != "" {
 			old.Hint = p.Hint
@@ -476,6 +529,29 @@ func pcJaccard(a, b []string) float64 {
 	return float64(inter) / float64(len(sa)+len(sb)-inter)
 }
 
+// pcEntsOf converts the spotted entities of a request for storage.
+func pcEntsOf(hits []nuHit) []pcEnt {
+	var out []pcEnt
+	for _, h := range hits {
+		out = append(out, pcEnt{Kind: h.Kind, Name: h.Name, Raw: h.Raw})
+	}
+	return out
+}
+
+// pcShapeEnts derives a request's shape: the canon text with every spotted
+// entity masked as "@<kind>" — "comprime docs" reads "comprime @dir". Two
+// requests that differ only in entity values share the shape and merge
+// into one plan; their entity values are the distill witnesses.
+func pcShapeEnts(text string, w *nuWorld) (string, []pcEnt) {
+	m := nuGet()
+	if m == nil || m.loadErr != nil || w == nil {
+		return "", nil
+	}
+	toks := m.normalize(nuTokenize(text))
+	hits := m.spot(toks, w)
+	return nuShapeCanon(toks, hits), pcEntsOf(hits)
+}
+
 // pcBuild turns the turn's tool log into a template: read-only exploration
 // is dropped, consecutive repeats are folded, failed commands that never
 // succeeded later become dead ends.
@@ -490,6 +566,7 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 		NSteps: steps,
 		Wins:   1,
 	}
+	p.Shape, p.Ents = pcShapeEnts(req, nuRuntimeWorld(a.tools.Root, nil))
 	p.Kind, p.Repo, p.Session = lrTaskClass(req), lrRepoSig(a.tools.Root), a.SessionID
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", p.Task, time.Now().UnixNano())))
 	p.ID = hex.EncodeToString(sum[:6])

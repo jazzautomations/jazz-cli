@@ -67,8 +67,13 @@ type mhMethod struct {
 	Verify   []mhCheck `json:"verify"`
 	Needs    []string  `json:"needs,omitempty"` // facts that must be set ("bin.ssh"): the tool the method uses is present
 	Cmds     []string  `json:"cmds,omitempty"`  // literal commands the method runs as read-only: each must be in cbReadCmds
-	Risk     string    `json:"risk"`
-	CostMS   int       `json:"cost_ms"`
+	// Slots declares the $slot.x placeholders a learned_cmd step may use:
+	// name → entity kind ("dir", "file", "text"). Witnessed runs prove
+	// them (distill.go); at execution every path-typed value is confined
+	// to the project root before the command is re-checked.
+	Slots  map[string]string `json:"slots,omitempty"`
+	Risk   string            `json:"risk"`
+	CostMS int               `json:"cost_ms"`
 }
 
 var (
@@ -201,6 +206,7 @@ type brCtx struct {
 	cat       rvCat
 	attempts  map[rvCat]int
 	proj      fpProject
+	mslots    map[string]string // slot kinds of the method currently running
 }
 
 // brStep is what a capability returns.

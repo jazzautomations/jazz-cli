@@ -245,6 +245,11 @@ func (a *Agent) rcObserve(lt *acTurnLoop, tc ToolCall, out ToolOutput, denied bo
 	switch tc.Name {
 	case "bash":
 		cmd := rcArg(tc, "command")
+		if cmd != "" {
+			// the plan cache replays this line (pcPlan.Cmds): a command
+			// that a distill may parameterize must not truncate at 100
+			e.target = oneLine(cmd, dsMaxCmd)
+		}
 		e.exit = rcExitCode(out.Text)
 		e.mut = cmd != "" && !IsReadOnly(cmd)
 		if cmd != "" && rcIsVerifyCmd(cmd) && e.exit >= 0 {

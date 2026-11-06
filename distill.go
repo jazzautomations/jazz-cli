@@ -14,6 +14,14 @@ package main
 // DECOMPOSIÇÃO é o próprio método: a tarefa vira a sequência de sub-passos
 // verificáveis que resolveu ela, replayável com zero tokens.
 //
+// Com slots: variantes do mesmo Shape ("comprime docs" e "comprime src" →
+// "comprime @dir") viram TESTEMUNHAS de um único plano (pcPlan.Witnesses),
+// e a anti-unificação prova parâmetros — o valor da entidade é o que muda
+// de uma corrida pra outra; preencher o template com os valores de cada
+// testemunha reconstrói o comando dela byte a byte. Prova dada, o método
+// sai parametrizado ($slot.x tipado + pré-condição + atalho mascarado);
+// sem prova, fica literal como sempre.
+//
 // Segurança, em camadas (nenhuma contorna a outra):
 //
 //   - destilação: todo comando passa dsCmdOK (sem DangerReason, sem
@@ -65,11 +73,13 @@ const (
 
 // dsIntent é uma intenção aprendida: nome learned_*, sem regras, só
 // exemplos — o classificador a vê (paráfrases) e o atalho a acerta (o mesmo
-// texto de novo = replay exato).
+// texto de novo = replay exato). Slots, quando o plano provou parâmetros:
+// o atalho mascarado preenche cada um com a entidade do tipo certo.
 type dsIntent struct {
-	Name     string   `json:"name"`
-	Desc     string   `json:"desc,omitempty"`
-	Examples []string `json:"examples"`
+	Name     string               `json:"name"`
+	Desc     string               `json:"desc,omitempty"`
+	Examples []string             `json:"examples"`
+	Slots    map[string]nuSlotDef `json:"slots,omitempty"`
 }
 
 // dsProv é a proveniência de um método aprendido: de qual plano ele veio.
@@ -326,7 +336,30 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 		if st.Cap != "learned_cmd" {
 			return fmt.Sprintf("passo %d usa capacidade %q — o overlay só carrega learned_cmd", i+1, st.Cap)
 		}
-		if why := dsCmdOK(st.In["cmd"]); why != "" {
+		cmd := st.In["cmd"]
+		eff := cmd
+		if refs := dsSlotNames(cmd); len(refs) > 0 {
+			// template parametrizado: cada placeholder precisa estar
+			// declarado e guardado por pré-condição, nunca pode ser a
+			// palavra de comando, e a substituição (aqui uma sonda "x")
+			// continua dentro da barra de replay.
+			if dsSlotInCmdWord(cmd) {
+				return fmt.Sprintf("passo %d: slot na palavra de comando", i+1)
+			}
+			for _, n := range refs {
+				if _, ok := m.Slots[n]; !ok {
+					return fmt.Sprintf("passo %d: $slot.%s não declarado em slots", i+1, n)
+				}
+				if !dsPreHas(m.Pre, "slot."+n) {
+					return fmt.Sprintf("passo %d: $slot.%s sem pré-condição slot.%s set", i+1, n, n)
+				}
+				eff = strings.ReplaceAll(eff, "$slot."+n, "x")
+			}
+			if !dsReplaySafe(eff) {
+				return fmt.Sprintf("passo %d: template fora do reproduzível", i+1)
+			}
+		}
+		if why := dsCmdOK(eff); why != "" {
 			return fmt.Sprintf("passo %d: %s", i+1, why)
 		}
 		for k := range st.In {
@@ -355,8 +388,25 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 			return "pré-condição mal formada"
 		}
 	}
+	for n, k := range m.Slots {
+		if !dsSlotNameRe.MatchString(n) || !dsKindOK(k) {
+			return "slot mal declarado: " + n
+		}
+	}
 	return ""
 }
+
+// dsSlotNameRe casa o nome de um slot declarado (mesmo alfabeto do
+// placeholder $slot.<nome>).
+var dsSlotNameRe = lazyRx(`^[a-z][a-z0-9_]*$`)
+
+// dsKindOK: os tipos de slot que um método pode declarar — os kinds de
+// entidade do NLU mais os tipos livres de texto.
+var dsKindSet = smSet("file", "dir", "test", "symbol", "service", "container",
+	"toolchain", "bin", "ssh_host", "ts_peer", "port", "number",
+	"text", "name", "message", "q")
+
+func dsKindOK(k string) bool { return dsKindSet[k] }
 
 // ---------- aplicação do overlay (carga) ----------
 
@@ -409,7 +459,7 @@ func dsAddIntent(m *nuModel, it dsIntent) bool {
 		return false
 	}
 	m.data.Intents = append(m.data.Intents, nuIntentDef{
-		Name: it.Name, Desc: it.Desc, Examples: exs,
+		Name: it.Name, Desc: it.Desc, Examples: exs, Slots: it.Slots,
 	})
 	m.byName[it.Name] = len(m.data.Intents) - 1
 	m.embedN = append(m.embedN, 0)
@@ -495,9 +545,10 @@ func dsLoadMethods(lib map[string][]mhMethod) {
 type dsCand struct {
 	Plan   pcPlan
 	Method mhMethod
-	Intent dsIntent // Name "" quando o método gruda numa intenção existente
-	Attach string   // intenção existente que recebe o método ("" = cria Intent)
-	Alias  nuAlias  // atalho exato do texto do plano → a intenção
+	Intent dsIntent          // Name "" quando o método gruda numa intenção existente
+	Attach string            // intenção existente que recebe o método ("" = cria Intent)
+	Alias  nuAlias           // atalho exato do texto do plano → a intenção
+	Bind   map[string]string // valores do plano base p/ cada $slot.x (replay do portão)
 }
 
 // dsEligible barra um plano antes do desenho do método: repetido,
@@ -543,6 +594,256 @@ func dsVerifyCmd(p pcPlan) string {
 	return v
 }
 
+// ---------- destilação com slots (anti-unificação) ----------
+
+// dsSlotRefRe casa os placeholders de um comando aprendido: $slot.<nome>.
+var dsSlotRefRe = lazyRx(`\$slot\.([a-z][a-z0-9_]*)`)
+
+// dsSlotNames lista os placeholders distintos de um template, na ordem.
+func dsSlotNames(cmd string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range dsSlotRefRe.FindAllStringSubmatch(cmd, -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// dsSlotInCmdWord: um placeholder nunca pode ser a PALAVRA de comando de
+// nenhum segmento — "$slot.c -rf x" deixaria o valor escolher o binário.
+func dsSlotInCmdWord(cmd string) bool {
+	for _, seg := range reSplit.Split(cmd, -1) {
+		f := shellFields(strings.TrimSpace(seg))
+		if len(f) > 0 && dsSlotRefRe.MatchString(f[0]) {
+			return true
+		}
+	}
+	return false
+}
+
+// dsSlotPathKind: o slot nomeia um caminho do projeto — file/dir/test —
+// ou o tipo é desconhecido (desconhecido confina, nunca abre).
+func dsSlotPathKind(kinds []string) bool {
+	if len(kinds) == 0 {
+		return true
+	}
+	for _, k := range kinds {
+		switch k {
+		case "file", "dir", "test":
+			return true
+		}
+	}
+	return false
+}
+
+// dsSlotValOK valida um valor de slot na execução. Caminho fica confinado
+// no root do projeto: nada de "..", absoluto ou "~".
+func dsSlotValOK(path bool, v string) string {
+	switch {
+	case v == "":
+		return "vazio"
+	case strings.ContainsAny(v, "\n\r\x00"):
+		return "byte de controle"
+	case !path:
+		return ""
+	}
+	switch {
+	case v == "..", strings.HasPrefix(v, "../"), strings.Contains(v, "/../"), strings.HasSuffix(v, "/.."):
+		return "caminho escapa o projeto (..)"
+	case filepath.IsAbs(v) || strings.HasPrefix(v, `\`) || (len(v) > 1 && v[1] == ':'):
+		return "caminho absoluto"
+	case v == "~" || strings.HasPrefix(v, "~/"):
+		return "caminho do HOME (~)"
+	}
+	return ""
+}
+
+// dsExpand preenche os $slot.x de um template com os valores do turno,
+// validando cada um contra o tipo declarado. "" no segundo retorno = ok.
+func dsExpand(tmpl string, slots map[string]string, kindOf func(string) []string) (string, string) {
+	fail := ""
+	out := dsSlotRefRe.ReplaceAllStringFunc(tmpl, func(ph string) string {
+		if fail != "" {
+			return ph
+		}
+		name := ph[len("$slot."):]
+		v := slots[name]
+		if why := dsSlotValOK(dsSlotPathKind(kindOf(name)), v); why != "" {
+			fail = "$slot." + name + ": " + why
+			return ph
+		}
+		return v
+	})
+	if fail != "" {
+		return "", fail
+	}
+	return out, ""
+}
+
+// dsExpandBound preenche com os valores gravados da testemunha base (o
+// replay do portão — literais que já saíram exit 0, sem confinamento).
+func dsExpandBound(tmpl string, bind map[string]string) (string, bool) {
+	ok := true
+	out := dsSlotRefRe.ReplaceAllStringFunc(tmpl, func(ph string) string {
+		v, has := bind[ph[len("$slot."):]]
+		if !has {
+			ok = false
+			return ph
+		}
+		return v
+	})
+	return out, ok
+}
+
+// dsPreHas: o método exige slot.<nome> preenchido antes de rodar?
+func dsPreHas(pre []mhCond, fact string) bool {
+	for _, c := range pre {
+		if c.Fact == fact && (c.Op == "" || c.Op == "set") {
+			return true
+		}
+	}
+	return false
+}
+
+// dsEntVal é o valor que a entidade j da variante vi carrega no slot —
+// a mesma regra do fill (nlu.go): file/dir/test guarda o que foi digitado.
+func dsEntVal(e pcEnt) string {
+	switch e.Kind {
+	case "file", "dir", "test":
+		if e.Raw != "" {
+			return e.Raw
+		}
+	}
+	if e.Name != "" {
+		return e.Name
+	}
+	return e.Raw
+}
+
+// dsAntiUnify: as testemunhas do MESMO Shape provam slots — mesma
+// quantidade de comandos, mesmos tipos de entidade em cada posição, e o
+// valor da entidade é a única coisa que muda de uma corrida pra outra.
+// A prova é exata, por comando: substituir o valor do plano base por
+// $slot.x e repreencher com os valores de CADA testemunha reconstrói o
+// comando dela byte a byte — e o resultado passa na mesma barra
+// (dsCmdOK + dsReplaySafe). Sem prova, o comando fica literal.
+// Retorna templates por índice de comando, os slots provados (nome→tipo)
+// e os valores do plano base pra replay (bind).
+func dsAntiUnify(p pcPlan) (map[int]string, map[string]string, map[string]string) {
+	if len(p.Ents) == 0 || len(p.Witnesses) == 0 {
+		return nil, nil, nil
+	}
+	vars := []pcWitness{{Task: p.Task, Ents: p.Ents, Cmds: p.Cmds}}
+	for _, wt := range p.Witnesses {
+		if len(wt.Cmds) != len(p.Cmds) || len(wt.Ents) != len(p.Ents) {
+			continue
+		}
+		ok := true
+		for j := range wt.Ents {
+			if wt.Ents[j].Kind != p.Ents[j].Kind {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			vars = append(vars, wt)
+		}
+	}
+	if len(vars) < 2 {
+		return nil, nil, nil
+	}
+	jname := map[int]string{} // posição da entidade → nome do slot
+	jof := map[string]int{}
+	kinds := map[string]string{}
+	cnt := map[string]int{}
+	for j, e := range p.Ents {
+		cnt[e.Kind]++
+		n := e.Kind
+		if cnt[e.Kind] > 1 {
+			n = fmt.Sprintf("%s%d", e.Kind, cnt[e.Kind])
+		}
+		jname[j], jof[n], kinds[n] = n, j, e.Kind
+	}
+	tmpl := map[int]string{}
+	used := map[string]bool{}
+	for i, base := range p.Cmds {
+		var reps [][2]string // [slot, valor da base] — maior primeiro: "a/b" antes de "b"
+		for j := range p.Ents {
+			if v0 := dsEntVal(vars[0].Ents[j]); v0 != "" && strings.Contains(base, v0) {
+				reps = append(reps, [2]string{jname[j], v0})
+			}
+		}
+		if len(reps) == 0 {
+			continue
+		}
+		sort.Slice(reps, func(a, b int) bool { return len(reps[a][1]) > len(reps[b][1]) })
+		t := base
+		for _, r := range reps {
+			t = strings.ReplaceAll(t, r[1], "$slot."+r[0])
+		}
+		if dsSlotInCmdWord(t) {
+			continue
+		}
+		ok := true
+		for vi := 1; vi < len(vars) && ok; vi++ {
+			conc := t
+			for _, r := range reps {
+				conc = strings.ReplaceAll(conc, "$slot."+r[0], dsEntVal(vars[vi].Ents[jof[r[0]]]))
+			}
+			if conc != vars[vi].Cmds[i] || dsCmdOK(conc) != "" || !dsReplaySafe(conc) {
+				ok = false
+			}
+		}
+		if !ok {
+			continue
+		}
+		tmpl[i] = t
+		for _, r := range reps {
+			used[r[0]] = true
+		}
+	}
+	if len(tmpl) == 0 {
+		return nil, nil, nil
+	}
+	slots, bind := map[string]string{}, map[string]string{}
+	for n := range used {
+		slots[n] = kinds[n]
+		bind[n] = dsEntVal(vars[0].Ents[jof[n]])
+	}
+	return tmpl, slots, bind
+}
+
+// dsSlotsFitSchema: grudando numa intenção existente, cada placeholder só
+// pode mapear num slot do schema dela, com tipo compatível. Sem encaixe,
+// o método fica literal — nunca inventa placeholder incompatível.
+func dsSlotsFitSchema(intent string, slots map[string]string) bool {
+	m := nuGet()
+	if m == nil || m.loadErr != nil {
+		return false
+	}
+	di, ok := m.byName[intent]
+	if !ok {
+		return false
+	}
+	for n, k := range slots {
+		sd, ok := m.data.Intents[di].Slots[n]
+		if !ok {
+			return false
+		}
+		ks := map[string]bool{}
+		for _, x := range sd.Kinds {
+			ks[x] = true
+		}
+		if !nuKindAllowed(ks, k) {
+			return false
+		}
+	}
+	return true
+}
+
 // dsBuild desenha o método de um plano elegível: cada comando vira um
 // passo learned_cmd, o verificador vira check exit_zero no último passo,
 // o texto do plano vira o atalho exato e (quando a gramática não tem onde
@@ -554,16 +855,6 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 		return nil, why
 	}
 	c := &dsCand{Plan: p}
-	var steps []mhStep
-	last := ""
-	for i, cmd := range p.Cmds {
-		last = fmt.Sprintf("r%d", i+1)
-		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": cmd}, Out: last})
-	}
-	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v {
-		last = fmt.Sprintf("r%d", len(steps)+1)
-		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": v}, Out: last})
-	}
 	name := ""
 	if in := nuGet().Parse(p.Task, w); in.Understood() && in.Name != "none" &&
 		!fgIsMutating(in.Name) && !strings.HasPrefix(in.Name, dsLearnedPrefix) && len(lib[in.Name]) == 0 {
@@ -578,6 +869,46 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 		c.Intent = dsIntent{Name: name, Desc: oneLine(p.Task, 80), Examples: []string{ex}}
 	}
 	c.Alias = nuAlias{Text: p.Task, Intent: name, Ts: p.Time}
+	// anti-unificação: testemunhas do mesmo Shape provam os $slot.x; numa
+	// intenção existente eles ainda precisam mapear no schema dela.
+	tmpl, slots, bind := dsAntiUnify(p)
+	if len(slots) > 0 && c.Attach != "" && !dsSlotsFitSchema(c.Attach, slots) {
+		tmpl, slots, bind = nil, nil, nil
+	}
+	var steps []mhStep
+	last := ""
+	for i, cmd := range p.Cmds {
+		if t := tmpl[i]; t != "" {
+			cmd = t
+		}
+		last = fmt.Sprintf("r%d", i+1)
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": cmd}, Out: last})
+	}
+	if v := dsVerifyCmd(p); v != "" && p.Cmds[len(p.Cmds)-1] != v {
+		last = fmt.Sprintf("r%d", len(steps)+1)
+		steps = append(steps, mhStep{Cap: "learned_cmd", In: map[string]string{"cmd": v}, Out: last})
+	}
+	var pre []mhCond
+	var mslots map[string]string
+	if len(slots) > 0 {
+		mslots = map[string]string{}
+		c.Bind = bind
+		var names []string
+		for n := range slots {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			mslots[n] = slots[n]
+			pre = append(pre, mhCond{Fact: "slot." + n, Op: "set"})
+			if c.Attach == "" {
+				if c.Intent.Slots == nil {
+					c.Intent.Slots = map[string]nuSlotDef{}
+				}
+				c.Intent.Slots[n] = nuSlotDef{Kinds: []string{slots[n]}, Required: true}
+			}
+		}
+	}
 	risk := "low"
 	for _, cm := range p.Cmds {
 		if !IsReadOnly(cm) {
@@ -588,8 +919,10 @@ func dsBuild(p pcPlan, lib map[string][]mhMethod, w *nuWorld) (*dsCand, string) 
 	c.Method = mhMethod{
 		Name: name + ".replay", Intent: name, Priority: 0,
 		Doc:    "aprendido (jazz distill): " + oneLine(p.Task, 90),
+		Pre:    pre,
 		Steps:  steps,
 		Verify: []mhCheck{{Check: "exit_zero", Arg: "$" + last}},
+		Slots:  mslots,
 		Risk:   risk, CostMS: len(steps) * 2000,
 	}
 	return c, ""
@@ -631,10 +964,18 @@ func dsGate(ctx context.Context, root string, c *dsCand, run dsRunner, seed int6
 	} else {
 		rep.Intent = c.Intent.Name
 	}
-	// (a) replay — cada passo sai com exit 0 no projeto de verdade.
+	// (a) replay — cada passo sai com exit 0 no projeto de verdade. Um
+	// template com $slot.x roda com os valores do plano base (a corrida
+	// verificada que gerou o template — a prova já é dela).
 	for i, st := range c.Method.Steps {
-		code := run(ctx, st.In["cmd"], dsCmdTimeout)
-		rep.Replay = append(rep.Replay, dsStepRep{Cmd: st.In["cmd"], Exit: code})
+		cmd := st.In["cmd"]
+		if strings.Contains(cmd, "$slot.") {
+			if x, ok := dsExpandBound(cmd, c.Bind); ok {
+				cmd = x
+			}
+		}
+		code := run(ctx, cmd, dsCmdTimeout)
+		rep.Replay = append(rep.Replay, dsStepRep{Cmd: cmd, Exit: code})
 		if code != 0 {
 			rep.Reason = fmt.Sprintf("replay: passo %d saiu com exit %d — a trajetória não re-verifica", i+1, code)
 			return rep
@@ -981,8 +1322,15 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 		// o atalho fica indexado pelo canon que a gramática realmente vê
 		m := dsModelMustNoErr()
 		if m != nil {
-			if canon := m.canonOf(c.Alias.Text); canon != "" {
+			canon := m.canonOf(c.Alias.Text)
+			if canon != "" {
 				ov.Aliases[canon] = c.Alias
+			}
+			// método parametrizado: a forma mascarada também atalha —
+			// "comprime @dir" lê "comprime docs" e "comprime src" na mesma
+			// intenção, com a entidade preenchendo o slot (nlu.go Parse).
+			if len(c.Method.Slots) > 0 && c.Plan.Shape != "" && c.Plan.Shape != canon {
+				ov.Aliases[c.Plan.Shape] = nuAlias{Text: c.Plan.Shape, Intent: c.Alias.Intent, Ts: c.Alias.Ts}
 			}
 		}
 		ov.Prov = append(ov.Prov, dsProv{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 120), Intent: g.Intent, Method: c.Method.Name, Wins: c.Plan.Wins, Ts: now})
@@ -1129,7 +1477,7 @@ func dsNote(a *Agent, root string, p pcPlan) {
 		return
 	}
 	for _, q := range pcLoad(root) {
-		if pcJaccard(q.Keys, p.Keys) < 0.7 {
+		if pcJaccard(q.Keys, p.Keys) < 0.7 && (q.Shape == "" || q.Shape != p.Shape) {
 			continue
 		}
 		if q.Wins == dsMinWins && dsEligible(q) == "" {
@@ -1144,17 +1492,40 @@ func dsIsLearned(name string) bool { return strings.HasPrefix(name, dsLearnedPre
 
 // ---------- learned_cmd (a capacidade dos métodos aprendidos) ----------
 
-// brLearnedCmd executa UM comando literal gravado por `jazz distill`. A
-// mesma cerca de qualquer comando do cérebro: env.Permit decide, o audit
-// registra, o orçamento conta, e o shadow-git cobre os efeitos pra /undo.
-// A validação roda de novo aqui — um overlay editado à mão tem a mesma
-// barra da carga (nada perigoso, nada de segredo, uma linha).
+// brLearnedCmd executa UM comando gravado por `jazz distill` — literal ou
+// um template com $slot.x que as testemunhas provaram. A mesma cerca de
+// qualquer comando do cérebro: env.Permit decide, o audit registra, o
+// orçamento conta, e o shadow-git cobre os efeitos pra /undo. A validação
+// roda de novo aqui — um overlay editado à mão tem a mesma barra da carga
+// (nada perigoso, nada de segredo, uma linha) — e a substituição também:
+// caminho confinado no projeto e o comando preenchido reproduzível.
 func brLearnedCmd(cx *brCtx, in map[string]string) brStep {
 	cmd := strings.TrimSpace(in["cmd"])
-	if why := dsCmdOK(cmd); why != "" {
+	refuse := func(why string) brStep {
 		obs := rvNoCmd()
 		obs.Output = "comando aprendido recusado: " + why
 		return brStep{obs: obs, why: obs.Output}
+	}
+	if strings.Contains(cmd, "$slot.") {
+		if dsSlotInCmdWord(cmd) { // nunca o binário: só argumentos
+			return refuse("slot na palavra de comando")
+		}
+		ex, why := dsExpand(cmd, cx.task.Slots, func(n string) []string {
+			if k, ok := cx.mslots[n]; ok {
+				return []string{k}
+			}
+			return nil // tipo desconhecido: valor tratado como caminho (confinado)
+		})
+		if why != "" {
+			return refuse(why)
+		}
+		cmd = ex
+		if !dsReplaySafe(cmd) { // a substituição não pode mudar a natureza do comando
+			return refuse("a substituição sai do reproduzível")
+		}
+	}
+	if why := dsCmdOK(cmd); why != "" {
+		return refuse(why)
 	}
 	out, exit, obs := cx.runCmd(cmd, dsCmdTimeout)
 	if obs.Denied || obs.BudgetLeft == 0 {

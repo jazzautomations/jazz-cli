@@ -974,9 +974,20 @@ func h2PoisonReason(s string) string {
 }
 
 func h2PlanPoison(p pcPlan) string {
-	parts := []string{p.Task, p.Verify, p.Hint}
+	parts := []string{p.Task, p.Verify, p.Hint, p.Shape}
 	parts = append(parts, p.Steps...)
 	parts = append(parts, p.Dead...)
+	parts = append(parts, p.Cmds...) // a trajetória literal também é texto aprendido
+	for _, e := range p.Ents {
+		parts = append(parts, e.Raw, e.Name)
+	}
+	for _, wt := range p.Witnesses {
+		parts = append(parts, wt.Task)
+		parts = append(parts, wt.Cmds...)
+		for _, e := range wt.Ents {
+			parts = append(parts, e.Raw, e.Name)
+		}
+	}
 	for _, s := range parts {
 		if r := h2PoisonReason(s); r != "" {
 			return r
