@@ -204,11 +204,6 @@ func TestNLUWeakEntityDoesNotSelfCorroborate(t *testing.T) {
 func TestNLUCorpusFalseMatches(t *testing.T) {
 	m, w := nuTestWorld(t)
 	under := map[string]float64{
-		// verbo de compactação não é listar arquivo
-		"compacta a pasta logs em tar.gz":         nuMinConf,
-		"compress the logs folder into a tarball": nuMinConf,
-		// "make" + atributo não é build
-		"make script.sh executable": nuMinConf,
 		// serviços que falharam no boot é consulta de serviço, não ambiente nem conserto
 		"quais serviços falharam no boot": nuMinConf,
 		"which services failed at boot":   nuMinConf,
@@ -229,6 +224,17 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		"find the official code repository for each paper in this list": "find",
 		// quantidade de cpu é ambiente, não ferramenta
 		"how many cpus does this box have": "env_status",
+		// compactar/executável agora têm dono: archive_create e perm_set
+		// existem e são as leituras certas dessas frases
+		"compacta a pasta logs em tar.gz":         "archive_create",
+		"compress the logs folder into a tarball": "archive_create",
+		"make script.sh executable":               "perm_set",
+		// formatos soltos e palavras-tipo não são diretório nem arquivo
+		"Archive the directory structure under current directory into dirstructure.tar": "archive_create",
+		"Archive all files/directories under data/ into archive.tar":                    "archive_create",
+		"create a zip file of all the files in some directory":                          "archive_create",
+		"comprime a pasta src em src.tar.gz":                                            "archive_create",
+		"extrai src.tar.gz em dest":                                                     "archive_extract",
 	}
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {
@@ -296,6 +302,11 @@ func TestNLUV5Wiring(t *testing.T) {
 		"conta quantas linhas tem o app.log":   "wordcount_stats",
 		"who last touched main.go":             "git_blame",
 		"o que tem dentro do release.zip":      "archive_list",
+		// perm_set nasceu: atributo executável é mutação com cap próprio
+		"deixa o script.sh executável": "perm_set",
+		"torna o script executável":    "perm_set",
+		"chmod 755 no deploy.sh":       "perm_set",
+		"muda o dono de a.txt pra mike": "perm_set",
 	}
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {
@@ -356,8 +367,6 @@ func TestNLUV5Wiring(t *testing.T) {
 		"mede a latência pro gateway":          nuMinConf,
 		// split/chmod/clean são mutações, não leituras
 		"split file data.csv into pieces per 100 lines": nuMinConf,
-		"deixa o script.sh executável":                  nuMinConf,
-		"torna o script executável":                     nuMinConf,
 		// "users logged in" não é file_users (não existe método de sessões)
 		"Print a list of unique users who are logged in": nuMinConf,
 		"Print a column of CPU usage numbers":            nuMinConf,

@@ -122,7 +122,11 @@ func TestDistillAntiUnify(t *testing.T) {
 		t.Fatalf("slots/bind: %+v %+v", slots, bind)
 	}
 	// e o método sai parametrizado, tipado e guardado por pré-condição
-	c, why := dsBuild(p, map[string][]mhMethod{}, w, root)
+	// (a lib carrega a intenção archive_create — "comprime docs" roteia pra
+	// ela e, com métodos existentes, o Attach não deve disparar)
+	c, why := dsBuild(p, map[string][]mhMethod{
+		"archive_create": {{Name: "archive_create.dir"}},
+	}, w, root)
 	if c == nil {
 		t.Fatalf("build: %s", why)
 	}

@@ -1669,6 +1669,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			if v == "" && !derived {
 				// the words no rule explained, as typed
 				var parts []string
+				clause := false
 				for _, i := range res {
 					if taken[i] {
 						continue
@@ -1697,6 +1698,16 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if kinds["number"] && !kinds["text"] && !nuIsNumber(toks[i].Fold) {
 						continue // a number slot takes digits only, never a leftover name
+					}
+					switch toks[i].Fold {
+					// marcador de oração fecha o nome — "make a rust file
+					// that also compiles" não tem target "rust that also"
+					case "that", "which", "whose", "where", "when", "que", "onde", "quando", "because", "pois", "porque":
+						clause = true
+						continue
+					}
+					if clause {
+						break
 					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
@@ -1963,7 +1974,7 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				if u.Filler || u.Slang || taken[j] {
 					continue
 				}
-				if nuArchiveName(u.Fold) || nuNameShaped(u.Raw) ||
+				if nuArchiveWord(u.Fold) || nuNameShaped(u.Raw) ||
 					(len(u.Concs) == 0 && !nuIsNumber(u.Fold) && u.Fold != "") {
 					taken[i], taken[j] = true, true
 					return u.Raw
@@ -1972,9 +1983,10 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		// pass 2: um nome-archive solto ("comprime logs.tar.gz" implícito
-		// não existe — mas "create filename.tar.gz" sem cue vale).
+		// não existe — mas "create filename.tar.gz" sem cue vale), ou a
+		// palavra-formato nua ("create a zip file" → formato zip).
 		for i := range toks {
-			if !taken[i] && nuArchiveName(toks[i].Fold) {
+			if !taken[i] && nuArchiveWord(toks[i].Fold) {
 				taken[i] = true
 				return toks[i].Raw
 			}
@@ -2032,11 +2044,27 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				if u.Filler || u.Slang || taken[j] || u.has("article") {
 					continue
 				}
-				if nuArchiveName(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) {
+				if nuArchiveWord(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) {
 					break // o archive é do slot out; ".txt" é filtro de ext
+				}
+				if nuArcTypeWord(u.Fold) {
+					continue // "files/directories/structure" descreve o quê, não a fonte
 				}
 				add(j) // com cue de pasta/arquivo a palavra é a fonte —
 				// "a pasta logs": logs tem conceito próprio e mesmo assim é src
+				break
+			}
+			// EN "the logs folder": o nome vem ANTES do cue
+			for j := i - 1; j >= 0 && j >= i-2; j-- {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] || u.has("article") {
+					continue
+				}
+				if nuArchiveWord(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) ||
+					nuArcTypeWord(u.Fold) {
+					break
+				}
+				add(j)
 				break
 			}
 		}
@@ -2047,7 +2075,7 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			if nuNameShaped(t.Raw) || nuFileShaped(t.Fold) ||
 				strings.Contains(t.Raw, "/") || (t.Quoted && t.Raw != "") {
-				if !nuArchiveName(t.Fold) && !nuPureExt(t.Fold) {
+				if !nuArchiveName(t.Fold) && !nuPureExt(t.Fold) && !nuArcAllTypeWords(t.Raw) {
 					add(i)
 				}
 			}
@@ -2055,6 +2083,30 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 		return strings.Join(srcs, " ")
 	}
 	return ""
+}
+
+// nuArcTypeWord: palavras que descrevem o TIPO do que vai ser arquivado —
+// nunca são o nome da fonte ("archive the directory structure", "archive
+// files/directories under data").
+var nuArcTypeWords = map[string]bool{
+	"structure": true, "estrutura": true, "contents": true, "content": true,
+	"conteudo": true, "conteúdo": true, "files": true, "file": true,
+	"directories": true, "directory": true, "dirs": true, "dir": true,
+	"folders": true, "folder": true, "subdirectories": true, "subdirs": true,
+	"arquivos": true, "arquivo": true, "pastas": true, "pasta": true,
+	"diretorios": true, "diretório": true, "diretorio": true,
+}
+
+func nuArcTypeWord(f string) bool { return nuArcTypeWords[f] }
+
+// nuArcAllTypeWords: "files/directories" — todos os pedaços são tipo.
+func nuArcAllTypeWords(raw string) bool {
+	for _, p := range strings.Split(raw, "/") {
+		if p != "" && !nuArcTypeWords[p] {
+			return false
+		}
+	}
+	return strings.Contains(raw, "/")
 }
 
 // nuReplFlag: flags do replace — "first occurrence/only the first" →
@@ -2582,6 +2634,18 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				return strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
 			}
 			if nuExtWords[f] {
+				// "a zip file": ext-word + file substantivo + artigo
+				// indefinido é o NOME do artefato, não um filtro de
+				// extensão — "the .zip files" (plural/definido) segue filtro.
+				if i > 0 && i+1 < len(toks) {
+					nxt := toks[i+1].Fold
+					if nxt == "file" || nxt == "arquivo" {
+						switch toks[i-1].Fold {
+						case "a", "an", "um", "uma":
+							continue
+						}
+					}
+				}
 				taken[i] = true
 				return f
 			}
@@ -2698,6 +2762,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"all": true, "every": true, "each": true, "any": true,
 			"todos": true, "todas": true, "todo": true, "toda": true,
 			"cada": true, "qualquer": true, "quaisquer": true,
+			// "in some directory" = escopo indefinido — não é nome real
+			"some": true, "certa": true, "certo": true,
 			// "in text files" = arquivos de texto em geral, não dir "text"
 			"text": true, "texto": true,
 		}
@@ -2765,6 +2831,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				if nuFileShaped(u.Fold) {
 					continue // "em a.txt" — o alvo é o slot file, não um dir
+				}
+				if nuArchiveWord(u.Fold) {
+					continue // "into a tarball" — é o formato do out, não dir
 				}
 				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
 					continue // a window, a verb or a shell var is never a dir — leave it for the time slots or unfed
@@ -3011,6 +3080,54 @@ var nuCueFamilyConcs = map[string]bool{
 // nuOwnerLikeArg: candidate word after a cue — skip fillers, quoted and
 // already-taken tokens, bounded radius (the 'owner is daniel'→is fix).
 func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]bool) string {
+	// passada set-phrasing: "change owner … to NAME" / "…para NAME" — o
+	// nome fecha a frase depois da preposição, longe da palavra-cue.
+	// Só dispara quando a cue da família aparece no texto ("owner" pro
+	// owner, "group"/"grupo" pro group) — senão o scan rouba o nome do
+	// slot vizinho.
+	if !neg {
+		family := false
+		for _, t := range toks {
+			if cues[t.Fold] {
+				family = true
+				break
+			}
+		}
+		if !family {
+			goto window
+		}
+		for i := 0; i+1 < len(toks); i++ {
+			if toks[i].Fold != "to" && toks[i].Fold != "para" {
+				continue
+			}
+			j := i + 1
+			for j < len(toks) && (toks[j].Filler || taken[j]) {
+				j++
+			}
+			if j >= len(toks) {
+				continue
+			}
+			n := toks[j].Fold
+			cueish := false
+			for _, c := range toks[j].Concs {
+				if nuCueFamilyConcs[c] {
+					cueish = true
+				}
+			}
+			isFile := false
+			for _, tag := range toks[j].Tags {
+				if tag == "@file" {
+					isFile = true
+				}
+			}
+			if n != "" && !cueish && !isFile && !strings.Contains(n, "/") && !nuIsNumber(n) &&
+				!nuOctalShaped(n) && !nuGroupCues[n] && j+1 >= len(toks) {
+				taken[i], taken[j] = true, true
+				return n
+			}
+		}
+	}
+window:
 	for i, t := range toks {
 		cue := cues[t.Fold]
 		// 'owned/belonging by' é cue de DONO — nunca de grupo
@@ -3028,7 +3145,7 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 		if nuNegationNear(toks, i) != neg {
 			continue
 		}
-		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+		for j := i + 1; j < len(toks) && j <= i+6; j++ {
 			if toks[j].Filler || taken[j] {
 				continue
 			}
@@ -3141,6 +3258,95 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			if !taken[i] && nuOctalShaped(t.Fold) && nuNegationNear(toks, i) {
 				taken[i] = true
 				return t.Fold
+			}
+		}
+		return ""
+	case "symbolic":
+		// modo simbólico: "u+x", "ug=rwx,o=", "a-w" — token cru com
+		// operador e bits, geralmente depois de "chmod"/"permission"
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			f := t.Fold
+			if len(f) < 3 || len(f) > 24 {
+				continue
+			}
+			op := strings.IndexAny(f, "+-=")
+			if op <= 0 {
+				continue
+			}
+			who, ok := f[:op], true
+			for _, c := range who {
+				if c != 'u' && c != 'g' && c != 'o' && c != 'a' {
+					ok = false
+				}
+			}
+			for _, c := range f[op+1:] {
+				if c != 'r' && c != 'w' && c != 'x' && c != 'X' && c != 's' && c != 't' && c != ',' {
+					ok = false
+				}
+			}
+			if ok {
+				taken[i] = true
+				return f
+			}
+		}
+		return ""
+	case "recursive":
+		for i, t := range toks {
+			if !taken[i] && (t.Fold == "recursively" || t.Fold == "recursive" ||
+				t.Fold == "recursivo" || t.Fold == "recursiva" || t.Fold == "recursivamente") {
+				taken[i] = true
+				return "true"
+			}
+		}
+		return ""
+	case "symexec":
+		// "make x executable" → a+x; negado fica de fora (recusa honesta)
+		for i, t := range toks {
+			for _, w := range []string{"executavel", "executável", "executable", "executaveis", "executáveis", "rodavel", "rodável"} {
+				if t.Fold == w && !nuNegationNear(toks, i) {
+					taken[i] = true
+					return "a+x"
+				}
+			}
+		}
+		return ""
+	case "symw":
+		// "make it writable" → a+w
+		for i, t := range toks {
+			for _, w := range []string{"writable", "escrevivel", "escrevível", "gravavel", "gravável"} {
+				if t.Fold == w && !nuNegationNear(toks, i) {
+					taken[i] = true
+					return "a+w"
+				}
+			}
+		}
+		return ""
+	case "symnw":
+		// "read-only"/"remove write"/"somente leitura" → a-w
+		for i, t := range toks {
+			f := t.Fold
+			rm := false
+			for j := i - 3; j < i; j++ {
+				if j < 0 {
+					continue
+				}
+				switch toks[j].Fold {
+				case "remove", "remover", "remova", "tira", "tirar", "strip", "drop":
+					rm = true
+				}
+			}
+			if (f == "writable" || f == "write" || f == "escrita" || f == "escrever") && (nuNegationNear(toks, i) || rm) {
+				taken[i] = true
+				return "a-w"
+			}
+			if f == "read-only" || f == "readonly" ||
+				(f == "leitura" && i > 0 &&
+					(toks[i-1].Fold == "somente" || toks[i-1].Fold == "only" || toks[i-1].Fold == "so" || toks[i-1].Fold == "só")) {
+				taken[i] = true
+				return "a-w"
 			}
 		}
 		return ""
@@ -3473,4 +3679,14 @@ func nuArchiveName(f string) bool {
 		}
 	}
 	return false
+}
+
+// nuArchiveWord: archive-shaped OU palavra-formato solta ("tarball", "a
+// zip", "num tgz") — o cap resolve o formato e deriva o nome da fonte.
+func nuArchiveWord(f string) bool {
+	switch f {
+	case "tar", "tarball", "zip", "tgz", "gz", "gzip", "jar", "whl", "tar.gz":
+		return true
+	}
+	return nuArchiveName(f)
 }

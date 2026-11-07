@@ -722,7 +722,8 @@
    "estrutura inicial",
    "project structure",
    "folder structure",
-   "estrutura do projeto"
+   "estrutura do projeto",
+   "compiles"
   ],
   "outnoun": [
    "output",
@@ -2743,7 +2744,14 @@
    "rwx",
    "setuid bit",
    "setgid bit",
-   "sticky bit"
+   "sticky bit",
+   "owners",
+   "donos",
+   "dona",
+   "proprietario",
+   "proprietário",
+   "proprietarios",
+   "proprietários"
   ],
   "nameattr": [
    "named",
@@ -3012,10 +3020,9 @@
    "chamado",
    "chamada",
    "sob",
+   "pro",
    "to",
-   "para",
-   "pra",
-   "pro"
+   "para"
   ]
  }
 }

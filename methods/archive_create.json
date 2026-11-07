@@ -1,72 +1,179 @@
-{"methods": [
- {
-  "name": "archive_create.pack",
-  "intent": "archive_create",
-  "priority": 10,
-  "doc": "archive_op create nativo: fontes confinadas ao root, saída atômica, file_exists prova o pacote",
-  "pre": [
-   {"fact": "slot.out", "op": "set"},
-   {"fact": "slot.srcs", "op": "set"}
-  ],
-  "steps": [
-   {"cap": "archive_op", "in": {"op": "create", "out": "$slot.out", "srcs": "$slot.srcs"}, "out": "a"}
-  ],
-  "verify": [{"check": "file_exists", "arg": "$a"}],
-  "risk": "medium",
-  "cost_ms": 200
- },
- {
-  "name": "archive_create.exts",
-  "intent": "archive_create",
-  "priority": 9,
-  "doc": "'comprime todos os .txt em x.zip': file_find produz a lista, archive_op empacota",
-  "needs": ["bin.python3"],
-  "pre": [
-   {"fact": "slot.out", "op": "set"},
-   {"fact": "slot.srcs", "op": "unset"},
-   {"fact": "slot.ext", "op": "set"}
-  ],
-  "steps": [
-   {"cap": "script:file_find", "in": {"path": ".", "name": "*.$slot.ext"}, "out": "f"},
-   {"cap": "archive_op", "in": {"op": "create", "out": "$slot.out", "srcs": "$f"}, "out": "a"}
-  ],
-  "verify": [{"check": "file_exists", "arg": "$a"}],
-  "risk": "medium",
-  "cost_ms": 1500
- },
- {
-  "name": "archive_create.all",
-  "intent": "archive_create",
-  "priority": 8,
-  "doc": "'comprime todos os arquivos / o diretório atual em x.tgz': o pacote é o root inteiro",
-  "pre": [
-   {"fact": "slot.out", "op": "set"},
-   {"fact": "slot.srcs", "op": "unset"},
-   {"fact": "slot.mass", "op": "set"},
-   {"fact": "slot.ext", "op": "unset"}
-  ],
-  "steps": [
-   {"cap": "archive_op", "in": {"op": "create", "out": "$slot.out", "srcs": "."}, "out": "a"}
-  ],
-  "verify": [{"check": "file_exists", "arg": "$a"}],
-  "risk": "medium",
-  "cost_ms": 400
- },
- {
-  "name": "archive_create.ask_out",
-  "intent": "archive_create",
-  "priority": 5,
-  "doc": "fonte clara mas sem nome de saída — pergunta o nome do pacote",
-  "pre": [
-   {"fact": "slot.out", "op": "unset"},
-   {"fact": "slot.srcs", "op": "set"}
-  ],
-  "steps": [
-   {"cap": "ask_slot", "in": {"slot": "out", "q": "Nome do archive? (ex.: backup.tar.gz)"}, "out": "slot.out"},
-   {"cap": "archive_op", "in": {"op": "create", "out": "$slot.out", "srcs": "$slot.srcs"}, "out": "a"}
-  ],
-  "verify": [{"check": "file_exists", "arg": "$a"}],
-  "risk": "medium",
-  "cost_ms": 200
- }
-]}
+{
+ "methods": [
+  {
+   "name": "archive_create.pack",
+   "intent": "archive_create",
+   "priority": 10,
+   "doc": "archive_op create nativo: fontes confinadas ao root, saída atômica, file_exists prova o pacote",
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    },
+    {
+     "fact": "slot.srcs",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "archive_op",
+     "in": {
+      "op": "create",
+      "out": "$slot.out",
+      "srcs": "$slot.srcs",
+      "dir": "$slot.dir"
+     },
+     "out": "a"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$a"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 200
+  },
+  {
+   "name": "archive_create.exts",
+   "intent": "archive_create",
+   "priority": 9,
+   "doc": "'comprime todos os .txt em x.zip': file_find produz a lista, archive_op empacota",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    },
+    {
+     "fact": "slot.srcs",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": ".",
+      "name": "*.$slot.ext"
+     },
+     "out": "f"
+    },
+    {
+     "cap": "archive_op",
+     "in": {
+      "op": "create",
+      "out": "$slot.out",
+      "srcs": "$f",
+      "dir": "$slot.dir"
+     },
+     "out": "a"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$a"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 1500
+  },
+  {
+   "name": "archive_create.all",
+   "intent": "archive_create",
+   "priority": 8,
+   "doc": "'comprime todos os arquivos / o diretório atual em x.tgz': o pacote é o root inteiro",
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    },
+    {
+     "fact": "slot.srcs",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "archive_op",
+     "in": {
+      "op": "create",
+      "out": "$slot.out",
+      "srcs": ".",
+      "dir": "$slot.dir"
+     },
+     "out": "a"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$a"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 400
+  },
+  {
+   "name": "archive_create.ask_out",
+   "intent": "archive_create",
+   "priority": 5,
+   "doc": "fonte clara mas sem nome de saída — pergunta o nome do pacote",
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.srcs",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "out",
+      "q": "Nome do archive? (ex.: backup.tar.gz)"
+     },
+     "out": "slot.out"
+    },
+    {
+     "cap": "archive_op",
+     "in": {
+      "op": "create",
+      "out": "$slot.out",
+      "srcs": "$slot.srcs",
+      "dir": "$slot.dir"
+     },
+     "out": "a"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$a"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 200
+  }
+ ]
+}

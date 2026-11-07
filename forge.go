@@ -84,6 +84,7 @@ var fgMutating = map[string]bool{
 	"kill_process":    true,
 	"service_restart": true, "service_start": true, "service_stop": true,
 	"container_stop": true, "container_up": true, "container_prune": true,
+	"text_replace": true, "perm_set": true,
 }
 
 // fgIsMutating: the overlay loader also asks (nlu_overlay.go) — a

@@ -71,6 +71,7 @@ var noInlineMustCompileAllow = map[string]string{
 	"docs.go:dcSelect":            "dynamic", // QuoteMeta(sym)
 	"docs_fetch.go:dcC7Version":   "dynamic", // QuoteMeta(id), QuoteMeta(want)
 	"shell.go:Shell.Run":          "dynamic", // QuoteMeta(marker)
+	"methods.go:brTextOp":         "dynamic", // QuoteMeta(from) no ignore_case
 	"web.go:dropBlockRes":         "dynamic", // tag names from the caller
 	"buildtarget.go":              "todo",    // wave 2 (guard FP item owns the file)
 	"hardening2.go:h2WholeDanger": "todo",    // wave 2

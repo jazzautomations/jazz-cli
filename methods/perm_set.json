@@ -1,0 +1,765 @@
+{
+ "methods": [
+  {
+   "name": "perm_set.chmod",
+   "intent": "perm_set",
+   "priority": 10,
+   "doc": "'chmod 755 em a.sh': perm_op confinado num arquivo, file_mode prova os bits reais",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.group",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "$slot.mode",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_mode",
+     "arg": "$p",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.dir",
+   "intent": "perm_set",
+   "priority": 9,
+   "doc": "'muda a permissão da pasta build pra 755': perm_op no próprio dir (recursive se pedido)",
+   "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    },
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.group",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.dir",
+      "mode": "$slot.mode",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_mode",
+     "arg": "$p",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 40
+  },
+  {
+   "name": "perm_set.chown",
+   "intent": "perm_set",
+   "priority": 9,
+   "doc": "'change owner of f to user': perm_op chown, file_owner confere o dono real",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chown",
+      "path": "$slot.file",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_owner",
+     "arg": "$p",
+     "arg2": "$slot.owner"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.chgrp",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'change group of f to staff': perm_op chgrp, file_group confere o grupo real",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chgrp",
+      "path": "$slot.file",
+      "group": "$slot.group",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_group",
+     "arg": "$p",
+     "arg2": "$slot.group"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.each",
+   "intent": "perm_set",
+   "priority": 7,
+   "doc": "'chmod 644 em todos os .txt': file_find por ext produz, for_each aplica, list_mode prova o lote",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.mode",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_mode",
+     "arg": "$cand",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 200
+  },
+  {
+   "name": "perm_set.all",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'chmod 755 em todos os arquivos': mass sem escopo de nome — for_each no tipo file, list_mode prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.mode",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_mode",
+     "arg": "$cand",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "perm_set.dirin",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'chmod nos arquivos dentro de src': mass dentro de dir real — file_find escopado + for_each",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    },
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256",
+      "path": "$slot.dir"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.mode",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_mode",
+     "arg": "$cand",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "perm_set.exec",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'torna deploy.sh executável': perm_op chmod a+x, file_perm prova o bit x",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symexec",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "a+x",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_perm",
+     "arg": "$p",
+     "arg2": "x"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.execext",
+   "intent": "perm_set",
+   "priority": 7,
+   "doc": "'make all .sh executable': file_find por ext, for_each a+x, list_perm prova o lote",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symexec",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "a+x",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_perm",
+     "arg": "$cand",
+     "arg2": "x"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 200
+  },
+  {
+   "name": "perm_set.execall",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'make everything executable'/'all scripts': mass sem ext — for_each tipo file, list_perm prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symexec",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256",
+      "path": "$slot.dir"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "a+x",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_perm",
+     "arg": "$cand",
+     "arg2": "x"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "perm_set.wron",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'make config.ini writable': chmod a+w, file_perm w prova",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symw",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "a+w"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_perm",
+     "arg": "$p",
+     "arg2": "w"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.wroff",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'tira a escrita de config.ini'/'read-only': chmod a-w, file_noperm w prova",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symnw",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "a-w"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_noperm",
+     "arg": "$p",
+     "arg2": "w"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.sym",
+   "intent": "perm_set",
+   "priority": 5,
+   "doc": "'chmod u+x em f': simbólico literal — file_exists prova o alvo intacto (o chmod em si falha no step se der errado)",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symbolic",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "$slot.symbolic",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$p"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.ownall",
+   "intent": "perm_set",
+   "priority": 7,
+   "doc": "'change owner of all files in dir to X': mass chown escopado, list_owner prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256",
+      "path": "$slot.dir"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chown",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_owner",
+     "arg": "$cand",
+     "arg2": "$slot.owner"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "perm_set.owneach",
+   "intent": "perm_set",
+   "priority": 7,
+   "doc": "'change owner of all .log to X': ext+chown, list_owner prova",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chown",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_owner",
+     "arg": "$cand",
+     "arg2": "$slot.owner"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 200
+  }
+ ]
+}

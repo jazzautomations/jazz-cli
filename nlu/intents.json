@@ -1040,7 +1040,8 @@
       "recover",
       "service",
       "@service",
-      "mutate"
+      "mutate",
+      "permattr"
      ]
     },
     {
@@ -5559,6 +5560,12 @@
       "text"
      ],
      "from": "find:mass"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "from": "find:dir_cued"
     }
    },
    "examples": [
@@ -5649,6 +5656,156 @@
     "lista o conteúdo do tar",
     "extrai os ips do log",
     "extract all emails from mbox.txt"
+   ]
+  },
+  {
+   "name": "perm_set",
+   "desc": "mudar permissão/dono/grupo de arquivo ou dir — chmod/chown confinado com prova de bits reais",
+   "rules": [
+    {
+     "all": [
+      "permattr",
+      "mutate"
+     ],
+     "none": [
+      "delete",
+      "install",
+      "download",
+      "service",
+      "container",
+      "branch",
+      "status",
+      "extract",
+      "blame"
+     ]
+    },
+    {
+     "all": [
+      "execperm",
+      "mutate"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "delete",
+      "install",
+      "status",
+      "blame"
+     ],
+     "w": 0
+    },
+    {
+     "all": [
+      "execperm",
+      "filenoun"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "delete",
+      "install",
+      "status",
+      "permattr",
+      "blame"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "file": {
+     "kinds": [
+      "file"
+     ]
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "from": "find:dir_cued"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "mass": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:mass"
+    },
+    "mode": {
+     "kinds": [
+      "number"
+     ],
+     "from": "perm:mode"
+    },
+    "symbolic": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:symbolic"
+    },
+    "owner": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:owner"
+    },
+    "group": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:group"
+    },
+    "recursive": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:recursive"
+    },
+    "from_mode": {
+     "kinds": [
+      "number"
+     ],
+     "from": "perm:not_mode"
+    },
+    "symexec": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:symexec"
+    },
+    "symw": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:symw"
+    },
+    "symnw": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:symnw"
+    }
+   },
+   "examples": [
+    "change the permission of run.sh to 755",
+    "muda a permissão da pasta para 777",
+    "chmod 644 on all .txt files",
+    "change the owner of all files in dir to antoniod",
+    "make deploy.sh executable",
+    "change group of data/ to staff",
+    "change permissions recursively on build/",
+    "torna o script executável",
+    "remove write permission from config.ini"
+   ],
+   "negatives": [
+    "find files with permission 777",
+    "lista arquivos sem dono",
+    "quais arquivos são executáveis",
+    "apaga os arquivos sem permissão"
    ]
   }
  ]

@@ -31,6 +31,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -38,6 +39,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -367,6 +369,7 @@ func init() {
 		"file_op":      brFileOp,
 		"text_op":      brTextOp,
 		"archive_op":   brArchiveOp,
+		"perm_op":      brPermOp,
 		"git_op":       brGitOp,
 		"proc_kill":    brProcKill,
 		"pkg_cmd":      brPkgCmd,
@@ -1116,6 +1119,13 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 				return r == '\n' || r == ',' || r == ' '
 			})
 		}
+		// "archive files/directories under data/": as palavras-tipo foram
+		// filtradas do srcs — a fonte real é o dir escopado.
+		if len(srcList) == 0 {
+			if d := cx.str(in, "dir"); d != "" {
+				srcList = []string{d}
+			}
+		}
 		var srcs [][2]string
 		for _, f := range srcList {
 			if f == "" {
@@ -1132,13 +1142,17 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 		}
 		// "comprime a pasta logs em tar.gz": o destino era a palavra-formato,
 		// não um nome — deriva <fonte>.<formato> como o tar faria.
-		switch rel {
-		case "tar", "tar.gz", "tgz", "zip":
+		fmtExt := map[string]string{
+			"tar": ".tar", "tar.gz": ".tar.gz", "tgz": ".tgz", "zip": ".zip",
+			"tarball": ".tar.gz", "gz": ".tar.gz", "gzip": ".tar.gz",
+			"jar": ".jar", "whl": ".whl",
+		}
+		if ext, ok := fmtExt[rel]; ok {
 			base := filepath.Base(srcs[0][1])
 			if base == "." || base == "/" {
 				base = "archive"
 			}
-			rel = base + "." + rel
+			rel = base + ext
 			abs = filepath.Join(cx.env.Root, filepath.FromSlash(rel))
 		}
 		var files []string
@@ -1397,6 +1411,221 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 		return brStep{val: map[string]any{"data": map[string]any{"files": files}}, obs: obs, ok: true}
 	}
 	return brStep{obs: obs, why: "archive_op desconhecido: " + op}
+}
+
+// brPermOp: chmod/chown/chgrp confinado ao root — o par file_op das
+// permissões. mode aceita octal ("755","0644") ou simbólico simples
+// ("u+x","ug=rwx,o=","a-w"); recursive desce um dir inteiro com teto.
+// Permit decide; EPERM do chown vira falha honesta, não sucesso.
+func brPermOp(cx *brCtx, in map[string]string) brStep {
+	op, obs := in["op"], rvNoCmd()
+	switch op {
+	case "chmod", "chown", "chgrp":
+	default:
+		return brStep{obs: obs, why: "perm_op desconhecido: " + op}
+	}
+	path := cx.str(in, "path")
+	if path == "" {
+		return brStep{obs: obs, why: "perm_op sem alvo"}
+	}
+	abs, rel, err := brSafePath(cx.env.Root, path)
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	modeStr := cx.str(in, "mode")
+	ownerStr := cx.str(in, "owner")
+	groupStr := cx.str(in, "group")
+	recursive := cx.str(in, "recursive") == "true"
+	if op == "chmod" && modeStr == "" {
+		return brStep{obs: obs, why: "chmod sem modo"}
+	}
+	if op == "chown" && ownerStr == "" && groupStr == "" {
+		return brStep{obs: obs, why: "chown sem dono/grupo"}
+	}
+	if op == "chgrp" && groupStr == "" {
+		return brStep{obs: obs, why: "chgrp sem grupo"}
+	}
+	synth := op
+	if recursive {
+		synth += " -R"
+	}
+	if modeStr != "" {
+		synth += " " + modeStr
+	}
+	if ownerStr != "" {
+		synth += " " + ownerStr
+	}
+	if groupStr != "" {
+		synth += ":" + groupStr
+	}
+	synth += " " + rel
+	if ok, why := cx.brPermit(synth); !ok {
+		obs.Denied, obs.Output = true, why
+		return brStep{obs: obs, why: why}
+	}
+	var targets []string
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return brStep{obs: obs, why: rel + ": " + err.Error()}
+	}
+	if recursive && fi.IsDir() {
+		err = filepath.Walk(abs, func(p string, i os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if len(targets) >= 512 {
+				return fmt.Errorf("recursive: mais de 512 entradas — recuso conjunto parcial")
+			}
+			targets = append(targets, p)
+			return nil
+		})
+		if err != nil {
+			return brStep{obs: obs, why: err.Error()}
+		}
+	} else {
+		targets = []string{abs}
+	}
+	done := 0
+	for _, tgt := range targets {
+		tfi, err := os.Stat(tgt)
+		if err != nil {
+			continue
+		}
+		switch op {
+		case "chmod":
+			var nm os.FileMode
+			if m, ok := brParseOctal(modeStr); ok {
+				nm = m
+			} else {
+				m, e := brApplySymbolic(tfi.Mode().Perm(), modeStr)
+				if e != nil {
+					return brStep{obs: obs, why: "modo inválido " + modeStr + ": " + e.Error()}
+				}
+				nm = m
+			}
+			if err := os.Chmod(tgt, nm); err != nil {
+				return brStep{obs: obs, why: "chmod " + rel + ": " + err.Error()}
+			}
+		case "chown", "chgrp":
+			uid, gid := -1, -1
+			if op == "chown" && ownerStr != "" {
+				uid, err = brResolveUser(ownerStr)
+				if err != nil {
+					return brStep{obs: obs, why: "dono " + ownerStr + ": " + err.Error()}
+				}
+			}
+			if groupStr != "" {
+				gid, err = brResolveGroup(groupStr)
+				if err != nil {
+					return brStep{obs: obs, why: "grupo " + groupStr + ": " + err.Error()}
+				}
+			}
+			if err := os.Chown(tgt, uid, gid); err != nil {
+				return brStep{obs: obs, why: op + " " + rel + ": " + err.Error()}
+			}
+		}
+		done++
+	}
+	if done == 0 {
+		return brStep{obs: obs, why: "nada alterado em " + rel}
+	}
+	if cx.env.AfterWrite != nil {
+		cx.env.AfterWrite(synth)
+		cx.say("(/undo desfaz)")
+	}
+	cx.say("%s aplicado em %s (%d)", synth, rel, done)
+	cx.task.AddEvidence("file", fmt.Sprintf("%s em %s (%d alvos)", synth, rel, done))
+	return brStep{val: rel, obs: obs, ok: true}
+}
+
+// brParseOctal: "755"/"0755"/"4755" → FileMode, ou ok=false quando não é
+// octal de 3-4 dígitos (aí quem chama tenta o simbólico).
+func brParseOctal(s string) (os.FileMode, bool) {
+	if len(s) < 3 || len(s) > 4 {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(s, 8, 32)
+	if err != nil || n > 0o7777 {
+		return 0, false
+	}
+	return os.FileMode(n), true
+}
+
+// brApplySymbolic: subconjunto honesto do chmod simbólico —
+// "u+x", "a-w", "ug=rwx,o=", "go+r". X vira x só em dir/já-executável;
+// s/t são ignorados com aviso, não inventados.
+func brApplySymbolic(cur os.FileMode, expr string) (os.FileMode, error) {
+	out := cur
+	for _, clause := range strings.Split(expr, ",") {
+		clause = strings.TrimSpace(clause)
+		op := strings.IndexAny(clause, "+-=")
+		if op <= 0 {
+			return cur, fmt.Errorf("cláusula sem operador: %q", clause)
+		}
+		who := clause[:op]
+		perm := clause[op+1:]
+		var mask os.FileMode
+		for _, c := range who {
+			switch c {
+			case 'u':
+				mask |= 0o700
+			case 'g':
+				mask |= 0o070
+			case 'o':
+				mask |= 0o007
+			case 'a':
+				mask |= 0o777
+			default:
+				return cur, fmt.Errorf("who inválido %q em %q", string(c), clause)
+			}
+		}
+		var bits os.FileMode
+		for _, p := range perm {
+			switch p {
+			case 'r':
+				bits |= mask & 0o444
+			case 'w':
+				bits |= mask & 0o222
+			case 'x', 'X':
+				bits |= mask & 0o111
+			case 's', 't':
+				// suid/sgid/sticky: recusa silenciosa seria pior — ignora
+			default:
+				return cur, fmt.Errorf("permissão inválida %q em %q", string(p), clause)
+			}
+		}
+		switch clause[op] {
+		case '+':
+			out |= bits
+		case '-':
+			out &^= bits
+		case '=':
+			out = (out &^ mask) | bits
+		}
+	}
+	return out, nil
+}
+
+func brResolveUser(name string) (int, error) {
+	if u, err := strconv.Atoi(name); err == nil {
+		return u, nil
+	}
+	u, err := user.Lookup(name)
+	if err != nil {
+		return -1, err
+	}
+	return strconv.Atoi(u.Uid)
+}
+
+func brResolveGroup(name string) (int, error) {
+	if g, err := strconv.Atoi(name); err == nil {
+		return g, nil
+	}
+	g, err := user.LookupGroup(name)
+	if err != nil {
+		return -1, err
+	}
+	return strconv.Atoi(g.Gid)
 }
 
 // brGitOp runs git write subcommands through the normal permission path:
@@ -2687,6 +2916,238 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("%d item(ns) produzidos não existem", missing)
 			}
 			proofs = append(proofs, fmt.Sprintf("conferi: %d item(ns) existem", len(items)))
+		case "file_mode":
+			// arg=path, arg2=octal — prova o chmod comparando bits reais
+			rel, _ := arg.(string)
+			want, _ := cx.subst(c.Arg2).(string)
+			if rel == "" || want == "" {
+				return false, false, "file_mode sem caminho ou modo"
+			}
+			wm, okm := brParseOctal(want)
+			if !okm {
+				return false, false, "file_mode com modo não-octal: " + want
+			}
+			fAbs, fRel, fErr := brSafePath(cx.env.Root, rel)
+			if fErr != nil {
+				return false, false, fErr.Error()
+			}
+			fi, err := os.Stat(fAbs)
+			if err != nil {
+				return false, false, "não consegui stat " + fRel
+			}
+			var special os.FileMode
+			if fi.Mode()&os.ModeSetuid != 0 {
+				special |= 0o4000
+			}
+			if fi.Mode()&os.ModeSetgid != 0 {
+				special |= 0o2000
+			}
+			if fi.Mode()&os.ModeSticky != 0 {
+				special |= 0o1000
+			}
+			got := fi.Mode().Perm() | special
+			if got != wm {
+				return false, false, fmt.Sprintf("%s tem modo %04o, esperava %04o", fRel, got, wm)
+			}
+			proofs = append(proofs, fmt.Sprintf("%s modo %04o", fRel, got))
+		case "file_owner", "file_group":
+			// arg=path, arg2=nome — prova o chown/chgrp contra a conta real
+			rel, _ := arg.(string)
+			want, _ := cx.subst(c.Arg2).(string)
+			if rel == "" || want == "" {
+				return false, false, c.Check + " sem caminho ou nome"
+			}
+			fAbs, fRel, fErr := brSafePath(cx.env.Root, rel)
+			if fErr != nil {
+				return false, false, fErr.Error()
+			}
+			fi, err := os.Stat(fAbs)
+			if err != nil {
+				return false, false, "não consegui stat " + fRel
+			}
+			st, ok := fi.Sys().(*syscall.Stat_t)
+			if !ok {
+				return false, true, "stat_t indisponível nesta plataforma"
+			}
+			var gotName string
+			var id uint32
+			if c.Check == "file_owner" {
+				id = st.Uid
+				if u, err := user.LookupId(strconv.Itoa(int(st.Uid))); err == nil {
+					gotName = u.Username
+				}
+			} else {
+				id = st.Gid
+				if g, err := user.LookupGroupId(strconv.Itoa(int(st.Gid))); err == nil {
+					gotName = g.Name
+				}
+			}
+			if want != gotName && want != strconv.Itoa(int(id)) {
+				return false, false, fmt.Sprintf("%s %s=%s(%d), esperava %s", fRel, c.Check, gotName, id, want)
+			}
+			proofs = append(proofs, fmt.Sprintf("%s %s=%s", fRel, c.Check, gotName))
+		case "list_mode":
+			// arg=lista produzida, arg2=octal — prova massa de chmod
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			want, _ := cx.subst(c.Arg2).(string)
+			wm, okm := brParseOctal(want)
+			if !okm {
+				return false, false, "list_mode com modo não-octal: " + want
+			}
+			bad := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") {
+					bad++
+					continue
+				}
+				fi, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(p)))
+				if err != nil || fi.Mode().Perm() != wm&0o777 {
+					bad++
+				}
+			}
+			if bad > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) sem modo %04o", bad, wm)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) em modo %04o", len(items), wm))
+		case "file_perm", "file_noperm":
+			// arg=path, arg2=r|w|x — prova bit de permissão presente/ausente
+			// em qualquer classe (executável = algum x ligado).
+			rel, _ := arg.(string)
+			bit, _ := cx.subst(c.Arg2).(string)
+			var mask os.FileMode
+			switch bit {
+			case "r":
+				mask = 0o444
+			case "w":
+				mask = 0o222
+			case "x":
+				mask = 0o111
+			default:
+				return false, false, "file_perm com bit desconhecido: " + bit
+			}
+			fAbs, fRel, fErr := brSafePath(cx.env.Root, rel)
+			if fErr != nil {
+				return false, false, fErr.Error()
+			}
+			fi, err := os.Stat(fAbs)
+			if err != nil {
+				return false, false, "não consegui stat " + fRel
+			}
+			has := fi.Mode().Perm()&mask != 0
+			if c.Check == "file_perm" && !has {
+				return false, false, fmt.Sprintf("%s não tem bit %s", fRel, bit)
+			}
+			if c.Check == "file_noperm" && has {
+				return false, false, fmt.Sprintf("%s ainda tem bit %s", fRel, bit)
+			}
+			verbo := map[string]string{"file_perm": "tem", "file_noperm": "não tem"}[c.Check]
+			proofs = append(proofs, fmt.Sprintf("%s %s bit %s", fRel, verbo, bit))
+		case "list_perm":
+			// arg=lista, arg2=r|w|x — todo item produzido tem o bit.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			bit, _ := cx.subst(c.Arg2).(string)
+			var mask os.FileMode
+			switch bit {
+			case "r":
+				mask = 0o444
+			case "w":
+				mask = 0o222
+			case "x":
+				mask = 0o111
+			default:
+				return false, false, "list_perm com bit desconhecido: " + bit
+			}
+			nobit := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") {
+					nobit++
+					continue
+				}
+				fi, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(p)))
+				if err != nil || fi.Mode().Perm()&mask == 0 {
+					nobit++
+				}
+			}
+			if nobit > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) sem bit %s", nobit, bit)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) com bit %s", len(items), bit))
+		case "list_owner", "list_group":
+			// arg=lista, arg2=nome — todo item produzido pertence a quem pediu.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			want, _ := cx.subst(c.Arg2).(string)
+			mism := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") {
+					mism++
+					continue
+				}
+				fi, err := os.Stat(filepath.Join(cx.env.Root, filepath.FromSlash(p)))
+				if err != nil {
+					mism++
+					continue
+				}
+				st, ok := fi.Sys().(*syscall.Stat_t)
+				if !ok {
+					return false, true, "stat_t indisponível nesta plataforma"
+				}
+				var gotName string
+				var id uint32
+				if c.Check == "list_owner" {
+					id = st.Uid
+					if u, err := user.LookupId(strconv.Itoa(int(st.Uid))); err == nil {
+						gotName = u.Username
+					}
+				} else {
+					id = st.Gid
+					if g, err := user.LookupGroupId(strconv.Itoa(int(st.Gid))); err == nil {
+						gotName = g.Name
+					}
+				}
+				if want != gotName && want != strconv.Itoa(int(id)) {
+					mism++
+				}
+			}
+			if mism > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) com %s diferente de %s", mism, c.Check, want)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d item(ns) com %s=%s", len(items), c.Check, want))
 		case "file_contains", "file_lacks":
 			// arg=path, arg2=needle — a escrita do replace prova-se lendo
 			rel, _ := arg.(string)

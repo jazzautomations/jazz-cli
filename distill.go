@@ -403,7 +403,11 @@ func dsValidMethod(m mhMethod, intentOK func(string) bool) string {
 			return "verificador aponta um passo inexistente: " + v.Arg
 		}
 		if v.Arg2 != "" && v.Check != "list_present" &&
-			v.Check != "file_contains" && v.Check != "file_lacks" && v.Check != "list_lacks" {
+			v.Check != "file_contains" && v.Check != "file_lacks" && v.Check != "list_lacks" &&
+			v.Check != "file_mode" && v.Check != "list_mode" &&
+			v.Check != "file_owner" && v.Check != "file_group" &&
+			v.Check != "list_owner" && v.Check != "list_group" &&
+			v.Check != "file_perm" && v.Check != "file_noperm" && v.Check != "list_perm" {
 			return "verificador com arg2 inesperado: " + v.Check
 		}
 		if v.Check == "list_present" && !dsPathLit(v.Arg2) {
@@ -440,13 +444,18 @@ var dsCapKeys = map[string]map[string]bool{
 		"suid", "sgid", "executable", "not_executable", "owner",
 		"not_owner", "group", "not_group", "no_owner", "no_group", "orphan"),
 	"for_each": smSet("from", "do", "op", "max", "to", "to_dir", "content",
-		"from_str", "to_str", "ignore_case", "first_per_line", "backup_ext"),
+		"from_str", "to_str", "ignore_case", "first_per_line", "backup_ext",
+		"mode", "owner", "group", "recursive"),
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
 	"text_op": smSet("op", "path", "to", "from_str", "to_str",
 		"ignore_case", "first_per_line", "backup_ext"),
 	"archive_op": smSet("op", "out", "srcs", "arc", "dir"),
+	"perm_op":    smSet("op", "path", "mode", "owner", "group", "recursive"),
 }
+
+// dsPermOps são os ops que o brPermOp conhece.
+var dsPermOps = smSet("chmod", "chown", "chgrp")
 
 // dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
 // destilada pode pedir (direto ou via for_each).
@@ -459,6 +468,8 @@ var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename"
 // exit_zero/cmd_ran.
 var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present",
 	"list_exists",
+	"file_mode", "file_owner", "file_group", "list_mode",
+	"file_perm", "file_noperm", "list_perm", "list_owner", "list_group",
 	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
@@ -508,8 +519,12 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 			if st.In["from_str"] == "" {
 				return "capacidade for_each: replace sem from_str"
 			}
+		case "perm_op":
+			if err := dsPermShape(st.In, false); err != "" {
+				return "capacidade for_each: " + err
+			}
 		default:
-			return "capacidade for_each: do tem que ser file_op ou text_op"
+			return "capacidade for_each: do tem que ser file_op, text_op ou perm_op"
 		}
 	case "save_list":
 		if !lists[strings.TrimPrefix(st.In["from"], "$")] {
@@ -547,6 +562,10 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		}
 		if st.In["to"] != "" && !dsPathLit(st.In["to"]) {
 			return "capacidade text_op: destino não literal"
+		}
+	case "perm_op":
+		if err := dsPermShape(st.In, true); err != "" {
+			return "capacidade perm_op: " + err
 		}
 	case "archive_op":
 		switch st.In["op"] {
@@ -936,6 +955,20 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		verify = append(verify, mhCheck{Check: check, Arg: "$" + out})
 		caps++
 	}
+	pop := 0
+	emitPerm := func(in map[string]string, check, arg2 string) {
+		pop++
+		out := fmt.Sprintf("p%d", pop)
+		steps = append(steps, mhStep{Cap: "perm_op", In: in, Out: out})
+		c := mhCheck{Check: check, Arg: "$" + out}
+		switch check {
+		case "file_mode", "list_mode", "file_owner", "file_group",
+			"list_owner", "list_group", "file_perm", "file_noperm", "list_perm":
+			c.Arg2 = arg2
+		}
+		verify = append(verify, c)
+		caps++
+	}
 	sav := 0
 	emitSave := func(dest string, sorted bool) {
 		sav++
@@ -1115,6 +1148,41 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 					return false
 				}
 				emitOp(map[string]string{"op": "mkdir", "path": a}, "file_exists")
+			}
+		case "chmod":
+			rec, mode, paths, ok := dsChmodArgs(t)
+			if !ok {
+				return false
+			}
+			for _, p := range paths {
+				in := map[string]string{"op": "chmod", "path": p, "mode": mode}
+				if rec {
+					in["recursive"] = "true"
+				}
+				check := "file_exists" // simbólico prova-se pela execução + evidência
+				if _, isOct := brParseOctal(mode); isOct {
+					check = "file_mode"
+				}
+				emitPerm(in, check, mode)
+			}
+		case "chown", "chgrp":
+			rec, owner, group, paths, ok := dsChownArgs(t)
+			if !ok {
+				return false
+			}
+			if t[0] == "chgrp" {
+				owner, group = "", owner // chgrp: o spec é o grupo
+			}
+			for _, p := range paths {
+				in := map[string]string{"op": t[0], "path": p, "owner": owner, "group": group}
+				if rec {
+					in["recursive"] = "true"
+				}
+				if owner != "" {
+					emitPerm(in, "file_owner", owner)
+				} else {
+					emitPerm(in, "file_group", group)
+				}
 			}
 		case "tar":
 			in, check, ok := dsTarArgs(t)
@@ -2036,6 +2104,143 @@ func dsUnzipArgs(t []string) (in map[string]string, ok bool) {
 		return nil, false
 	}
 	return in, true
+}
+
+// dsPermShape: forma comum de um passo perm_op — direto (wantPath=true,
+// o path vem literal) ou via for_each (o path é injetado por item).
+func dsPermShape(in map[string]string, wantPath bool) string {
+	op := in["op"]
+	if !dsPermOps[op] {
+		return "op desconhecido " + op
+	}
+	if wantPath && strings.TrimSpace(in["path"]) == "" {
+		return "falta path"
+	}
+	if wantPath && !dsPathLit(in["path"]) {
+		return "path não literal"
+	}
+	switch op {
+	case "chmod":
+		if strings.TrimSpace(in["mode"]) == "" {
+			return "chmod sem mode"
+		}
+	case "chown":
+		if strings.TrimSpace(in["owner"]) == "" && strings.TrimSpace(in["group"]) == "" {
+			return "chown sem owner/group"
+		}
+	case "chgrp":
+		if strings.TrimSpace(in["group"]) == "" {
+			return "chgrp sem group"
+		}
+	}
+	return ""
+}
+
+// dsChmodArgs: "chmod [-R|-r] MODE PATH…" → recursão + modo + alvos.
+// MODE é octal (644/0755) ou simbólico simples (u+x, ug=rwx,o=r).
+func dsChmodArgs(t []string) (rec bool, mode string, paths []string, ok bool) {
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch a {
+		case "-R", "-r", "--recursive", "-v":
+		case "--changes", "-c":
+		default:
+			return false, "", nil, false // --reference/-f?/-m etc não mapeiam
+		}
+		rec = rec || a == "-R" || a == "-r" || a == "--recursive"
+	}
+	if i >= len(t) {
+		return false, "", nil, false
+	}
+	mode = t[i]
+	if !dsModeLit(mode) {
+		return false, "", nil, false
+	}
+	for _, p := range t[i+1:] {
+		if !dsPathLit(p) {
+			return false, "", nil, false
+		}
+		paths = append(paths, p)
+	}
+	return rec, mode, paths, len(paths) > 0
+}
+
+// dsModeLit: octal de 3-4 dígitos ou simbólico "[ugoa]*[+-=][rwxXst]+(,…)*".
+func dsModeLit(s string) bool {
+	if _, ok := brParseOctal(s); ok {
+		return true
+	}
+	if len(s) > 40 {
+		return false
+	}
+	for _, clause := range strings.Split(s, ",") {
+		op := strings.IndexAny(clause, "+-=")
+		if op <= 0 {
+			return false
+		}
+		for _, c := range clause[:op] {
+			if c != 'u' && c != 'g' && c != 'o' && c != 'a' {
+				return false
+			}
+		}
+		rest := clause[op+1:]
+		if rest == "" {
+			return false
+		}
+		for _, c := range rest {
+			if c != 'r' && c != 'w' && c != 'x' && c != 'X' && c != 's' && c != 't' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// dsChownArgs: "chown [-R] OWNER[:GROUP] PATH…".
+func dsChownArgs(t []string) (rec bool, owner, group string, paths []string, ok bool) {
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch a {
+		case "-R", "-r", "--recursive", "-v", "-c", "--changes":
+		default:
+			return false, "", "", nil, false // --from/--reference não mapeiam
+		}
+		rec = rec || a == "-R" || a == "-r" || a == "--recursive"
+	}
+	if i >= len(t) {
+		return false, "", "", nil, false
+	}
+	spec := t[i]
+	if strings.Contains(spec, ":") {
+		parts := strings.SplitN(spec, ":", 2)
+		owner, group = parts[0], parts[1]
+	} else {
+		owner = spec
+	}
+	if owner == "" && group == "" {
+		return false, "", "", nil, false
+	}
+	for _, c := range owner + group {
+		if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') &&
+			c != '_' && c != '-' && c != '.' {
+			return false, "", "", nil, false
+		}
+	}
+	for _, p := range t[i+1:] {
+		if !dsPathLit(p) {
+			return false, "", "", nil, false
+		}
+		paths = append(paths, p)
+	}
+	return rec, owner, group, paths, len(paths) > 0
 }
 
 // dsPermFlag: um predicado de permissão/dono do find vira a chave do

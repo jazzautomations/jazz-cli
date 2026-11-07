@@ -517,6 +517,49 @@ func TestDsCapPlan(t *testing.T) {
 			}
 			return ""
 		}},
+		// chmod/chown literal → perm_op confinado com verificador de bits
+		{[]string{"chmod 755 deploy.sh"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "perm_op" || st.In["op"] != "chmod" ||
+				st.In["path"] != "deploy.sh" || st.In["mode"] != "755" {
+				return fmt.Sprintf("chmod: %+v", st)
+			}
+			if m.Verify[0].Check != "file_mode" || m.Verify[0].Arg2 != "755" {
+				return fmt.Sprintf("chmod sem file_mode: %+v", m.Verify)
+			}
+			return ""
+		}},
+		{[]string{"chmod -R 700 secrets"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.In["recursive"] != "true" || st.In["path"] != "secrets" {
+				return fmt.Sprintf("chmod -R: %+v", st.In)
+			}
+			return ""
+		}},
+		{[]string{"chmod u+x run.sh"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.In["mode"] != "u+x" || m.Verify[0].Check != "file_exists" {
+				return fmt.Sprintf("chmod simbólico: %+v / %+v", st.In, m.Verify)
+			}
+			return ""
+		}},
+		{[]string{"chown mike:www-data site.conf"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "perm_op" || st.In["op"] != "chown" ||
+				st.In["owner"] != "mike" || st.In["group"] != "www-data" {
+				return fmt.Sprintf("chown: %+v", st)
+			}
+			if m.Verify[0].Check != "file_owner" || m.Verify[0].Arg2 != "mike" {
+				return fmt.Sprintf("chown sem file_owner: %+v", m.Verify)
+			}
+			return ""
+		}},
+		{[]string{"find . -name '*.tmp' -print", "chmod 600 x"}, func(m *mhMethod) string {
+			if m.Steps[1].Cap != "perm_op" || m.Steps[1].In["path"] != "x" {
+				return fmt.Sprintf("find+chmod: %+v", m.Steps)
+			}
+			return ""
+		}},
 	} {
 		cp := dsCapPlan(dsPlan("ca77ps06", "zzq copia e move", 3, tc.cmds, ""), root)
 		if cp == nil {
@@ -537,13 +580,16 @@ func TestDsCapPlan(t *testing.T) {
 	for _, cmds := range [][]string{
 		{"rm -rf dir"},
 		{"find . -exec grep -l x {} +"},
-		{"find . -name '*.tmp' -print", "chmod 600 x"},
 		{"find . -name '*.tmp' -print", "xargs rm"},
 		{"ls -la > out.txt"},
 		{"find . -name '*.log' | tee /tmp/out.txt"},
 		{"tar -xOf arc.tar.gz file"},
 		{"tar -Pf arc.tar"},
 		{"zip -e secret.zip f.txt"},
+		{"chmod --reference=base.txt f.txt"},
+		{"chown --from=old:new f.txt"},
+		{"chmod 755 /etc/passwd"},
+		{"chmod 755 ../escape.sh"},
 	} {
 		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, ""), root); cp != nil {
 			t.Errorf("%v não devia virar método de caps: %+v", cmds, cp)
@@ -1114,6 +1160,86 @@ func TestBrArchiveOp(t *testing.T) {
 	brExecute(cxM2, []mhMethod{mExtract})
 	if cxM2.task.Status != tkSucceeded || read("docs_out/doc.md") != "# doc\n" {
 		t.Fatalf("método extract devia verificar: %s", cxM2.task.Status)
+	}
+}
+
+func TestBrPermOp(t *testing.T) {
+	root := t.TempDir()
+	env, _ := brTestEnv(t, root, map[string]brFakeOut{}, -1)
+	mk := func() *brCtx {
+		task := newTask("x", "learned_ab12cd", nil, nil)
+		task.must(tkInvestigating, "teste")
+		return &brCtx{ctx: context.Background(), env: env,
+			task: task, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	}
+	write := func(name, body string, mode os.FileMode) {
+		t.Helper()
+		p := filepath.Join(root, name)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	modeOf := func(name string) os.FileMode {
+		t.Helper()
+		fi, err := os.Stat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi.Mode().Perm()
+	}
+
+	write("run.sh", "#!/bin/sh\n", 0o644)
+
+	// chmod octal simples — bits conferem de verdade
+	st := brPermOp(mk(), map[string]string{"op": "chmod", "path": "run.sh", "mode": "755"})
+	if !st.ok || modeOf("run.sh") != 0o755 {
+		t.Fatalf("chmod 755: %+v mode=%04o", st, modeOf("run.sh"))
+	}
+	// chmod simbólico u+x / a-w
+	st = brPermOp(mk(), map[string]string{"op": "chmod", "path": "run.sh", "mode": "a-w"})
+	if !st.ok || modeOf("run.sh")&0o222 != 0 {
+		t.Fatalf("chmod a-w: %+v mode=%04o", st, modeOf("run.sh"))
+	}
+	st = brPermOp(mk(), map[string]string{"op": "chmod", "path": "run.sh", "mode": "a+w"})
+	if !st.ok || modeOf("run.sh")&0o222 == 0 {
+		t.Fatalf("chmod a+w: %+v", st)
+	}
+	// recusas honestas
+	if st = brPermOp(mk(), map[string]string{"op": "chmod", "path": "../x", "mode": "755"}); st.ok {
+		t.Error("path fora do root devia recusar")
+	}
+	if st = brPermOp(mk(), map[string]string{"op": "chmod", "path": "run.sh"}); st.ok {
+		t.Error("chmod sem mode devia recusar")
+	}
+	if st = brPermOp(mk(), map[string]string{"op": "chown", "path": "run.sh", "owner": "usuario_que_nao_existe_x9"}); st.ok {
+		t.Error("dono inexistente devia falhar honesto")
+	}
+	// recursive num dir (755: dir sem x não atravessa — semântica real)
+	write("d/f1", "x\n", 0o644)
+	write("d/sub/f2", "y\n", 0o644)
+	st = brPermOp(mk(), map[string]string{"op": "chmod", "path": "d", "mode": "755", "recursive": "true"})
+	if !st.ok || modeOf("d/f1") != 0o755 || modeOf("d/sub/f2") != 0o755 {
+		t.Fatalf("chmod -R: %+v", st)
+	}
+	// verificadores: file_mode / file_perm / file_noperm
+	cxV := mk()
+	mMode := mhMethod{Name: "learned_ab12cd.caps", Intent: "learned_ab12cd",
+		Steps: []mhStep{{Cap: "perm_op", Out: "p1", In: map[string]string{
+			"op": "chmod", "path": "run.sh", "mode": "700"}}},
+		Verify: []mhCheck{{Check: "file_mode", Arg: "$p1", Arg2: "700"}}}
+	brExecute(cxV, []mhMethod{mMode})
+	if cxV.task.Status != tkSucceeded || modeOf("run.sh") != 0o700 {
+		t.Fatalf("file_mode devia verificar: %s", cxV.task.Status)
+	}
+	cxV2 := mk()
+	mPerm := mhMethod{Name: "learned_cd34ef.caps", Intent: "learned_cd34ef",
+		Steps: []mhStep{{Cap: "perm_op", Out: "p1", In: map[string]string{
+			"op": "chmod", "path": "run.sh", "mode": "a+x"}}},
+		Verify: []mhCheck{{Check: "file_perm", Arg: "$p1", Arg2: "x"}}}
+	brExecute(cxV2, []mhMethod{mPerm})
+	if cxV2.task.Status != tkSucceeded {
+		t.Fatalf("file_perm x devia verificar: %s", cxV2.task.Status)
 	}
 }
 
