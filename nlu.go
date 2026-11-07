@@ -3143,10 +3143,27 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 	switch what {
 	case "type":
 		dir, file := false, false
-		for _, t := range toks {
+		for i, t := range toks {
 			switch t.Fold {
 			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas":
-				dir = true
+				// "in the current directory" — a dir-word depois de
+				// preposição de escopo é LOCALIZAÇÃO, não tipo pedido
+				scope := false
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					// preposições de escopo são fillers — checar a fold
+					// ANTES do skip, senão "in" some na peneira
+					switch toks[j].Fold {
+					case "in", "on", "em", "no", "na", "under", "inside", "sob", "through", "within":
+						scope = true
+					}
+					if toks[j].Filler || scope {
+						continue
+					}
+					break
+				}
+				if !scope {
+					dir = true
+				}
 			case "arquivo", "arquivos", "file", "files":
 				file = true
 			}
@@ -3197,6 +3214,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		for i := range toks {
+			if taken[i] {
+				continue // "except xml files": o xml já é alvo do exclude
+			}
 			f := toks[i].Fold
 			// ext é ".log"/"*.log" — "./storage/" começa com ponto mas é
 			// caminho; o sufixo tem que ser alfanumérico como no nuPureExt
@@ -3274,14 +3294,19 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		// "except git files" / "exceto os .o" — the pattern follows the cue
 		for i, t := range toks {
 			switch t.Fold {
-			case "except", "exceto", "excluding", "excluindo", "without", "ignoring", "ignore", "not":
+			case "except", "exceto", "excluding", "excluindo", "without", "ignoring", "ignore", "not", "expect":
 				for j := i + 1; j < len(toks) && j <= i+3; j++ {
 					f := toks[j].Fold
-					if f != "" && !toks[j].Filler && len(toks[j].Concs) == 0 && !nuIsNumber(f) {
-						if nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") {
-							taken[i], taken[j] = true, true
-							return f
-						}
+					if f == "" || toks[j].Filler || nuIsNumber(f) || taken[j] {
+						continue
+					}
+					// palavra de extensão é candidato natural de
+					// exclusão ("except xml files") — o extcue
+					// sintético não pode bloquear
+					concsOK := len(toks[j].Concs) == 0 || toks[j].has("extcue")
+					if concsOK && (nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") || nuExtWords[f]) {
+						taken[i], taken[j] = true, true
+						return f
 					}
 				}
 			}
@@ -3519,6 +3544,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// unidade de contagem é atributo, não path — "with 20 lines"
 			// não tem dir "lines"
 			"line": true, "lines": true, "linha": true, "linhas": true,
+			// atributo de tamanho nunca é path — "less than 1MB in size"
+			"size": true, "tamanho": true, "bytes": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -3608,8 +3635,15 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		// "apaga os arquivos" sem filtro é ambíguo e vai perguntar.
 		for _, t := range toks {
 			switch t.Fold {
-			case "todos", "todas", "todo", "toda", "all", "every", "cada", "qualquer", "quaisquer", "tudinho":
+			case "todos", "todas", "todo", "toda", "all", "every", "cada", "qualquer", "quaisquer", "tudinho",
+				"everything", "tudo":
 				return "1"
+			}
+		}
+		for _, t := range toks {
+			switch t.Fold {
+			case "regular", "regulars", "normal", "normais", "ordinary", "comuns":
+				return "1" // "regular/normal files" — o próprio tipo é o filtro (-type f)
 			}
 		}
 		hasPlural := false
@@ -4330,7 +4364,7 @@ func nuFindSize(toks []nuTok, min bool, taken map[int]bool) string {
 		switch t.Fold {
 		case "maior", "maiores", "larger", "bigger", "over", "above", "acima", "exceeding", "least", "more", "minimo", "mínimo", "minimum":
 			minSeen = true
-		case "menor", "menores", "smaller", "under", "below", "less", "ate", "até", "abaixo", "maximo", "máximo", "maximum":
+		case "menor", "menores", "menos", "smaller", "under", "below", "less", "ate", "até", "abaixo", "maximo", "máximo", "maximum":
 			maxSeen = true
 		case "size", "sized", "tamanho", "bytes", "kilobytes", "megabytes", "gigabytes":
 			exact = true // a size cue without a comparative is an exact-size ask
