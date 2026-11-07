@@ -4517,7 +4517,6 @@
       "create",
       "mutate",
       "extract",
-      "content",
       "download",
       "net",
       "remote",
@@ -4617,15 +4616,13 @@
       "diskuse",
       "run",
       "cron",
-      "content",
       "symnoun",
-      "have",
       "nameattr",
-      "@quoted",
       "grepword",
       "v4_wordcount_stats",
       "move",
-      "forquoted"
+      "forquoted",
+      "@quoted"
      ],
      "w": 5
     },
@@ -4725,11 +4722,9 @@
       "diskuse",
       "run",
       "cron",
-      "content",
       "symnoun",
       "have",
       "nameattr",
-      "@quoted",
       "grepword",
       "v4_wordcount_stats",
       "move",
@@ -4737,7 +4732,8 @@
       "context",
       "between",
       "count",
-      "forquoted"
+      "forquoted",
+      "@quoted"
      ]
     },
     {
@@ -4889,6 +4885,12 @@
       "number"
      ],
      "from": "find:max_lines"
+    },
+    "namelen": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:namelen"
     }
    },
    "examples": [
@@ -5081,6 +5083,24 @@
       "number"
      ],
      "from": "perm:not_mode"
+    },
+    "exall": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:exall"
+    },
+    "uread": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:uread"
+    },
+    "aread": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:aread"
     }
    },
    "examples": [

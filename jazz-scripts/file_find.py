@@ -42,7 +42,14 @@ if name_re is not None:
     try:
         name_re = re.compile(name_re)
     except re.error as e:
-        fail("name_re is not a valid regex: %s" % e)
+        # glob-shaped text leaked into the regex slot ("pattern '*.rb'") —
+        # fnmatch resolves it honestly instead of dying on the regex
+        if any(c in name_re for c in "*?["):
+            if not name:
+                name = name_re
+            name_re = None
+        else:
+            fail("name_re is not a valid regex: %s" % e)
 exclude = arg("exclude")
 if exclude is not None:
     exclude = str(exclude).lower()

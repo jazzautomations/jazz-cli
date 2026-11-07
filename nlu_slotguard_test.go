@@ -158,3 +158,41 @@ func TestNLUSlotGuards(t *testing.T) {
 		}
 	}
 }
+
+// Perm-read/exec natural-language filters + glob/regex split (v18 mining):
+// "execute permission for everybody" é a+x (0111), "read for user" é u+r,
+// glob "'file??'"/'*.rb' é name/ext — nunca name_re — e "not matching" é
+// exclude, não match invertido.
+func TestNLUPermGlobGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	if in := m.Parse("Search the current directory tree for directories lacking execute permissions for user, group, or others", w); in.Slots["nx"] == "" || in.Slots["dir"] != "" {
+		t.Errorf("lacking-exec: %v", in.Slots)
+	}
+	if in := m.Parse("Search the current directory tree for directories with the execute permission set for everybody", w); in.Slots["exall"] == "" {
+		t.Errorf("exec-for-everybody: %v", in.Slots)
+	}
+	if in := m.Parse("display all the files which have read permission to the user", w); in.Slots["uread"] == "" {
+		t.Errorf("read-for-user: %v", in.Slots)
+	}
+	if in := m.Parse("Search the current directory recursively for regular files with the read permission set for everybody", w); in.Slots["aread"] == "" {
+		t.Errorf("read-for-everybody: %v", in.Slots)
+	}
+
+	// glob quoted: vai pra name/exclude/ext — nunca name_re (regex quebra)
+	for _, c := range []struct {
+		text, slot, want string
+	}{
+		{"find files matching pattern 'file??'", "name", "file??"},
+		{"Find files not matching shell pattern '*/vendor/*'", "exclude", "*/vendor/*"},
+		{"Search the current directory tree for all files matching pattern '*.rb'", "ext", "rb"},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Slots["name_re"] != "" {
+			t.Errorf("%q: glob vazou pro name_re (%v)", c.text, in.Slots)
+		}
+		if in.Slots[c.slot] != c.want {
+			t.Errorf("%q: %s=%q, queria %q (%v)", c.text, c.slot, in.Slots[c.slot], c.want, in.Slots)
+		}
+	}
+}

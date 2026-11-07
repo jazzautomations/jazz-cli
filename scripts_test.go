@@ -143,8 +143,8 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("description has %d lines, want <= 3", n)
 	}
 	b, _ := json.Marshal(last)
-	if est := len(b) / 4; est > 900 { // 70 scripts (cardápio v1–v5), ~13 tokens each after capping optionals at 2; raise only with the same arithmetic
-		t.Errorf("script spec ~%d tokens, keep it small (<900)", est)
+	if est := len(b) / 4; est > 910 { // 70 scripts (cardápio v1–v5), ~13 tokens each after capping optionals at 2; raise only with the same arithmetic
+		t.Errorf("script spec ~%d tokens, keep it small (<910)", est)
 	}
 	props := last.Params["properties"].(map[string]any)
 	enum := props["name"].(map[string]any)["enum"].([]string)

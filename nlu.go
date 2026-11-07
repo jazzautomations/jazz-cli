@@ -414,8 +414,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	for i := range out {
 		t := &out[i]
 		// token com curinga é um glob de nome — sintético, não vem do
-		// léxico: "files matching *.log" separa "matching ERROR" (conteúdo)
-		if strings.Contains(t.Raw, "*") {
+		// léxico: "files matching *.log" separa "matching ERROR" (conteúdo).
+		// Glob chars: * ? [ — "file??" é padrão de nome tanto quanto "*.log"
+		if strings.ContainsAny(t.Raw, "*?[") {
 			t.Concs = append(t.Concs, "glob")
 			continue
 		}
@@ -490,6 +491,19 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		case nuExtWords[t.Fold], nuPureExt(t.Fold),
 			t.Fold == "text", t.Fold == "texto", t.Fold == "textos":
 			t.Concs = append(t.Concs, "extcue")
+		}
+		// aspa que é arg de nome (ext/glob/nome-de-arquivo) não é
+		// "texto livre" — perde a tag @quoted pra não vetar file_find:
+		// 'the "jpg" file' filtra por ext; "'timeout' nos arquivos"
+		// continua texto e veta (vai pro find/grep).
+		if t.Quoted && (t.has("extcue") || t.has("glob") || t.has("filequoted")) {
+			kept := t.Tags[:0]
+			for _, tg := range t.Tags {
+				if tg != "@quoted" {
+					kept = append(kept, tg)
+				}
+			}
+			t.Tags = kept
 		}
 	}
 	return out
@@ -1224,6 +1238,14 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	var unfed int
 	var taken map[int]bool
 	in.Slots, in.Missing, in.Hint, unfed, taken = m.fill(def, toks, hits, used, w)
+	// namelen destila: "names 33 characters long" vira o glob ?×N no
+	// slot name — é um padrão de nome, não um argumento separado.
+	if v := in.Slots["namelen"]; v != "" {
+		if in.Slots["name"] == "" {
+			in.Slots["name"] = v
+		}
+		delete(in.Slots, "namelen")
+	}
 	if unfed > 0 {
 		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavra(s) solta(s) não parecem nome do slot", unfed))
@@ -3277,15 +3299,21 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		if !cue {
 			return ""
 		}
+		// glob não é regex: "pattern '*.rb'" quer name=*.rb, não name_re
+		// quebrando no compile. Só vira name_re com sintaxe de expressão
+		// de verdade (^ $ | + ( ) \) ou cue explícita "regex".
+		globShaped := func(s string) bool {
+			return strings.ContainsAny(s, "*?[") && !strings.ContainsAny(s, "^$|+()\\")
+		}
 		for i, t := range toks {
-			if t.Quoted && t.Fold != "" {
+			if t.Quoted && t.Fold != "" && !globShaped(t.Fold) {
 				taken[i] = true
 				return t.Fold
 			}
 		}
 		for i := len(toks) - 1; i >= 0; i-- {
 			t := &toks[i]
-			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) {
+			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) && !globShaped(t.Fold) {
 				taken[i] = true
 				return t.Fold
 			}
@@ -3295,16 +3323,16 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		for i, t := range toks {
 			switch t.Fold {
 			case "except", "exceto", "excluding", "excluindo", "without", "ignoring", "ignore", "not", "expect":
-				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				for j := i + 1; j < len(toks) && j <= i+5; j++ {
 					f := toks[j].Fold
 					if f == "" || toks[j].Filler || nuIsNumber(f) || taken[j] {
 						continue
 					}
-					// palavra de extensão é candidato natural de
-					// exclusão ("except xml files") — o extcue
-					// sintético não pode bloquear
-					concsOK := len(toks[j].Concs) == 0 || toks[j].has("extcue")
-					if concsOK && (nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") || nuExtWords[f]) {
+					// palavra de extensão/glob é candidato natural de
+					// exclusão ("except xml files", "not matching
+					// '*/vendor/*'") — conceito sintético não bloqueia
+					concsOK := len(toks[j].Concs) == 0 || toks[j].has("extcue") || toks[j].has("glob")
+					if concsOK && (nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") || nuExtWords[f] || strings.ContainsAny(f, "*?[")) {
 						taken[i], taken[j] = true, true
 						return f
 					}
@@ -3313,6 +3341,52 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "min_depth", "max_depth":
 		return nuFindDepth(toks, what == "min_depth", taken)
+	case "namelen":
+		// "names are 33 characters long" → name="?×N" (fnmatch ? = 1
+		// char). Só comprimento EXATO — "shorter/longer than N" glob
+		// não expressa e fica de fora honestamente.
+		for i, t := range toks {
+			switch t.Fold {
+			case "name", "names", "nome", "nomes", "filename", "filenames", "pathname", "pathnames":
+			default:
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+6; j++ {
+				if !nuIsNumber(toks[j].Fold) {
+					continue
+				}
+				// comparativo de comprimento não é exato — recusa
+				lessMore := false
+				for k := j - 3; k < j+3 && k < len(toks); k++ {
+					if k < 0 {
+						continue
+					}
+					switch toks[k].Fold {
+					case "shorter", "longer", "less", "fewer", "more", "greater", "menor", "menores", "maior", "maiores", "menos", "mais":
+						lessMore = true
+					}
+				}
+				if lessMore {
+					return ""
+				}
+				for k := j + 1; k < len(toks) && k <= j+2; k++ {
+					switch toks[k].Fold {
+					case "characters", "character", "chars", "char", "caracteres", "caractere", "letras", "letters":
+						if n, err := strconv.Atoi(toks[j].Fold); err == nil && n >= 1 && n <= 200 {
+							taken[i], taken[j], taken[k] = true, true, true
+							if k+1 < len(toks) {
+								switch toks[k+1].Fold {
+								case "long", "comprido", "comprida":
+									taken[k+1] = true
+								}
+							}
+							return strings.Repeat("?", n)
+						}
+					}
+				}
+			}
+		}
+		return ""
 	case "tfield":
 		for i, t := range toks {
 			switch t.Fold {
@@ -3546,6 +3620,12 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"line": true, "lines": true, "linha": true, "linhas": true,
 			// atributo de tamanho nunca é path — "less than 1MB in size"
 			"size": true, "tamanho": true, "bytes": true,
+			// negação/verbo de permissão não é path — "lacking execute
+			// permissions" não tem dir "lacking"/"execute"
+			"lack": true, "lacks": true, "lacking": true, "falta": true,
+			"execute": true, "execution": true, "read": true,
+			"write": true, "permission": true, "permissions": true,
+			"permissao": true, "permissões": true, "owned": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -3785,7 +3865,7 @@ var nuPermWords = map[string][]string{
 	"world_writable": {"world-writable", "writable", "escreviveis", "escrevível", "gravavel", "gravável", "gravaveis", "graváveis"},
 	"suid":           {"suid"},
 	"sgid":           {"sgid"},
-	"executable":     {"executavel", "executável", "executaveis", "executáveis", "executable", "executables", "rodavel", "rodável"},
+	"executable":     {"executavel", "executável", "executaveis", "executáveis", "executable", "executables", "execute", "execution", "rodavel", "rodável"},
 }
 
 var nuGroupCues = map[string]bool{
@@ -3829,7 +3909,7 @@ func nuNegationNear(toks []nuTok, i int) bool {
 			continue
 		}
 		switch toks[j].Fold {
-		case "not", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto":
+		case "not", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto", "lack", "lacks", "lacking", "falta", "faltando":
 			return true
 		case "no":
 			if j+1 < len(toks) && nuNegatableNouns[toks[j+1].Fold] {
@@ -4036,7 +4116,8 @@ var nuPermClassWords = map[string]string{
 	"owner": "u", "user": "u", "usuario": "u", "usuário": "u",
 	"dono": "u", "donos": "u",
 	"others": "o", "other": "o", "outros": "o", "outras": "o",
-	"all": "a", "everyone": "a", "todos": "a", "todas": "a",
+	"all": "a", "everyone": "a", "everybody": "a", "anyone": "a", "anybody": "a",
+	"todos": "a", "todas": "a", "todo": "a", "toda": "a",
 }
 
 func nuPermClass(toks []nuTok, at int) string {
@@ -4258,6 +4339,39 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 					taken[i] = true
 					return "true"
 				}
+			}
+		}
+		return ""
+	case "exall":
+		// "execute permission set for everybody/everyone" — todos os bits x
+		// ligados (a+x), mais forte que o "algum exec" do slot x.
+		for i, t := range toks {
+			for _, w := range nuPermWords["executable"] {
+				if t.Fold == w && !nuNegationNear(toks, i) && nuPermClass(toks, i) == "a" {
+					taken[i] = true
+					return "true"
+				}
+			}
+		}
+		return ""
+	case "uread", "aread":
+		// "read permission for the user" → u+r (0400); "read permission for
+		// everybody" → a+r (0444). A classe na frase escolhe o slot.
+		for i, t := range toks {
+			f := t.Fold
+			isRead := f == "read" || f == "readable" || f == "leitura" ||
+				f == "legivel" || f == "legível" || f == "lida" || f == "lido"
+			if !isRead || nuNegationNear(toks, i) {
+				continue
+			}
+			// "read-only"/"readonly" é semântica de -w, não filtro de leitura
+			if i+1 < len(toks) && (toks[i+1].Fold == "only" || toks[i+1].Fold == "-only") {
+				continue
+			}
+			cls := nuPermClass(toks, i)
+			if (what == "uread" && cls == "u") || (what == "aread" && cls == "a") {
+				taken[i] = true
+				return "true"
 			}
 		}
 		return ""

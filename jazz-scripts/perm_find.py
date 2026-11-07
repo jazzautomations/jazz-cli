@@ -42,6 +42,9 @@ want_ww = as_bool(ARGS.get("world_writable"), False)
 want_suid = as_bool(ARGS.get("suid"), False)
 want_sgid = as_bool(ARGS.get("sgid"), False)
 want_exec = as_bool(ARGS.get("executable"), False)
+want_exec_all = as_bool(ARGS.get("everyone_exec"), False)
+want_uread = as_bool(ARGS.get("user_readable"), False)
+want_aread = as_bool(ARGS.get("world_readable"), False)
 owner = arg("owner")
 not_owner = arg("not_owner")
 group = arg("group")
@@ -66,10 +69,12 @@ except (TypeError, ValueError):
 limit = max(1, min(limit, 5000))
 
 if (exact is None and not (want_ww or want_suid or want_sgid or want_exec
+        or want_exec_all or want_uread or want_aread
         or owner or not_owner or group or not_group or no_owner or no_group
         or orphan or not_exec or not_ww)):
     fail("pass a filter: mode/not_mode, world_writable, suid, sgid, "
-         "executable/not_executable, owner/not_owner, group/not_group, "
+         "executable/not_executable, everyone_exec, "
+         "user_readable/world_readable, owner/not_owner, group/not_group, "
          "no_owner, no_group or orphan")
 
 def bounded_path(value):
@@ -156,6 +161,12 @@ def match(st):
     if want_sgid and not (m & stat.S_ISGID):
         return False
     if want_exec and not (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
+        return False
+    if want_exec_all and (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) != (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+        return False
+    if want_uread and not (m & stat.S_IRUSR):
+        return False
+    if want_aread and (m & (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)) != (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH):
         return False
     if not_exec and (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
         return False

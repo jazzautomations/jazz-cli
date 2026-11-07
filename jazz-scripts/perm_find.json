@@ -90,6 +90,18 @@
       "not_mode": {
         "type": "boolean",
         "description": "negate the mode match"
+      },
+      "everyone_exec": {
+        "type": "boolean",
+        "description": "u+g+o exec bits set"
+      },
+      "user_readable": {
+        "type": "boolean",
+        "description": "u+r set"
+      },
+      "world_readable": {
+        "type": "boolean",
+        "description": "u+g+o read set"
       }
     }
   },
