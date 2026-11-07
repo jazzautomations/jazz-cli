@@ -1556,7 +1556,14 @@
       "service",
       "sysnoun",
       "test",
-      "update"
+      "update",
+      "lineselect",
+      "grepword",
+      "forquoted",
+      "filenoun",
+      "filequoted",
+      "nametgt",
+      "count"
      ]
     }
    ],
@@ -4235,7 +4242,6 @@
       "create",
       "install",
       "disk",
-      "filequoted",
       "nametgt"
      ],
      "w": 15
@@ -4252,7 +4258,6 @@
       "create",
       "install",
       "disk",
-      "filequoted",
       "nametgt"
      ],
      "w": 15
@@ -4274,7 +4279,6 @@
       "move",
       "sort",
       "disk",
-      "filequoted",
       "nametgt"
      ]
     },
@@ -4295,7 +4299,6 @@
       "move",
       "sort",
       "disk",
-      "filequoted",
       "nametgt"
      ]
     }
@@ -5320,7 +5323,10 @@
       "@symbol",
       "project",
       "cpu",
-      "session"
+      "session",
+      "forquoted",
+      "grepword",
+      "nametgt"
      ],
      "w": 10
     }
@@ -6048,7 +6054,7 @@
     {
      "all": [
       "extract",
-      "filenoun"
+      "filenoun|files"
      ],
      "none": [
       "compress",
@@ -6062,6 +6068,24 @@
       "connect"
      ],
      "w": 0
+    },
+    {
+     "all": [
+      "extract",
+      "glob|filequoted"
+     ],
+     "none": [
+      "compress",
+      "create",
+      "delete",
+      "list",
+      "download",
+      "install",
+      "extractkind",
+      "remote",
+      "connect"
+     ],
+     "w": 8
     }
    ],
    "slots": {
@@ -6078,6 +6102,18 @@
      ],
      "required": false,
      "from": "find:dir_cued"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "namepat": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:namepat"
     }
    },
    "examples": [

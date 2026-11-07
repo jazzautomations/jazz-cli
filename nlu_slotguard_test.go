@@ -232,3 +232,39 @@ func TestNLUNameTgtGuards(t *testing.T) {
 		}
 	}
 }
+
+// archive_extract mass + archive_create srcs + grep-de-linha: o cluster
+// que misturava "unzip all *.zip" (each), "compacta a pasta X" (srcs via
+// cue substantivo) e "lines containing 'x'" (text_grep, não line_slice).
+func TestNLUArchiveMassGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check      func(map[string]string) bool
+	}{
+		{"Unzip all *.zip files under current directory", "archive_extract",
+			func(s map[string]string) bool { return s["ext"] == "zip" && s["arc"] == "" }},
+		{"unzip all zip files in current folder", "archive_extract",
+			func(s map[string]string) bool { return s["ext"] == "zip" && s["arc"] == "" }},
+		{"Unzip every \".gz\" file in the current directory", "archive_extract",
+			func(s map[string]string) bool { return s["ext"] == "gz" && s["arc"] == "" }},
+		{"unzip pack.tar.gz into dest", "archive_extract",
+			func(s map[string]string) bool { return s["arc"] == "pack.tar.gz" && s["dir"] == "dest" }},
+		{"extract site.zip into www", "archive_extract",
+			func(s map[string]string) bool { return s["arc"] == "site.zip" && s["dir"] == "www" }},
+		{"compacta a pasta logs em tar.gz", "archive_create",
+			func(s map[string]string) bool { return s["srcs"] == "logs" && s["out"] == "tar.gz" && s["dir"] == "" }},
+		{"compress the logs folder into a tarball", "archive_create",
+			func(s map[string]string) bool { return s["srcs"] == "logs" && s["out"] == "tarball" }},
+		{"Print all lines from file 'report.txt' containing 'error'", "text_grep",
+			func(s map[string]string) bool { return s["file"] == "report.txt" && s["pattern"] == "error" }},
+		{"Print all lines from file 'report.txt' containing any-cased 'error' pattern", "text_grep",
+			func(s map[string]string) bool { return s["file"] == "report.txt" && s["pattern"] == "error" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}

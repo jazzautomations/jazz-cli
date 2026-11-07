@@ -1478,6 +1478,10 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 	case "extract":
 		arc := cx.str(in, "arc")
 		if arc == "" {
+			// for_each injeta o item como "path" — "unzip all *.zip"
+			arc = cx.str(in, "path")
+		}
+		if arc == "" {
 			return brStep{obs: obs, why: "extract sem arquivo"}
 		}
 		abs, rel, err := brSafePath(cx.env.Root, arc)

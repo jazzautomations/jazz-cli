@@ -456,7 +456,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					t.Concs = append(t.Concs, "forquoted")
 					break
 				}
-				if out[j].Filler {
+				// flag de case é modificador transparente: "containing
+				// any-cased 'error'" marca como "containing 'error'"
+				if out[j].Filler || out[j].has("icase") || nuCaseFlags[out[j].Fold] {
 					continue
 				}
 				break // a primeira palavra útil não era cue
@@ -494,9 +496,7 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		t := &out[i]
 		// conceitos sintéticos ADITIVOS — rodam depois do léxico pra não
 		// esconder o conceito real ("tar" é archive E palavra de ext)
-		switch t.Fold {
-		case "case-insensitive", "insensitive", "case-sensitive",
-			"caseinsensitive", "sensitive":
+		if nuCaseFlags[t.Fold] {
 			// flag de case é modificador de comparação, nunca nome:
 			// "case-insensitive example.com file" não tem name "insensitive"
 			t.Concs = append(t.Concs, "icase")
@@ -1664,6 +1664,14 @@ func (m *nuModel) residualCount(toks []nuTok, used map[string]bool, taken map[in
 
 var nuToWords = map[string]bool{"para": true, "pra": true, "pro": true, "to": true, "por": true, "->": true, "=>": true, "em": true}
 
+// nuCaseFlags: modificadores de comparação ("any-cased 'error'") —
+// nunca nome de arquivo, e transparentes pro lookahead do forquoted.
+var nuCaseFlags = map[string]bool{
+	"case-insensitive": true, "insensitive": true, "case-sensitive": true,
+	"caseinsensitive": true, "sensitive": true, "any-cased": true,
+	"anycase": true, "any-case": true, "nocase": true, "caseless": true,
+}
+
 // fill extracts the slots of def. It also counts unfed — free words a
 // world-kind slot refused — so Parse can lower confidence instead of
 // inventing values. A refused word only counts when the slot needed it
@@ -1788,8 +1796,13 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						continue
 					}
 					if strict {
-						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 || toks[i].Quoted {
-							continue // a number, an entity of another kind or a quoted literal is not a free name
+						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
+							continue // a number or an entity of another kind is not a free name
+						}
+						// 'report.txt' citado é nome de arquivo explícito
+						// (filequoted) — os demais quoted são literais
+						if toks[i].Quoted && !toks[i].has("filequoted") {
+							continue
 						}
 						if m.slotTokOK(kinds, &toks[i], w) {
 							parts = append(parts, toks[i].Raw)
@@ -2144,10 +2157,16 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 		return ""
 	case "arc":
 		for i := range toks {
-			if !taken[i] && nuArchiveName(toks[i].Fold) {
-				taken[i] = true
-				return toks[i].Raw
+			if taken[i] || !nuArchiveName(toks[i].Fold) {
+				continue
 			}
+			// "*.zip"/".gz" são filtro de conjunto ou ext pura — o
+			// mass-extract (each) é quem os usa, não o slot arc
+			if toks[i].has("glob") || strings.HasPrefix(toks[i].Fold, ".") {
+				continue
+			}
+			taken[i] = true
+			return toks[i].Raw
 		}
 		return ""
 	case "srcs":
@@ -3715,8 +3734,26 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"to": true, "para": true, "pra": true, "pro": true,
 			"into": true, "as": true, "named": true, "called": true,
 		}
+		// cue de pasta substantivo (pasta/folder/directory) introduz o ALVO
+		// num pedido de archive — "compacta a pasta logs" tem srcs=logs, não
+		// dir=logs. Preposições (em/in/na) continuam marcando escopo.
+		nounCues := map[string]bool{
+			"pasta": true, "pastas": true, "diretorio": true, "diretório": true,
+			"diretorios": true, "diretórios": true, "folder": true,
+			"folders": true, "directory": true, "directories": true,
+		}
+		arcCtx := false
+		for _, t := range toks {
+			if t.has("compress") || t.has("archiveverb") || t.has("extract") {
+				arcCtx = true
+				break
+			}
+		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
+				continue
+			}
+			if arcCtx && nounCues[t.Fold] {
 				continue
 			}
 			// "no owner"/"no group": EN negation, not the PT "em+o" preposition

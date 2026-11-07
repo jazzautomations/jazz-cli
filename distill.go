@@ -446,7 +446,7 @@ var dsCapKeys = map[string]map[string]bool{
 		"not_owner", "group", "not_group", "no_owner", "no_group", "orphan"),
 	"for_each": smSet("from", "do", "op", "max", "to", "to_dir", "content",
 		"from_str", "to_str", "ignore_case", "first_per_line", "backup_ext",
-		"mode", "owner", "group", "recursive"),
+		"mode", "owner", "group", "recursive", "dir"),
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
 	"text_op": smSet("op", "path", "to", "from_str", "to_str",

@@ -15,6 +15,43 @@
   "cost_ms": 300
  },
  {
+  "name": "archive_extract.each",
+  "intent": "archive_extract",
+  "priority": 9,
+  "doc": "'unzip all *.zip files': file_find produz os archives do tipo, for_each extrai um a um no dir (teto 32)",
+  "needs": ["bin.python3"],
+  "pre": [
+   {"fact": "slot.arc", "op": "unset"},
+   {"fact": "slot.ext", "op": "set"}
+  ],
+  "steps": [
+   {"cap": "script:file_find", "in": {"path": ".", "name": "*.$slot.ext", "type": "file", "limit": "32"}, "out": "cand"},
+   {"cap": "for_each", "in": {"from": "$cand", "do": "archive_op", "op": "extract", "dir": "$slot.dir", "max": "32"}, "out": "fe"}
+  ],
+  "verify": [{"check": "each_clean", "arg": "$fe"}],
+  "risk": "medium",
+  "cost_ms": 3000
+ },
+ {
+  "name": "archive_extract.each_name",
+  "intent": "archive_extract",
+  "priority": 9,
+  "doc": "'unzip all zip files' sem ponto-ext: file_find por *zip* produz, for_each extrai um a um no dir (teto 32)",
+  "needs": ["bin.python3"],
+  "pre": [
+   {"fact": "slot.arc", "op": "unset"},
+   {"fact": "slot.ext", "op": "unset"},
+   {"fact": "slot.namepat", "op": "set"}
+  ],
+  "steps": [
+   {"cap": "script:file_find", "in": {"path": ".", "name": "$slot.namepat", "type": "file", "limit": "32"}, "out": "cand"},
+   {"cap": "for_each", "in": {"from": "$cand", "do": "archive_op", "op": "extract", "dir": "$slot.dir", "max": "32"}, "out": "fe"}
+  ],
+  "verify": [{"check": "each_clean", "arg": "$fe"}],
+  "risk": "medium",
+  "cost_ms": 3000
+ },
+ {
   "name": "archive_extract.ask",
   "intent": "archive_extract",
   "priority": 5,
