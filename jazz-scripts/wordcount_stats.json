@@ -15,6 +15,16 @@
       "text": {
         "type": "string",
         "description": "Inline input instead of a file"
+      },
+      "path": {
+        "type": "string",
+        "description": "Item path injected by for_each (alias for file)"
+      },
+      "top": {
+        "type": "integer",
+        "description": "Max word frequencies to report, 0..200",
+        "minimum": 0,
+        "maximum": 200
       }
     }
   },

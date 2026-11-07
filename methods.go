@@ -523,6 +523,9 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 		return brStep{obs: rvNoCmd(), why: "for_each: capacidade desconhecida " + in["do"]}
 	}
 	done, failed, skipped := 0, 0, 0
+	sumKey := cx.str(in, "sum")
+	sums := 0.0
+	sample := map[string]any{}
 	firstWhy := ""
 	if len(items) > max {
 		failed = len(items) - max // excedente conta como não-feito, honesto
@@ -546,6 +549,7 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 		delete(ii, "do")
 		delete(ii, "slot")
 		delete(ii, "max")
+		delete(ii, "sum") // controle do for_each, não argumento do cap interno
 		// "./$kf": arquivos cujo nome começa com $ não podem ir crus — o
 		// subst do cap os leria como variável e esvaziaria o path.
 		ii["path"] = "./" + path
@@ -560,6 +564,21 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 				firstWhy = path + ": " + r.why
 			}
 			continue
+		}
+		// in["sum"]: acumula um campo numérico do data de cada item —
+		// "wc -l sobre conjunto" vira sum=lines com total auditável.
+		if sumKey != "" {
+			if rm, ok := r.val.(map[string]any); ok {
+				if rd, ok := rm["data"].(map[string]any); ok {
+					if n, has := rd[sumKey]; has {
+						f := brToFloat(n)
+						sums += f
+						if len(sample) < 8 {
+							sample[path] = f
+						}
+					}
+				}
+			}
 		}
 		if in["do"] == "file_op" && in["op"] == "delete" {
 			if abs, _, err := brSafePath(cx.env.Root, path); err == nil {
@@ -581,12 +600,31 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 	if failed > 0 {
 		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s), %d pulado(s) — primeira: %s", done, failed, skipped, firstWhy)}
 	}
-	return brStep{obs: rvNoCmd(), ok: true, val: map[string]any{
-		"data": map[string]any{
-			"done": done, "failed": failed, "skipped": skipped,
-			"total": len(items),
-		},
-	}}
+	dout := map[string]any{
+		"done": done, "failed": failed, "skipped": skipped,
+		"total": len(items),
+	}
+	if sumKey != "" {
+		dout["sum"], dout["sum_key"], dout["sample"] = sums, sumKey, sample
+		cx.say("total de %s em %d itens: %.0f", sumKey, done, sums)
+	}
+	return brStep{obs: rvNoCmd(), ok: true, val: map[string]any{"data": dout}}
+}
+
+// brToFloat: o val pode chegar int (in-process), float64 (JSON) ou
+// string serializada (round-trip de evidência) — todos são contagens
+// válidas. Zero-padding serializado sai via TrimLeft.
+func brToFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case string:
+		f, _ := strconv.ParseFloat(strings.TrimLeft(strings.TrimSpace(n), "0"), 64)
+		return f
+	}
+	return 0
 }
 
 // brSaveList escreve a lista produzida inteira num arquivo confinado —
@@ -3210,21 +3248,7 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			// foi varrido pela metade nem vazio de propósito)
 			m, _ := arg.(map[string]any)
 			data, _ := m["data"].(map[string]any)
-			num := func(k string) float64 {
-				// o val pode chegar int (in-process), float64 (JSON) ou
-				// string serializada — todos são contagens válidas
-				switch v := data[k].(type) {
-				case float64:
-					return v
-				case int:
-					return float64(v)
-				case string:
-					f, _ := strconv.ParseFloat(strings.TrimLeft(v, "0"), 64)
-					return f
-				}
-				return 0
-			}
-			done, failed, total := num("done"), num("failed"), num("total")
+			done, failed, total := brToFloat(data["done"]), brToFloat(data["failed"]), brToFloat(data["total"])
 			if failed > 0 || done == 0 {
 				return false, false, fmt.Sprintf("for_each: %.0f falha(s) de %.0f itens", failed, total)
 			}

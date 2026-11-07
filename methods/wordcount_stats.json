@@ -1,55 +1,219 @@
 {
-  "methods": [
+ "methods": [
+  {
+   "name": "wordcount_stats.script",
+   "intent": "wordcount_stats",
+   "priority": 10,
+   "doc": "conta palavras",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
     {
-      "name": "wordcount_stats.script",
-      "intent": "wordcount_stats",
-      "priority": 10,
-      "doc": "conta palavras",
-      "needs": [
-        "bin.python3"
-      ],
-      "steps": [
-        {
-          "cap": "script:wordcount_stats",
-          "in": {
-            "file": "$slot.target"
-          },
-          "out": "res"
-        }
-      ],
-      "verify": [
-        {
-          "check": "script_ok",
-          "arg": "$res"
-        }
-      ],
-      "risk": "low",
-      "cost_ms": 800
+     "cap": "script:wordcount_stats",
+     "in": {
+      "file": "$slot.target"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 800,
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "set"
+    }
+   ]
+  },
+  {
+   "name": "wordcount_stats.each",
+   "intent": "wordcount_stats",
+   "priority": 9,
+   "doc": "soma lines/words/chars sobre conjunto *.$ext (file_find produz, for_each soma; teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "unset"
     },
     {
-      "name": "wordcount_stats.no_python",
-      "intent": "wordcount_stats",
-      "priority": 1,
-      "doc": "conta palavras",
-      "pre": [
-        {
-          "fact": "bin.python3",
-          "op": "unset"
-        }
-      ],
-      "steps": [
-        {
-          "cap": "report",
-          "in": {
-            "text": "isso usa o script wordcount_stats, que precisa de python3 (não achei no PATH)",
-            "status": "blocked",
-            "category": "command_missing"
-          }
-        }
-      ],
-      "verify": [],
-      "risk": "low",
-      "cost_ms": 1
+     "fact": "slot.ext",
+     "op": "set"
     }
-  ]
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:wordcount_stats",
+      "sum": "$slot.what",
+      "max": "32",
+      "top": "0"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "wordcount_stats.dir",
+   "intent": "wordcount_stats",
+   "priority": 8,
+   "doc": "soma lines/words/chars nos arquivos do dir (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:wordcount_stats",
+      "sum": "$slot.what",
+      "max": "32",
+      "top": "0"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "wordcount_stats.all",
+   "intent": "wordcount_stats",
+   "priority": 7,
+   "doc": "'count lines in all files': varre o projeto inteiro (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": ".",
+      "name": "*",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:wordcount_stats",
+      "sum": "$slot.what",
+      "max": "32",
+      "top": "0"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "wordcount_stats.no_python",
+   "intent": "wordcount_stats",
+   "priority": 1,
+   "doc": "conta palavras",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script wordcount_stats, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
 }

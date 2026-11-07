@@ -18,6 +18,8 @@ def source():
             fail("text must be a string")
         truncated = len(value.encode("utf-8")) > MAX_BYTES
         return value.encode("utf-8")[:MAX_BYTES].decode("utf-8", "replace")
+    if not arg("file") and arg("path"):
+        ARGS["file"] = arg("path")  # for_each injeta path por item
     if not arg("file"):
         fail("pass file or text")
     try:
@@ -31,6 +33,12 @@ def source():
     except OSError:
         fail("cannot read file")
 
+def top():
+    try:
+        return max(0, min(int(ARGS.get("top", 200)), 200))
+    except (TypeError, ValueError):
+        return 200
+
 def finish(data, text):
     data.update(text=clip(text, 1000), truncated=truncated)
     emit(True, data)
@@ -41,5 +49,5 @@ from collections import Counter
 counts = Counter(words)
 truncated |= len(counts) > 200
 finish({"lines": len(src.splitlines()), "words": len(words), "characters": len(src),
-        "frequencies": [{"word": w, "count": n} for w, n in sorted(counts.items())[:200]]},
+        "frequencies": [{"word": w, "count": n} for w, n in sorted(counts.items())[:top()]]},
        "%d words, %d lines, %d characters" % (len(words), len(src.splitlines()), len(src)))

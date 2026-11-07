@@ -1626,6 +1626,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuArchiveArg(toks, sd.From[4:], taken)
 			case strings.HasPrefix(sd.From, "grep:"):
 				v = nuGrepArg(toks, sd.From[5:], taken)
+			case sd.From == "wc:what":
+				v = nuWcWhat(toks)
 			}
 			// any From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into slots the helper deliberately left
@@ -2209,6 +2211,24 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// nuWcWhat: qual grandeza contar — a resposta errada é somar "lines"
+// quando pediram "words". Cue explícito vence; sem cue, lines (pedido
+// dominante do domínio).
+func nuWcWhat(toks []nuTok) string {
+	for _, t := range toks {
+		switch t.Fold {
+		case "word", "words", "palavra", "palavras", "vocábulo", "vocabulos":
+			return "words"
+		case "char", "chars", "character", "characters", "caractere", "caracteres",
+			"byte", "bytes", "carateres":
+			return "characters"
+		case "line", "lines", "linha", "linhas", "row", "rows":
+			return "lines"
+		}
+	}
+	return "lines"
 }
 
 // nuArcTypeWord: palavras que descrevem o TIPO do que vai ser arquivado —

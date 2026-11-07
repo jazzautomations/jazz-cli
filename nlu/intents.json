@@ -3912,7 +3912,28 @@
      "kinds": [
       "file"
      ],
-     "required": true
+     "required": false
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "find:ext"
+    },
+    "dir": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "find:dir_cued"
+    },
+    "what": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "wc:what"
     }
    },
    "examples": [
@@ -4391,7 +4412,8 @@
       "diskuse",
       "run",
       "cron",
-      "grepword"
+      "grepword",
+      "v4_wordcount_stats"
      ],
      "w": 10
     },
@@ -4429,7 +4451,8 @@
       "diskuse",
       "run",
       "cron",
-      "grepword"
+      "grepword",
+      "v4_wordcount_stats"
      ],
      "w": 0
     },
@@ -4465,7 +4488,8 @@
       "diskuse",
       "run",
       "cron",
-      "grepword"
+      "grepword",
+      "v4_wordcount_stats"
      ],
      "w": 15
     },
@@ -4506,7 +4530,8 @@
       "have",
       "nameattr",
       "@quoted",
-      "grepword"
+      "grepword",
+      "v4_wordcount_stats"
      ],
      "w": 5
     },
@@ -4544,7 +4569,8 @@
       "symnoun",
       "lineselect",
       "@quoted",
-      "grepword"
+      "grepword",
+      "v4_wordcount_stats"
      ],
      "w": 5,
      "any": [
