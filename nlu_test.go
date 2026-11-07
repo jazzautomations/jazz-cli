@@ -235,6 +235,9 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		"create a zip file of all the files in some directory":                          "archive_create",
 		"comprime a pasta src em src.tar.gz":                                            "archive_create",
 		"extrai src.tar.gz em dest":                                                     "archive_extract",
+		// verbo imperativo "Archive" roteia pra create — a recusa do
+		// formato (bzip2) é honesta no cap, não no intent errado
+		"Archive file 'file' with bzip2 tool": "archive_create",
 	}
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {
@@ -460,6 +463,10 @@ func TestNLUOpinionIsNotIntent(t *testing.T) {
 		if in := m.Parse(s, w); nuPredict(in) != "none" {
 			t.Errorf("%q => %s (%.2f) — opinião tem que ir pro modelo, não virar intent offline", s, in.Name, in.Confidence)
 		}
+	}
+	// operação remota não vira compressão local: recusa, nunca stat lixo
+	if in := m.Parse("move files via ssh on port 2222 compressing", w); nuPredict(in) != "none" {
+		t.Errorf("'move files via ssh…compressing' devia ser none, veio %s (%.2f)", nuPredict(in), in.Confidence)
 	}
 	// comandos legítimos com as mesmas palavras sobrevivem
 	if in := m.Parse("acha o arquivo mais novo", w); nuPredict(in) != "file_find" {

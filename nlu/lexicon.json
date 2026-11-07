@@ -958,7 +958,12 @@
    "remoto",
    "origin",
    "remote",
-   "upstream"
+   "upstream",
+   "ssh",
+   "scp",
+   "sftp",
+   "rsync",
+   "user@"
   ],
   "pull": [
    "pull",
@@ -3058,6 +3063,15 @@
    "strip",
    "revoke",
    "drop"
+  ],
+  "archiveverb": [
+   "archive",
+   "archives",
+   "archived",
+   "archiving",
+   "arquiva",
+   "arquivar",
+   "archivei"
   ]
  }
 }

@@ -1701,8 +1701,10 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					switch toks[i].Fold {
 					// marcador de oração fecha o nome — "make a rust file
-					// that also compiles" não tem target "rust that also"
-					case "that", "which", "whose", "where", "when", "que", "onde", "quando", "because", "pois", "porque":
+					// that also compiles" não tem target "rust that also";
+					// "except/without" abrem cláusula de exceção idem
+					case "that", "which", "whose", "where", "when", "que", "onde", "quando", "because", "pois", "porque",
+						"except", "exceto", "menos", "without", "excluding", "excluindo", "save":
 						clause = true
 						continue
 					}
@@ -1982,6 +1984,30 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				break
 			}
 		}
+		// pass 1.5: "with/using/com FORMAT" — a ferramenta cita o formato,
+		// não o nome ("Archive file with bzip2" → formato bzip2; o cap
+		// recusa o que não suporta, mas não se perde a especificação).
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "with", "using", "via", "com", "atraves", "através":
+			default:
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] || u.has("article") {
+					continue
+				}
+				if nuArchiveWord(u.Fold) {
+					taken[i], taken[j] = true, true
+					return u.Raw
+				}
+				break
+			}
+		}
 		// pass 2: um nome-archive solto ("comprime logs.tar.gz" implícito
 		// não existe — mas "create filename.tar.gz" sem cue vale), ou a
 		// palavra-formato nua ("create a zip file" → formato zip).
@@ -2009,6 +2035,25 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			"arquivo": true, "arquivos": true, "file": true, "files": true,
 		}
 		var srcs []string
+		actionConcs := map[string]bool{
+			"mutate": true, "remote": true, "net": true, "run": true,
+			"delete": true, "kill": true, "exec": true, "install": true,
+			"download": true, "service": true, "connect": true, "host": true,
+			// o verbo de roteamento não é fonte: "Archive file X" não tem
+			// fonte "Archive"; "compress files" não tem fonte "compress"
+			"compress": true, "archiveverb": true, "extract": true,
+		}
+		actionWord := func(u *nuTok) bool {
+			if nuIsNumber(u.Fold) {
+				return true
+			}
+			for _, c := range u.Concs {
+				if actionConcs[c] {
+					return true
+				}
+			}
+			return false
+		}
 		add := func(i int) {
 			if taken[i] {
 				return
@@ -2050,6 +2095,9 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				if nuArcTypeWord(u.Fold) {
 					continue // "files/directories/structure" descreve o quê, não a fonte
 				}
+				if actionWord(u) {
+					break // verbo/ação depois do cue ("pasta move X") não é fonte
+				}
 				add(j) // com cue de pasta/arquivo a palavra é a fonte —
 				// "a pasta logs": logs tem conceito próprio e mesmo assim é src
 				break
@@ -2061,7 +2109,7 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue
 				}
 				if nuArchiveWord(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) ||
-					nuArcTypeWord(u.Fold) {
+					nuArcTypeWord(u.Fold) || actionWord(u) {
 					break
 				}
 				add(j)
@@ -2070,7 +2118,7 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		// tokens com cara de nome/path que sobraram ("a.txt", "src/x")
 		for i, t := range toks {
-			if taken[i] || t.Filler || t.Slang {
+			if taken[i] || t.Filler || t.Slang || actionWord(&toks[i]) {
 				continue
 			}
 			if nuNameShaped(t.Raw) || nuFileShaped(t.Fold) ||
@@ -2809,6 +2857,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		clauseBoundaries := map[string]bool{
 			"and": true, "or": true, "but": true, "then": true,
 			"e": true, "ou": true, "mas": true, "então": true, "entao": true,
+			// cláusula de exceção/limitação fecha o escopo — "files in the
+			// folder except those in workspace" não tem dir "except"
+			"except": true, "exceto": true, "menos": true, "without": true,
+			"save": true, "excluding": true, "excluindo": true,
 		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
@@ -3685,7 +3737,12 @@ func nuArchiveName(f string) bool {
 // zip", "num tgz") — o cap resolve o formato e deriva o nome da fonte.
 func nuArchiveWord(f string) bool {
 	switch f {
-	case "tar", "tarball", "zip", "tgz", "gz", "gzip", "jar", "whl", "tar.gz":
+	case "tar", "tarball", "zip", "tgz", "gz", "gzip", "jar", "whl", "tar.gz",
+		// formatos citados na frase mesmo sem suporte — "with bzip2" é
+		// especificação de formato, nunca nome de fonte ou dir
+		"bzip2", "bzip", "pbzip2", "xz", "lzma", "lz4", "zstd", "zstdmt",
+		"7z", "7za", "rar", "unrar", "cab", "arj", "lzh",
+		"bz2", "tbz", "tbz2", "txz", "tlz4":
 		return true
 	}
 	return nuArchiveName(f)

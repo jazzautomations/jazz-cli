@@ -3577,7 +3577,10 @@
       "download",
       "install",
       "mutate",
-      "extract"
+      "extract",
+      "archiveverb",
+      "remote",
+      "connect"
      ]
     },
     {
@@ -3593,7 +3596,10 @@
       "download",
       "install",
       "mutate",
-      "extract"
+      "extract",
+      "archiveverb",
+      "remote",
+      "connect"
      ],
      "w": 0
     }
@@ -5506,7 +5512,9 @@
       "extract",
       "delete",
       "download",
-      "install"
+      "install",
+      "remote",
+      "connect"
      ]
     },
     {
@@ -5518,7 +5526,9 @@
       "extract",
       "delete",
       "download",
-      "install"
+      "install",
+      "remote",
+      "connect"
      ],
      "w": 0
     },
@@ -5531,9 +5541,28 @@
       "extract",
       "delete",
       "download",
-      "install"
+      "install",
+      "remote",
+      "connect"
      ],
      "w": 0
+    },
+    {
+     "all": [
+      "archiveverb",
+      "filenoun|files|intocue|archive"
+     ],
+     "none": [
+      "extract",
+      "delete",
+      "download",
+      "install",
+      "remote",
+      "connect",
+      "listverb",
+      "find"
+     ],
+     "w": 5
     }
    ],
    "slots": {
@@ -5607,7 +5636,9 @@
       "list",
       "download",
       "install",
-      "extractkind"
+      "extractkind",
+      "remote",
+      "connect"
      ]
     },
     {
@@ -5622,7 +5653,9 @@
       "list",
       "download",
       "install",
-      "extractkind"
+      "extractkind",
+      "remote",
+      "connect"
      ],
      "w": 0
     }
