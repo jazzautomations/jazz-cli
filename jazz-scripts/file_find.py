@@ -85,6 +85,30 @@ sort_by = str(arg("sort", "name")).lower()
 if sort_by not in ("name", "size", "mtime"):
     fail("sort must be name, size or mtime")
 limit = as_int("limit", 200, 1, 5000)
+# filtro por contagem de linhas: "only one line", "more than 10 lines"
+lines_exact = as_int("lines", -1, -1, 1 << 30)
+min_lines = as_int("min_lines", 0, 0, 1 << 30)
+max_lines = as_int("max_lines", 1 << 30, 0, 1 << 30)
+if lines_exact >= 0:
+    min_lines = max_lines = lines_exact
+line_filter = min_lines > 0 or max_lines != (1 << 30)
+if min_lines > max_lines:
+    fail("min_lines is greater than max_lines")
+
+
+def count_lines(p, stop_above):
+    # conta \n com saída antecipada: arquivo acima do teto não precisa
+    # ser lido até o fim (log de 2GB não trava o filtro)
+    n = 0
+    try:
+        with open(p, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                n += chunk.count(b"\n")
+                if stop_above >= 0 and n > stop_above:
+                    return n
+    except (IOError, OSError):
+        return -1
+    return n
 
 
 def bounded_path(value):
@@ -101,7 +125,8 @@ top = bounded_path(arg("path", "."))
 if not os.path.exists(top):
     fail("path not found: %s" % rel(top))
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
-        or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"):
+        or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"
+        or line_filter):
     # "find all files under X" is a literal request — unbounded in intent,
     # still bounded by limit/MAX_SCAN like every other query
     name = "*"
@@ -147,6 +172,10 @@ def match(p, base, st):
         return False
     if is_file and not (min_size <= st.st_size <= max_size):
         return False
+    if is_file and line_filter:
+        n = count_lines(p, max_lines)
+        if n < 0 or not (min_lines <= n <= max_lines):
+            return False
     if newer_ts and getattr(st, TSKEY) < newer_ts:
         return False
     if older_ts and getattr(st, TSKEY) > older_ts:

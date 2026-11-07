@@ -4689,6 +4689,40 @@
       "between",
       "count"
      ]
+    },
+    {
+     "all": [
+      "files",
+      "lineselect"
+     ],
+     "w": 20,
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "net",
+      "remote",
+      "user",
+      "opinion",
+      "blame",
+      "session",
+      "who",
+      "branch",
+      "git",
+      "version",
+      "diff",
+      "undo",
+      "commit",
+      "history",
+      "count",
+      "v4_wordcount_stats",
+      "move",
+      "symnoun",
+      "sort"
+     ]
     }
    ],
    "slots": {
@@ -4785,6 +4819,24 @@
       "text"
      ],
      "from": "find:tfield"
+    },
+    "lines": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:lines"
+    },
+    "min_lines": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:min_lines"
+    },
+    "max_lines": {
+     "kinds": [
+      "number"
+     ],
+     "from": "find:max_lines"
     }
    },
    "examples": [

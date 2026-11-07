@@ -3249,6 +3249,118 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				return "ctime"
 			}
 		}
+	case "lines", "min_lines", "max_lines":
+		// "files that contain only one line" → lines=1; "more than 10
+		// lines" → min_lines=11; "com 3 linhas" → lines=3
+		for i, t := range toks {
+			f := t.Fold
+			if f != "line" && f != "lines" && f != "linha" && f != "linhas" {
+				continue
+			}
+			// número antes ("10 lines") ou depois ("linhas: 10", "de 10 linhas")
+			var num string
+			numAt := -1
+			for j := i - 1; j >= 0 && j >= i-3; j-- {
+				if toks[j].Filler {
+					continue
+				}
+				if nuIsNumber(toks[j].Fold) {
+					num, numAt = toks[j].Fold, j
+				}
+				break
+			}
+			if num == "" {
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					if toks[j].Filler {
+						continue
+					}
+					if nuIsNumber(toks[j].Fold) {
+						num, numAt = toks[j].Fold, j
+					}
+					break
+				}
+			}
+			// "only one line" / "uma única linha" — palavra-numero vale
+			if num == "" {
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					if toks[j].Filler {
+						continue
+					}
+					switch toks[j].Fold {
+					case "one", "single", "um", "uma", "única", "unica", "único", "unico":
+						num, numAt = "1", j
+					}
+					break
+				}
+			}
+			if num == "" {
+				continue
+			}
+			// comparador perto do número: "more than", "at least", "mais de"
+			cmp := ""
+			for j := numAt - 1; j >= 0 && j >= numAt-4; j-- {
+				fj := toks[j].Fold
+				// "pelo menos N" é UMA unidade (at least) — não deixar
+				// "menos" solto vencer o "pelo" que vem antes dele
+				if fj == "menos" && j > 0 && toks[j-1].Fold == "pelo" {
+					cmp = "min"
+					break
+				}
+				switch fj {
+				case "more", "mais", "over", "acima", "above", "greater", "maior":
+					cmp = "min+1"
+					// "no more than N" / "não mais de N" = no máximo N
+					if j > 0 && (toks[j-1].Fold == "no" || toks[j-1].Fold == "não" || toks[j-1].Fold == "nao") {
+						cmp = "max"
+					}
+				case "least", "minimo", "mínimo", "minimum", "pelo":
+					cmp = "min"
+				case "fewer", "less", "menos", "below", "abaixo", "under":
+					cmp = "max-1" // "menos de 20" = 19 no máximo
+				case "maximo", "máximo", "maximum":
+					cmp = "max"
+				case "only", "somente", "só", "just", "exactly", "exatamente", "exata":
+					cmp = "exact"
+				}
+				if cmp != "" {
+					break
+				}
+				if nuIsNumber(toks[j].Fold) || toks[j].Filler {
+					continue
+				}
+				break
+			}
+			n, err := strconv.Atoi(num)
+			if err != nil {
+				continue
+			}
+			switch what {
+			case "lines":
+				if cmp == "" || cmp == "exact" {
+					taken[i], taken[numAt] = true, true
+					return num
+				}
+			case "min_lines":
+				if cmp == "min+1" {
+					taken[i], taken[numAt] = true, true
+					return strconv.Itoa(n + 1)
+				}
+				if cmp == "min" {
+					taken[i], taken[numAt] = true, true
+					return num
+				}
+			case "max_lines":
+				if cmp == "max" {
+					taken[i], taken[numAt] = true, true
+					return num
+				}
+				if cmp == "max-1" && n > 1 {
+					taken[i], taken[numAt] = true, true
+					return strconv.Itoa(n - 1)
+				}
+			}
+			return ""
+		}
 	case "empty":
 		for _, t := range toks {
 			switch t.Fold {
@@ -3354,6 +3466,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// "in ext2 partitions" não tem dir "partitions"
 			"partition": true, "partitions": true, "filesystem": true,
 			"volume": true, "volumes": true, "mount": true, "mounts": true,
+			// unidade de contagem é atributo, não path — "with 20 lines"
+			// não tem dir "lines"
+			"line": true, "lines": true, "linha": true, "linhas": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name

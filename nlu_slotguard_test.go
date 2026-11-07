@@ -113,4 +113,32 @@ func TestNLUSlotGuards(t *testing.T) {
 			}
 		}
 	}
+	// contagem de linhas: exata, mínimo ("pelo menos"/"more than") e máximo
+	// ("menos de" é estrito = N-1; "no máximo" é N)
+	linecases := map[string]map[string]string{
+		"find all PHP files that contain only one line": {"lines": "1"},
+		"find files with more than 10 lines":            {"min_lines": "11"},
+		"arquivos com pelo menos 5 linhas":              {"min_lines": "5"},
+		"lista arquivos com menos de 20 linhas":         {"max_lines": "19"},
+		"files with no more than 20 lines":              {"max_lines": "20"},
+	}
+	for text, wants := range linecases {
+		in := m.Parse(text, w)
+		if in.Name != "file_find" {
+			t.Errorf("%q intent=%s want file_find", text, in.Name)
+		}
+		for k, v := range wants {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+	// o verbo do subcomando ("jazz ask X") vaza pro texto: não pode virar name
+	in = m.Parse("ask find all PHP files that contain only one line", w)
+	if in.Slots["name"] == "ask" {
+		t.Errorf("name roubou o verbo ask: %v", in.Slots)
+	}
+	if in.Slots["lines"] != "1" {
+		t.Errorf("lines perdido com ask: %v", in.Slots)
+	}
 }
