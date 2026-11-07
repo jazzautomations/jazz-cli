@@ -300,7 +300,8 @@
       "context",
       "findattr",
       "scope",
-      "opinion"
+      "opinion",
+      "filequoted"
      ]
     },
     {
@@ -313,7 +314,8 @@
       "create",
       "replace",
       "install",
-      "glob"
+      "glob",
+      "filequoted"
      ],
      "w": 10
     }
@@ -4219,7 +4221,8 @@
       "delete",
       "create",
       "install",
-      "disk"
+      "disk",
+      "filequoted"
      ],
      "w": 15
     },
@@ -4234,7 +4237,8 @@
       "delete",
       "create",
       "install",
-      "disk"
+      "disk",
+      "filequoted"
      ],
      "w": 15
     },
@@ -4254,8 +4258,8 @@
       "extract",
       "move",
       "sort",
-      "glob",
-      "disk"
+      "disk",
+      "filequoted"
      ]
     },
     {
@@ -4274,8 +4278,8 @@
       "extract",
       "move",
       "sort",
-      "glob",
-      "disk"
+      "disk",
+      "filequoted"
      ]
     }
    ],
@@ -4423,6 +4427,26 @@
    "rules": [
     {
      "all": [
+      "filequoted"
+     ],
+     "none": [
+      "content",
+      "delete",
+      "forquoted",
+      "grepword",
+      "intocue",
+      "keynoun",
+      "mutate",
+      "net",
+      "permattr",
+      "remote",
+      "run",
+      "session"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
       "findattr"
      ],
      "none": [
@@ -4457,7 +4481,8 @@
       "cron",
       "grepword",
       "v4_wordcount_stats",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 10
     },
@@ -4497,7 +4522,8 @@
       "cron",
       "grepword",
       "v4_wordcount_stats",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 0
     },
@@ -4535,7 +4561,8 @@
       "cron",
       "grepword",
       "v4_wordcount_stats",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 15
     },
@@ -4578,7 +4605,8 @@
       "@quoted",
       "grepword",
       "v4_wordcount_stats",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 5
     },
@@ -4618,7 +4646,8 @@
       "@quoted",
       "grepword",
       "v4_wordcount_stats",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 5,
      "any": [
@@ -4639,7 +4668,8 @@
       "net",
       "remote",
       "user",
-      "move"
+      "move",
+      "forquoted"
      ],
      "w": 15
     },
@@ -4687,7 +4717,8 @@
       "lineselect",
       "context",
       "between",
-      "count"
+      "count",
+      "forquoted"
      ]
     },
     {
@@ -4721,14 +4752,16 @@
       "v4_wordcount_stats",
       "move",
       "symnoun",
-      "sort"
+      "sort",
+      "forquoted"
      ]
     }
    ],
    "slots": {
     "name": {
      "kinds": [
-      "text"
+      "text",
+      "file"
      ]
     },
     "ext": {

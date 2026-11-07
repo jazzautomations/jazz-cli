@@ -3177,6 +3177,8 @@
    "relocate"
   ],
   "glob": [],
-  "forquoted": []
+  "forquoted": [],
+  "filequoted": [],
+  "icase": []
  }
 }

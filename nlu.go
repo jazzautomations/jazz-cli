@@ -413,10 +413,23 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	}
 	for i := range out {
 		t := &out[i]
+		// flag de case é modificador de comparação, nunca nome:
+		// "case-insensitive example.com file" não tem name "insensitive"
+		switch t.Fold {
+		case "case-insensitive", "insensitive", "case-sensitive",
+			"caseinsensitive", "sensitive":
+			t.Concs = append(t.Concs, "icase")
+		}
 		// token com curinga é um glob de nome — sintético, não vem do
 		// léxico: "files matching *.log" separa "matching ERROR" (conteúdo)
 		if strings.Contains(t.Raw, "*") {
 			t.Concs = append(t.Concs, "glob")
+			continue
+		}
+		// aspas com forma de arquivo ("foo.txt", "/etc/x") = nome de
+		// arquivo citado — vence forquoted: "find the file \"x.c\""
+		if t.Quoted && (strings.Contains(t.Raw, ".") || strings.Contains(t.Raw, "/")) {
+			t.Concs = append(t.Concs, "filequoted")
 			continue
 		}
 		// aspas depois de "for"/"por" = alvo de CONTEÚDO (o padrão do
@@ -425,12 +438,15 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			for j := i - 1; j >= 0; j-- {
 				// "for"/"por" são fillers também — checar ANTES do skip.
 				// meta-palavras de conteúdo são transparentes: "for the
-				// string \"x\"" marca do mesmo jeito que "for \"x\""
-				if out[j].Fold == "for" || out[j].Fold == "por" {
+				// string \"x\"" marca do mesmo jeito que "for \"x\"";
+				// "strings \"x\"" e "matching \"x\"" marcam pelo
+				// próprio cue de conteúdo
+				if out[j].Fold == "for" || out[j].Fold == "por" ||
+					out[j].has("content") || out[j].has("grepword") {
 					t.Concs = append(t.Concs, "forquoted")
 					break
 				}
-				if out[j].Filler || out[j].has("content") || out[j].has("grepword") {
+				if out[j].Filler {
 					continue
 				}
 				break // a primeira palavra útil não era cue
@@ -1567,7 +1583,10 @@ func (m *nuModel) residual(toks []nuTok, used map[string]bool) []int {
 				explained = true
 			}
 		}
-		if !explained {
+		// um glob consumido pela regra ainda é material de nome:
+		// "files matching *.log" — o conceito classifica, o token é
+		// o padrão; sem isso o slot name fica vazio
+		if !explained || t.has("glob") {
 			out = append(out, i)
 		}
 	}
@@ -1727,6 +1746,9 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						continue
 					}
 					if toks[i].Quoted {
+						if toks[i].has("forquoted") || toks[i].has("grepword") {
+							continue // padrão de conteúdo citado — é pattern, não name
+						}
 						parts = []string{toks[i].Raw}
 						taken[i] = true
 						break
@@ -1750,7 +1772,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						break
 					}
 					if toks[i].has("grepword") || toks[i].has("nameattr") ||
-						toks[i].has("sort") || toks[i].Fold == "by" {
+						toks[i].has("sort") || toks[i].has("icase") ||
+						toks[i].has("forquoted") || toks[i].Fold == "by" {
 						// cue de filtro ("matching"), de nome ("named") ou
 						// de ordenação ("sorted by") nunca é o valor — o
 						// nome/glob vem no token seguinte
