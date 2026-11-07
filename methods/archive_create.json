@@ -31,6 +31,10 @@
     {
      "check": "file_exists",
      "arg": "$a"
+    },
+    {
+     "check": "arc_contains",
+     "arg": "$a"
     }
    ],
    "risk": "medium",
@@ -63,7 +67,8 @@
      "cap": "script:file_find",
      "in": {
       "path": ".",
-      "name": "*.$slot.ext"
+      "name": "*.$slot.ext",
+      "limit": "64"
      },
      "out": "f"
     },
@@ -81,6 +86,66 @@
    "verify": [
     {
      "check": "file_exists",
+     "arg": "$a"
+    },
+    {
+     "check": "arc_contains",
+     "arg": "$a"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 1500
+  },
+  {
+   "name": "archive_create.match",
+   "intent": "archive_create",
+   "priority": 9,
+   "doc": "'archive files matching X' — file_find pelo padrão, archive_op empacota, arc_contains relê",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    },
+    {
+     "fact": "slot.srcs",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": ".",
+      "name": "$slot.pat",
+      "limit": "64"
+     },
+     "out": "f"
+    },
+    {
+     "cap": "archive_op",
+     "in": {
+      "op": "create",
+      "out": "$slot.out",
+      "srcs": "$f",
+      "dir": "$slot.dir"
+     },
+     "out": "a"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$a"
+    },
+    {
+     "check": "arc_contains",
      "arg": "$a"
     }
    ],
@@ -125,6 +190,10 @@
    "verify": [
     {
      "check": "file_exists",
+     "arg": "$a"
+    },
+    {
+     "check": "arc_contains",
      "arg": "$a"
     }
    ],

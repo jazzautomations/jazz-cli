@@ -238,6 +238,11 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		// verbo imperativo "Archive" roteia pra create — a recusa do
 		// formato (bzip2) é honesta no cap, não no intent errado
 		"Archive file 'file' with bzip2 tool": "archive_create",
+		// producer→archive: "matching X" é filtro do find, não fonte —
+		// e não pode ser engolido pelo find (grepword)
+		"archive all files matching *.log to logs.tar": "archive_create",
+		"archive files matching *.log to x.tar":        "archive_create",
+		"create a tar of all .log files":               "archive_create",
 	}
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {

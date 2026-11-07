@@ -1246,6 +1246,52 @@ func brTextSort(cx *brCtx, in map[string]string) brStep {
 // sem depender de tar/zip no PATH (potato-friendly). Anti tar-slip:
 // membros ../, absolutos e links simbólicos não são escritos. Saída do
 // extract é a lista de paths escritos (list_present prova o pós-estado).
+// brArcList lista os nomes de entrada de um pacote tar/tar.gz/tgz/zip —
+// usado pelo verificador arc_contains pra provar conteúdo, não existência.
+func brArcList(abs string) (map[string]bool, error) {
+	got := map[string]bool{}
+	add := func(n string) {
+		n = strings.TrimPrefix(strings.TrimSuffix(n, "/"), "./")
+		if n != "" {
+			got[n] = true
+		}
+	}
+	if strings.HasSuffix(abs, ".zip") {
+		zr, err := zip.OpenReader(abs)
+		if err != nil {
+			return nil, err
+		}
+		defer zr.Close()
+		for _, f := range zr.File {
+			add(f.Name)
+		}
+		return got, nil
+	}
+	f, err := os.Open(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var rd io.Reader = f
+	if strings.HasSuffix(abs, ".tar.gz") || strings.HasSuffix(abs, ".tgz") {
+		gz, err := gzip.NewReader(f)
+		if err != nil {
+			return nil, err
+		}
+		defer gz.Close()
+		rd = gz
+	}
+	tr := tar.NewReader(rd)
+	for {
+		h, err := tr.Next()
+		if err != nil {
+			break
+		}
+		add(h.Name)
+	}
+	return got, nil
+}
+
 func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 	op, obs := in["op"], rvNoCmd()
 	switch op {
@@ -1310,7 +1356,9 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 		}
 		if ext, ok := fmtExt[rel]; ok {
 			base := filepath.Base(srcs[0][1])
-			if base == "." || base == "/" {
+			// conjunto produzido ("a tar of all .log files"): nomear pelo
+			// primeiro item é enganoso — "a.log.tar" guarda 3 arquivos.
+			if len(srcs) > 1 || base == "." || base == "/" {
 				base = "archive"
 			}
 			rel = base + ext
@@ -1420,7 +1468,13 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 		}
 		cx.say("archive criado: %s (%d arquivo(s))", rel, len(files))
 		cx.task.AddEvidence("file", fmt.Sprintf("archive create %s", rel))
-		return brStep{val: rel, obs: obs, ok: true}
+		packed := make([]any, 0, len(files))
+		for _, f := range files {
+			packed = append(packed, f)
+		}
+		return brStep{val: map[string]any{
+			"path": rel, "packed": len(files), "files": packed,
+		}, obs: obs, ok: true}
 	case "extract":
 		arc := cx.str(in, "arc")
 		if arc == "" {
@@ -2935,6 +2989,13 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 		switch c.Check {
 		case "file_exists":
 			rel, _ := arg.(string)
+			// archive_op create devolve mapa {path,packed,files} — o path
+			// continua sendo a prova de existência.
+			if rel == "" {
+				if mm, ok := arg.(map[string]any); ok {
+					rel, _ = mm["path"].(string)
+				}
+			}
 			// Lstat: um symlink criado pela cap verifica mesmo se o alvo
 			// ainda não existir — quem existe é o link.
 			fi, err := os.Lstat(filepath.Join(cx.env.Root, filepath.FromSlash(rel)))
@@ -2951,6 +3012,37 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, "o arquivo ainda existe: " + rel
 			}
 			proofs = append(proofs, rel+" não existe mais")
+		case "arc_contains":
+			// prova real de conteúdo: relê o pacote e exige cada fonte
+			// declarada lá dentro — archive "criado" mas vazio falha.
+			mm, ok := arg.(map[string]any)
+			if !ok {
+				return false, false, "arc_contains: resultado sem mapa"
+			}
+			path, _ := mm["path"].(string)
+			want, _ := mm["files"].([]any)
+			if path == "" || len(want) == 0 {
+				return false, false, "arc_contains: sem path/files"
+			}
+			got, err := brArcList(filepath.Join(cx.env.Root, filepath.FromSlash(path)))
+			if err != nil {
+				return false, false, "arc_contains: " + err.Error()
+			}
+			miss := 0
+			for _, w := range want {
+				ws, ok := w.(string)
+				if !ok {
+					continue
+				}
+				ws = strings.TrimPrefix(strings.TrimSuffix(ws, "/"), "./")
+				if !got[ws] {
+					miss++
+				}
+			}
+			if miss > 0 {
+				return false, false, fmt.Sprintf("arc_contains: %d fonte(s) fora do pacote", miss)
+			}
+			proofs = append(proofs, fmt.Sprintf("pacote %s contém %d fonte(s)", path, len(want)))
 		case "list_gone":
 			// every path a producer listed must be gone (mass-delete proof)
 			mm, _ := arg.(map[string]any)

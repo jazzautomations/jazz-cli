@@ -2050,6 +2050,9 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			// o verbo de roteamento não é fonte: "Archive file X" não tem
 			// fonte "Archive"; "compress files" não tem fonte "compress"
 			"compress": true, "archiveverb": true, "extract": true,
+			// cue de filtro ("files matching X") descreve o padrão,
+			// não a fonte
+			"grepword": true,
 		}
 		actionWord := func(u *nuTok) bool {
 			if nuIsNumber(u.Fold) {
@@ -2137,6 +2140,37 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		return strings.Join(srcs, " ")
+	case "pat":
+		// "archive files matching *.log / pattern X / named work" — o
+		// filtro do producer. Glob solto também vale ("archive *.log").
+		patCues := map[string]bool{
+			"matching": true, "match": true, "pattern": true,
+			"padrao": true, "padrão": true, "named": true, "called": true,
+			"like": true, "como": true,
+		}
+		for i, t := range toks {
+			if taken[i] || !patCues[t.Fold] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] || u.has("article") {
+					continue
+				}
+				if nuArchiveWord(u.Fold) || nuIsNumber(u.Fold) {
+					break
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+		}
+		for i, t := range toks {
+			if !taken[i] && strings.Contains(t.Raw, "*") {
+				taken[i] = true
+				return t.Raw
+			}
+		}
+		return ""
 	}
 	return ""
 }
@@ -3100,7 +3134,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				// extensão — "the .zip files" (plural/definido) segue filtro.
 				if i > 0 && i+1 < len(toks) {
 					nxt := toks[i+1].Fold
-					if nxt == "file" || nxt == "arquivo" {
+					// "a tar OF files": formato do artefato, não filtro
+					if nxt == "file" || nxt == "arquivo" || nxt == "of" || nxt == "de" {
 						switch toks[i-1].Fold {
 						case "a", "an", "um", "uma":
 							continue

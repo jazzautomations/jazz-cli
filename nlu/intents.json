@@ -5664,7 +5664,7 @@
       "listverb",
       "find"
      ],
-     "w": 5
+     "w": 15
     }
    ],
    "slots": {
@@ -5699,6 +5699,13 @@
       "dir"
      ],
      "from": "find:dir_cued"
+    },
+    "pat": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "arc:pat"
     }
    },
    "examples": [
