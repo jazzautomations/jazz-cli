@@ -616,3 +616,41 @@ func TestNLUSortOpRouting(t *testing.T) {
 		t.Errorf("-u não virou flag unique: %v", in.Slots)
 	}
 }
+
+func TestNLUFileMove(t *testing.T) {
+	m, w := nuTestWorld(t)
+	cases := map[string]string{
+		"move todos os jpgs pra pasta images":                "file_move",
+		"find .sh files and move them to folder back.scripts": "file_move",
+		"move all the .txt files into docs":                   "file_move",
+		"move every jpg to the images directory":              "file_move",
+		"find directories named work and move them to trash":  "file_move",
+		"move all files to backup":                            "file_move",
+		"move them to another folder":                         "file_move",
+		"renomeia a.txt para b.txt":                           "rename",
+		"find files and delete them":                          "none",
+	}
+	for text, want := range cases {
+		if in := m.Parse(text, w); nuPredict(in) != want {
+			t.Errorf("%q => %s (%v), want %s", text, nuPredict(in), in.Evidence, want)
+		}
+	}
+	// O bug real: "jpgs" virava "*" e movia TUDO junto — falso sucesso.
+	// pat tem que ser *.jpg ou não pode executar.
+	if in := m.Parse("move todos os jpgs pra pasta images", w); in.Slots["pat"] != "*.jpg" {
+		t.Errorf("jpgs => pat=%q (falso sucesso se for * ou vazio)", in.Slots["pat"])
+	}
+	if in := m.Parse("move all the .txt files into docs", w); in.Slots["pat"] != "*.txt" || in.Slots["dest"] != "docs" {
+		t.Errorf(".txt => slots %v", in.Slots)
+	}
+	if in := m.Parse("find directories named work and move them to trash", w); in.Slots["pat"] != "work" || in.Slots["type"] != "dir" {
+		t.Errorf("dirs named work => slots %v", in.Slots)
+	}
+	if in := m.Parse("move all files to backup", w); in.Slots["pat"] != "*" {
+		t.Errorf("all files => pat=%q", in.Slots["pat"])
+	}
+	// Sem filtro e sem escopo explícito: pat vazio → needs_input, nunca "*"
+	if in := m.Parse("move them to another folder", w); in.Slots["pat"] == "*" {
+		t.Errorf("move them => pat=* indevido")
+	}
+}

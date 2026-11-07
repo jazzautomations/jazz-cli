@@ -4413,7 +4413,8 @@
       "run",
       "cron",
       "grepword",
-      "v4_wordcount_stats"
+      "v4_wordcount_stats",
+      "move"
      ],
      "w": 10
     },
@@ -4452,7 +4453,8 @@
       "run",
       "cron",
       "grepword",
-      "v4_wordcount_stats"
+      "v4_wordcount_stats",
+      "move"
      ],
      "w": 0
     },
@@ -4489,7 +4491,8 @@
       "run",
       "cron",
       "grepword",
-      "v4_wordcount_stats"
+      "v4_wordcount_stats",
+      "move"
      ],
      "w": 15
     },
@@ -4531,7 +4534,8 @@
       "nameattr",
       "@quoted",
       "grepword",
-      "v4_wordcount_stats"
+      "v4_wordcount_stats",
+      "move"
      ],
      "w": 5
     },
@@ -4570,7 +4574,8 @@
       "lineselect",
       "@quoted",
       "grepword",
-      "v4_wordcount_stats"
+      "v4_wordcount_stats",
+      "move"
      ],
      "w": 5,
      "any": [
@@ -6063,6 +6068,90 @@
     "find files sorted by date",
     "list files by size",
     "conta as linhas do arquivo"
+   ]
+  },
+  {
+   "name": "file_move",
+   "desc": "move conjunto de arquivos/dirs pra um destino",
+   "rules": [
+    {
+     "all": [
+      "move"
+     ],
+     "none": [
+      "rename",
+      "delete",
+      "permattr",
+      "execperm",
+      "git",
+      "remote",
+      "net",
+      "install",
+      "run",
+      "undo",
+      "history",
+      "service",
+      "container",
+      "kill",
+      "user",
+      "who",
+      "opinion",
+      "error"
+     ],
+     "w": 10
+    }
+   ],
+   "slots": {
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "find:ext"
+    },
+    "srcdir": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "mv:srcdir"
+    },
+    "pat": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "mv:pat"
+    },
+    "type": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "mv:type"
+    },
+    "dest": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "mv:dest"
+    }
+   },
+   "examples": [
+    "move todos os jpgs pra pasta images",
+    "move all the .sh files to folder scripts",
+    "find all pdf files and move them to docs",
+    "mova os .txt para o diretorio textos",
+    "find .sh files and move them to folder back.scripts",
+    "move every jpg to the images directory",
+    "move all files bigger than 1MB to big/"
+   ],
+   "negatives": [
+    "renomeia a.txt para b.txt",
+    "apaga todos os .log",
+    "find files and delete them",
+    "muda a permissão do arquivo"
    ]
   }
  ]

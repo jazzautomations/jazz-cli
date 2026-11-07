@@ -1630,6 +1630,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuWcWhat(toks)
 			case strings.HasPrefix(sd.From, "sort:"):
 				v = nuSortArg(toks, sd.From[5:], taken)
+			case strings.HasPrefix(sd.From, "mv:"):
+				v = nuMvArg(toks, sd.From[3:], taken)
 			}
 			// any From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into slots the helper deliberately left
@@ -2365,6 +2367,179 @@ func nuSortArg(toks []nuTok, what string, taken map[int]bool) string {
 		for _, t := range toks {
 			if strings.HasSuffix(strings.ToLower(t.Raw), ".csv") || t.Fold == "csv" {
 				return ","
+			}
+		}
+	}
+	return ""
+}
+
+// nuMvArg: slots do file_move — dest (dir destino após cue to/para/into),
+// pat (glob do file_find: "*.$ext" > nome literal > "*"), type (file|dir).
+var mvDestCues = map[string]bool{"to": true, "para": true, "pra": true, "into": true,
+	"em": true, "inside": true, "under": true, "dentro": true}
+
+var mvScopeAll = map[string]bool{"all": true, "every": true, "each": true,
+	"todos": true, "todas": true, "cada": true}
+
+func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "dest":
+		destCue := mvDestCues
+		dirWord := map[string]bool{"folder": true, "pasta": true, "dir": true, "directory": true,
+			"diretorio": true, "diretório": true, "destino": true, "target": true, "dest": true}
+		vague := map[string]bool{"another": true, "outra": true, "outro": true,
+			"some": true, "alguma": true, "algum": true, "other": true, "nova": true, "new": true}
+		for i, t := range toks {
+			if taken[i] || !destCue[t.Fold] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j < i+4; j++ {
+				u := &toks[j]
+				if taken[j] || u.Filler || u.has("article") || dirWord[u.Fold] || vague[u.Fold] {
+					continue
+				}
+				switch u.Fold {
+				case "and", "or", "e", "ou", "except", "without", "that", "which":
+					return ""
+				}
+				if u.has("mutate") || u.has("delete") || u.has("create") || nuArchiveWord(u.Fold) {
+					return ""
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+		}
+	case "pat":
+		// nome literal depois de cue — "directories named work" → "work"
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "named", "called", "nome", "nomeado", "chamado", "chamada", "name":
+				for j := i + 1; j < len(toks) && j < i+3; j++ {
+					u := &toks[j]
+					if taken[j] || u.Filler || u.has("article") {
+						continue
+					}
+					switch u.Fold {
+					case "and", "or", "e", "ou", "to", "para", "into", "which", "that",
+						"dir", "directory", "folder", "pasta", "file", "arquivo":
+						return ""
+					}
+					if u.has("mutate") || u.has("delete") || u.has("create") {
+						return ""
+					}
+					taken[i], taken[j] = true, true
+					return u.Raw
+				}
+			}
+		}
+		for i, t := range toks {
+			// família-ext alimenta pat MESMO se o slot ext já consumiu o
+			// token — o find precisa do glob (*.txt) como filtro de nome,
+			// então o check de taken vem só depois desses ramos.
+			if strings.HasPrefix(t.Raw, "*.") || nuPureExt(t.Fold) {
+				return "*." + strings.TrimPrefix(strings.TrimPrefix(t.Fold, "*"), ".")
+			}
+			// extensão nua ("jpg files", "every jpg") precisa de âncora:
+			// palavra-arquivo ou escopo-all colado — e nunca depois de cue
+			// de destino ("files to go" não pode virar "*.go").
+			if nuExtWords[t.Fold] && (i == 0 || !mvDestCues[toks[i-1].Fold]) {
+				near := false
+				for j := i - 2; j <= i+2 && !near; j++ {
+					if j >= 0 && j < len(toks) && j != i &&
+						(toks[j].has("files") || toks[j].has("filenoun") ||
+							mvScopeAll[toks[j].Fold]) {
+						near = true
+					}
+				}
+				if near {
+					return "*." + t.Fold
+				}
+			}
+			// plural de extensão é evidência suficiente sozinho: "jpgs"→*.jpg
+			if f := strings.TrimSuffix(t.Fold, "s"); f != t.Fold && nuExtWords[f] {
+				return "*." + f
+			}
+			if taken[i] {
+				continue
+			}
+		}
+		// "*" só quando o pedido explicita o conjunto inteiro — "move all
+		// files": scopeall + palavra-arquivo. Sem filtro E sem cue, pat=""
+		// → needs_input honesto em vez de mover tudo por engano.
+		hasAll, hasFiles := false, false
+		for _, t := range toks {
+			if mvScopeAll[t.Fold] {
+				hasAll = true
+			}
+			if t.has("files") || t.Fold == "everything" || t.Fold == "tudo" {
+				hasFiles = true
+			}
+		}
+		if hasAll && hasFiles {
+			return "*"
+		}
+		return ""
+	case "type":
+		for i, t := range toks {
+			switch t.Fold {
+			case "directory", "directories", "diretorio", "diretório", "diretorios",
+				"folder", "folders", "pasta", "pastas", "subdir", "subdirectory":
+				// "to the images directory" / "pra pasta images": a palavra-dir
+				// é destino se um cue de destino aparece na frase antes dela
+				// (o nome do destino fica no meio — não pode parar nele)
+				destNear := false
+			scan:
+				for j := i - 1; j >= 0 && j >= i-4; j-- {
+					u := &toks[j]
+					switch u.Fold {
+					case "and", "or", "e", "ou", "except", "without", "which", "that", "from", "de":
+						break scan
+					}
+					if u.has("mutate") || u.has("delete") || u.has("create") {
+						break scan
+					}
+					switch u.Fold {
+					case "to", "para", "pra", "into", "inside", "under", "dentro":
+						destNear = true
+						break scan
+					}
+				}
+				if !destNear {
+					return "dir"
+				}
+			}
+		}
+		return "file"
+	case "srcdir":
+		// diretório FONTE — "in dir X"/"under X"/"from X". Não reusa
+		// find:dir_cued porque "directories named work" é cue de nome, não de
+		// dir; e "em/no" ficam de fora porque em PT são cue de destino.
+		srcCue := map[string]bool{"in": true, "inside": true, "under": true,
+			"from": true, "de": true, "below": true}
+		for i, t := range toks {
+			if taken[i] || !srcCue[t.Fold] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j < i+4; j++ {
+				u := &toks[j]
+				if taken[j] || u.Filler || u.has("article") ||
+					u.Fold == "dir" || u.Fold == "directory" || u.Fold == "folder" ||
+					u.Fold == "diretorio" || u.Fold == "diretório" || u.Fold == "pasta" ||
+					u.Fold == "tree" || u.Fold == "current" || u.Fold == "atual" {
+					continue
+				}
+				switch u.Fold {
+				case "and", "or", "e", "ou", "to", "para", "into", "which", "that", "move", "rename":
+					return ""
+				}
+				if u.has("mutate") || u.has("delete") || u.has("create") || nuArchiveWord(u.Fold) || nuPureExt(u.Fold) {
+					return ""
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
 			}
 		}
 	}

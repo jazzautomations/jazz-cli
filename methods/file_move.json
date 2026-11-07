@@ -1,0 +1,54 @@
+{
+ "methods": [
+  {
+   "name": "file_move.each",
+   "intent": "file_move",
+   "priority": 10,
+   "doc": "file_find produz (ext/nome/tudo via pat), for_each mv item -> $dest/basename (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.srcdir",
+      "name": "$slot.pat",
+      "type": "$slot.type",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "rename",
+      "to_dir": "$slot.dest",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 2000
+  }
+ ]
+}
