@@ -412,6 +412,12 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	}
 	for i := range out {
 		t := &out[i]
+		// token com curinga é um glob de nome — sintético, não vem do
+		// léxico: "files matching *.log" separa "matching ERROR" (conteúdo)
+		if strings.Contains(t.Raw, "*") {
+			t.Concs = append(t.Concs, "glob")
+			continue
+		}
 		if t.Quoted || len(t.Concs) > 0 {
 			continue
 		}
@@ -1718,6 +1724,12 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if clause {
 						break
+					}
+					if toks[i].has("grepword") || toks[i].has("nameattr") {
+						// cue de filtro ("matching", "containing") ou de
+						// nome ("named", "chamados") nunca é o valor — o
+						// nome/glob vem no token seguinte
+						continue
 					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true

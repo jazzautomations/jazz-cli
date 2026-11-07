@@ -243,6 +243,10 @@ func TestNLUCorpusFalseMatches(t *testing.T) {
 		"archive all files matching *.log to logs.tar": "archive_create",
 		"archive files matching *.log to x.tar":        "archive_create",
 		"create a tar of all .log files":               "archive_create",
+		// glob é nome (file_find), palavra é conteúdo (find) — o conceito
+		// sintético separa "matching *.log" de "matching ERROR"
+		"find files matching *.log": "file_find",
+		"find files matching ERROR": "find",
 	}
 	for text, want := range right {
 		if in := m.Parse(text, w); in.Name != want {

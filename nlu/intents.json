@@ -312,7 +312,8 @@
       "delete",
       "create",
       "replace",
-      "install"
+      "install",
+      "glob"
      ],
      "w": 10
     }
@@ -4581,6 +4582,24 @@
      "any": [
       "nameattr"
      ]
+    },
+    {
+     "all": [
+      "find",
+      "files",
+      "glob"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "net",
+      "remote",
+      "user",
+      "move"
+     ],
+     "w": 15
     }
    ],
    "slots": {
