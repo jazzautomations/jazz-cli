@@ -1480,6 +1480,12 @@ func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
 	if w == nil || !fileish || len(t.Fold) < 3 {
 		return false
 	}
+	// palavra-com-conceito-forte é vocabulário ("have", "sorted"), nunca
+	// nome — conceito fraco (stem) ou de reparo de typo não conta: "parsr"
+	// ainda pode fuzar parser.go
+	if len(t.Concs) > 0 && !t.Weak && t.Fixed == "" {
+		return false
+	}
 	lim := fzLimit(len([]rune(t.Fold)))
 	for ei := range w.ents {
 		e := &w.ents[ei]
@@ -1725,9 +1731,10 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					if clause {
 						break
 					}
-					if toks[i].has("grepword") || toks[i].has("nameattr") {
-						// cue de filtro ("matching", "containing") ou de
-						// nome ("named", "chamados") nunca é o valor — o
+					if toks[i].has("grepword") || toks[i].has("nameattr") ||
+						toks[i].has("sort") || toks[i].Fold == "by" {
+						// cue de filtro ("matching"), de nome ("named") ou
+						// de ordenação ("sorted by") nunca é o valor — o
 						// nome/glob vem no token seguinte
 						continue
 					}
@@ -3272,6 +3279,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"cada": true, "qualquer": true, "quaisquer": true,
 			// "in some directory" = escopo indefinido — não é nome real
 			"some": true, "certa": true, "certo": true,
+			// "in the entire/whole tree" = este projeto — não dir "entire"
+			"entire": true, "whole": true, "inteiro": true, "inteira": true,
+			"completo": true, "completa": true,
 			// "in text files" = arquivos de texto em geral, não dir "text"
 			"text": true, "texto": true,
 		}
@@ -3311,6 +3321,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"regular": true, "normal": true, "standard": true, "certain": true,
 			"particular": true, "specific": true, "common": true,
 			"where": true, "path": true, "location": true, "place": true,
+			// vocab de filesystem descreve o alvo, não um diretório —
+			// "in ext2 partitions" não tem dir "partitions"
+			"partition": true, "partitions": true, "filesystem": true,
+			"volume": true, "volumes": true, "mount": true, "mounts": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -3321,6 +3335,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// folder except those in workspace" não tem dir "except"
 			"except": true, "exceto": true, "menos": true, "without": true,
 			"save": true, "excluding": true, "excluindo": true,
+			// pronome relativo abre oração nova — "directory which have
+			// size 40" não tem dir "have"
+			"which": true, "that": true, "who": true, "whose": true,
+			"whom": true, "que": true, "quem": true,
 		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
