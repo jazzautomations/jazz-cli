@@ -3179,6 +3179,7 @@
   "glob": [],
   "forquoted": [],
   "filequoted": [],
-  "icase": []
+  "icase": [],
+  "extcue": []
  }
 }

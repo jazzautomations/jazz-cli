@@ -413,13 +413,6 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	}
 	for i := range out {
 		t := &out[i]
-		// flag de case é modificador de comparação, nunca nome:
-		// "case-insensitive example.com file" não tem name "insensitive"
-		switch t.Fold {
-		case "case-insensitive", "insensitive", "case-sensitive",
-			"caseinsensitive", "sensitive":
-			t.Concs = append(t.Concs, "icase")
-		}
 		// token com curinga é um glob de nome — sintético, não vem do
 		// léxico: "files matching *.log" separa "matching ERROR" (conteúdo)
 		if strings.Contains(t.Raw, "*") {
@@ -478,6 +471,25 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				t.Concs = append(t.Concs, c...)
 				t.Weak = true // this word isn't in the lexicon; every concept it carries was deduced from a suffix strip
 			}
+		}
+	}
+	for i := range out {
+		t := &out[i]
+		// conceitos sintéticos ADITIVOS — rodam depois do léxico pra não
+		// esconder o conceito real ("tar" é archive E palavra de ext)
+		switch t.Fold {
+		case "case-insensitive", "insensitive", "case-sensitive",
+			"caseinsensitive", "sensitive":
+			// flag de case é modificador de comparação, nunca nome:
+			// "case-insensitive example.com file" não tem name "insensitive"
+			t.Concs = append(t.Concs, "icase")
+		}
+		// palavra de extensão é filtro de busca — "list the text
+		// files" tem extcue ("text"→txt), "list the files" não tem
+		switch {
+		case nuExtWords[t.Fold], nuPureExt(t.Fold),
+			t.Fold == "text", t.Fold == "texto", t.Fold == "textos":
+			t.Concs = append(t.Concs, "extcue")
 		}
 	}
 	return out
@@ -3199,6 +3211,20 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				taken[i] = true
 				return strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
+			}
+			// "text files"/"arquivos de texto" — convenção do corpus:
+			// é o glob *.txt, não um tipo de conteúdo qualquer
+			if f == "text" || f == "texto" || f == "textos" {
+				for _, j := range []int{i + 1, i + 2, i - 1, i - 2} {
+					if j < 0 || j >= len(toks) {
+						continue
+					}
+					switch toks[j].Fold {
+					case "file", "files", "arquivo", "arquivos":
+						taken[i] = true
+						return "txt"
+					}
+				}
 			}
 			if nuExtWords[f] {
 				// "a zip file": ext-word + file substantivo + artigo

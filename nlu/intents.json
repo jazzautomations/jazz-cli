@@ -2685,6 +2685,13 @@
       "dir"
      ],
      "required": false
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext",
+     "required": false
     }
    },
    "examples": [
