@@ -196,3 +196,39 @@ func TestNLUPermGlobGuards(t *testing.T) {
 		}
 	}
 }
+
+// nametgt/namepat: quoted + "in their name" é filtro de NOME (file_find),
+// não padrão de conteúdo; "X files" com X palavra é *X* no namepat, não
+// dir nem file.
+func TestNLUNameTgtGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent, slot, want string
+	}{
+		{"find all the files that have the word \"fstab\" in their name in a folder", "file_find", "name", "fstab"},
+		{"search all the files in the folder \"myfiles\" which have the word \"blue\" in their name", "file_find", "name", "blue"},
+		{"Search the current directory tree for files containing \"string\" in their path names", "file_find", "name", "string"},
+		{"Find all directories under current directory whose names are 33 characters long", "file_find", "name", "?????????????????????????????????"},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || in.Slots[tc.slot] != tc.want {
+			t.Errorf("%q -> %s %s=%q, queria %s %s=%q (%v)", tc.text, in.Name, tc.slot, in.Slots[tc.slot], tc.intent, tc.slot, tc.want, in.Slots)
+		}
+	}
+	// namepat: "X files" → *X*, nunca dir nem conteúdo
+	for _, tc := range []struct {
+		text, intent string
+	}{
+		{"grep for 'timeout' in all config files", "text_grep"},
+		{"grep for 'timeout' in all backup files", "text_grep"},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || in.Slots["namepat"] == "" {
+			t.Errorf("%q -> %s slots=%v, queria %s com namepat", tc.text, in.Name, in.Slots, tc.intent)
+		}
+		if in.Slots["dir"] != "" {
+			t.Errorf("%q: dir=%q vazou (era filtro de nome)", tc.text, in.Slots["dir"])
+		}
+	}
+}

@@ -426,6 +426,22 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, "filequoted")
 			continue
 		}
+		// aspa seguida de "in their name"/"path names" é alvo de NOME,
+		// não conteúdo: "files with the word 'fstab' in their name" é
+		// file_find name=fstab. O lookahead vence o forquoted lookback.
+		if t.Quoted && i > 0 {
+			nameTgt := false
+			for j := i + 1; j < len(out) && j <= i+5; j++ {
+				switch out[j].Fold {
+				case "name", "names", "nome", "nomes", "filename", "filenames", "pathname", "pathnames":
+					nameTgt = true
+				}
+			}
+			if nameTgt {
+				t.Concs = append(t.Concs, "nametgt")
+				continue
+			}
+		}
 		// aspas depois de "for"/"por" = alvo de CONTEÚDO (o padrão do
 		// grep), não nome de arquivo: "search files for \"foo\""
 		if t.Quoted && i > 0 {
@@ -1238,13 +1254,19 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	var unfed int
 	var taken map[int]bool
 	in.Slots, in.Missing, in.Hint, unfed, taken = m.fill(def, toks, hits, used, w)
-	// namelen destila: "names 33 characters long" vira o glob ?×N no
-	// slot name — é um padrão de nome, não um argumento separado.
-	if v := in.Slots["namelen"]; v != "" {
-		if in.Slots["name"] == "" {
-			in.Slots["name"] = v
+	// namelen/namepat destilam pra glob no slot name — "names 33
+	// characters long"→?×33, "config files"→*config*; são padrões de
+	// nome, não argumentos separados. Só funde quando o intent TEM slot
+	// name — text_grep lê namepat direto no método .each_name.
+	for _, k := range []string{"namelen", "namepat"} {
+		if v := in.Slots[k]; v != "" {
+			if _, hasName := def.Slots["name"]; hasName {
+				if in.Slots["name"] == "" {
+					in.Slots["name"] = v
+				}
+				delete(in.Slots, k)
+			}
 		}
-		delete(in.Slots, "namelen")
 	}
 	if unfed > 0 {
 		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
@@ -3387,6 +3409,48 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		return ""
+	case "namepat":
+		// "X files"/"arquivos X" nomeia o CONJUNTO por padrão de nome:
+		// "grep 'timeout' in all config files" → name=*config* (não é
+		// dir "config" nem ext). Qualificadores do conjunto ficam fora.
+		qualif := map[string]bool{
+			"all": true, "every": true, "each": true, "any": true,
+			"todos": true, "todas": true, "todo": true, "toda": true,
+			"cada": true, "qualquer": true, "quaisquer": true,
+			"regular": true, "regulars": true, "normal": true, "normais": true,
+			"ordinary": true, "comuns": true, "text": true, "texto": true,
+			"hidden": true, "empty": true, "new": true, "old": true,
+			"large": true, "small": true, "some": true, "certa": true,
+			"certo": true, "other": true, "outros": true, "outras": true,
+			"the": true, "a": true, "an": true, "o": true, "os": true,
+			"as": true, "um": true, "uma": true, "current": true,
+		}
+		for i := 0; i+1 < len(toks); i++ {
+			f := toks[i+1].Fold
+			if f != "files" && f != "arquivos" {
+				continue
+			}
+			u := &toks[i]
+			if u.Filler || u.Slang || taken[i] || u.Quoted || nuIsNumber(u.Fold) || qualif[u.Fold] {
+				continue
+			}
+			// "config" é keynoun léxico MAS em "config files" é nome do
+			// conjunto — conceitos coexistíveis não bloqueiam o filtro.
+			// O candidato é palavra comum (não name-shaped): o vizinho
+			// "files" é que o torna filtro de nome.
+			concsOK := len(u.Concs) == 0
+			for _, c := range u.Concs {
+				if c == "config" || c == "keynoun" {
+					concsOK = true
+				}
+			}
+			if !concsOK || len(u.Fold) < 2 {
+				continue
+			}
+			taken[i] = true
+			return "*" + u.Fold + "*"
+		}
+		return ""
 	case "tfield":
 		for i, t := range toks {
 			switch t.Fold {
@@ -3626,6 +3690,12 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"execute": true, "execution": true, "read": true,
 			"write": true, "permission": true, "permissions": true,
 			"permissao": true, "permissões": true, "owned": true,
+			// editor/ferramenta é o COMO, não o ONDE — "open in nano
+			// text editor" não tem dir "nano"
+			"nano": true, "vim": true, "vi": true, "emacs": true,
+			"editor": true, "editores": true, "awk": true, "sed": true,
+			"grep": true, "xargs": true, "head": true, "tail": true,
+			"sort": true, "uniq": true, "wc": true, "cat": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -3681,6 +3751,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if scopeFillers[u.Fold] {
 					taken[i], taken[j] = true, true
 					break // "no projeto"/"directory tree" falam DESTE escopo — consome a frase, não de um dir
+				}
+				// "config files" — a palavra antes de files descreve o
+				// conjunto (*config*), não a pasta onde procurar
+				if j+1 < len(toks) && fileWords[toks[j+1].Fold] {
+					continue
 				}
 				taken[i], taken[j] = true, true
 				return u.Raw // tagged entities (@dir, /etc) are exactly the right values

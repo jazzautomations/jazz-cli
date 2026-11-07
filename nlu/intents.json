@@ -4235,7 +4235,8 @@
       "create",
       "install",
       "disk",
-      "filequoted"
+      "filequoted",
+      "nametgt"
      ],
      "w": 15
     },
@@ -4251,7 +4252,8 @@
       "create",
       "install",
       "disk",
-      "filequoted"
+      "filequoted",
+      "nametgt"
      ],
      "w": 15
     },
@@ -4272,7 +4274,8 @@
       "move",
       "sort",
       "disk",
-      "filequoted"
+      "filequoted",
+      "nametgt"
      ]
     },
     {
@@ -4292,7 +4295,8 @@
       "move",
       "sort",
       "disk",
-      "filequoted"
+      "filequoted",
+      "nametgt"
      ]
     }
    ],
@@ -4337,6 +4341,12 @@
       "text"
      ],
      "from": "repl:stdin"
+    },
+    "namepat": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:namepat"
     }
    },
    "examples": [
@@ -4770,6 +4780,41 @@
       "sort",
       "forquoted"
      ]
+    },
+    {
+     "all": [
+      "files",
+      "nametgt"
+     ],
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "net",
+      "remote",
+      "user",
+      "opinion",
+      "blame",
+      "session",
+      "who",
+      "error",
+      "branch",
+      "git",
+      "version",
+      "diff",
+      "undo",
+      "commit",
+      "history",
+      "diskuse",
+      "run",
+      "cron",
+      "move",
+      "forquoted"
+     ],
+     "w": 20
     }
    ],
    "slots": {
@@ -4891,6 +4936,12 @@
       "text"
      ],
      "from": "find:namelen"
+    },
+    "namepat": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:namepat"
     }
    },
    "examples": [
