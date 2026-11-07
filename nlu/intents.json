@@ -4603,7 +4603,8 @@
       "service",
       "install",
       "extract",
-      "enable"
+      "enable",
+      "removeword"
      ],
      "w": 10
     },
@@ -4619,7 +4620,8 @@
       "service",
       "install",
       "run",
-      "enable"
+      "enable",
+      "makeword"
      ],
      "w": 10
     },
@@ -5692,7 +5694,7 @@
       "status",
       "blame"
      ],
-     "w": 0
+     "w": 10
     },
     {
      "all": [
@@ -5708,7 +5710,40 @@
       "permattr",
       "blame"
      ],
-     "w": 0
+     "w": 10
+    },
+    {
+     "all": [
+      "execperm",
+      "makeword"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "delete",
+      "install",
+      "status",
+      "blame",
+      "permattr"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "permattr",
+      "removeword"
+     ],
+     "none": [
+      "install",
+      "download",
+      "service",
+      "container",
+      "branch",
+      "status",
+      "extract",
+      "blame"
+     ],
+     "w": 10
     }
    ],
    "slots": {

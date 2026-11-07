@@ -2179,7 +2179,7 @@ func dsModeLit(s string) bool {
 	}
 	for _, clause := range strings.Split(s, ",") {
 		op := strings.IndexAny(clause, "+-=")
-		if op <= 0 {
+		if op < 0 || (op == 0 && clause[0] == '=') {
 			return false
 		}
 		for _, c := range clause[:op] {

@@ -1559,10 +1559,13 @@ func brApplySymbolic(cur os.FileMode, expr string) (os.FileMode, error) {
 	for _, clause := range strings.Split(expr, ",") {
 		clause = strings.TrimSpace(clause)
 		op := strings.IndexAny(clause, "+-=")
-		if op <= 0 {
+		if op < 0 || (op == 0 && clause[0] == '=') {
 			return cur, fmt.Errorf("cláusula sem operador: %q", clause)
 		}
 		who := clause[:op]
+		if who == "" {
+			who = "a" // chmod "+x"/"-w": sem who explícito ⇒ todos
+		}
 		perm := clause[op+1:]
 		var mask os.FileMode
 		for _, c := range who {

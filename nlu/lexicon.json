@@ -3023,6 +3023,41 @@
    "pro",
    "to",
    "para"
+  ],
+  "makeword": [
+   "make",
+   "makes",
+   "making",
+   "made",
+   "turn",
+   "turns",
+   "turning",
+   "grant",
+   "faz",
+   "faça",
+   "faco",
+   "faço",
+   "torna",
+   "tornar",
+   "torne",
+   "deixa",
+   "deixar",
+   "deixe"
+  ],
+  "removeword": [
+   "remove",
+   "removes",
+   "removed",
+   "removing",
+   "remover",
+   "remova",
+   "removo",
+   "tira",
+   "tirar",
+   "tiro",
+   "strip",
+   "revoke",
+   "drop"
   ]
  }
 }

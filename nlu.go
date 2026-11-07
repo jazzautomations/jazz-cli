@@ -3269,14 +3269,14 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				continue
 			}
 			f := t.Fold
-			if len(f) < 3 || len(f) > 24 {
+			if len(f) < 2 || len(f) > 24 {
 				continue
 			}
 			op := strings.IndexAny(f, "+-=")
-			if op <= 0 {
+			if op < 0 || (op == 0 && f[0] == '=') {
 				continue
 			}
-			who, ok := f[:op], true
+			who, ok := f[:op], true // op==0: forma nua "+x"/"-w" ⇒ who implícito "a"
 			for _, c := range who {
 				if c != 'u' && c != 'g' && c != 'o' && c != 'a' {
 					ok = false
@@ -3329,7 +3329,7 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 		for i, t := range toks {
 			f := t.Fold
 			rm := false
-			for j := i - 3; j < i; j++ {
+			for j := i - 5; j < i; j++ { // "tira a permissão de escrita": cue longe
 				if j < 0 {
 					continue
 				}
