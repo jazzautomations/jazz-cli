@@ -1,0 +1,33 @@
+{"methods": [
+ {
+  "name": "archive_extract.to",
+  "intent": "archive_extract",
+  "priority": 10,
+  "doc": "archive_op extract nativo: magic bytes decidem o formato, membros unsafe/link são pulados, list_exists prova cada path produzido",
+  "pre": [
+   {"fact": "slot.arc", "op": "set"}
+  ],
+  "steps": [
+   {"cap": "archive_op", "in": {"op": "extract", "arc": "$slot.arc", "dir": "$slot.dir"}, "out": "e"}
+  ],
+  "verify": [{"check": "list_exists", "arg": "$e"}],
+  "risk": "medium",
+  "cost_ms": 300
+ },
+ {
+  "name": "archive_extract.ask",
+  "intent": "archive_extract",
+  "priority": 5,
+  "doc": "sem archive no pedido: pergunta qual",
+  "pre": [
+   {"fact": "slot.arc", "op": "unset"}
+  ],
+  "steps": [
+   {"cap": "ask_slot", "in": {"slot": "arc", "q": "Qual archive? (ex.: pack.tar.gz)"}, "out": "slot.arc"},
+   {"cap": "archive_op", "in": {"op": "extract", "arc": "$slot.arc", "dir": "$slot.dir"}, "out": "e"}
+  ],
+  "verify": [{"check": "list_exists", "arg": "$e"}],
+  "risk": "medium",
+  "cost_ms": 300
+ }
+]}

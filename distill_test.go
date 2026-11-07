@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -479,6 +481,42 @@ func TestDsCapPlan(t *testing.T) {
 			}
 			return ""
 		}},
+		// tar/zip literal → archive_op confinado; -O/-P/flags exóticas
+		// ficam fora (transform ou escape de root não mapeiam).
+		{[]string{"tar -czf logs.tar.gz logs"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "archive_op" || st.In["op"] != "create" ||
+				st.In["out"] != "logs.tar.gz" || st.In["srcs"] != "logs" {
+				return fmt.Sprintf("tar -czf: %+v", st)
+			}
+			if m.Verify[0].Check != "file_exists" {
+				return "tar -czf sem file_exists"
+			}
+			return ""
+		}},
+		{[]string{"tar -xzf arc.tar.gz -C dest"}, func(m *mhMethod) string {
+			st := m.Steps[0]
+			if st.Cap != "archive_op" || st.In["op"] != "extract" ||
+				st.In["arc"] != "arc.tar.gz" || st.In["dir"] != "dest" {
+				return fmt.Sprintf("tar -xzf: %+v", st)
+			}
+			if m.Verify[0].Check != "list_exists" {
+				return "tar -xzf sem list_exists"
+			}
+			return ""
+		}},
+		{[]string{"zip -r site.zip site"}, func(m *mhMethod) string {
+			if m.Steps[0].In["out"] != "site.zip" || m.Steps[0].In["srcs"] != "site" {
+				return fmt.Sprintf("zip -r: %+v", m.Steps[0].In)
+			}
+			return ""
+		}},
+		{[]string{"unzip pack.zip -d unpacked"}, func(m *mhMethod) string {
+			if m.Steps[0].In["arc"] != "pack.zip" || m.Steps[0].In["dir"] != "unpacked" {
+				return fmt.Sprintf("unzip: %+v", m.Steps[0].In)
+			}
+			return ""
+		}},
 	} {
 		cp := dsCapPlan(dsPlan("ca77ps06", "zzq copia e move", 3, tc.cmds, ""), root)
 		if cp == nil {
@@ -503,6 +541,9 @@ func TestDsCapPlan(t *testing.T) {
 		{"find . -name '*.tmp' -print", "xargs rm"},
 		{"ls -la > out.txt"},
 		{"find . -name '*.log' | tee /tmp/out.txt"},
+		{"tar -xOf arc.tar.gz file"},
+		{"tar -Pf arc.tar"},
+		{"zip -e secret.zip f.txt"},
 	} {
 		if cp := dsCapPlan(dsPlan("ca77ps04", "zzq sem encaixe", 3, cmds, ""), root); cp != nil {
 			t.Errorf("%v não devia virar método de caps: %+v", cmds, cp)
@@ -900,6 +941,179 @@ func TestBrTextOp(t *testing.T) {
 	brExecute(cx2, []mhMethod{m2})
 	if cx2.task.Status == tkSucceeded {
 		t.Fatal("verify falso devia reprovar o método")
+	}
+}
+
+func TestBrArchiveOp(t *testing.T) {
+	root := t.TempDir()
+	env, _ := brTestEnv(t, root, map[string]brFakeOut{}, -1)
+	mk := func() *brCtx {
+		task := newTask("x", "learned_ab12cd", nil, nil)
+		task.must(tkInvestigating, "teste")
+		return &brCtx{ctx: context.Background(), env: env,
+			task: task, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	}
+	write := func(name, body string) {
+		t.Helper()
+		p := filepath.Join(root, name)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	exists := func(name string) bool {
+		_, err := os.Lstat(filepath.Join(root, name))
+		return err == nil
+	}
+
+	write("src/a.txt", "alpha\n")
+	write("src/sub/b.txt", "beta\n")
+
+	// create .tar.gz de um diretório → membros carregam o prefixo src/
+	st := brArchiveOp(mk(), map[string]string{"op": "create", "out": "pack.tar.gz", "srcs": "src"})
+	if !st.ok || !exists("pack.tar.gz") {
+		t.Fatalf("create tar.gz: %+v", st)
+	}
+	// extrai num dir novo → os caminhos produzidos existem e trazem o conteúdo
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "pack.tar.gz", "dir": "out1"})
+	if !st.ok || read("out1/src/a.txt") != "alpha\n" || read("out1/src/sub/b.txt") != "beta\n" {
+		t.Fatalf("extract tar.gz: %+v", st)
+	}
+	// o shape do val é o que list_exists consome (data.files[].path)
+	data, _ := st.val.(map[string]any)["data"].(map[string]any)
+	files, _ := data["files"].([]any)
+	if len(files) != 2 {
+		t.Fatalf("val.data.files devia ter 2 entradas: %+v", st.val)
+	}
+
+	// create .zip com múltiplas fontes
+	write("one.txt", "1\n")
+	write("two.txt", "2\n")
+	st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "pair.zip", "srcs": "one.txt two.txt"})
+	if !st.ok {
+		t.Fatalf("create zip: %+v", st.why)
+	}
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "pair.zip", "dir": "out2"})
+	if !st.ok || read("out2/one.txt") != "1\n" || read("out2/two.txt") != "2\n" {
+		t.Fatalf("extract zip: %+v", st)
+	}
+
+	// .tar puro e .tgz
+	st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "plain.tar", "srcs": "one.txt"})
+	if !st.ok {
+		t.Fatalf("create tar: %s", st.why)
+	}
+	st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "mini.tgz", "srcs": "two.txt"})
+	if !st.ok {
+		t.Fatalf("create tgz: %s", st.why)
+	}
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "plain.tar"})
+	if !st.ok || read("one.txt") != "1\n" {
+		t.Fatalf("extract tar no cwd: %+v", st)
+	}
+
+	// formato fora da lista recusa
+	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "x.rar", "srcs": "one.txt"}); st.ok {
+		t.Error("rar devia recusar")
+	}
+	// destino fora do root recusa
+	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "../x.tar", "srcs": "one.txt"}); st.ok {
+		t.Error("out fora do root devia recusar")
+	}
+	// fonte inexistente recusa
+	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "y.tar", "srcs": "ghost"}); st.ok {
+		t.Error("fonte inexistente devia recusar")
+	}
+
+	// tar com membro ../evil: extração pula o traversal mas tira o legítimo
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	tw.WriteHeader(&tar.Header{Name: "../evil.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: 4})
+	tw.Write([]byte("EVIL"))
+	tw.WriteHeader(&tar.Header{Name: "good.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: 4})
+	tw.Write([]byte("GOOD"))
+	tw.Close()
+	write("slip.tar", "")
+	os.WriteFile(filepath.Join(root, "slip.tar"), buf.Bytes(), 0o644)
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "slip.tar", "dir": "out3"})
+	if !st.ok {
+		t.Fatalf("extract com slip devia extrair o legítimo: %s", st.why)
+	}
+	if read("out3/good.txt") != "GOOD" {
+		t.Fatal("good.txt devia ter saído")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "evil.txt")); err == nil {
+		t.Fatal("../evil.txt vazou pro root")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "..", "evil.txt")); err == nil {
+		t.Fatal("../evil.txt vazou pra fora")
+	}
+
+	// tar com symlink: membro não-regular não é escrito
+	buf.Reset()
+	tw = tar.NewWriter(&buf)
+	tw.WriteHeader(&tar.Header{Name: "ln", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd", Mode: 0o777})
+	tw.WriteHeader(&tar.Header{Name: "real.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: 2})
+	tw.Write([]byte("hi"))
+	tw.Close()
+	os.WriteFile(filepath.Join(root, "link.tar"), buf.Bytes(), 0o644)
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "link.tar", "dir": "out4"})
+	if !st.ok {
+		t.Fatalf("extract com symlink: %s", st.why)
+	}
+	if exists("out4/ln") {
+		t.Error("symlink não devia ser escrito")
+	}
+	if read("out4/real.txt") != "hi" {
+		t.Fatal("real.txt devia ter saído")
+	}
+
+	// srcs via lista produzida (shape de script: data.files[].path)
+	cx := mk()
+	cx.vars["cand"] = map[string]any{"data": map[string]any{
+		"files": []any{map[string]any{"path": "one.txt"}, "two.txt"}}}
+	st = brArchiveOp(cx, map[string]string{"op": "create", "out": "fromlist.tar", "srcs": "$cand"})
+	if !st.ok {
+		t.Fatalf("srcs de lista produzida: %s", st.why)
+	}
+	st = brArchiveOp(mk(), map[string]string{"op": "extract", "arc": "fromlist.tar", "dir": "out5"})
+	if !st.ok || read("out5/one.txt") != "1\n" || read("out5/two.txt") != "2\n" {
+		t.Fatalf("extract da lista: %+v", st)
+	}
+
+	// método destilado: create verifica file_exists, extract verifica list_exists
+	write("doc.md", "# doc\n")
+	mCreate := mhMethod{Name: "learned_ab12cd.caps", Intent: "learned_ab12cd",
+		Steps: []mhStep{{Cap: "archive_op", Out: "a1", In: map[string]string{
+			"op": "create", "out": "docs.tar.gz", "srcs": "doc.md"}}},
+		Verify: []mhCheck{{Check: "file_exists", Arg: "$a1"}}}
+	mExtract := mhMethod{Name: "learned_cd34ef.caps", Intent: "learned_cd34ef",
+		Steps: []mhStep{{Cap: "archive_op", Out: "a1", In: map[string]string{
+			"op": "extract", "arc": "docs.tar.gz", "dir": "docs_out"}}},
+		Verify: []mhCheck{{Check: "list_exists", Arg: "$a1"}}}
+	task := newTask("z", "learned_ab12cd", nil, nil)
+	task.must(tkInvestigating, "teste")
+	cxM := &brCtx{ctx: context.Background(), env: env,
+		task: task, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	brExecute(cxM, []mhMethod{mCreate})
+	if cxM.task.Status != tkSucceeded {
+		t.Fatalf("método create devia verificar: %s", cxM.task.Status)
+	}
+	task2 := newTask("w", "learned_cd34ef", nil, nil)
+	task2.must(tkInvestigating, "teste")
+	cxM2 := &brCtx{ctx: context.Background(), env: env,
+		task: task2, vars: map[string]any{}, attempts: map[rvCat]int{}}
+	brExecute(cxM2, []mhMethod{mExtract})
+	if cxM2.task.Status != tkSucceeded || read("docs_out/doc.md") != "# doc\n" {
+		t.Fatalf("método extract devia verificar: %s", cxM2.task.Status)
 	}
 }
 

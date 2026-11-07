@@ -1087,7 +1087,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				if best >= 0 {
 					used = matches[best].used
 				}
-				in.Slots, in.Missing, in.Hint, _ = m.fill(&m.data.Intents[di], toks, hits, used, w)
+				in.Slots, in.Missing, in.Hint, _, _ = m.fill(&m.data.Intents[di], toks, hits, used, w)
 			}
 			return in
 		}
@@ -1170,7 +1170,8 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 	}
 	var unfed int
-	in.Slots, in.Missing, in.Hint, unfed = m.fill(def, toks, hits, used, w)
+	var taken map[int]bool
+	in.Slots, in.Missing, in.Hint, unfed, taken = m.fill(def, toks, hits, used, w)
 	if unfed > 0 {
 		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavra(s) solta(s) não parecem nome do slot", unfed))
@@ -1287,7 +1288,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			in.Evidence = append(in.Evidence, fmt.Sprintf("'%s' não parece nome de arquivo", v))
 		}
 	}
-	if res := m.residualCount(toks, used); res >= 3 {
+	if res := m.residualCount(toks, used, taken); res >= 3 {
 		conf *= 0.6 // a long free-form request is a job for the model, not a template
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavras fora da gramática: pedido livre", res))
 	}
@@ -1506,6 +1507,18 @@ func nuPureExt(raw string) bool {
 	return true
 }
 
+// nuFileShaped: "a.txt"/"config.ini" — nome com sufixo de extensão
+// conhecida. Diferente de nuNameShaped (qualquer token com ponto): aqui o
+// sufixo precisa ser uma extensão do vocabulário, então "release.2" e
+// "my.dir" continuam podendo nomear diretórios.
+func nuFileShaped(fold string) bool {
+	dot := strings.LastIndexByte(fold, '.')
+	if dot <= 0 || dot == len(fold)-1 {
+		return false
+	}
+	return nuExtWords[fold[dot+1:]]
+}
+
 // residual: the words that are not fillers and that no rule or cue explained.
 func (m *nuModel) residual(toks []nuTok, used map[string]bool) []int {
 	var out []int
@@ -1531,9 +1544,12 @@ func (m *nuModel) residual(toks []nuTok, used map[string]bool) []int {
 	return out
 }
 
-func (m *nuModel) residualCount(toks []nuTok, used map[string]bool) int {
+func (m *nuModel) residualCount(toks []nuTok, used map[string]bool, taken map[int]bool) int {
 	n := 0
 	for _, i := range m.residual(toks, used) {
+		if taken[i] {
+			continue // a slot já consumiu esta palavra — não é fora-da-gramática
+		}
 		if len(toks[i].Tags) == 0 && !toks[i].Quoted && len(toks[i].Concs) == 0 {
 			n++
 		}
@@ -1549,7 +1565,7 @@ var nuToWords = map[string]bool{"para": true, "pra": true, "pro": true, "to": tr
 // (required, or a service/host kind — a unit is never a leftover noun)
 // and the word carries no concept of its own: "arquivo", "zip" and
 // "conteúdo" are phrasing, not failed names.
-func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool, w *nuWorld) (map[string]string, []string, string, int) {
+func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[string]bool, w *nuWorld) (map[string]string, []string, string, int, map[int]bool) {
 	slots := map[string]string{}
 	var missing []string
 	hint := ""
@@ -1591,7 +1607,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			case sd.From == "rename_from" || sd.From == "rename_to":
 				v = nuRenamePart(toks, res, sd.From == "rename_to")
 			case sd.From == "repl_from" || sd.From == "repl_to":
-				v = nuReplacePart(toks, res, sd.From == "repl_to")
+				v = nuReplacePart(toks, res, sd.From == "repl_to", taken)
 			case strings.HasPrefix(sd.From, "repl:"):
 				v = nuReplFlag(toks, sd.From[5:])
 			case strings.HasPrefix(sd.From, "find:"):
@@ -1606,10 +1622,14 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuSvcName(toks, taken)
 			case sd.From == "disk:path":
 				v = nuDiskPath(toks, taken)
+			case strings.HasPrefix(sd.From, "arc:"):
+				v = nuArchiveArg(toks, sd.From[4:], taken)
 			}
-			// a "x:y" From is helper-or-nothing: the generic fallbacks would
-			// stuff leftovers into enum/flag slots (e.g. a bare "10" into tail)
-			derived := v == "" && strings.Contains(sd.From, ":")
+			// any From is helper-or-nothing: the generic fallbacks would
+			// stuff leftovers into slots the helper deliberately left
+			// empty ("repl_to" sem separador → missing honesto, não
+			// "hello a.txt" colado dos residuais)
+			derived := sd.From != ""
 			kinds := map[string]bool{}
 			for _, k := range sd.Kinds {
 				kinds[k] = true
@@ -1715,7 +1735,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			}
 		}
 	}
-	return slots, missing, hint, unfed
+	return slots, missing, hint, unfed, taken
 }
 
 // FillAs re-reads text under one intent's slot schema: chain sub-tasks
@@ -1749,7 +1769,7 @@ func (m *nuModel) FillAs(intent, text string, w *nuWorld) map[string]string {
 	if best >= 0 {
 		used = matches[best].used
 	}
-	slots, _, _, _ := m.fill(&m.data.Intents[di], toks, hits, used, w)
+	slots, _, _, _, _ := m.fill(&m.data.Intents[di], toks, hits, used, w)
 	return slots
 }
 
@@ -1816,12 +1836,22 @@ var nuWithWords = map[string]bool{
 	"to": true, "for": true, "into": true, "->": true, "=>": true,
 }
 
+// nuReplScopeCue: palavras que abrem o trecho de escopo (em qual arquivo/
+// diretório) ou fecham a oração — o "to" do replace morre nelas.
+var nuReplScopeCue = map[string]bool{
+	"em": true, "in": true, "no": true, "na": true, "nos": true,
+	"nas": true, "dentro": true, "under": true, "inside": true,
+	"across": true, "throughout": true, "on": true, "onto": true,
+	"and": true, "or": true, "but": true, "e": true, "ou": true,
+	"mas": true, "then": true, "depois": true, "sob": true,
+}
+
 // nuReplacePart: o texto velho (from) ou o novo (to) de um pedido de
 // substituição. Aspas ganham sempre: 1ª citada = from, a citada após o
 // separador (ou a 2ª) = to. Sem aspas, o from é o trecho entre o verbo e
 // o separador e o to é o que segue o separador — devolve a frase inteira
 // quando ela é multi-palavra ("local host"→"local.host").
-func nuReplacePart(toks []nuTok, res []int, to bool) string {
+func nuReplacePart(toks []nuTok, res []int, to bool, taken map[int]bool) string {
 	// O separador from→to é o PRIMEIRO "with/por" — "with '.php' extension"
 	// lá no fim da frase é seletor de escopo, não o destino da troca.
 	mark := -1
@@ -1841,18 +1871,38 @@ func nuReplacePart(toks []nuTok, res []int, to bool) string {
 	if to {
 		for _, i := range q {
 			if mark < 0 || i > mark {
+				taken[i] = true
 				return toks[i].Raw
 			}
 		}
 		if len(q) > 1 {
+			taken[q[1]] = true
 			return toks[q[1]].Raw
 		}
-		// sem aspas: o trecho após o último separador
+		// sem aspas: o trecho após o último separador, parando no cue de
+		// escopo — "por oi em a.txt" → oi; sem o corte o nome do arquivo
+		// entrava no texto novo.
 		if mark >= 0 {
 			var parts []string
+			var idx []int
 			for i := mark + 1; i < len(toks); i++ {
-				if !toks[i].Filler && !nuWithWords[toks[i].Fold] {
-					parts = append(parts, toks[i].Raw)
+				// cue de escopo fecha o texto novo sempre — "por oi em
+				// a.txt" morre no em; um cue não pode ser texto literal
+				if nuReplScopeCue[toks[i].Fold] || toks[i].has("file") {
+					break
+				}
+				if nuWithWords[toks[i].Fold] || nuFileShaped(toks[i].Fold) {
+					continue
+				}
+				// fillers contam: "troca x por oi" — oi é o texto, não
+				// phrasing. Artigos no meio ("por o valor") são letra.
+				parts = append(parts, toks[i].Raw)
+				idx = append(idx, i)
+			}
+			if len(parts) > 0 {
+				taken[mark] = true
+				for _, i := range idx {
+					taken[i] = true
 				}
 			}
 			return strings.TrimSpace(strings.Join(parts, " "))
@@ -1862,10 +1912,12 @@ func nuReplacePart(toks []nuTok, res []int, to bool) string {
 	// from: a citada antes do separador (ou a 1ª de todas)
 	for _, i := range q {
 		if mark < 0 || i < mark {
+			taken[i] = true
 			return toks[i].Raw
 		}
 	}
 	if len(q) > 1 {
+		taken[q[0]] = true
 		return toks[q[0]].Raw
 	}
 	// sem aspas: o trecho não-arquivo entre o verbo e o separador
@@ -1880,7 +1932,127 @@ func nuReplacePart(toks []nuTok, res []int, to bool) string {
 		if t.has("file") || nuNameShaped(t.Raw) && strings.Contains(t.Raw, ".") {
 			continue // o arquivo não é o texto velho
 		}
+		taken[i] = true
 		return t.Raw
+	}
+	return ""
+}
+
+// nuArchiveArg: slots das intenções de archive. "out" é o archive a criar
+// (com cue — "em/para/into/como/named" — ou o único nome-archive da frase);
+// "arc" é o archive a extrair; "srcs" é a lista de fontes (arquivos, pastas
+// com cue, "diretório atual"→".", tudo não-taken que parece nome).
+func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "out":
+		outCues := map[string]bool{
+			"em": true, "para": true, "pra": true, "pro": true,
+			"into": true, "como": true, "as": true, "named": true,
+			"chamado": true, "chamada": true, "called": true, "to": true,
+			"->": true, "=>": true, "sob": true,
+		}
+		// pass 1: token com cue — aceita archive-shaped ou nome simples
+		// ("Archive all files to copy_of_folder1": o destino pode não
+		// ter extensão — o cap resolve o formato).
+		for i, t := range toks {
+			if !outCues[t.Fold] || taken[i] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] {
+					continue
+				}
+				if nuArchiveName(u.Fold) || nuNameShaped(u.Raw) ||
+					(len(u.Concs) == 0 && !nuIsNumber(u.Fold) && u.Fold != "") {
+					taken[i], taken[j] = true, true
+					return u.Raw
+				}
+				break
+			}
+		}
+		// pass 2: um nome-archive solto ("comprime logs.tar.gz" implícito
+		// não existe — mas "create filename.tar.gz" sem cue vale).
+		for i := range toks {
+			if !taken[i] && nuArchiveName(toks[i].Fold) {
+				taken[i] = true
+				return toks[i].Raw
+			}
+		}
+		return ""
+	case "arc":
+		for i := range toks {
+			if !taken[i] && nuArchiveName(toks[i].Fold) {
+				taken[i] = true
+				return toks[i].Raw
+			}
+		}
+		return ""
+	case "srcs":
+		srcCues := map[string]bool{
+			"pasta": true, "pastas": true, "folder": true, "folders": true,
+			"diretorio": true, "diretório": true, "diretorios": true,
+			"diretórios": true, "dir": true, "dirs": true,
+			"directory": true, "directories": true,
+			"arquivo": true, "arquivos": true, "file": true, "files": true,
+		}
+		var srcs []string
+		add := func(i int) {
+			if taken[i] {
+				return
+			}
+			taken[i] = true
+			srcs = append(srcs, toks[i].Raw)
+		}
+		// "current/current directory/pasta atual/tudo" → o projeto inteiro
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "tudo", "everything", "todas", "todos":
+				if i+1 < len(toks) && srcCues[toks[i+1].Fold] {
+					taken[i], taken[i+1] = true, true
+					srcs = append(srcs, ".")
+				}
+			case "current", "atual":
+				if i+1 < len(toks) && srcCues[toks[i+1].Fold] {
+					taken[i], taken[i+1] = true, true
+					srcs = append(srcs, ".")
+				}
+			}
+		}
+		// nome com cue de pasta/arquivo ("a pasta logs", "the folder src")
+		for i, t := range toks {
+			if !srcCues[t.Fold] || taken[i] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+2; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] || u.has("article") {
+					continue
+				}
+				if nuArchiveName(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) {
+					break // o archive é do slot out; ".txt" é filtro de ext
+				}
+				add(j) // com cue de pasta/arquivo a palavra é a fonte —
+				// "a pasta logs": logs tem conceito próprio e mesmo assim é src
+				break
+			}
+		}
+		// tokens com cara de nome/path que sobraram ("a.txt", "src/x")
+		for i, t := range toks {
+			if taken[i] || t.Filler || t.Slang {
+				continue
+			}
+			if nuNameShaped(t.Raw) || nuFileShaped(t.Fold) ||
+				strings.Contains(t.Raw, "/") || (t.Quoted && t.Raw != "") {
+				if !nuArchiveName(t.Fold) && !nuPureExt(t.Fold) {
+					add(i)
+				}
+			}
+		}
+		return strings.Join(srcs, " ")
 	}
 	return ""
 }
@@ -2506,6 +2678,7 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"directory": true, "directories": true,
 			"em": true, "no": true, "na": true, "nos": true, "nas": true,
 			"in": true, "inside": true, "under": true, "within": true, "dentro": true,
+			"into": true,
 		}
 		scopeFillers := map[string]bool{
 			"projeto": true, "project": true, "repo": true, "repositorio": true,
@@ -2589,6 +2762,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				if strings.HasPrefix(u.Fold, ".") || nuExtWords[u.Fold] {
 					continue // ".txt files" é seletor do slot ext, não dir
+				}
+				if nuFileShaped(u.Fold) {
+					continue // "em a.txt" — o alvo é o slot file, não um dir
 				}
 				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
 					continue // a window, a verb or a shell var is never a dir — leave it for the time slots or unfed

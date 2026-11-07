@@ -17,7 +17,10 @@ package main
 // project.test|build|git, bin.<name>, env.online.
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -25,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -362,6 +366,7 @@ func init() {
 		"report":       brReport,
 		"file_op":      brFileOp,
 		"text_op":      brTextOp,
+		"archive_op":   brArchiveOp,
 		"git_op":       brGitOp,
 		"proc_kill":    brProcKill,
 		"pkg_cmd":      brPkgCmd,
@@ -1071,6 +1076,327 @@ func brTextOp(cx *brCtx, in map[string]string) brStep {
 	cx.say("substituído: %s → %s (%d ocorrência(s))", rel, toRel, cnt)
 	cx.task.AddEvidence("file", fmt.Sprintf("replace %s", rel))
 	return brStep{val: toRel, obs: obs, ok: true}
+}
+
+// brArchiveOp: cria/extrai tar/tar.gz/zip confinado ao root — Go-native,
+// sem depender de tar/zip no PATH (potato-friendly). Anti tar-slip:
+// membros ../, absolutos e links simbólicos não são escritos. Saída do
+// extract é a lista de paths escritos (list_present prova o pós-estado).
+func brArchiveOp(cx *brCtx, in map[string]string) brStep {
+	op, obs := in["op"], rvNoCmd()
+	switch op {
+	case "create":
+		out := cx.str(in, "out")
+		if out == "" {
+			return brStep{obs: obs, why: "archive sem destino"}
+		}
+		abs, rel, err := brSafePath(cx.env.Root, out)
+		if err != nil {
+			return brStep{obs: obs, why: err.Error()}
+		}
+		var srcList []string
+		if raw := in["srcs"]; strings.HasPrefix(raw, "$") {
+			// lista produzida (file_find): mesma dieta do for_each.from
+			if mm, ok := cx.subst(raw).(map[string]any); ok {
+				data, _ := mm["data"].(map[string]any)
+				for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+					if arr, ok := data[k].([]any); ok {
+						for _, it := range arr {
+							if p := brItemPath(it); p != "" {
+								srcList = append(srcList, p)
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+		if srcList == nil {
+			srcList = strings.FieldsFunc(cx.substStr(in["srcs"]), func(r rune) bool {
+				return r == '\n' || r == ',' || r == ' '
+			})
+		}
+		var srcs [][2]string
+		for _, f := range srcList {
+			if f == "" {
+				continue
+			}
+			sAbs, sRel, e := brSafePath(cx.env.Root, f)
+			if e != nil {
+				return brStep{obs: obs, why: e.Error()}
+			}
+			srcs = append(srcs, [2]string{sAbs, sRel})
+		}
+		if len(srcs) == 0 {
+			return brStep{obs: obs, why: "archive sem fontes"}
+		}
+		// "comprime a pasta logs em tar.gz": o destino era a palavra-formato,
+		// não um nome — deriva <fonte>.<formato> como o tar faria.
+		switch rel {
+		case "tar", "tar.gz", "tgz", "zip":
+			base := filepath.Base(srcs[0][1])
+			if base == "." || base == "/" {
+				base = "archive"
+			}
+			rel = base + "." + rel
+			abs = filepath.Join(cx.env.Root, filepath.FromSlash(rel))
+		}
+		var files []string
+		for _, s := range srcs {
+			sAbs, sRel := s[0], s[1]
+			fi, err := os.Stat(sAbs)
+			if err != nil {
+				return brStep{obs: obs, why: "fonte " + sRel + ": " + err.Error()}
+			}
+			if fi.IsDir() {
+				err = filepath.Walk(sAbs, func(p string, i os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					relP, err := filepath.Rel(cx.env.Root, p)
+					if err != nil {
+						return err
+					}
+					if i.IsDir() || i.Mode().IsRegular() {
+						files = append(files, filepath.ToSlash(relP))
+					}
+					return nil
+				})
+				if err != nil {
+					return brStep{obs: obs, why: "fonte " + sRel + ": " + err.Error()}
+				}
+			} else if fi.Mode().IsRegular() {
+				files = append(files, sRel)
+			}
+		}
+		if len(files) == 0 {
+			return brStep{obs: obs, why: "nenhum arquivo regular nas fontes"}
+		}
+		synth := "tar -czf " + rel + " " + strings.Join(files, " ")
+		if ok, why := cx.brPermit(synth); !ok {
+			obs.Denied, obs.Output = true, why
+			return brStep{obs: obs, why: why}
+		}
+		// formato pelo sufixo; "copy_of_folder1" sem ponto é tar puro —
+		// o que o tar -cf produziria. Sufixo estranho (x.rar) recusa.
+		isZip := strings.HasSuffix(rel, ".zip")
+		isGzTar := strings.HasSuffix(rel, ".tar.gz") || strings.HasSuffix(rel, ".tgz")
+		isTar := strings.HasSuffix(rel, ".tar") || !strings.Contains(filepath.Base(rel), ".")
+		if !isZip && !isGzTar && !isTar {
+			return brStep{obs: obs, why: "formato de archive não suportado: " + rel + " (tar/tar.gz/tgz/zip)"}
+		}
+		var buf bytes.Buffer
+		switch {
+		case isZip:
+			zw := zip.NewWriter(&buf)
+			for _, f := range files {
+				data, err := os.ReadFile(filepath.Join(cx.env.Root, filepath.FromSlash(f)))
+				if err != nil {
+					continue
+				}
+				w, err := zw.Create(f)
+				if err == nil {
+					w.Write(data)
+				}
+			}
+			zw.Close()
+		default: // tar, tar.gz/tgz ou tar puro sem extensão
+			var w io.Writer = &buf
+			var gz *gzip.Writer
+			if isGzTar {
+				gz = gzip.NewWriter(&buf)
+				w = gz
+			}
+			tw := tar.NewWriter(w)
+			for _, f := range files {
+				absF := filepath.Join(cx.env.Root, filepath.FromSlash(f))
+				fi, err := os.Stat(absF)
+				if err != nil || fi.IsDir() {
+					if err == nil && fi.IsDir() {
+						tw.WriteHeader(&tar.Header{Name: f + "/", Typeflag: tar.TypeDir, Mode: 0o755})
+					}
+					continue
+				}
+				data, err := os.ReadFile(absF)
+				if err != nil {
+					continue
+				}
+				if err := tw.WriteHeader(&tar.Header{
+					Name: f, Typeflag: tar.TypeReg, Mode: int64(fi.Mode() & 0o777), Size: int64(len(data)),
+				}); err == nil {
+					tw.Write(data)
+				}
+			}
+			tw.Close()
+			if gz != nil {
+				gz.Close()
+			}
+		}
+		tmp := abs + ".jazz.tmp"
+		if err = os.WriteFile(tmp, buf.Bytes(), 0o644); err == nil {
+			err = os.Rename(tmp, abs)
+		}
+		if err != nil {
+			return brStep{obs: obs, why: "archive " + rel + ": " + err.Error()}
+		}
+		if cx.env.AfterWrite != nil {
+			cx.env.AfterWrite(synth)
+			cx.say("(/undo desfaz)")
+		}
+		cx.say("archive criado: %s (%d arquivo(s))", rel, len(files))
+		cx.task.AddEvidence("file", fmt.Sprintf("archive create %s", rel))
+		return brStep{val: rel, obs: obs, ok: true}
+	case "extract":
+		arc := cx.str(in, "arc")
+		if arc == "" {
+			return brStep{obs: obs, why: "extract sem arquivo"}
+		}
+		abs, rel, err := brSafePath(cx.env.Root, arc)
+		if err != nil {
+			return brStep{obs: obs, why: err.Error()}
+		}
+		dir := cx.str(in, "dir")
+		if dir == "" {
+			dir = "."
+		}
+		dirAbs, dirRel, err := brSafePath(cx.env.Root, dir)
+		if err != nil {
+			return brStep{obs: obs, why: "destino: " + err.Error()}
+		}
+		synth := "tar -xf " + rel + " -C " + dirRel
+		if ok, why := cx.brPermit(synth); !ok {
+			obs.Denied, obs.Output = true, why
+			return brStep{obs: obs, why: why}
+		}
+		var written []any
+		skipped := 0
+		addWritten := func(name string) {
+			name = strings.TrimSuffix(name, "/")
+			if name == "" || strings.HasPrefix(name, "/") || strings.Contains(name, "..") {
+				skipped++ // tar-slip: nem escreve nem prova
+				return
+			}
+			tgt := filepath.Join(dirAbs, filepath.FromSlash(name))
+			root, _ := filepath.Abs(cx.env.Root)
+			full, _ := filepath.Abs(tgt)
+			if !strings.HasPrefix(full, root+string(os.PathSeparator)) && full != root {
+				skipped++
+				return
+			}
+			if err := os.MkdirAll(filepath.Dir(tgt), 0o755); err != nil {
+				skipped++
+				return
+			}
+			written = append(written, map[string]any{"path": filepath.Join(dirRel, filepath.FromSlash(name)), "abs": tgt})
+		}
+		// formato pelos magic bytes, não pela extensão — "backup" sem
+		// extensão extrai se for tar/zip de verdade, e um ".zip" que não
+		// é PK falha com a razão certa.
+		head := make([]byte, 300)
+		var n int
+		if fh, err := os.Open(abs); err == nil {
+			n, _ = fh.Read(head)
+			fh.Close()
+		}
+		head = head[:n]
+		magicZip := n >= 4 && bytes.Equal(head[:4], []byte("PK\x03\x04"))
+		magicGz := n >= 2 && head[0] == 0x1f && head[1] == 0x8b
+		magicTar := n >= 262 && string(head[257:262]) == "ustar"
+		switch {
+		case magicZip:
+			zr, err := zip.OpenReader(abs)
+			if err != nil {
+				return brStep{obs: obs, why: "extract " + rel + ": " + err.Error()}
+			}
+			defer zr.Close()
+			for _, f := range zr.File {
+				if f.FileInfo().IsDir() {
+					continue
+				}
+				before := len(written)
+				addWritten(f.Name)
+				if len(written) == before {
+					continue
+				}
+				rc, err := f.Open()
+				if err != nil {
+					continue
+				}
+				data, err := io.ReadAll(io.LimitReader(rc, 64<<20))
+				rc.Close()
+				if err != nil {
+					continue
+				}
+				tgt := written[len(written)-1].(map[string]any)["abs"].(string)
+				os.WriteFile(tgt, data, f.Mode()&0o777)
+			}
+		case magicGz || magicTar || !strings.Contains(filepath.Base(rel), ".") ||
+			strings.HasSuffix(rel, ".tar") || strings.HasSuffix(rel, ".tgz"):
+			fh, err := os.Open(abs)
+			if err != nil {
+				return brStep{obs: obs, why: "extract " + rel + ": " + err.Error()}
+			}
+			defer fh.Close()
+			var rd io.Reader = fh
+			if magicGz {
+				gz, err := gzip.NewReader(fh)
+				if err != nil {
+					return brStep{obs: obs, why: "extract " + rel + ": " + err.Error()}
+				}
+				defer gz.Close()
+				rd = gz
+			}
+			tr := tar.NewReader(rd)
+			for {
+				h, err := tr.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return brStep{obs: obs, why: "extract " + rel + ": " + err.Error()}
+				}
+				if h.Typeflag != tar.TypeReg {
+					if h.Typeflag != tar.TypeDir {
+						skipped++ // link/device/fifo: não escreve
+					}
+					continue
+				}
+				before := len(written)
+				addWritten(h.Name)
+				if len(written) == before {
+					continue
+				}
+				data, err := io.ReadAll(io.LimitReader(tr, 64<<20))
+				if err != nil {
+					continue
+				}
+				tgt := written[len(written)-1].(map[string]any)["abs"].(string)
+				os.WriteFile(tgt, data, os.FileMode(h.Mode&0o777))
+			}
+		default:
+			return brStep{obs: obs, why: "formato de archive não suportado: " + rel + " (tar/tar.gz/tgz/zip)"}
+		}
+		if len(written) == 0 {
+			return brStep{obs: obs, why: "nada extraído de " + rel}
+		}
+		if cx.env.AfterWrite != nil {
+			cx.env.AfterWrite(synth)
+			cx.say("(/undo desfaz)")
+		}
+		var files []any
+		for _, w := range written {
+			m := w.(map[string]any)
+			files = append(files, map[string]any{"path": m["path"]})
+		}
+		cx.say("extraído: %s → %s (%d arquivo(s))", rel, dirRel, len(files))
+		if skipped > 0 {
+			cx.say("membros não-extraídos (link/dir/unsafe): %d", skipped)
+			cx.task.AddEvidence("file", fmt.Sprintf("archive extract %s: %d membros pulados", rel, skipped))
+		}
+		cx.task.AddEvidence("file", fmt.Sprintf("archive extract %s", rel))
+		return brStep{val: map[string]any{"data": map[string]any{"files": files}}, obs: obs, ok: true}
+	}
+	return brStep{obs: obs, why: "archive_op desconhecido: " + op}
 }
 
 // brGitOp runs git write subcommands through the normal permission path:
@@ -2330,7 +2656,37 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if missing > 0 {
 				return false, false, fmt.Sprintf("%d item(ns) não pousaram em %s", missing, dRel)
 			}
-			proofs = append(proofs, fmt.Sprintf("%d item(ns) confirmados em %s", len(items), dRel))
+			proofs = append(proofs, fmt.Sprintf("conferi: %d item(ns) em %s", len(items), dRel))
+		case "list_exists":
+			// cada path produzido existe sob o root — prova de extract/
+			// fan-out cujo destino já vem completo no item.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items = arr
+					break
+				}
+			}
+			if len(items) == 0 {
+				return false, false, "sem lista produzida pra conferir"
+			}
+			missing := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") {
+					missing++
+					continue
+				}
+				if _, err := os.Lstat(filepath.Join(cx.env.Root, filepath.FromSlash(p))); err != nil {
+					missing++
+				}
+			}
+			if missing > 0 {
+				return false, false, fmt.Sprintf("%d item(ns) produzidos não existem", missing)
+			}
+			proofs = append(proofs, fmt.Sprintf("conferi: %d item(ns) existem", len(items)))
 		case "file_contains", "file_lacks":
 			// arg=path, arg2=needle — a escrita do replace prova-se lendo
 			rel, _ := arg.(string)

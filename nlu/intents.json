@@ -3575,7 +3575,8 @@
       "delete",
       "download",
       "install",
-      "mutate"
+      "mutate",
+      "extract"
      ]
     },
     {
@@ -3590,7 +3591,8 @@
       "delete",
       "download",
       "install",
-      "mutate"
+      "mutate",
+      "extract"
      ],
      "w": 0
     }
@@ -5487,6 +5489,166 @@
     "apaga os arquivos .bak",
     "count occurrences of TODO in main.go",
     "change permissions to 755"
+   ]
+  },
+  {
+   "name": "archive_create",
+   "desc": "comprimir/empacotar arquivos ou pastas em tar/tar.gz/tgz/zip — 'comprime a pasta logs em logs.tar.gz'",
+   "rules": [
+    {
+     "all": [
+      "compress"
+     ],
+     "none": [
+      "extract",
+      "delete",
+      "download",
+      "install"
+     ]
+    },
+    {
+     "all": [
+      "archive",
+      "create"
+     ],
+     "none": [
+      "extract",
+      "delete",
+      "download",
+      "install"
+     ],
+     "w": 0
+    },
+    {
+     "all": [
+      "archive",
+      "intocue"
+     ],
+     "none": [
+      "extract",
+      "delete",
+      "download",
+      "install"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "out": {
+     "kinds": [
+      "file"
+     ],
+     "required": true,
+     "from": "arc:out"
+    },
+    "srcs": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "arc:srcs"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:ext"
+    },
+    "mass": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:mass"
+    }
+   },
+   "examples": [
+    "comprime a pasta logs em logs.tar.gz",
+    "compress the logs folder into a tarball",
+    "compacta o diretório src para src.zip",
+    "zip the build output into dist.zip",
+    "cria um tar da pasta docs chamado docs.tar",
+    "archive current directory into dirstructure.tar",
+    "comprime todos os .txt em textos.zip",
+    "create a compressed archive 'filename.tar.gz'",
+    "empacota a.txt e b.txt em bundle.tgz",
+    "Archive the directory structure under current directory into dirstructure.tar"
+   ],
+   "negatives": [
+    "extrai o arquivo zip",
+    "o que tem dentro do tar.gz",
+    "lista o conteúdo do zip",
+    "descompacta pack.tar.gz",
+    "apaga os archives velhos",
+    "find all .gz archives in /path"
+   ]
+  },
+  {
+   "name": "archive_extract",
+   "desc": "extrair/descompactar tar/tar.gz/tgz/zip num diretório — 'extrai pack.tar.gz em dest'",
+   "rules": [
+    {
+     "all": [
+      "extract",
+      "archive"
+     ],
+     "none": [
+      "compress",
+      "create",
+      "delete",
+      "list",
+      "download",
+      "install",
+      "extractkind"
+     ]
+    },
+    {
+     "all": [
+      "extract",
+      "filenoun"
+     ],
+     "none": [
+      "compress",
+      "create",
+      "delete",
+      "list",
+      "download",
+      "install",
+      "extractkind"
+     ],
+     "w": 0
+    }
+   ],
+   "slots": {
+    "arc": {
+     "kinds": [
+      "file"
+     ],
+     "required": true,
+     "from": "arc:arc"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "required": false,
+     "from": "find:dir_cued"
+    }
+   },
+   "examples": [
+    "extrai pack.tar.gz em dest",
+    "descompacta o arquivo zip na pasta out",
+    "extract site.zip into www",
+    "untar backup.tgz no diretório restaurado",
+    "unzip the archive to ./unpacked",
+    "extrai o tar aqui",
+    "unpack data.tar into folder data"
+   ],
+   "negatives": [
+    "comprime a pasta logs",
+    "o que tem dentro do zip",
+    "lista o conteúdo do tar",
+    "extrai os ips do log",
+    "extract all emails from mbox.txt"
    ]
   }
  ]

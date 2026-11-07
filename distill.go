@@ -439,12 +439,13 @@ var dsCapKeys = map[string]map[string]bool{
 		"mode", "not_mode", "world_writable", "not_world_writable",
 		"suid", "sgid", "executable", "not_executable", "owner",
 		"not_owner", "group", "not_group", "no_owner", "no_group", "orphan"),
-	"for_each":  smSet("from", "do", "op", "max", "to", "to_dir", "content",
+	"for_each": smSet("from", "do", "op", "max", "to", "to_dir", "content",
 		"from_str", "to_str", "ignore_case", "first_per_line", "backup_ext"),
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
 	"text_op": smSet("op", "path", "to", "from_str", "to_str",
 		"ignore_case", "first_per_line", "backup_ext"),
+	"archive_op": smSet("op", "out", "srcs", "arc", "dir"),
 }
 
 // dsFileOpOps são os ops que o brFileOp conhece — os únicos que uma cap
@@ -457,6 +458,7 @@ var dsFileOpOps = smSet("create", "write", "append", "mkdir", "delete", "rename"
 // (brVerify); num método só de learned_cmd seguem valendo só
 // exit_zero/cmd_ran.
 var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present",
+	"list_exists",
 	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
@@ -545,6 +547,36 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 		}
 		if st.In["to"] != "" && !dsPathLit(st.In["to"]) {
 			return "capacidade text_op: destino não literal"
+		}
+	case "archive_op":
+		switch st.In["op"] {
+		case "create":
+			if !dsPathLit(st.In["out"]) || strings.TrimSpace(st.In["out"]) == "" {
+				return "capacidade archive_op: create sem out literal"
+			}
+			if strings.TrimSpace(st.In["srcs"]) == "" {
+				return "capacidade archive_op: create sem fontes"
+			}
+			if strings.HasPrefix(st.In["srcs"], "$") {
+				if !lists[strings.TrimPrefix(st.In["srcs"], "$")] {
+					return "capacidade archive_op: srcs não é uma lista produzida por script"
+				}
+			} else {
+				for _, f := range strings.Fields(st.In["srcs"]) {
+					if !dsPathLit(f) {
+						return "capacidade archive_op: fonte não literal " + f
+					}
+				}
+			}
+		case "extract":
+			if !dsPathLit(st.In["arc"]) || strings.TrimSpace(st.In["arc"]) == "" {
+				return "capacidade archive_op: extract sem arc literal"
+			}
+			if st.In["dir"] != "" && !dsPathLit(st.In["dir"]) {
+				return "capacidade archive_op: dir não literal"
+			}
+		default:
+			return "capacidade archive_op: op tem que ser create ou extract"
 		}
 	}
 	return ""
@@ -896,6 +928,14 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 		}
 		caps++
 	}
+	aop := 0
+	emitArchive := func(in map[string]string, check string) {
+		aop++
+		out := fmt.Sprintf("a%d", aop)
+		steps = append(steps, mhStep{Cap: "archive_op", In: in, Out: out})
+		verify = append(verify, mhCheck{Check: check, Arg: "$" + out})
+		caps++
+	}
 	sav := 0
 	emitSave := func(dest string, sorted bool) {
 		sav++
@@ -1076,6 +1116,24 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 				}
 				emitOp(map[string]string{"op": "mkdir", "path": a}, "file_exists")
 			}
+		case "tar":
+			in, check, ok := dsTarArgs(t)
+			if !ok {
+				return false
+			}
+			emitArchive(in, check)
+		case "zip":
+			in, ok := dsZipArgs(t)
+			if !ok {
+				return false
+			}
+			emitArchive(in, "file_exists")
+		case "unzip":
+			in, ok := dsUnzipArgs(t)
+			if !ok {
+				return false
+			}
+			emitArchive(in, "list_exists")
 		default:
 			return literal(s)
 		}
@@ -1789,7 +1847,7 @@ func dsSedArgs(t []string) (in map[string]string, ok bool) {
 		case a == "-i" || strings.HasPrefix(a, "-i"):
 			if len(a) > 2 {
 				bak = a[2:]
-				if !dsPathLit("x" + bak) || strings.ContainsAny(bak, "/\\") {
+				if !dsPathLit("x"+bak) || strings.ContainsAny(bak, "/\\") {
 					return nil, false
 				}
 			}
@@ -1811,6 +1869,171 @@ func dsSedArgs(t []string) (in map[string]string, ok bool) {
 	}
 	if bak != "" {
 		in["backup_ext"] = bak
+	}
+	return in, true
+}
+
+// dsTarArgs: "tar -c[zgjv]f out src…" → create; "tar -x[zgjv]f arc [-C dir]"
+// → extract. Flags proibidas: -O/--to-stdout (transform), --to-command,
+// -P/--absolute-names (escapa do root), -T/--files-from, --exclude*
+// (seleção que o cap não expressa). Paths têm que ser literais.
+func dsTarArgs(t []string) (in map[string]string, check string, ok bool) {
+	if len(t) < 3 {
+		return nil, "", false
+	}
+	mode, out, dir := byte(0), "", ""
+	var files []string
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if a == "-C" {
+			if i+1 >= len(t) {
+				return nil, "", false
+			}
+			dir = t[i+1]
+			i++
+			continue
+		}
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		fl := strings.TrimPrefix(a, "-")
+		for _, f := range fl {
+			switch f {
+			case 'c', 'x', 't':
+				if mode != 0 {
+					return nil, "", false
+				}
+				mode = byte(f)
+			case 'f', 'z', 'g', 'j', 'J', 'v', 'k', 'p':
+			default:
+				return nil, "", false // -O/-P/-T/--to-command etc
+			}
+		}
+		if strings.HasPrefix(a, "--") {
+			return nil, "", false
+		}
+	}
+	if i >= len(t) {
+		return nil, "", false
+	}
+	out = t[i]
+	i++
+	// o -C pode vir depois do arquivo ("tar -xzf arc -C dir")
+	for ; i < len(t); i++ {
+		if t[i] == "-C" {
+			if i+1 >= len(t) {
+				return nil, "", false
+			}
+			dir = t[i+1]
+			i++
+			continue
+		}
+		files = append(files, t[i])
+	}
+	switch mode {
+	case 'c':
+		if dir != "" {
+			return nil, "", false // -C no create muda o nome dos membros — não mapeia
+		}
+		if len(files) == 0 || !dsPathLit(out) {
+			return nil, "", false
+		}
+		for _, f := range files {
+			if !dsPathLit(f) {
+				return nil, "", false
+			}
+		}
+		return map[string]string{
+			"op": "create", "out": out, "srcs": strings.Join(files, " "),
+		}, "file_exists", true
+	case 'x':
+		if !dsPathLit(out) {
+			return nil, "", false
+		}
+		if dir != "" && !dsPathLit(dir) {
+			return nil, "", false
+		}
+		if len(files) != 0 {
+			return nil, "", false // extração de membros específicos não mapeia
+		}
+		in = map[string]string{"op": "extract", "arc": out}
+		if dir != "" {
+			in["dir"] = dir
+		}
+		return in, "list_exists", true
+	}
+	return nil, "", false // 't' (list) e modo ausente não encaixam
+}
+
+// dsZipArgs: "zip [-r] out.zip src…" → create com saída .zip.
+func dsZipArgs(t []string) (in map[string]string, ok bool) {
+	if len(t) < 3 {
+		return nil, false
+	}
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch a {
+		case "-r", "-q", "-9", "-6", "-1":
+		default:
+			return nil, false // -e (senha), -x (exclude), -d (delete) não mapeiam
+		}
+	}
+	if i >= len(t) {
+		return nil, false
+	}
+	out := t[i]
+	if !strings.HasSuffix(out, ".zip") || !dsPathLit(out) {
+		return nil, false
+	}
+	var files []string
+	for _, f := range t[i+1:] {
+		if !dsPathLit(f) {
+			return nil, false
+		}
+		files = append(files, f)
+	}
+	if len(files) == 0 {
+		return nil, false
+	}
+	return map[string]string{"op": "create", "out": out, "srcs": strings.Join(files, " ")}, true
+}
+
+// dsUnzipArgs: "unzip arc.zip [-d dir]" → extract.
+func dsUnzipArgs(t []string) (in map[string]string, ok bool) {
+	if len(t) < 2 {
+		return nil, false
+	}
+	in = map[string]string{"op": "extract"}
+	i := 1
+	for ; i < len(t); i++ {
+		a := t[i]
+		switch {
+		case a == "-d":
+			if i+1 >= len(t) || !dsPathLit(t[i+1]) {
+				return nil, false
+			}
+			in["dir"] = t[i+1]
+			i++
+		case a == "-q" || a == "-o" || a == "-qq":
+		case strings.HasPrefix(a, "-"):
+			return nil, false
+		default:
+			if in["arc"] != "" {
+				return nil, false // membro específico não mapeia
+			}
+			if !strings.HasSuffix(a, ".zip") || !dsPathLit(a) {
+				return nil, false
+			}
+			in["arc"] = a
+		}
+	}
+	if in["arc"] == "" {
+		return nil, false
 	}
 	return in, true
 }

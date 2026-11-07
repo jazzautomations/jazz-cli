@@ -2983,7 +2983,17 @@
    "troca",
    "trocar",
    "troque",
-   "trocando"
+   "trocando",
+   "change",
+   "changes",
+   "changing",
+   "altera",
+   "alterar",
+   "altere",
+   "alter",
+   "muda",
+   "mudar",
+   "mude"
   ],
   "stdin": [
    "stdin",
@@ -2993,6 +3003,19 @@
    "entrada padrao",
    "entrada padrão",
    "standard_input"
+  ],
+  "intocue": [
+   "into",
+   "named",
+   "called",
+   "como",
+   "chamado",
+   "chamada",
+   "sob",
+   "to",
+   "para",
+   "pra",
+   "pro"
   ]
  }
 }
