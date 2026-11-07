@@ -141,4 +141,20 @@ func TestNLUSlotGuards(t *testing.T) {
 	if in.Slots["lines"] != "1" {
 		t.Errorf("lines perdido com ask: %v", in.Slots)
 	}
+	// auto-referência: "current user"/"usuário atual"/"to me" resolve pra
+	// conta real — nunca literal "pro"/"atual"/"me"; grupo não herda
+	for _, text := range []string{
+		"change the owner of file x.txt to the current user",
+		"change the owner of file x.txt to me",
+		"muda o dono da pasta data pro usuário atual",
+	} {
+		in := m.Parse(text, w)
+		own := in.Slots["owner"]
+		if own == "" || own == "pro" || own == "atual" || own == "me" || own == "current" {
+			t.Errorf("%q: owner=%q devia resolver a conta atual (%v)", text, own, in.Slots)
+		}
+		if in.Slots["group"] == own {
+			t.Errorf("%q: group herdou o self de owner (%v)", text, in.Slots)
+		}
+	}
 }

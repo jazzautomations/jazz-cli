@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -3766,6 +3767,44 @@ var nuCueFamilyConcs = map[string]bool{
 // nuOwnerLikeArg: candidate word after a cue — skip fillers, quoted and
 // already-taken tokens, bounded radius (the 'owner is daniel'→is fix).
 func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]bool) string {
+	// auto-referência: "the current user", "usuário atual", "to me" —
+	// resolve pro nome real da conta (o verify confere via LookupId).
+	// "current"/"me" podem ser fillers, então o scan normal não os vê.
+	if !neg {
+		selfWords := map[string]bool{
+			"me": true, "myself": true, "eu": true,
+			"atual": true, "current": true, "próprio": true, "proprio": true,
+		}
+		for i, t := range toks {
+			if !selfWords[t.Fold] {
+				continue
+			}
+			// "to me"/"pra mim" — a preposição de destino fecha a frase;
+			// só vale pra família owner ("change group to me" é ambíguo)
+			if i > 0 && cues["owner"] {
+				switch toks[i-1].Fold {
+				case "to", "para", "pro", "pra", "por":
+					if cur := nuCurrentUser(); cur != "" {
+						taken[i-1], taken[i] = true, true
+						return cur
+					}
+				}
+			}
+			for j := i - 2; j <= i+2 && j < len(toks); j++ {
+				if j < 0 || j == i {
+					continue
+				}
+				// só a cue da família pedida vale: "current user" é
+				// dono, não grupo; "current group" é grupo, não dono
+				if cues[toks[j].Fold] {
+					if cur := nuCurrentUser(); cur != "" {
+						taken[i], taken[j] = true, true
+						return cur
+					}
+				}
+			}
+		}
+	}
 	// passada set-phrasing: "change owner … to NAME" / "…para NAME" — o
 	// nome fecha a frase depois da preposição, longe da palavra-cue.
 	// Só dispara quando a cue da família aparece no texto ("owner" pro
@@ -3786,7 +3825,9 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 			goto window
 		}
 		for i := cueAt + 1; i+1 < len(toks); i++ {
-			if toks[i].Fold != "to" && toks[i].Fold != "para" {
+			switch toks[i].Fold {
+			case "to", "para", "pro", "pra", "por":
+			default:
 				continue
 			}
 			j := i + 1
@@ -3851,7 +3892,8 @@ window:
 				n == "conhecido" || n == "conhecida" || n == "conhecidos" ||
 				n == "conhecidas" || n == "valid" || n == "valido" ||
 				n == "valida" || n == "validos" || n == "validas" ||
-				n == "either" || n == "both" || n == "neither" || n == "each" {
+				n == "either" || n == "both" || n == "neither" || n == "each" ||
+				n == "pro" || n == "pra" || n == "por" {
 				continue // a conjunction, a preposition or a path is never a user/group name
 			}
 			// só a família-cue bloqueia nome: stem/typo-repair são palpites
@@ -3887,6 +3929,15 @@ window:
 		}
 	}
 	return ""
+}
+
+// nuCurrentUser: o nome da conta que está rodando — "usuário atual" é
+// semântico, não literal; vazio quando o ambiente não diz (falha honesta).
+func nuCurrentUser() string {
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	return os.Getenv("LOGNAME")
 }
 
 var nuOwnerCues = map[string]bool{
