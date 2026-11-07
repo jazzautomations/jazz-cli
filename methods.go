@@ -1043,6 +1043,9 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 // tmp+rename inside the same dir so the checkpoint can undo.
 func brTextOp(cx *brCtx, in map[string]string) brStep {
 	op, obs := in["op"], rvNoCmd()
+	if op == "sort" {
+		return brTextSort(cx, in)
+	}
 	if op != "replace" {
 		return brStep{obs: obs, why: "text_op desconhecido: " + op}
 	}
@@ -1121,6 +1124,121 @@ func brTextOp(cx *brCtx, in map[string]string) brStep {
 	}
 	cx.say("substituído: %s → %s (%d ocorrência(s))", rel, toRel, cnt)
 	cx.task.AddEvidence("file", fmt.Sprintf("replace %s", rel))
+	return brStep{val: toRel, obs: obs, ok: true}
+}
+
+// brTextSort: ordena as linhas de um arquivo confinado — sort(1) sem
+// shell. numeric/reverse/unique, key = coluna 1-based sobre o delimitador
+// (default: campos em branco). Sem `to`/`inplace` imprime (read-only);
+// com `to` grava no destino confinado, com inplace:true regrava a fonte —
+// ambos passam por permissão, tmp+rename e checkpoint/undo.
+func brTextSort(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	abs, rel, err := brSafePath(cx.env.Root, cx.str(in, "path"))
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return brStep{obs: obs, why: "sort " + rel + ": " + err.Error()}
+	}
+	if len(data) > 8<<20 {
+		return brStep{obs: obs, why: "sort " + rel + ": arquivo grande demais (>8MB)", skip: true}
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return brStep{obs: obs, why: "sort " + rel + ": arquivo binário", skip: true}
+	}
+	flags := "," + cx.str(in, "flags") + ","
+	numeric := strings.Contains(flags, ",numeric,")
+	reverse := strings.Contains(flags, ",reverse,")
+	unique := strings.Contains(flags, ",unique,")
+	key, _ := strconv.Atoi(cx.str(in, "key"))
+	delim := cx.str(in, "delim")
+	keyOf := func(l string) string {
+		if key <= 0 {
+			return l
+		}
+		var f []string
+		if delim != "" {
+			f = strings.Split(l, delim)
+		} else {
+			f = strings.Fields(l)
+		}
+		if key > len(f) {
+			return ""
+		}
+		return f[key-1]
+	}
+	less := func(a, b string) bool {
+		ka, kb := keyOf(a), keyOf(b)
+		if numeric {
+			fa, _ := strconv.ParseFloat(strings.TrimSpace(ka), 64)
+			fb, _ := strconv.ParseFloat(strings.TrimSpace(kb), 64)
+			if fa != fb {
+				return fa < fb
+			}
+		}
+		return ka < kb
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	sort.SliceStable(lines, func(i, j int) bool { return less(lines[i], lines[j]) })
+	if reverse {
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
+	}
+	if unique {
+		out := lines[:0]
+		for i, l := range lines {
+			if i == 0 || keyOf(l) != keyOf(lines[i-1]) {
+				out = append(out, l)
+			}
+		}
+		lines = out
+	}
+	to := cx.str(in, "to")
+	if to == "" && cx.str(in, "inplace") == "true" {
+		to = rel
+	}
+	out := strings.Join(lines, "\n") + "\n"
+	if to == "" {
+		shown := lines
+		if len(shown) > 200 {
+			shown = shown[:200]
+			cx.say("… (%d linhas no total, primeiras 200)", len(lines))
+		}
+		for _, l := range shown {
+			cx.say("%s", l)
+		}
+		// val carrega as linhas e a spec resolvida — out_sorted re-verifica
+		// a ordenação com comparador próprio (falso sucesso não passa).
+		return brStep{val: map[string]any{"data": map[string]any{
+			"lines": lines, "flags": cx.str(in, "flags"),
+			"key": key, "delim": delim, "reverse": reverse,
+		}}, obs: obs, ok: true}
+	}
+	toAbs, toRel, err := brSafePath(cx.env.Root, to)
+	if err != nil {
+		return brStep{obs: obs, why: "destino: " + err.Error()}
+	}
+	synth := "sort " + rel + " > " + toRel
+	if ok, why := cx.brPermit(synth); !ok {
+		obs.Denied, obs.Output = true, why
+		return brStep{obs: obs, why: why}
+	}
+	tmp := toAbs + ".jazz.tmp"
+	if err = os.WriteFile(tmp, []byte(out), 0o644); err == nil {
+		err = os.Rename(tmp, toAbs)
+	}
+	if err != nil {
+		return brStep{obs: obs, why: "sort " + rel + ": " + err.Error()}
+	}
+	if cx.env.AfterWrite != nil {
+		cx.env.AfterWrite(synth)
+		cx.say("(/undo desfaz)")
+	}
+	cx.say("ordenado: %s → %s (%d linhas)", rel, toRel, len(lines))
+	cx.task.AddEvidence("file", fmt.Sprintf("sort %s → %s", rel, toRel))
 	return brStep{val: toRel, obs: obs, ok: true}
 }
 
@@ -3253,6 +3371,136 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("for_each: %.0f falha(s) de %.0f itens", failed, total)
 			}
 			proofs = append(proofs, fmt.Sprintf("for_each limpo: %.0f/%.0f processados", done, total))
+		case "file_sorted":
+			// Arg = arquivo; Arg2 = spec "flags=numeric,reverse key=N delim=X"
+			// — o verificador repete o comparador do sort, não confia no exit.
+			spec, _ := cx.subst(c.Arg2).(string)
+			flags, key, delim := "", 0, ""
+			for _, kv := range strings.Fields(spec) {
+				switch {
+				case strings.HasPrefix(kv, "flags="):
+					flags = "," + kv[6:] + ","
+				case strings.HasPrefix(kv, "key="):
+					key, _ = strconv.Atoi(kv[4:])
+				case strings.HasPrefix(kv, "delim="):
+					delim = kv[6:]
+				}
+			}
+			numeric, reverse := strings.Contains(flags, ",numeric,"), strings.Contains(flags, ",reverse,")
+			sp, _ := arg.(string)
+			if sp == "" {
+				return false, true, "sort check sem arquivo"
+			}
+			data2, err := os.ReadFile(filepath.Join(cx.env.Root, filepath.FromSlash(sp)))
+			if err != nil {
+				return false, false, "sort check: " + err.Error()
+			}
+			lns := strings.Split(strings.TrimRight(string(data2), "\n"), "\n")
+			keyOf := func(l string) string {
+				if key <= 0 {
+					return l
+				}
+				var f []string
+				if delim != "" {
+					f = strings.Split(l, delim)
+				} else {
+					f = strings.Fields(l)
+				}
+				if key > len(f) {
+					return ""
+				}
+				return f[key-1]
+			}
+			strictLess := func(a, b string) bool {
+				ka, kb := keyOf(a), keyOf(b)
+				if numeric {
+					fa, _ := strconv.ParseFloat(strings.TrimSpace(ka), 64)
+					fb, _ := strconv.ParseFloat(strings.TrimSpace(kb), 64)
+					if fa != fb {
+						return fa < fb
+					}
+					return ka < kb
+				}
+				return ka < kb
+			}
+			bad := -1
+			for i := 1; i < len(lns); i++ {
+				// desordem = o anterior viria DEPOIS do atual na ordem pedida
+				outOfOrder := strictLess(lns[i], lns[i-1])
+				if reverse {
+					outOfOrder = strictLess(lns[i-1], lns[i])
+				}
+				if outOfOrder {
+					bad = i
+					break
+				}
+			}
+			if bad >= 0 {
+				return false, false, fmt.Sprintf("arquivo não está ordenado na linha %d", bad+1)
+			}
+			proofs = append(proofs, fmt.Sprintf("%s está ordenado (%d linhas)", arg, len(lns)))
+		case "out_sorted":
+			// o cap devolveu as linhas que imprimiu + a spec que usou — o
+			// verificador repete a checagem de ordem com código próprio:
+			// um comparador quebrado no sort não engana este check.
+			om, _ := arg.(map[string]any)
+			od, _ := om["data"].(map[string]any)
+			var lns []string
+			switch arr := od["lines"].(type) {
+			case []string:
+				lns = arr
+			case []any:
+				for _, x := range arr {
+					if s, ok := x.(string); ok {
+						lns = append(lns, s)
+					}
+				}
+			}
+			if len(lns) == 0 {
+				return false, false, "o sort não devolveu linhas pra conferir"
+			}
+			onum, _ := od["reverse"].(bool)
+			oflags, _ := od["flags"].(string)
+			okey := int(brToFloat(od["key"]))
+			odelim, _ := od["delim"].(string)
+			onumeric := strings.Contains(","+oflags+",", ",numeric,")
+			okeyOf := func(l string) string {
+				if okey <= 0 {
+					return l
+				}
+				var f []string
+				if odelim != "" {
+					f = strings.Split(l, odelim)
+				} else {
+					f = strings.Fields(l)
+				}
+				if okey > len(f) {
+					return ""
+				}
+				return f[okey-1]
+			}
+			oLess := func(a, b string) bool {
+				ka, kb := okeyOf(a), okeyOf(b)
+				if onumeric {
+					fa, _ := strconv.ParseFloat(strings.TrimSpace(ka), 64)
+					fb, _ := strconv.ParseFloat(strings.TrimSpace(kb), 64)
+					if fa != fb {
+						return fa < fb
+					}
+					return ka < kb
+				}
+				return ka < kb
+			}
+			for i := 1; i < len(lns); i++ {
+				oo := oLess(lns[i], lns[i-1])
+				if onum {
+					oo = oLess(lns[i-1], lns[i])
+				}
+				if oo {
+					return false, false, fmt.Sprintf("saída fora de ordem na linha %d", i+1)
+				}
+			}
+			proofs = append(proofs, fmt.Sprintf("saída ordenada conferida (%d linhas)", len(lns)))
 		case "script_ok":
 			sm, _ := arg.(map[string]any)
 			if ok, _ := sm["ok"].(bool); !ok {

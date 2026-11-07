@@ -5972,6 +5972,98 @@
     "quais arquivos são executáveis",
     "apaga os arquivos sem permissão"
    ]
+  },
+  {
+   "name": "sort_op",
+   "desc": "ordena linhas de um arquivo (print ou gravação)",
+   "rules": [
+    {
+     "all": [
+      "sort"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "files",
+      "create",
+      "delete",
+      "permattr",
+      "execperm",
+      "git",
+      "grepword",
+      "count",
+      "install",
+      "content",
+      "mutate",
+      "replace"
+     ],
+     "w": 10
+    }
+   ],
+   "slots": {
+    "file": {
+     "kinds": [
+      "file"
+     ],
+     "required": false
+    },
+    "key": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "sort:key"
+    },
+    "flags": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "sort:flags"
+    },
+    "to": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "sort:to"
+    },
+    "delim": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "sort:delim"
+    }
+   },
+   "examples": [
+    "ordena o app.log",
+    "sort the file data.txt",
+    "sort the csv by the second column",
+    "ordena o csv pela segunda coluna",
+    "sort numerically the table file",
+    "ordena em ordem reversa o lista.txt",
+    "sort -u names.txt",
+    "sort data.txt",
+    "sort the data file",
+    "ordena o arquivo data.txt",
+    "sort -n nums.txt",
+    "sort -r lista.txt",
+    "sort -u nomes.txt",
+    "ordena numericamente o tabela.txt",
+    "sort reverse the log file",
+    "sort file1.txt to out.txt",
+    "ordena o f.txt e grava em g.txt",
+    "sort the table by the third column",
+    "ordena o arquivo pelo terceiro campo",
+    "sort file.txt and output to sorted.txt",
+    "uniq sort users.txt"
+   ],
+   "negatives": [
+    "find files sorted by date",
+    "list files by size",
+    "conta as linhas do arquivo"
+   ]
   }
  ]
 }

@@ -1628,6 +1628,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuGrepArg(toks, sd.From[5:], taken)
 			case sd.From == "wc:what":
 				v = nuWcWhat(toks)
+			case strings.HasPrefix(sd.From, "sort:"):
+				v = nuSortArg(toks, sd.From[5:], taken)
 			}
 			// any From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into slots the helper deliberately left
@@ -2229,6 +2231,144 @@ func nuWcWhat(toks []nuTok) string {
 		}
 	}
 	return "lines"
+}
+
+// nuSortArg: slots do sort — key (coluna 1-based), flags (numeric,
+// reverse, unique), to (destino name-shaped depois de cue), delim
+// (separator explícito; .csv no pedido implica ",").
+func nuSortArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "key":
+		ords := map[string]int{
+			"first": 1, "primeira": 1, "primeiro": 1,
+			"second": 2, "segunda": 2, "segundo": 2,
+			"third": 3, "terceira": 3, "terceiro": 3,
+			"fourth": 4, "quarta": 4, "quarto": 4,
+			"fifth": 5, "quinta": 5, "quinto": 5,
+			"sixth": 6, "sexta": 6, "sexto": 6,
+		}
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "column", "coluna", "field", "campo", "col", "k", "key":
+				for _, j := range []int{i - 1, i + 1, i + 2} {
+					if j < 0 || j >= len(toks) || taken[j] {
+						continue
+					}
+					u := &toks[j]
+					if n, err := strconv.Atoi(u.Fold); err == nil && n > 0 {
+						taken[i], taken[j] = true, true
+						return strconv.Itoa(n)
+					}
+					// "4th"/"2nd"/"1st": dígito + sufixo ordinal
+					f := u.Fold
+					for _, suf := range []string{"th", "st", "nd", "rd", "o", "a"} {
+						if strings.HasSuffix(f, suf) && len(f) > len(suf) {
+							if n, err := strconv.Atoi(f[:len(f)-len(suf)]); err == nil && n > 0 {
+								taken[i], taken[j] = true, true
+								return strconv.Itoa(n)
+							}
+						}
+					}
+					if n, ok := ords[u.Fold]; ok {
+						taken[i], taken[j] = true, true
+						return strconv.Itoa(n)
+					}
+				}
+			}
+		}
+	case "flags":
+		var f []string
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			// -u / -n / -r / -nr / -un — forma curta literal do sort(1)
+			if strings.HasPrefix(t.Fold, "-") && len(t.Fold) <= 4 {
+				letters := strings.TrimLeft(t.Fold, "-")
+				if letters != "" && strings.IndexFunc(letters, func(r rune) bool {
+					return r != 'n' && r != 'r' && r != 'u'
+				}) < 0 {
+					for _, r := range letters {
+						switch r {
+						case 'n':
+							f = append(f, "numeric")
+						case 'r':
+							f = append(f, "reverse")
+						case 'u':
+							f = append(f, "unique")
+						}
+					}
+					taken[i] = true
+					continue
+				}
+			}
+			switch t.Fold {
+			case "numeric", "numerically", "numericamente", "numerico", "numerica":
+				f = append(f, "numeric")
+				taken[i] = true
+			case "reverse", "reversa", "reverso", "inverted", "invertida", "invertido":
+				f = append(f, "reverse")
+				taken[i] = true
+			case "unique", "uniq", "unica", "unicas", "unico", "unicos",
+				"distinct", "dedupe", "dedup":
+				f = append(f, "unique")
+				taken[i] = true
+			}
+		}
+		return strings.Join(f, ",")
+	case "to":
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "to", "para", "into", "em", "save", "salva", "output", "grava":
+				for j := i + 1; j < len(toks) && j < i+4; j++ {
+					u := &toks[j]
+					if taken[j] || u.Filler || u.has("article") {
+						continue
+					}
+					if nuNameShaped(u.Raw) {
+						taken[i], taken[j] = true, true
+						return u.Raw
+					}
+				}
+			}
+		}
+	case "delim":
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "separador", "separator", "delimiter", "delimitador", "sep", "separado":
+				for j := i + 1; j < len(toks) && j < i+4; j++ {
+					u := &toks[j]
+					if taken[j] || u.Filler || u.has("article") {
+						continue
+					}
+					if u.Quoted && u.Raw != "" {
+						taken[i], taken[j] = true, true
+						return u.Raw
+					}
+					if len(u.Raw) <= 3 && !nuNameShaped(u.Raw) {
+						taken[i], taken[j] = true, true
+						return u.Raw
+					}
+				}
+			}
+		}
+		// ".csv" no pedido → o delimitador implícito é vírgula
+		for _, t := range toks {
+			if strings.HasSuffix(strings.ToLower(t.Raw), ".csv") || t.Fold == "csv" {
+				return ","
+			}
+		}
+	}
+	return ""
 }
 
 // nuArcTypeWord: palavras que descrevem o TIPO do que vai ser arquivado —

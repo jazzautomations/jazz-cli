@@ -449,7 +449,8 @@ var dsCapKeys = map[string]map[string]bool{
 	"save_list": smSet("from", "path", "sort"),
 	"file_op":   smSet("op", "path", "to", "to_dir", "content"),
 	"text_op": smSet("op", "path", "to", "from_str", "to_str",
-		"ignore_case", "first_per_line", "backup_ext"),
+		"ignore_case", "first_per_line", "backup_ext",
+		"flags", "key", "delim", "inplace"),
 	"archive_op": smSet("op", "out", "srcs", "arc", "dir"),
 	"perm_op":    smSet("op", "path", "mode", "owner", "group", "recursive"),
 }
@@ -471,7 +472,7 @@ var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present",
 	"file_mode", "file_owner", "file_group", "list_mode",
 	"file_perm", "file_noperm", "list_perm", "list_owner", "list_group",
 	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero",
-	"each_clean")
+	"each_clean", "file_sorted", "out_sorted")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
 // lista, chaves conhecidas, valores literais ou $out produzido antes
@@ -552,17 +553,29 @@ func dsCapStepOK(st mhStep, outs, lists map[string]bool) string {
 			}
 		}
 	case "text_op":
-		if st.In["op"] != "replace" {
+		if st.In["op"] != "replace" && st.In["op"] != "sort" {
 			return "capacidade text_op: op desconhecido " + st.In["op"]
 		}
 		if strings.TrimSpace(st.In["path"]) == "" {
 			return "capacidade text_op: falta path"
 		}
-		if st.In["from_str"] == "" {
+		if st.In["op"] == "replace" && st.In["from_str"] == "" {
 			return "capacidade text_op: replace sem from_str"
 		}
 		if st.In["to"] != "" && !dsPathLit(st.In["to"]) {
 			return "capacidade text_op: destino não literal"
+		}
+		if st.In["op"] == "sort" {
+			for _, f := range strings.Split(st.In["flags"], ",") {
+				if f != "" && f != "numeric" && f != "reverse" && f != "unique" {
+					return "capacidade text_op: flag de sort desconhecida " + f
+				}
+			}
+			if k := st.In["key"]; k != "" {
+				if n, err := strconv.Atoi(k); err != nil || n < 1 {
+					return "capacidade text_op: key tem que ser coluna 1-based"
+				}
+			}
 		}
 	case "perm_op":
 		if err := dsPermShape(st.In, true); err != "" {

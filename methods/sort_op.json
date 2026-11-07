@@ -1,0 +1,80 @@
+{
+ "methods": [
+  {
+   "name": "sort_op.print",
+   "intent": "sort_op",
+   "priority": 10,
+   "doc": "ordena e imprime (read-only): sort FILE [key flags delim]",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "text_op",
+     "in": {
+      "op": "sort",
+      "path": "$slot.file",
+      "flags": "$slot.flags",
+      "key": "$slot.key",
+      "delim": "$slot.delim"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "out_sorted",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 50
+  },
+  {
+   "name": "sort_op.write",
+   "intent": "sort_op",
+   "priority": 9,
+   "doc": "ordena e grava no destino (ou in-place quando to==file): file_sorted confere a ordem real",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "text_op",
+     "in": {
+      "op": "sort",
+      "path": "$slot.file",
+      "to": "$slot.to",
+      "flags": "$slot.flags",
+      "key": "$slot.key",
+      "delim": "$slot.delim"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_sorted",
+     "arg": "$slot.to",
+     "arg2": "flags=$slot.flags key=$slot.key delim=$slot.delim"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 80
+  }
+ ]
+}

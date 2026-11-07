@@ -591,3 +591,28 @@ func TestNLUTextReplaceSlots(t *testing.T) {
 		}
 	}
 }
+
+// sort_op: o intent dono de "sort FILE" — file_find segue dono de "find ... sorted"
+func TestNLUSortOpRouting(t *testing.T) {
+	m, w := nuTestWorld(t)
+	cases := map[string]string{
+		"ordena o csv pela segunda coluna":                  "sort_op",
+		"sort the csv by the second column":                 "sort_op",
+		"sort numerically the table file":                   "sort_op",
+		"ordena em ordem reversa o lista.txt":               "sort_op",
+		"sort -u names.txt":                                 "sort_op",
+		"sort file1.txt and output the result to file1.txt": "sort_op",
+		"find files sorted by date":                         "find",
+	}
+	for text, want := range cases {
+		if in := m.Parse(text, w); nuPredict(in) != want {
+			t.Errorf("%q => %s (%v), want %s", text, nuPredict(in), in.Evidence, want)
+		}
+	}
+	if in := m.Parse("sort the csv by the second column", w); in.Slots["key"] != "2" || in.Slots["delim"] != "," {
+		t.Errorf("csv pela segunda coluna => slots %v", in.Slots)
+	}
+	if in := m.Parse("sort -u names.txt", w); !strings.Contains(in.Slots["flags"], "unique") {
+		t.Errorf("-u não virou flag unique: %v", in.Slots)
+	}
+}
