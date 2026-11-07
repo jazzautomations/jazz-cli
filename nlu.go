@@ -3137,7 +3137,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		for i := range toks {
 			f := toks[i].Fold
-			if strings.HasPrefix(f, "*.") || (strings.HasPrefix(f, ".") && len(f) > 1) {
+			// ext é ".log"/"*.log" — "./storage/" começa com ponto mas é
+			// caminho; o sufixo tem que ser alfanumérico como no nuPureExt
+			extShaped := strings.HasPrefix(f, ".") && len(f) > 1 &&
+				!strings.ContainsAny(f, "/\\") && nuPureExt(f)
+			if strings.HasPrefix(f, "*.") || extShaped {
 				if bakAt >= 0 && i > bakAt && i+1 < len(toks) {
 					switch toks[i+1].Fold {
 					case "extension", "extensions", "ext", "extensão", "extensões", "extensao", "extensoes", "suffix", "sufixo":
@@ -3339,6 +3343,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// size 40" não tem dir "have"
 			"which": true, "that": true, "who": true, "whose": true,
 			"whom": true, "que": true, "quem": true,
+			// preposição de destino abre o ALVO, não mais o escopo —
+			// "directory to antoniod" não tem dir "to"
+			"to": true, "para": true, "pra": true, "pro": true,
+			"into": true, "as": true, "named": true, "called": true,
 		}
 		for i, t := range toks {
 			if !dirCues[t.Fold] || taken[i] {
@@ -3356,8 +3364,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
 				}
-				if strings.HasPrefix(u.Fold, ".") || nuExtWords[u.Fold] {
-					continue // ".txt files" é seletor do slot ext, não dir
+				if nuPureExt(u.Fold) || nuExtWords[u.Fold] {
+					continue // ".txt files" é seletor do slot ext, não dir —
+					// "./storage/" começa com ponto mas é caminho (tem /)
 				}
 				if nuFileShaped(u.Fold) {
 					continue // "em a.txt" — o alvo é o slot file, não um dir
@@ -3616,22 +3625,25 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 	// owner, "group"/"grupo" pro group) — senão o scan rouba o nome do
 	// slot vizinho.
 	if !neg {
-		family := false
-		for _, t := range toks {
+		// posição da cue da família — o alvo é o to/para DEPOIS dela:
+		// "owner to a and group to b" → a/b; "owner and group to X" → X/X
+		// (o mesmo alvo vale pras duas famílias — um não rouba do outro)
+		cueAt := -1
+		for i, t := range toks {
 			if cues[t.Fold] {
-				family = true
+				cueAt = i
 				break
 			}
 		}
-		if !family {
+		if cueAt < 0 {
 			goto window
 		}
-		for i := 0; i+1 < len(toks); i++ {
+		for i := cueAt + 1; i+1 < len(toks); i++ {
 			if toks[i].Fold != "to" && toks[i].Fold != "para" {
 				continue
 			}
 			j := i + 1
-			for j < len(toks) && (toks[j].Filler || taken[j]) {
+			for j < len(toks) && toks[j].Filler {
 				j++
 			}
 			if j >= len(toks) {
@@ -3650,7 +3662,7 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 					isFile = true
 				}
 			}
-			if n != "" && !cueish && !isFile && !strings.Contains(n, "/") && !nuIsNumber(n) &&
+			if n != "" && !cueish && !isFile && !strings.ContainsAny(n, "/.") && !nuIsNumber(n) &&
 				!nuOctalShaped(n) && !nuGroupCues[n] && j+1 >= len(toks) {
 				taken[i], taken[j] = true, true
 				return n
@@ -3680,9 +3692,19 @@ window:
 				continue
 			}
 			n := toks[j].Fold
-			if n == "or" || n == "and" || n == "e" || n == "ou" || strings.Contains(n, "/") ||
+			if n == "or" || n == "and" || n == "e" || n == "ou" || strings.ContainsAny(n, "/.") ||
 				n == "under" || n == "in" || n == "on" || n == "at" || n == "from" ||
-				n == "to" || n == "into" || n == "dentro" || n == "para" {
+				n == "to" || n == "into" || n == "dentro" || n == "para" ||
+				// pronome/determinante não é username — "writable by their
+				// owner" fala do dono genérico, não do usuário "their"
+				n == "their" || n == "its" || n == "his" || n == "her" ||
+				n == "the" || n == "a" || n == "an" || n == "this" || n == "that" ||
+				n == "seu" || n == "sua" || n == "seus" || n == "suas" ||
+				n == "dele" || n == "dela" || n == "known" || n == "any" ||
+				n == "conhecido" || n == "conhecida" || n == "conhecidos" ||
+				n == "conhecidas" || n == "valid" || n == "valido" ||
+				n == "valida" || n == "validos" || n == "validas" ||
+				n == "either" || n == "both" || n == "neither" || n == "each" {
 				continue // a conjunction, a preposition or a path is never a user/group name
 			}
 			// só a família-cue bloqueia nome: stem/typo-repair são palpites
@@ -3724,6 +3746,37 @@ var nuOwnerCues = map[string]bool{
 	"usuario": true, "usuário": true, "usuarios": true, "usuários": true,
 	"user": true, "users": true, "dono": true, "donos": true,
 	"owner": true, "owners": true,
+}
+
+// nuPermClass: a classe de permissão perto da palavra de modo —
+// "remove write FOR GROUP" é g-w, não a-w. Sem cue explícita: a (todos).
+var nuPermClassWords = map[string]string{
+	"group": "g", "groups": "g", "grupo": "g", "grupos": "g",
+	"owner": "u", "user": "u", "usuario": "u", "usuário": "u",
+	"dono": "u", "donos": "u",
+	"others": "o", "other": "o", "outros": "o", "outras": "o",
+	"all": "a", "everyone": "a", "todos": "a", "todas": "a",
+}
+
+func nuPermClass(toks []nuTok, at int) string {
+	// a classe se anuncia por cue de escopo perto do modo:
+	// "writable for the group", "permissão de escrita do grupo"
+	for j := at + 1; j < len(toks) && j <= at+5; j++ {
+		f := toks[j].Fold
+		if f == "for" || f == "para" || f == "pro" || f == "pra" ||
+			f == "of" || f == "de" || f == "do" || f == "da" ||
+			f == "to" || f == "ao" {
+			for k := j + 1; k < len(toks) && k <= j+3; k++ {
+				if c, ok := nuPermClassWords[toks[k].Fold]; ok {
+					return c
+				}
+				if !toks[k].Filler {
+					break // "for the group" ok; "for backup group" não é classe
+				}
+			}
+		}
+	}
+	return "a"
 }
 
 func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
@@ -3838,7 +3891,7 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			for _, w := range []string{"executavel", "executável", "executable", "executaveis", "executáveis", "rodavel", "rodável"} {
 				if t.Fold == w && !nuNegationNear(toks, i) {
 					taken[i] = true
-					return "a+x"
+					return nuPermClass(toks, i) + "+x"
 				}
 			}
 		}
@@ -3849,7 +3902,7 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			for _, w := range []string{"writable", "escrevivel", "escrevível", "gravavel", "gravável"} {
 				if t.Fold == w && !nuNegationNear(toks, i) {
 					taken[i] = true
-					return "a+w"
+					return nuPermClass(toks, i) + "+w"
 				}
 			}
 		}
@@ -3870,13 +3923,13 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			if (f == "writable" || f == "write" || f == "escrita" || f == "escrever") && (nuNegationNear(toks, i) || rm) {
 				taken[i] = true
-				return "a-w"
+				return nuPermClass(toks, i) + "-w"
 			}
 			if f == "read-only" || f == "readonly" ||
 				(f == "leitura" && i > 0 &&
 					(toks[i-1].Fold == "somente" || toks[i-1].Fold == "only" || toks[i-1].Fold == "so" || toks[i-1].Fold == "só")) {
 				taken[i] = true
-				return "a-w"
+				return nuPermClass(toks, i) + "-w"
 			}
 		}
 		return ""

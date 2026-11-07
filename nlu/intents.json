@@ -5834,8 +5834,6 @@
       "delete",
       "install",
       "download",
-      "service",
-      "container",
       "branch",
       "status",
       "extract",
@@ -5897,12 +5895,31 @@
      "none": [
       "install",
       "download",
-      "service",
-      "container",
       "branch",
       "status",
       "extract",
       "blame"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "user",
+      "mutate"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "delete",
+      "install",
+      "status",
+      "blame",
+      "download",
+      "branch",
+      "extract",
+      "run",
+      "undo",
+      "history"
      ],
      "w": 10
     }

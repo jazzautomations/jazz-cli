@@ -65,4 +65,38 @@ func TestNLUSlotGuards(t *testing.T) {
 			t.Errorf("%q poisoned: %v", text, in.Slots)
 		}
 	}
+	// pronouns, qualifiers and dotted filenames are never owner/group names;
+	// "for group" near a mode word is a permission CLASS (g-w), not a chgrp
+	permcases := map[string]map[string]string{
+		"change owner to alice and group to staff on app.log":       {"file": "app.log", "owner": "alice", "group": "staff"},
+		"remove write permission for group on data.csv":             {"file": "data.csv", "symnw": "g-w"},
+		"remove write permission for the user on run.sh":            {"file": "run.sh", "symnw": "u-w"},
+		"make script.sh executable":                                 {"file": "script.sh", "symexec": "a+x"},
+		"Change all directories under ./storage/ to owner apache and group lara": {"dir": "./storage/", "owner": "apache", "group": "lara"},
+	}
+	for text, wants := range permcases {
+		in := m.Parse(text, w)
+		for k, v := range wants {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+	// "for group" é classe: o slot group NÃO pode engolir o arquivo
+	in = m.Parse("remove write permission for group on data.csv", w)
+	if in.Slots["group"] == "data.csv" {
+		t.Errorf("group roubou o arquivo: %v", in.Slots)
+	}
+	// "usuário conhecido"/"their owner" falam do dono genérico — não são nomes
+	for _, text := range []string{
+		"arquivos que não pertencem a um usuário conhecido",
+		"find files writable by either their owner or their group",
+	} {
+		in := m.Parse(text, w)
+		for _, k := range []string{"owner", "group", "not_owner", "not_group"} {
+			if v := in.Slots[k]; v == "conhecido" || v == "their" || v == "either" {
+				t.Errorf("%q: %s=%q é qualificador, não nome (%v)", text, k, v, in.Slots)
+			}
+		}
+	}
 }

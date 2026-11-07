@@ -3278,20 +3278,24 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			}
 			proofs = append(proofs, fmt.Sprintf("%d item(ns) em modo %04o", len(items), wm))
 		case "file_perm", "file_noperm":
-			// arg=path, arg2=r|w|x — prova bit de permissão presente/ausente
-			// em qualquer classe (executável = algum x ligado).
+			// arg=path, arg2=r|w|x (qualquer classe) ou forma simbólica
+			// augo[+-=]rwx — "g-w" prova o bit da CLASSE pedida, não um
+			// bit solto de outra (g-w em 777 deixa u+w: file_noperm w
+			// cego falharia numa operação correta).
 			rel, _ := arg.(string)
-			bit, _ := cx.subst(c.Arg2).(string)
+			spec, _ := cx.subst(c.Arg2).(string)
+			cls, bit := "a", spec
+			if len(spec) >= 2 && strings.ContainsRune("augo", rune(spec[0])) {
+				cls = string(spec[0])
+				bit = strings.TrimLeft(spec[1:], "+-=")
+			}
 			var mask os.FileMode
-			switch bit {
-			case "r":
-				mask = 0o444
-			case "w":
-				mask = 0o222
-			case "x":
-				mask = 0o111
-			default:
-				return false, false, "file_perm com bit desconhecido: " + bit
+			permBit := map[string]os.FileMode{"r": 4, "w": 2, "x": 1}[bit]
+			if permBit == 0 {
+				return false, false, "file_perm com bit desconhecido: " + spec
+			}
+			for _, c := range map[string][]int{"u": {6}, "g": {3}, "o": {0}, "a": {6, 3, 0}}[cls] {
+				mask |= permBit << c
 			}
 			fAbs, fRel, fErr := brSafePath(cx.env.Root, rel)
 			if fErr != nil {
@@ -3302,14 +3306,18 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, "não consegui stat " + fRel
 			}
 			has := fi.Mode().Perm()&mask != 0
+			bitName := bit
+			if cls != "a" {
+				bitName = cls + bit
+			}
 			if c.Check == "file_perm" && !has {
-				return false, false, fmt.Sprintf("%s não tem bit %s", fRel, bit)
+				return false, false, fmt.Sprintf("%s não tem bit %s", fRel, bitName)
 			}
 			if c.Check == "file_noperm" && has {
-				return false, false, fmt.Sprintf("%s ainda tem bit %s", fRel, bit)
+				return false, false, fmt.Sprintf("%s ainda tem bit %s", fRel, bitName)
 			}
 			verbo := map[string]string{"file_perm": "tem", "file_noperm": "não tem"}[c.Check]
-			proofs = append(proofs, fmt.Sprintf("%s %s bit %s", fRel, verbo, bit))
+			proofs = append(proofs, fmt.Sprintf("%s %s bit %s", fRel, verbo, bitName))
 		case "list_perm":
 			// arg=lista, arg2=r|w|x — todo item produzido tem o bit.
 			mm, _ := arg.(map[string]any)

@@ -389,7 +389,7 @@
      "in": {
       "op": "chmod",
       "path": "$slot.file",
-      "mode": "a+x",
+      "mode": "$slot.symexec",
       "recursive": "$slot.recursive"
      },
      "out": "p"
@@ -399,7 +399,7 @@
     {
      "check": "file_perm",
      "arg": "$p",
-     "arg2": "x"
+     "arg2": "$slot.symexec"
     }
    ],
    "risk": "medium",
@@ -444,7 +444,7 @@
       "from": "$cand",
       "do": "perm_op",
       "op": "chmod",
-      "mode": "a+x",
+      "mode": "$slot.symexec",
       "max": "256"
      }
     }
@@ -501,7 +501,7 @@
       "from": "$cand",
       "do": "perm_op",
       "op": "chmod",
-      "mode": "a+x",
+      "mode": "$slot.symexec",
       "max": "256"
      }
     }
@@ -545,7 +545,7 @@
      "in": {
       "op": "chmod",
       "path": "$slot.file",
-      "mode": "a+w"
+      "mode": "$slot.symw"
      },
      "out": "p"
     }
@@ -554,7 +554,7 @@
     {
      "check": "file_perm",
      "arg": "$p",
-     "arg2": "w"
+     "arg2": "$slot.symw"
     }
    ],
    "risk": "medium",
@@ -589,7 +589,7 @@
      "in": {
       "op": "chmod",
       "path": "$slot.file",
-      "mode": "a-w"
+      "mode": "$slot.symnw"
      },
      "out": "p"
     }
@@ -598,7 +598,7 @@
     {
      "check": "file_noperm",
      "arg": "$p",
-     "arg2": "w"
+     "arg2": "$slot.symnw"
     }
    ],
    "risk": "medium",
