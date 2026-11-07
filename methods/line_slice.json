@@ -27,7 +27,13 @@
     }
    ],
    "risk": "low",
-   "cost_ms": 500
+   "cost_ms": 500,
+   "pre": [
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ]
   },
   {
    "name": "line_slice.no_python",
@@ -37,6 +43,10 @@
    "pre": [
     {
      "fact": "bin.python3",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
      "op": "unset"
     }
    ],

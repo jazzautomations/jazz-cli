@@ -25,7 +25,13 @@
     }
    ],
    "risk": "low",
-   "cost_ms": 800
+   "cost_ms": 800,
+   "pre": [
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ]
   },
   {
    "name": "text_count.no_python",
@@ -35,6 +41,10 @@
    "pre": [
     {
      "fact": "bin.python3",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
      "op": "unset"
     }
    ],

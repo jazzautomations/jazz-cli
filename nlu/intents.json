@@ -3944,6 +3944,12 @@
      ],
      "required": false,
      "from": "wc:what"
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
     }
    },
    "examples": [
@@ -4325,6 +4331,12 @@
      ],
      "required": false,
      "from": "find:mass"
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
     }
    },
    "examples": [
@@ -5137,6 +5149,12 @@
       "text"
      ],
      "required": true
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
     }
    },
    "examples": [
@@ -5260,6 +5278,12 @@
       "number"
      ],
      "from": "slice:tail"
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
     }
    },
    "examples": [
@@ -6263,6 +6287,12 @@
      ],
      "required": false,
      "from": "sort:delim"
+    },
+    "stdin": {
+     "kinds": [
+      "text"
+     ],
+     "from": "repl:stdin"
     }
    },
    "examples": [

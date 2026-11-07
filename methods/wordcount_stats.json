@@ -29,6 +29,10 @@
     {
      "fact": "slot.target",
      "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
     }
    ]
   },
@@ -48,6 +52,10 @@
     {
      "fact": "slot.ext",
      "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -102,6 +110,10 @@
     {
      "fact": "slot.dir",
      "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -156,6 +168,10 @@
     {
      "fact": "slot.dir",
      "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -198,6 +214,10 @@
    "pre": [
     {
      "fact": "bin.python3",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
      "op": "unset"
     }
    ],
