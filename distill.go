@@ -470,7 +470,8 @@ var dsCapChecks = smSet("file_exists", "file_gone", "list_gone", "list_present",
 	"list_exists",
 	"file_mode", "file_owner", "file_group", "list_mode",
 	"file_perm", "file_noperm", "list_perm", "list_owner", "list_group",
-	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero")
+	"file_contains", "file_lacks", "list_lacks", "script_ok", "script_exit_zero",
+	"each_clean")
 
 // dsCapStepOK valida um passo de capacidade de método aprendido: cap da
 // lista, chaves conhecidas, valores literais ou $out produzido antes

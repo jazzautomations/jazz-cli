@@ -581,7 +581,12 @@ func brForEach(cx *brCtx, in map[string]string) brStep {
 	if failed > 0 {
 		return brStep{obs: rvNoCmd(), why: fmt.Sprintf("%d feito(s), %d falha(s), %d pulado(s) — primeira: %s", done, failed, skipped, firstWhy)}
 	}
-	return brStep{obs: rvNoCmd(), ok: true}
+	return brStep{obs: rvNoCmd(), ok: true, val: map[string]any{
+		"data": map[string]any{
+			"done": done, "failed": failed, "skipped": skipped,
+			"total": len(items),
+		},
+	}}
 }
 
 // brSaveList escreve a lista produzida inteira num arquivo confinado —
@@ -3199,8 +3204,34 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, "não consegui o status da ferramenta"
 			}
 			proofs = append(proofs, fmt.Sprintf("status de %v obtido", arg))
+		case "each_clean":
+			// for_each emitiu contagens: todo item do conjunto produzido foi
+			// processado — zero falhas e ao menos um feito (o conjunto não
+			// foi varrido pela metade nem vazio de propósito)
+			m, _ := arg.(map[string]any)
+			data, _ := m["data"].(map[string]any)
+			num := func(k string) float64 {
+				// o val pode chegar int (in-process), float64 (JSON) ou
+				// string serializada — todos são contagens válidas
+				switch v := data[k].(type) {
+				case float64:
+					return v
+				case int:
+					return float64(v)
+				case string:
+					f, _ := strconv.ParseFloat(strings.TrimLeft(v, "0"), 64)
+					return f
+				}
+				return 0
+			}
+			done, failed, total := num("done"), num("failed"), num("total")
+			if failed > 0 || done == 0 {
+				return false, false, fmt.Sprintf("for_each: %.0f falha(s) de %.0f itens", failed, total)
+			}
+			proofs = append(proofs, fmt.Sprintf("for_each limpo: %.0f/%.0f processados", done, total))
 		case "script_ok":
-			if ok, _ := arg.(map[string]any)["ok"].(bool); !ok {
+			sm, _ := arg.(map[string]any)
+			if ok, _ := sm["ok"].(bool); !ok {
 				return false, false, "o script não confirmou sucesso"
 			}
 			proofs = append(proofs, "script confirmou sucesso")
@@ -3208,7 +3239,8 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			// a script that runs a command reports data.exit_code — parse
 			// scripts emit ok:true even when the command failed, so the
 			// exit code is what separates "ran clean" from "found errors"
-			data, _ := arg.(map[string]any)["data"].(map[string]any)
+			em, _ := arg.(map[string]any)
+			data, _ := em["data"].(map[string]any)
 			code, has := data["exit_code"].(float64)
 			if !has {
 				return false, true, "o script não informou o exit code do comando"

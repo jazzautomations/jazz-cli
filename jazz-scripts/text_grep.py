@@ -18,6 +18,8 @@ def source():
             fail("text must be a string")
         truncated = len(value.encode("utf-8")) > MAX_BYTES
         return value.encode("utf-8")[:MAX_BYTES].decode("utf-8", "replace")
+    if not arg("file") and arg("path"):
+        ARGS["file"] = arg("path")  # for_each injeta path por item
     if not arg("file"):
         fail("pass file or text")
     try:

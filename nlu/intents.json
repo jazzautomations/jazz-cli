@@ -302,6 +302,19 @@
       "scope",
       "opinion"
      ]
+    },
+    {
+     "all": [
+      "files",
+      "grepword"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "replace",
+      "install"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -310,7 +323,8 @@
       "symbol",
       "text"
      ],
-     "required": true
+     "required": true,
+     "from": "grep:pat"
     },
     "ext": {
      "kinds": [
@@ -2626,7 +2640,8 @@
       "recent",
       "duplicate",
       "sort",
-      "find"
+      "find",
+      "grepword"
      ]
     },
     {
@@ -2656,7 +2671,8 @@
       "recent",
       "duplicate",
       "sort",
-      "find"
+      "find",
+      "grepword"
      ]
     }
    ],
@@ -2862,7 +2878,8 @@
      ],
      "none": [
       "create",
-      "fix"
+      "fix",
+      "grepword"
      ]
     }
    ],
@@ -3872,7 +3889,8 @@
      "none": [
       "create",
       "delete",
-      "replace"
+      "replace",
+      "grepword"
      ]
     },
     {
@@ -3883,7 +3901,8 @@
      "none": [
       "create",
       "delete",
-      "replace"
+      "replace",
+      "grepword"
      ],
      "w": 5
     }
@@ -4170,20 +4189,67 @@
    "rules": [
     {
      "all": [
-      "v4_text_grep"
+      "grepword"
      ],
      "none": [
+      "files",
+      "replace",
+      "delete",
       "create",
-      "delete"
-     ]
+      "install"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
+      "lineselect",
+      "grepword"
+     ],
+     "none": [
+      "files",
+      "replace",
+      "delete",
+      "create",
+      "install"
+     ],
+     "w": 15
     }
    ],
    "slots": {
-    "target": {
+    "file": {
      "kinds": [
       "file"
      ],
-     "required": true
+     "required": false
+    },
+    "pattern": {
+     "kinds": [
+      "text",
+      "symbol"
+     ],
+     "required": true,
+     "from": "grep:pat"
+    },
+    "dir": {
+     "kinds": [
+      "dir"
+     ],
+     "required": false,
+     "from": "find:dir_cued"
+    },
+    "ext": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "find:ext"
+    },
+    "mass": {
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "from": "find:mass"
     }
    },
    "examples": [
@@ -4324,7 +4390,8 @@
       "extractkind",
       "diskuse",
       "run",
-      "cron"
+      "cron",
+      "grepword"
      ],
      "w": 10
     },
@@ -4361,7 +4428,8 @@
       "extractkind",
       "diskuse",
       "run",
-      "cron"
+      "cron",
+      "grepword"
      ],
      "w": 0
     },
@@ -4396,7 +4464,8 @@
       "extractkind",
       "diskuse",
       "run",
-      "cron"
+      "cron",
+      "grepword"
      ],
      "w": 15
     },
@@ -4436,7 +4505,8 @@
       "symnoun",
       "have",
       "nameattr",
-      "@quoted"
+      "@quoted",
+      "grepword"
      ],
      "w": 5
     },
@@ -4473,7 +4543,8 @@
       "content",
       "symnoun",
       "lineselect",
-      "@quoted"
+      "@quoted",
+      "grepword"
      ],
      "w": 5,
      "any": [

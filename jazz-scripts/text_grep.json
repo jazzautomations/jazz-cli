@@ -37,6 +37,10 @@
         "description": "Maximum matches, 1..1000",
         "minimum": 1,
         "maximum": 1000
+      },
+      "path": {
+        "type": "string",
+        "description": "Item path injected by for_each (alias for file)"
       }
     }
   },

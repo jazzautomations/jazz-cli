@@ -283,3 +283,58 @@ func TestUXJSONStatusEvents(t *testing.T) {
 		t.Errorf("buffered json emitted %q", quiet.String())
 	}
 }
+
+func TestEachCleanVerify(t *testing.T) {
+	newCtx := func() *brCtx {
+		return &brCtx{env: &brEnv{Root: t.TempDir()}, task: &TaskState{Slots: map[string]string{}}, vars: map[string]any{}}
+	}
+	chk := func() mhMethod { return mhMethod{Verify: []mhCheck{{Check: "each_clean", Arg: "$fe"}}} }
+
+	// in-process int counts
+	cx := newCtx()
+	cx.vars["fe"] = map[string]any{"data": map[string]any{"done": 2, "failed": 0, "skipped": 0, "total": 2}}
+	if ok, _, why := brVerify(cx, chk()); !ok {
+		t.Fatalf("int counts: %q", why)
+	}
+	if !strings.Contains(cx.out.String(), "conferi: for_each limpo: 2/2 processados") {
+		t.Errorf("proof: %s", cx.out.String())
+	}
+
+	// JSON-decoded float64 counts
+	cx = newCtx()
+	cx.vars["fe"] = map[string]any{"data": map[string]any{"done": 2.0, "failed": 0.0, "skipped": 0.0, "total": 2.0}}
+	if ok, _, _ := brVerify(cx, chk()); !ok {
+		t.Fatal("float64 counts rejected")
+	}
+
+	// serialized string counts (evidence round-trip)
+	cx = newCtx()
+	cx.vars["fe"] = map[string]any{"data": map[string]any{"done": "2", "failed": "0", "skipped": "0", "total": "2"}}
+	if ok, _, _ := brVerify(cx, chk()); !ok {
+		t.Fatal("string counts rejected")
+	}
+
+	// vacuous success must fail: zero items processed
+	cx = newCtx()
+	cx.vars["fe"] = map[string]any{"data": map[string]any{"done": 0, "failed": 0, "skipped": 0, "total": 0}}
+	if ok, _, _ := brVerify(cx, chk()); ok {
+		t.Fatal("empty for_each verified")
+	}
+
+	// partial failure must fail
+	cx = newCtx()
+	cx.vars["fe"] = map[string]any{"data": map[string]any{"done": 1, "failed": 1, "skipped": 0, "total": 2}}
+	if ok, _, _ := brVerify(cx, chk()); ok {
+		t.Fatal("for_each with failure verified")
+	}
+
+	// missing var / wrong shape must fail, not panic
+	cx = newCtx()
+	if ok, _, _ := brVerify(cx, chk()); ok {
+		t.Fatal("missing $fe verified")
+	}
+	cx.vars["fe"] = "lixo"
+	if ok, _, _ := brVerify(cx, chk()); ok {
+		t.Fatal("garbage $fe verified")
+	}
+}

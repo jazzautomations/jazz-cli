@@ -1624,6 +1624,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuDiskPath(toks, taken)
 			case strings.HasPrefix(sd.From, "arc:"):
 				v = nuArchiveArg(toks, sd.From[4:], taken)
+			case strings.HasPrefix(sd.From, "grep:"):
+				v = nuGrepArg(toks, sd.From[5:], taken)
 			}
 			// any From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into slots the helper deliberately left
@@ -2131,6 +2133,82 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 		return strings.Join(srcs, " ")
 	}
 	return ""
+}
+
+// nuGrepArg: o padrão buscado — texto entre aspas, ou o trecho depois de
+// "for/por/containing/contêm" até o cue de escopo ("in FILE", "no log").
+// Palavras-meta ("the string foo", "the word bar") são conceito content,
+// não parte do padrão.
+func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
+	if what != "pat" {
+		return ""
+	}
+	// aspas primeiro: o conteúdo citado é o padrão, ponto
+	for i, t := range toks {
+		if !taken[i] && t.Quoted && t.Raw != "" {
+			taken[i] = true
+			return t.Raw
+		}
+	}
+	patCues := map[string]bool{
+		"for": true, "por": true, "de": true,
+		// Fold tira acento — "contêm" chega como "contem"
+		"containing": true, "contains": true, "contain": true,
+		"contem": true, "contendo": true, "contenha": true, "matching": true,
+		"com": true, "with": true,
+	}
+	var parts []string
+	for i, t := range toks {
+		if !patCues[t.Fold] || taken[i] {
+			continue
+		}
+		taken[i] = true
+		for j := i + 1; j < len(toks) && len(parts) < 6; j++ {
+			u := &toks[j]
+			// cue de escopo/conjunção fecha o padrão — "error in app.log":
+			// o arquivo é do slot file, não do padrão
+			switch u.Fold {
+			case "in", "em", "no", "na", "nos", "nas", "under", "inside",
+				"across", "throughout", "dentro", "on", "onto",
+				"and", "or", "but", "e", "ou", "mas", "then",
+				"except", "without", "exceto", "menos":
+				return strings.Join(parts, " ")
+			}
+			if u.Filler || u.Slang || taken[j] || u.has("article") {
+				continue
+			}
+			if u.has("content") || nuIsNumber(u.Fold) && len(parts) == 0 {
+				continue // "the string foo" — meta, não padrão
+			}
+			parts = append(parts, u.Raw)
+			taken[j] = true
+		}
+		break
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, " ")
+	}
+	// sem cue ("find TODO", "procura parser"): sobras exceto palavra-meta
+	// (conteúdo `content` = string/word/texto, não padrão). "error" tem
+	// conceito `error` mas É alvo de busca — coletável.
+	for i, u := range toks {
+		if taken[i] || u.Filler || u.Slang || u.has("article") ||
+			u.has("content") || u.has("grepword") || u.has("find") ||
+			nuArchiveWord(u.Fold) || nuPureExt(u.Fold) ||
+			nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			continue
+		}
+		switch u.Fold {
+		case "in", "em", "no", "na", "nos", "nas", "under", "inside", "across", "on", "onto":
+			continue
+		}
+		parts = append(parts, u.Raw)
+		taken[i] = true
+		if len(parts) >= 4 {
+			break
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // nuArcTypeWord: palavras que descrevem o TIPO do que vai ser arquivado —
