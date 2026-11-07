@@ -1,171 +1,231 @@
 {
-  "methods": [
+ "methods": [
+  {
+   "name": "text_grep.file",
+   "intent": "text_grep",
+   "priority": 10,
+   "doc": "busca literal num arquivo — 'grep for error in app.log', 'linhas contendo erro no app.log'",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
     {
-      "name": "text_grep.file",
-      "intent": "text_grep",
-      "priority": 10,
-      "doc": "busca literal num arquivo — 'grep for error in app.log', 'linhas contendo erro no app.log'",
-      "needs": [
-        "bin.python3"
-      ],
-      "pre": [
-        {
-          "fact": "slot.file",
-          "op": "set"
-        },
-        {
-          "fact": "slot.pattern",
-          "op": "set"
-        }
-      ],
-      "steps": [
-        {
-          "cap": "script:text_grep",
-          "in": {
-            "file": "$slot.file",
-            "pattern": "$slot.pattern"
-          },
-          "out": "res"
-        }
-      ],
-      "verify": [
-        {
-          "check": "script_ok",
-          "arg": "$res"
-        }
-      ],
-      "risk": "low",
-      "cost_ms": 800
+     "fact": "slot.file",
+     "op": "set"
     },
     {
-      "name": "text_grep.each",
-      "intent": "text_grep",
-      "priority": 8,
-      "doc": "'linhas contendo X em todos os .log': file_find produz, for_each grep por arquivo (teto 32)",
-      "needs": [
-        "bin.python3"
-      ],
-      "pre": [
-        {
-          "fact": "slot.file",
-          "op": "unset"
-        },
-        {
-          "fact": "slot.pattern",
-          "op": "set"
-        },
-        {
-          "fact": "slot.ext",
-          "op": "set"
-        }
-      ],
-      "steps": [
-        {
-          "cap": "script:file_find",
-          "in": {
-            "path": "$slot.dir",
-            "name": "*.$slot.ext",
-            "type": "file",
-            "limit": "32"
-          },
-          "out": "cand"
-        },
-        {
-          "cap": "for_each",
-          "in": {
-            "from": "$cand",
-            "do": "script:text_grep",
-            "pattern": "$slot.pattern",
-            "max": "32"
-          },
-          "out": "fe"
-        }
-      ],
-      "verify": [
-        {
-          "check": "each_clean",
-          "arg": "$fe"
-        }
-      ],
-      "risk": "low",
-      "cost_ms": 3000
-    },
-    {
-      "name": "text_grep.dir",
-      "intent": "text_grep",
-      "priority": 6,
-      "doc": "'grep for X in dir': todos os arquivos do dir, for_each grep (teto 32)",
-      "needs": [
-        "bin.python3"
-      ],
-      "pre": [
-        {
-          "fact": "slot.file",
-          "op": "unset"
-        },
-        {
-          "fact": "slot.pattern",
-          "op": "set"
-        },
-        {
-          "fact": "slot.dir",
-          "op": "set"
-        }
-      ],
-      "steps": [
-        {
-          "cap": "script:file_find",
-          "in": {
-            "path": "$slot.dir",
-            "type": "file",
-            "limit": "32"
-          },
-          "out": "cand"
-        },
-        {
-          "cap": "for_each",
-          "in": {
-            "from": "$cand",
-            "do": "script:text_grep",
-            "pattern": "$slot.pattern",
-            "max": "32"
-          },
-          "out": "fe"
-        }
-      ],
-      "verify": [
-        {
-          "check": "each_clean",
-          "arg": "$fe"
-        }
-      ],
-      "risk": "low",
-      "cost_ms": 3000
-    },
-    {
-      "name": "text_grep.no_python",
-      "intent": "text_grep",
-      "priority": 1,
-      "doc": "busca literal",
-      "pre": [
-        {
-          "fact": "bin.python3",
-          "op": "unset"
-        }
-      ],
-      "steps": [
-        {
-          "cap": "report",
-          "in": {
-            "text": "isso usa o script text_grep, que precisa de python3 (não achei no PATH)",
-            "status": "blocked",
-            "category": "command_missing"
-          }
-        }
-      ],
-      "verify": [],
-      "risk": "low",
-      "cost_ms": 1
+     "fact": "slot.pattern",
+     "op": "set"
     }
-  ]
+   ],
+   "steps": [
+    {
+     "cap": "script:text_grep",
+     "in": {
+      "file": "$slot.file",
+      "pattern": "$slot.pattern"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 800
+  },
+  {
+   "name": "text_grep.each",
+   "intent": "text_grep",
+   "priority": 8,
+   "doc": "'linhas contendo X em todos os .log': file_find produz, for_each grep por arquivo (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pattern",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*.$slot.ext",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_grep",
+      "pattern": "$slot.pattern",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "text_grep.dir",
+   "intent": "text_grep",
+   "priority": 6,
+   "doc": "'grep for X in dir': todos os arquivos do dir, for_each grep (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pattern",
+     "op": "set"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_grep",
+      "pattern": "$slot.pattern",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "text_grep.all",
+   "intent": "text_grep",
+   "priority": 6,
+   "doc": "'search all files for X': producer acha tudo, for_each grepa cada um — all exige mass set (escopo explícito, nunca padrão)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pattern",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": ".",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_grep",
+      "pattern": "$slot.pattern",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 3000
+  },
+  {
+   "name": "text_grep.no_python",
+   "intent": "text_grep",
+   "priority": 1,
+   "doc": "busca literal",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script text_grep, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
 }

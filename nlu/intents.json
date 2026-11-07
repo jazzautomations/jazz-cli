@@ -4218,7 +4218,8 @@
       "replace",
       "delete",
       "create",
-      "install"
+      "install",
+      "disk"
      ],
      "w": 15
     },
@@ -4232,9 +4233,50 @@
       "replace",
       "delete",
       "create",
-      "install"
+      "install",
+      "disk"
      ],
      "w": 15
+    },
+    {
+     "all": [
+      "files",
+      "forquoted"
+     ],
+     "w": 15,
+     "none": [
+      "replace",
+      "delete",
+      "create",
+      "install",
+      "permattr",
+      "findattr",
+      "extract",
+      "move",
+      "sort",
+      "glob",
+      "disk"
+     ]
+    },
+    {
+     "all": [
+      "find",
+      "forquoted"
+     ],
+     "w": 12,
+     "none": [
+      "replace",
+      "delete",
+      "create",
+      "install",
+      "permattr",
+      "findattr",
+      "extract",
+      "move",
+      "sort",
+      "glob",
+      "disk"
+     ]
     }
    ],
    "slots": {
@@ -4600,6 +4642,53 @@
       "move"
      ],
      "w": 15
+    },
+    {
+     "all": [
+      "find",
+      "filenoun"
+     ],
+     "w": 4,
+     "none": [
+      "permattr",
+      "execperm",
+      "delete",
+      "create",
+      "mutate",
+      "extract",
+      "net",
+      "remote",
+      "user",
+      "opinion",
+      "blame",
+      "session",
+      "who",
+      "error",
+      "branch",
+      "git",
+      "version",
+      "diff",
+      "undo",
+      "commit",
+      "history",
+      "v4_date_normalize",
+      "extractkind",
+      "diskuse",
+      "run",
+      "cron",
+      "content",
+      "symnoun",
+      "have",
+      "nameattr",
+      "@quoted",
+      "grepword",
+      "v4_wordcount_stats",
+      "move",
+      "lineselect",
+      "context",
+      "between",
+      "count"
+     ]
     }
    ],
    "slots": {

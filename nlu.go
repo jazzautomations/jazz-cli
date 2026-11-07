@@ -418,6 +418,23 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, "glob")
 			continue
 		}
+		// aspas depois de "for"/"por" = alvo de CONTEÚDO (o padrão do
+		// grep), não nome de arquivo: "search files for \"foo\""
+		if t.Quoted && i > 0 {
+			for j := i - 1; j >= 0; j-- {
+				// "for"/"por" são fillers também — checar ANTES do skip.
+				// meta-palavras de conteúdo são transparentes: "for the
+				// string \"x\"" marca do mesmo jeito que "for \"x\""
+				if out[j].Fold == "for" || out[j].Fold == "por" {
+					t.Concs = append(t.Concs, "forquoted")
+					break
+				}
+				if out[j].Filler || out[j].has("content") || out[j].has("grepword") {
+					continue
+				}
+				break // a primeira palavra útil não era cue
+			}
+		}
 		if t.Quoted || len(t.Concs) > 0 {
 			continue
 		}
@@ -2202,7 +2219,15 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 	if what != "pat" {
 		return ""
 	}
-	// aspas primeiro: o conteúdo citado é o padrão, ponto
+	// aspas primeiro: o conteúdo citado é o padrão — com duas citações,
+	// a marcada forquoted (depois de "for") é o padrão, a outra é alvo:
+	// 'search files "f.c" for the string "can'"' → pattern=can, file=f.c
+	for i, t := range toks {
+		if !taken[i] && t.Quoted && t.Raw != "" && t.has("forquoted") {
+			taken[i] = true
+			return t.Raw
+		}
+	}
 	for i, t := range toks {
 		if !taken[i] && t.Quoted && t.Raw != "" {
 			taken[i] = true
@@ -3435,6 +3460,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		probe := map[int]bool{}
 		for _, w := range []string{"ext", "newer", "older", "empty", "min_size", "max_size", "name_re", "exclude", "min_depth", "max_depth"} {
 			if nuFindArg(toks, w, probe) != "" {
+				return "1"
+			}
+		}
+		// filtro de CONTEÚDO também é escopo: "search files for X" — o
+		// conjunto é "todos os arquivos", o padrão seleciona dentro deles
+		for _, t := range toks {
+			if t.has("grepword") || t.has("forquoted") {
 				return "1"
 			}
 		}
