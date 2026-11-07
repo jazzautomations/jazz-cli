@@ -3806,6 +3806,39 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				return "true"
 			}
 		}
+		// "files that do not belong to a known user" / "não pertencem a
+		// um usuário conhecido" — dono sem conta = arquivo órfão. O
+		// qualificador pode vir antes ("a known user") ou depois
+		// ("usuário conhecido") da cue.
+		known := map[string]bool{
+			"known": true, "valid": true, "conhecido": true, "conhecida": true,
+			"conhecidos": true, "conhecidas": true, "valido": true, "valida": true,
+			"validos": true, "validas": true,
+		}
+		for i, t := range toks {
+			if !known[t.Fold] {
+				continue
+			}
+			for j := i - 2; j <= i+2 && j < len(toks); j++ {
+				if j < 0 || j == i {
+					continue
+				}
+				// a negação pode ancorar na cue ("não pertencem a um
+				// usuário conhecido") ou no qualificador ("not a known user")
+				neg := nuNegationNear(toks, i) || nuNegationNear(toks, j)
+				if !neg {
+					continue
+				}
+				if want["no_owner"] && nuOwnerCues[toks[j].Fold] {
+					taken[i], taken[j] = true, true
+					return "true"
+				}
+				if want["no_group"] && nuGroupCues[toks[j].Fold] {
+					taken[i], taken[j] = true, true
+					return "true"
+				}
+			}
+		}
 		return ""
 	case "mode":
 		for i, t := range toks {

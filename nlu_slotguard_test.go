@@ -87,6 +87,20 @@ func TestNLUSlotGuards(t *testing.T) {
 	if in.Slots["group"] == "data.csv" {
 		t.Errorf("group roubou o arquivo: %v", in.Slots)
 	}
+	// "known user" negado = órfão (dono sem conta); sem negação, não dispara
+	for _, text := range []string{
+		"display files which do not belong to a known user",
+		"arquivos que não pertencem a um usuário conhecido",
+	} {
+		in := m.Parse(text, w)
+		if in.Slots["orphan"] != "true" {
+			t.Errorf("%q: orphan=%q want true (%v)", text, in.Slots["orphan"], in.Slots)
+		}
+	}
+	in = m.Parse("arquivos do usuário conhecido", w)
+	if in.Slots["orphan"] != "" {
+		t.Errorf("orphan sem negação: %v", in.Slots)
+	}
 	// "usuário conhecido"/"their owner" falam do dono genérico — não são nomes
 	for _, text := range []string{
 		"arquivos que não pertencem a um usuário conhecido",
