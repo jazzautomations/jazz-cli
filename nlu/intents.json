@@ -674,9 +674,39 @@
       "outtgt",
       "listverb"
      ]
+    },
+    {
+     "all": [
+      "mkverb",
+      "permattr"
+     ],
+     "none": [
+      "branch",
+      "commit",
+      "container",
+      "recent",
+      "download",
+      "recover",
+      "ifaces",
+      "net",
+      "envvars",
+      "scaffold",
+      "outtgt",
+      "listverb",
+      "delete",
+      "extract"
+     ],
+     "w": 20
     }
    ],
    "slots": {
+    "mode": {
+     "from": "perm:mode",
+     "kinds": [
+      "number"
+     ],
+     "required": false
+    },
     "target": {
      "kinds": [
       "file",
@@ -5007,6 +5037,24 @@
     "apaga os arquivos sem permissão"
    ],
    "rules": [
+    {
+     "all": [
+      "permattr",
+      "setperm"
+     ],
+     "none": [
+      "find",
+      "listverb",
+      "delete",
+      "install",
+      "status",
+      "blame",
+      "download",
+      "branch",
+      "extract"
+     ],
+     "w": 10
+    },
     {
      "all": [
       "permattr",

@@ -6304,9 +6304,51 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				if cueish {
 					break
 				}
+				// verbo/meta não é alvo: "and change their permission to
+				// 600" — 'change'/'permission' não são arquivo
+				if u.has("mutate") || u.has("replace") || u.has("permattr") ||
+					u.has("create") || u.has("delete") || u.has("move") ||
+					u.has("copy") || u.has("find") || u.has("open") {
+					break
+				}
 				taken[i], taken[j] = true, true
 				return u.Fold
 			}
+		}
+		// "owner of X to Y" / "permissions of myfile": o alvo do chown/
+		// chmod mora depois do 'of' que segue o substantivo de permissão
+		for i, t := range toks {
+			switch t.Fold {
+			case "owner", "dono", "group", "grupo", "permission",
+				"permissions", "permissao", "permissões", "mode":
+			default:
+				continue
+			}
+			j := i + 1
+			if j >= len(toks) {
+				continue
+			}
+			switch toks[j].Fold {
+			case "of", "de", "do", "da", "on":
+			default:
+				continue
+			}
+			for k := j + 1; k < len(toks) && k <= j+3; k++ {
+				u := &toks[k]
+				if u.Filler || u.Slang {
+					continue
+				}
+				f := u.Fold
+				if f == "" || taken[k] || nuIsNumber(f) || nuOctalShaped(f) ||
+					nuFileCueWords[f] || nuGroupCues[f] || nuStopBare[f] ||
+					u.has("mutate") || u.has("permattr") || u.has("intocue") ||
+					strings.ContainsAny(f, "=*|") {
+					continue
+				}
+				taken[i], taken[j], taken[k] = true, true, true
+				return u.Fold
+			}
+			break
 		}
 		// sem cue: file-shaped solto ("chmod +x script.sh", "on app.log")
 		for i, t := range toks {
@@ -6510,19 +6552,24 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			if len(f) < 2 || len(f) > 24 {
 				continue
 			}
-			op := strings.IndexAny(f, "+-=")
-			if op < 0 || (op == 0 && f[0] == '=') {
-				continue
-			}
-			who, ok := f[:op], true // op==0: forma nua "+x"/"-w" ⇒ who implícito "a"
-			for _, c := range who {
-				if c != 'u' && c != 'g' && c != 'o' && c != 'a' {
+			ok := true
+			// cada grupo separado por vírgula é uma cláusula própria:
+			// "ug=rwx,o=" ⇒ ["ug=rwx","o="]
+			for _, piece := range strings.Split(f, ",") {
+				op := strings.IndexAny(piece, "+-=")
+				if op < 0 || (op == 0 && piece[0] == '=') {
 					ok = false
+					break
 				}
-			}
-			for _, c := range f[op+1:] {
-				if c != 'r' && c != 'w' && c != 'x' && c != 'X' && c != 's' && c != 't' && c != ',' {
-					ok = false
+				for _, c := range piece[:op] {
+					if c != 'u' && c != 'g' && c != 'o' && c != 'a' {
+						ok = false
+					}
+				}
+				for _, c := range piece[op+1:] {
+					if c != 'r' && c != 'w' && c != 'x' && c != 'X' && c != 's' && c != 't' {
+						ok = false
+					}
 				}
 			}
 			if ok {
@@ -6548,6 +6595,47 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 					taken[i] = true
 					return nuPermClass(toks, i) + "+x"
 				}
+			}
+		}
+		// "add execute to the permissions" — 'execute' nu só vale com
+		// verbo de concessão por perto (senão "execute the script"
+		// viraria chmod indevido)
+		for i, t := range toks {
+			if t.Fold != "execute" && t.Fold != "execucao" && t.Fold != "execução" {
+				continue
+			}
+			if nuNegationNear(toks, i) {
+				continue
+			}
+			grant := false
+			for j := i - 3; j <= i+3; j++ {
+				if j < 0 || j >= len(toks) {
+					continue
+				}
+				switch toks[j].Fold {
+				case "add", "give", "grant", "permit", "conceder",
+					"dar", "acrescentar", "adicionar", "allow", "deixar":
+					grant = true
+				}
+			}
+			if grant {
+				taken[i] = true
+				// consome o verbo de concessão e o substantivo de
+				// permissão ao redor — "add execute to the permissions"
+				// deixava phrasing solto e derrubava a confiança
+				for j := i - 3; j <= i+3; j++ {
+					if j < 0 || j >= len(toks) || j == i {
+						continue
+					}
+					switch toks[j].Fold {
+					case "add", "give", "grant", "permit", "conceder",
+						"dar", "acrescentar", "adicionar", "allow",
+						"deixar", "permission", "permissions",
+						"permissao", "permissões", "permissoes":
+						taken[j] = true
+					}
+				}
+				return nuPermClass(toks, i) + "+x"
 			}
 		}
 		return ""
@@ -6682,8 +6770,11 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				switch u {
 				case "by", "for", "para", "of", "de", "to", "por",
 					"both", "their", "its", "his", "her", "and", "e",
-					"the", "a", "an", "seu", "sua", "seus":
-					continue // "by both their owner and their group"
+					"the", "a", "an", "seu", "sua", "seus",
+					"permission", "permissions", "permissao", "permissões",
+					"permissoes", "mode", "have", "has", "com":
+					continue // "by both their owner and their group" /
+					// "not have read permission to all"
 				}
 				c, ok := nuPermClassWords[u]
 				if !ok {
@@ -6795,7 +6886,9 @@ func nuMkArg(toks []nuTok, what string, taken map[int]bool) string {
 			// multiword mas como nome é legítimo), "backup-dir" valem.
 			isName := !u.Filler && u.Fold != "" && !nuToolWords[u.Fold] &&
 				!u.has("permbit") && !u.has("files") && !u.has("filenoun") &&
-				!u.has("dirnoun") && !u.has("dir") && !u.has("extcue")
+				!u.has("dirnoun") && !u.has("dir") && !u.has("extcue") &&
+				!u.has("permattr") && !u.has("findattr") &&
+				!nuIsNumber(u.Fold) && !nuOctalShaped(u.Fold)
 			if !isName {
 				break
 			}

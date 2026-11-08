@@ -49,6 +49,67 @@
    "cost_ms": 50
   },
   {
+   "name": "create.dir_mode",
+   "intent": "create",
+   "priority": 13,
+   "doc": "'create directory X with permissions 777': mkdir + chmod no mesmo alvo — sucesso só se a pasta existe E os bits batem",
+   "pre": [
+    {
+     "fact": "slot.scope",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.targets",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.type",
+     "op": "eq",
+     "val": "dir"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "mkdir",
+      "path": "$slot.target"
+     },
+     "out": "f"
+    },
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.target",
+      "mode": "$slot.mode"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.target"
+    },
+    {
+     "check": "file_mode",
+     "arg": "$slot.target",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 60
+  },
+  {
    "name": "create.dir",
    "intent": "create",
    "priority": 12,

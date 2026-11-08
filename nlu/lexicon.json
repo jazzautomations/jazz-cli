@@ -2687,9 +2687,33 @@
    "using",
    "usando",
    "owner"
+  ],
+  "mkverb": [
+   "cria",
+   "criar",
+   "crie",
+   "create",
+   "creates",
+   "creating",
+   "make",
+   "mkdir",
+   "gera",
+   "gerar",
+   "gere",
+   "novo",
+   "nova",
+   "new"
+  ],
+  "setperm": [
+   "set",
+   "sets",
+   "setting",
+   "defina",
+   "definir"
   ]
  },
  "fillers": [
+  "-print",
   "a",
   "about",
   "above",
@@ -2776,6 +2800,10 @@
   "dar",
   "das",
   "de",
+  "definida",
+  "definidas",
+  "definido",
+  "definidos",
   "dela",
   "dele",
   "depois",
@@ -2977,6 +3005,8 @@
   "preciso",
   "present",
   "previously",
+  "print0",
+  "printf",
   "pro",
   "prompt",
   "prompts",
@@ -3021,6 +3051,10 @@
   "sends",
   "sent",
   "separately",
+  "setada",
+  "setadas",
+  "setado",
+  "setados",
   "seu",
   "seus",
   "several",
@@ -3100,11 +3134,8 @@
   "within",
   "without",
   "working",
-  "you",
-  "print0",
-  "printf",
   "xargs",
-  "-print"
+  "you"
  ],
  "slang": {
   "abre um terminal em": "connect",

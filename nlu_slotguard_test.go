@@ -1187,3 +1187,34 @@ func TestNLUDateShowGuards(t *testing.T) {
 		}
 	}
 }
+
+// perm cluster: verbo/meta não vira alvo, modo simbólico multi-grupo,
+// chown-of, classe depois de 'permission', e mkdir+chmod composto.
+func TestNLUPermClusterGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// verbos de mutação e substantivos de permissão nunca são arquivo
+	if in := m.Parse("Find all files under current directory and change their permission to 600", w); in.Slots["file"] == "change" || in.Slots["mode"] != "600" {
+		t.Errorf("change-permission mass: %v", in.Slots)
+	}
+	if in := m.Parse("Change the owner of tmp_file_upload to nobody", w); in.Slots["file"] != "tmp_file_upload" || in.Slots["owner"] != "nobody" {
+		t.Errorf("chown-of: %v", in.Slots)
+	}
+	if in := m.Parse("Set the permissions of all directories inside the current directory tree to ug=rwx,o=", w); in.Name != "perm_set" || in.Slots["symbolic"] != "ug=rwx,o=" {
+		t.Errorf("symbolic multi-group: %s %v", in.Name, in.Slots)
+	}
+	if in := m.Parse("Set permissions to ug=rw,o= for files inside the tree", w); in.Name != "perm_set" || in.Slots["symbolic"] == "" {
+		t.Errorf("symbolic set: %s %v", in.Name, in.Slots)
+	}
+	// "not have read permission to all" = bit 4 ausente nas 3 classes
+	if in := m.Parse("find all files that do not have read permission to all", w); in.Slots["not_bits"] != "444" {
+		t.Errorf("not-read-all: %v", in.Slots)
+	}
+	// "create directory X with permissions N" = mkdir+chmod, não archive
+	if in := m.Parse("create directory dirname with permissions 777", w); in.Name != "create" || in.Slots["target"] != "dirname" || in.Slots["mode"] != "777" {
+		t.Errorf("mkdir+mode: %s %v", in.Name, in.Slots)
+	}
+	// enumeração de dirs não engole 'permissions' nem o octal
+	if in := m.Parse("create directory dirname with permissions 777", w); in.Slots["targets"] != "" {
+		t.Errorf("targets engoliu perm/mode: %v", in.Slots)
+	}
+}
