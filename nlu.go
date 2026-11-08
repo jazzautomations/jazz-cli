@@ -542,6 +542,33 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Tags = kept
 		}
 	}
+	// "files that contain spaces in their names" — contain+name-word é
+	// predicado de NOME, não grep de conteúdo: o grepword do "contain"
+	// demora pra "have" e deixa de vetar list_files/file_find.
+	nameDomain := false
+	for _, t := range out {
+		switch t.Fold {
+		case "name", "names", "nome", "nomes", "filename", "filenames",
+			"pathname", "pathnames", "basename", "basenames":
+			nameDomain = true
+		}
+	}
+	if nameDomain {
+		for i := range out {
+			t := &out[i]
+			if !t.has("grepword") || !t.has("have") {
+				continue // verbos de busca (grep/search) seguem valendo
+			}
+			kept := t.Concs[:0]
+			for _, c := range t.Concs {
+				if c == "grepword" {
+					continue
+				}
+				kept = append(kept, c)
+			}
+			t.Concs = kept
+		}
+	}
 	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
 	// colateral do comando, não o critério da busca: a frase inteira é
 	// filler (o verbo vira nome falso, error/message vetam file_find).

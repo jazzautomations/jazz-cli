@@ -318,7 +318,9 @@
       "replace",
       "install",
       "glob",
-      "filequoted"
+      "filequoted",
+      "nameattr",
+      "nametgt"
      ],
      "w": 10
     }
@@ -5920,8 +5922,13 @@
       "download",
       "install",
       "remote",
-      "connect"
-     ]
+      "connect",
+      "list",
+      "listverb",
+      "count",
+      "v4_wordcount_stats"
+     ],
+     "w": 12
     },
     {
      "all": [
