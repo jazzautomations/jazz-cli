@@ -268,3 +268,35 @@ func TestNLUArchiveMassGuards(t *testing.T) {
 		}
 	}
 }
+
+// nome-quoted sem ponto + suppress-phrase + find→delete: "locate file 'x'"
+// e "filename is 'x'" são name de verdade; "suppress error messages" é
+// frase-efeito (filler), não critério; "find files and delete" é mutação.
+func TestNLUFindNameGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Locate file "file1"`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "file1" }},
+		{`find regular files whose filename is "your_pattern", suppressing all error messages.`, "file_find",
+			func(s map[string]string) bool {
+				return s["name"] == "your_pattern" && s["name_re"] == "" && s["dir"] == ""
+			}},
+		{`find all the text files in current folder and force delete them`, "delete_file",
+			func(s map[string]string) bool { return s["ext"] == "txt" && s["mass"] != "" }},
+		{`Find all files/directories named 'apt' under current directory`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "apt" }},
+		{`find files matching pattern 'file??'`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "file??" && s["name_re"] == "" }},
+		{`find files whose names match regex '^ab.*z$'`, "file_find",
+			func(s map[string]string) bool { return s["name_re"] == "^ab.*z$" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}

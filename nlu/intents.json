@@ -301,7 +301,10 @@
       "findattr",
       "scope",
       "opinion",
-      "filequoted"
+      "filequoted",
+      "delete",
+      "mutate",
+      "run"
      ]
     },
     {

@@ -426,6 +426,26 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, "filequoted")
 			continue
 		}
+		// aspa precedida de cue de nome de arquivo é o NOME mesmo sem
+		// ponto: "locate file 'file1'", "files whose filename is 'x'",
+		// "a file named 'apt'" — o cue marca o slot, não a forma.
+		if t.Quoted && i > 0 {
+			for j := i - 1; j >= 0 && j >= i-3; j-- {
+				u := &out[j]
+				if u.Filler {
+					continue
+				}
+				switch u.Fold {
+				case "file", "filename", "filenames", "named", "called",
+					"name", "names", "arquivo", "nome", "nomes", "is", "are":
+					t.Concs = append(t.Concs, "filequoted")
+				}
+				j = 0 // só a primeira palavra útil manda
+			}
+			if t.has("filequoted") {
+				continue
+			}
+		}
 		// aspa seguida de "in their name"/"path names" é alvo de NOME,
 		// não conteúdo: "files with the word 'fstab' in their name" é
 		// file_find name=fstab. O lookahead vence o forquoted lookback.
@@ -520,6 +540,37 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				}
 			}
 			t.Tags = kept
+		}
+	}
+	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
+	// colateral do comando, não o critério da busca: a frase inteira é
+	// filler (o verbo vira nome falso, error/message vetam file_find).
+	for i := range out {
+		t := &out[i]
+		switch t.Fold {
+		case "suppress", "suppresses", "suppressing", "silence",
+			"silencing", "hide", "hiding",
+			"supress", "supressing", "discard", "discarding":
+		default:
+			continue
+		}
+		t.Filler = true
+		for j := i + 1; j < len(out) && j <= i+3; j++ {
+			u := &out[j]
+			kept := u.Concs[:0]
+			for _, c := range u.Concs {
+				if c == "error" || c == "message" || c == "logs" {
+					continue
+				}
+				kept = append(kept, c)
+			}
+			u.Concs = kept
+			switch u.Fold {
+			case "error", "errors", "erro", "erros", "stderr",
+				"message", "messages", "mensagem", "mensagens",
+				"output", "saida", "saída":
+				u.Filler = true
+			}
 		}
 	}
 	return out
@@ -3329,11 +3380,25 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "name_re":
 		// "names match regex '^x$'" / "nome casa regex 'x'" — only runs when a
-		// regex/match cue is present, otherwise plain 'name' owns the pattern
-		cue := false
-		for _, t := range toks {
+		// regex/match cue is present, otherwise plain 'name' owns the pattern.
+		// "regular" só é cue com "expression" junto — "regular files" é
+		// -type f, não regexp.
+		cue, strongRe := false, false
+		for i, t := range toks {
 			switch t.Fold {
-			case "regex", "regexp", "regular", "expressao", "expressão", "match", "matching", "matches", "casa", "case", "pattern", "padrão", "padrao":
+			case "regex", "regexp":
+				cue, strongRe = true, true
+			case "regular":
+				for j := i + 1; j < len(toks) && j <= i+2; j++ {
+					switch toks[j].Fold {
+					case "expression", "expressions", "expressao", "expressão":
+						cue, strongRe = true, true
+					}
+					if !toks[j].Filler {
+						break
+					}
+				}
+			case "expressao", "expressão", "match", "matching", "matches", "casa", "case", "pattern", "padrão", "padrao":
 				cue = true
 			}
 		}
@@ -3346,15 +3411,20 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		globShaped := func(s string) bool {
 			return strings.ContainsAny(s, "*?[") && !strings.ContainsAny(s, "^$|+()\\")
 		}
+		reMeta := func(s string) bool {
+			return strings.ContainsAny(s, "^$|+()\\")
+		}
 		for i, t := range toks {
-			if t.Quoted && t.Fold != "" && !globShaped(t.Fold) {
+			// quoted literal sem meta-regex é NOME ('your_pattern'),
+			// não expressão — só "regex 'abc'" explícito força name_re
+			if t.Quoted && t.Fold != "" && !globShaped(t.Fold) && (strongRe || reMeta(t.Fold)) {
 				taken[i] = true
 				return t.Fold
 			}
 		}
 		for i := len(toks) - 1; i >= 0; i-- {
 			t := &toks[i]
-			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) && !globShaped(t.Fold) {
+			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) && !globShaped(t.Fold) && reMeta(t.Fold) {
 				taken[i] = true
 				return t.Fold
 			}
