@@ -1010,6 +1010,12 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 				t.must(tkUnverified, ignored)
 				return
 			}
+			if len(cx.in.Dropped) > 0 {
+				why := fmt.Sprintf("operando citado %q nunca foi consumido por %s", cx.in.Dropped[0], m.Name)
+				cx.say("não verificado: %s", why)
+				t.must(tkUnverified, why)
+				return
+			}
 			t.must(tkSucceeded, "verificado: "+brChecks(m))
 		case unavailable:
 			cx.cat = rvVerifierUnavailable

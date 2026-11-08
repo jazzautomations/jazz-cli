@@ -129,3 +129,23 @@ func TestCreateNoNameStaysMissing(t *testing.T) {
 		}
 	}
 }
+
+// T8: aspa-operando que nenhum slot consumiu — "pattern 'x'" num
+// intent sem slot de padrão — derruba pra unverified, nunca verde
+// com metade do pedido. Controles: aspa consumida não marca nada.
+func TestDroppedOperandFlagged(t *testing.T) {
+	in := nuGet().Parse(`Gets IP address of first network interface which name matches pattern "venet0:0|eth0"`, &nuWorld{})
+	if len(in.Dropped) == 0 || in.Dropped[0] != "venet0:0|eth0" {
+		t.Fatalf("dropped=%v, quero [venet0:0|eth0]", in.Dropped)
+	}
+	for _, s := range []string{
+		`find files whose names contain "log"`,
+		`create file "nota.txt"`,
+		`make a new directory "quoted-name"`,
+	} {
+		in := nuGet().Parse(s, &nuWorld{})
+		if len(in.Dropped) != 0 {
+			t.Fatalf("%q -> dropped=%v, quero vazio (aspa foi consumida)", s, in.Dropped)
+		}
+	}
+}

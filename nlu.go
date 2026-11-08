@@ -57,6 +57,7 @@ type Intent struct {
 	Missing    []string          `json:"missing,omitempty"`   // required slots nobody filled
 	Hint       string            `json:"hint,omitempty"`      // test | symbol | file (cue words)
 	Alt        []string          `json:"alt,omitempty"`       // runner-up intents
+	Dropped    []string          `json:"dropped,omitempty"`   // quoted/role operands no slot consumed — "pattern 'x'" num intent sem pattern
 	Git        bool              `json:"git,omitempty"`       // the request names git/repo explicitly
 	TypoOnly   bool              `json:"typo_only,omitempty"` // the intent stands only on a typo-repaired word (conf capped ≤ 0.5)
 }
@@ -1437,7 +1438,9 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				if best >= 0 {
 					used = matches[best].used
 				}
-				in.Slots, in.Missing, in.Hint, _, _ = m.fill(&m.data.Intents[di], toks, hits, used, w)
+				var alTaken map[int]bool
+				in.Slots, in.Missing, in.Hint, _, alTaken = m.fill(&m.data.Intents[di], toks, hits, used, w)
+				in.Dropped = nuDroppedOps(toks, alTaken, in.Slots)
 			}
 			return in
 		}
@@ -1611,6 +1614,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 		break
 	}
+	in.Dropped = nuDroppedOps(toks, taken, in.Slots)
 	// "with group owner X" / "belonging to root": X é predicado de ORIGEM;
 	// como alvo do chgrp/chown seria no-op (mesmo grupo/dono) e esconderia
 	// que o destino real ficou vazio.
@@ -6725,4 +6729,31 @@ func nuMkScopeDir(toks []nuTok, hits []nuHit, taken map[int]bool) string {
 		return ""
 	}
 	return ""
+}
+
+// nuDroppedOps — operando citado ou com papel semântico (nametgt/
+// forquoted/grepword/outtgt) que NENHUM slot consumiu: "matches
+// pattern 'venet0:0|eth0'" num intent sem slot de padrão. A aspa
+// sobrevive ao fill solta (taken=false) e seu Raw não aparece em
+// valor algum — ignorá-la muda o pedido. O cérebro lê essa lista e
+// derruba pra unverified em vez de selar sucesso incompleto (T8).
+func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string) []string {
+	var out []string
+	for i := range toks {
+		t := &toks[i]
+		if !t.Quoted || taken[i] || t.Raw == "" {
+			continue // só aspa é operando; cue não-citado ("containing") é palavra-ponte
+		}
+		consumed := false
+		for _, sv := range slots {
+			if sv != "" && strings.Contains(sv, t.Raw) {
+				consumed = true
+				break
+			}
+		}
+		if !consumed {
+			out = append(out, t.Raw)
+		}
+	}
+	return out
 }
