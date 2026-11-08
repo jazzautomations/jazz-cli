@@ -1142,10 +1142,22 @@
             "number"
           ]
         },
+        "newer_file": {
+          "from": "find:newer_file",
+          "kinds": [
+            "file"
+          ]
+        },
         "older": {
           "from": "find:older",
           "kinds": [
             "number"
+          ]
+        },
+        "older_file": {
+          "from": "find:older_file",
+          "kinds": [
+            "file"
           ]
         },
         "target": {
@@ -2716,6 +2728,18 @@
             "text"
           ],
           "required": false
+        },
+        "newer_file": {
+          "from": "find:newer_file",
+          "kinds": [
+            "file"
+          ]
+        },
+        "older_file": {
+          "from": "find:older_file",
+          "kinds": [
+            "file"
+          ]
         },
         "out": {
           "from": "find:out",
@@ -4991,10 +5015,22 @@
             "number"
           ]
         },
+        "newer_file": {
+          "from": "find:newer_file",
+          "kinds": [
+            "file"
+          ]
+        },
         "older": {
           "from": "find:older",
           "kinds": [
             "number"
+          ]
+        },
+        "older_file": {
+          "from": "find:older_file",
+          "kinds": [
+            "file"
           ]
         },
         "out": {

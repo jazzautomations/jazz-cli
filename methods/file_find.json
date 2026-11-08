@@ -34,6 +34,8 @@
       "min_depth": "$slot.min_depth",
       "max_depth": "$slot.max_depth",
       "time_field": "$slot.tfield",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
       "max_lines": "$slot.max_lines"
@@ -86,6 +88,8 @@
       "min_depth": "$slot.min_depth",
       "max_depth": "$slot.max_depth",
       "time_field": "$slot.tfield",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
       "max_lines": "$slot.max_lines"

@@ -74,6 +74,8 @@ not_exec = as_bool(ARGS.get("not_executable"), False)
 not_ww = as_bool(ARGS.get("not_world_writable"), False)
 not_mode = as_bool(ARGS.get("not_mode"), False)
 name = arg("name")
+if name is None:
+    name = arg("namepat")  # glob de nome — mesma dieta fnmatch do 'name'
 name_l = str(name).lower() if name is not None else None
 ext = arg("ext")
 exts = []

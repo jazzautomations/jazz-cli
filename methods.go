@@ -1610,7 +1610,28 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 					return brStep{obs: obs, why: "extract " + rel + ": " + err.Error()}
 				}
 				defer gz.Close()
-				rd = gz
+				// .gz de arquivo único vs .tar.gz: os primeiros bytes
+				// descomprimidos dizem — ustar@257 é tar, senão é gunzip
+				peek := make([]byte, 300)
+				pn, _ := io.ReadFull(gz, peek)
+				peek = peek[:pn]
+				if !(pn >= 262 && string(peek[257:262]) == "ustar") {
+					base := filepath.Base(rel)
+					out := strings.TrimSuffix(base, ".gz")
+					if out == base { // não-termina-.gz: gunzip honesto usa nome+“.out”
+						out = base + ".out"
+					}
+					addWritten(out)
+					data, err := io.ReadAll(io.LimitReader(io.MultiReader(
+						bytes.NewReader(peek), gz), 64<<20))
+					if err != nil {
+						return brStep{obs: obs, why: "gunzip " + rel + ": " + err.Error()}
+					}
+					tgt := written[len(written)-1].(map[string]any)["abs"].(string)
+					os.WriteFile(tgt, data, 0o644)
+					break // sai do switch: arquivo único extraído
+				}
+				rd = io.MultiReader(bytes.NewReader(peek), gz)
 			}
 			tr := tar.NewReader(rd)
 			for {

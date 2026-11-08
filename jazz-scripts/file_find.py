@@ -90,6 +90,10 @@ tfield = str(arg("time_field", "mtime")).lower()
 if tfield not in TFIELD:
     fail("time_field must be mtime, atime or ctime")
 TSKEY = TFIELD[tfield]
+# arquivo-referência: "newer than report.txt" compara com o timestamp
+# do próprio arquivo, não com a janela em minutos
+newer_file = arg("newer_file")
+older_file = arg("older_file")
 empty_only = as_bool(ARGS.get("empty"), False)
 include_hidden = as_bool(ARGS.get("include_hidden"), False)
 sort_by = str(arg("sort", "name")).lower()
@@ -135,9 +139,27 @@ if os.path.islink(top_arg):
 top = bounded_path(arg("path", "."))
 if not os.path.exists(top):
     fail("path not found: %s" % rel(top))
+def ref_ts(p):
+    # o arquivo-referência vive dentro do scan root — fora disso é fuga
+    if os.path.isabs(p) or ".." in p.split(os.sep):
+        fail("reference file must be inside the search root")
+    try:
+        st = os.stat(os.path.join(top, p))
+    except OSError:
+        fail("reference file not found: %s" % p)
+    return getattr(st, TSKEY)
+# arquivo-referência usa comparação ESTRITA — o próprio arquivo não é
+# "mais novo que si mesmo" (semântica do find -newer)
+newer_strict = older_strict = False
+if newer_file is not None:
+    newer_ts = ref_ts(newer_file)
+    newer_strict = True
+if older_file is not None:
+    older_ts = ref_ts(older_file)
+    older_strict = True
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
         or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"
-        or line_filter):
+        or line_filter or newer_file or older_file):
     # "find all files under X" is a literal request — unbounded in intent,
     # still bounded by limit/MAX_SCAN like every other query
     name = "*"
@@ -187,9 +209,11 @@ def match(p, base, st):
         n = count_lines(p, max_lines)
         if n < 0 or not (min_lines <= n <= max_lines):
             return False
-    if newer_ts and getattr(st, TSKEY) < newer_ts:
+    if newer_ts and (getattr(st, TSKEY) <= newer_ts if newer_strict
+                     else getattr(st, TSKEY) < newer_ts):
         return False
-    if older_ts and getattr(st, TSKEY) > older_ts:
+    if older_ts and (getattr(st, TSKEY) >= older_ts if older_strict
+                     else getattr(st, TSKEY) > older_ts):
         return False
     if empty_only:
         if is_file:

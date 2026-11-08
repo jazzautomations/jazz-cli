@@ -110,6 +110,14 @@
    "max_lines": {
     "type": "integer",
     "description": "maximum line count (files only)"
+   },
+   "newer_file": {
+    "type": "string",
+    "description": "project-relative file whose timestamp is the lower bound"
+   },
+   "older_file": {
+    "type": "string",
+    "description": "project-relative file whose timestamp is the upper bound"
    }
   }
  },

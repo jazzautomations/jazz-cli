@@ -809,6 +809,18 @@ func TestNLUMassRenameGuards(t *testing.T) {
 			func(s map[string]string) bool {
 				return s["from"] == "blah1" && s["to"] == "blah1-new" && s["ext"] == ""
 			}},
+		{`find files newer than report.txt`, "file_find",
+			func(s map[string]string) bool {
+				return s["newer_file"] == "report.txt" && s["name"] == ""
+			}},
+		{`find files older than report.txt`, "file_find",
+			func(s map[string]string) bool {
+				return s["older_file"] == "report.txt" && s["name"] == ""
+			}},
+		{`find files newer than 3 days`, "file_find",
+			func(s map[string]string) bool {
+				return s["newer"] != "" && s["newer_file"] == ""
+			}},
 	} {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) || len(in.Missing) > 0 {

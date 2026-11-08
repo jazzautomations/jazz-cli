@@ -425,6 +425,36 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if nuPermBitToken(t.Fold) {
 			t.Concs = append(t.Concs, "permbit")
 		}
+		// "newer than report.txt": o alvo do than é REFERÊNCIA temporal,
+		// nunca predicado de nome — marca antes de qualquer sponge pegar.
+		// 'than' costuma virar stop-word: o alvo é o não-tempo logo após
+		// o cue newer/older (com ou sem o 'than' materializado).
+		switch t.Fold {
+		case "newer", "older", "novo", "nova", "velho", "velha",
+			"antigo", "antiga":
+			thanSeen := false
+			for j := i + 1; j < len(out) && j <= i+4; j++ {
+				u := &out[j]
+				switch u.Fold {
+				case "than", "que", "do":
+					thanSeen = true
+					continue
+				}
+				if u.Filler || u.Fold == "a" || u.Fold == "the" ||
+					u.Fold == "that" {
+					continue
+				}
+				if nuIsNumber(u.Fold) || timeWords[u.Fold] {
+					break // "3 days" é janela em minutos, não arquivo
+				}
+				// sem 'than' explícito, só marca se o alvo tem forma de
+				// arquivo — "arquivos recentes importantes" não compara
+				if thanSeen || u.Quoted || strings.ContainsAny(u.Fold, "./") {
+					u.Concs = append(u.Concs, "timeref")
+				}
+				break
+			}
+		}
 		// "print list to a file named 'rm'" / "save the list to 'out.txt'" —
 		// destino de ESCRITA, não nome de busca: prep+file-cue na janela
 		// de lookback marca outtgt. Roda ANTES do shape e do cue de nome:
@@ -2020,6 +2050,17 @@ func (m *nuModel) residualCount(toks []nuTok, used map[string]bool, taken map[in
 
 var nuToWords = map[string]bool{"para": true, "pra": true, "pro": true, "to": true, "por": true, "->": true, "=>": true, "em": true}
 
+// timeWords: unidades e âncoras de janela de tempo — "3 days ago" é
+// filtro temporal, nunca nome de diretório nem arquivo-referência.
+var timeWords = map[string]bool{
+	"last": true, "past": true, "next": true, "previous": true,
+	"future": true, "recent": true, "today": true, "yesterday": true,
+	"tomorrow": true, "ago": true, "week": true, "weeks": true,
+	"month": true, "months": true, "year": true, "years": true,
+	"day": true, "days": true, "hour": true, "hours": true,
+	"minute": true, "minutes": true, "second": true, "seconds": true,
+}
+
 // nuCaseFlags: modificadores de comparação ("any-cased 'error'") —
 // nunca nome de arquivo, e transparentes pro lookahead do forquoted.
 // nuNoRepair: palavras inglesas reais que o typo-repair destruiria —
@@ -2337,8 +2378,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
 							continue // a number or an entity of another kind is not a free name
 						}
-						if toks[i].has("glob") {
-							continue // '*conf*' é padrão de conjunto (namepat), nunca UM arquivo
+						if toks[i].has("glob") || toks[i].has("timeref") {
+							continue // glob é namepat; timeref é comparação temporal — nunca UM nome
 						}
 						// 'report.txt' citado é nome de arquivo explícito
 						// (filequoted) — os demais quoted são literais
@@ -2356,8 +2397,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if toks[i].has("forquoted") || toks[i].has("grepword") {
 							continue // padrão de conteúdo citado — é pattern, não name
 						}
-						if toks[i].has("outtgt") || toks[i].has("nametgt") {
-							continue // destino de escrita / predicado de nome
+						if toks[i].has("outtgt") || toks[i].has("nametgt") || toks[i].has("timeref") {
+							continue // destino de escrita / predicado de nome / referência temporal
 						}
 						parts = []string{toks[i].Raw}
 						taken[i] = true
@@ -2389,7 +2430,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if toks[i].has("grepword") || toks[i].has("nameattr") ||
 						toks[i].has("sort") || toks[i].has("icase") ||
-						toks[i].has("intocue") ||
+						toks[i].has("intocue") || toks[i].has("timeref") ||
 						toks[i].has("forquoted") || toks[i].Fold == "by" {
 						// cue de filtro ("matching"), de nome ("named") ou
 						// de ordenação ("sorted by") nunca é o valor — o
@@ -4001,6 +4042,33 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "newer", "older":
 		return nuFindWindow(toks, what == "newer", taken)
+	case "newer_file", "older_file":
+		// "newer than report.txt": o alvo já foi marcado `timeref` no
+		// normalize (cue newer/older + than implícito + forma de arquivo)
+		newer := what == "newer_file"
+		cueAt := -1
+		for i, t := range toks {
+			isCue := (newer && (t.Fold == "newer" || t.Fold == "novo" ||
+				t.Fold == "nova" || t.Fold == "recente")) ||
+				(!newer && (t.Fold == "older" || t.Fold == "velho" ||
+					t.Fold == "velha" || t.Fold == "antigo" || t.Fold == "antiga"))
+			if isCue {
+				cueAt = i
+				break
+			}
+		}
+		if cueAt < 0 {
+			return ""
+		}
+		for j := cueAt + 1; j < len(toks) && j <= cueAt+5; j++ {
+			u := &toks[j]
+			if !u.has("timeref") {
+				continue
+			}
+			taken[cueAt], taken[j] = true, true
+			return u.Raw
+		}
+		return ""
 	case "min_size", "max_size":
 		return nuFindSize(toks, what == "min_size", taken)
 	case "ext":
@@ -4612,14 +4680,6 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"bytes": true, "byte": true, "kilobytes": true, "megabytes": true,
 			"gigabytes": true, "terabytes": true, "kb": true, "mb": true,
 			"gb": true, "tb": true, "kbytes": true, "mbytes": true, "gbytes": true,
-		}
-		timeWords := map[string]bool{
-			"last": true, "past": true, "next": true, "previous": true,
-			"future": true, "recent": true, "today": true, "yesterday": true,
-			"tomorrow": true, "ago": true, "week": true, "weeks": true,
-			"month": true, "months": true, "year": true, "years": true,
-			"day": true, "days": true, "hour": true, "hours": true,
-			"minute": true, "minutes": true, "second": true, "seconds": true,
 		}
 		// words that can never name a directory — verbs, degree/size words,
 		// filesystem types — are skipped, not returned for an honest miss
