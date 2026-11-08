@@ -1,6 +1,42 @@
 {
  "methods": [
   {
+   "name": "list_files.name",
+   "intent": "list_files",
+   "priority": 13,
+   "doc": "'directories starting with X': filtro de nome vai pro file_find (type opcional)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.namepat",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.namepat",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "limit": "50"
+     },
+     "out": "lst"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$lst"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 300
+  },
+  {
    "name": "list_files.filter",
    "intent": "list_files",
    "priority": 12,

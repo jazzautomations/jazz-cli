@@ -480,7 +480,24 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				// próprio cue de conteúdo
 				if out[j].Fold == "for" || out[j].Fold == "por" ||
 					out[j].has("content") || out[j].has("grepword") {
-					t.Concs = append(t.Concs, "forquoted")
+					// "names contain 'log'": um predicado de posse com
+					// palavra de nome à esquerda descreve o NOME —
+					// a aspa é alvo de nome, não conteúdo
+					isName := false
+					for k := j - 1; k >= 0 && k >= j-3; k-- {
+						if out[k].has("nameattr") {
+							isName = true
+							break
+						}
+						if !out[k].Filler {
+							break
+						}
+					}
+					if isName {
+						t.Concs = append(t.Concs, "nametgt")
+					} else {
+						t.Concs = append(t.Concs, "forquoted")
+					}
 					break
 				}
 				// flag de case é modificador transparente: "containing
@@ -1351,6 +1368,25 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				}
 				delete(in.Slots, k)
 			}
+		}
+	}
+	// nametgt = aspa reivindicada como predicado de nome ("names contain
+	// 'log'", "word 'fstab' in their name") — o sponge para em "whose"
+	// antes de chegar nela, então o valor vai direto pro slot:
+	// name→literal (o script vira *log*); sem slot name, namepat→*x*.
+	_, hasName := def.Slots["name"]
+	_, hasPat := def.Slots["namepat"]
+	if (hasName && in.Slots["name"] == "") || (!hasName && hasPat && in.Slots["namepat"] == "") {
+		for i := range toks {
+			if !toks[i].has("nametgt") {
+				continue
+			}
+			if hasName {
+				in.Slots["name"] = toks[i].Raw
+			} else {
+				in.Slots["namepat"] = "*" + toks[i].Raw + "*"
+			}
+			break
 		}
 	}
 	if unfed > 0 {
@@ -3408,6 +3444,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			if taken[i] {
 				continue // "except xml files": o xml já é alvo do exclude
 			}
+			if toks[i].has("nametgt") || toks[i].has("forquoted") {
+				continue // a aspa é predicado de nome/conteúdo, não ext
+			}
 			f := toks[i].Fold
 			// ext é ".log"/"*.log" — "./storage/" começa com ponto mas é
 			// caminho; o sufixo tem que ser alfanumérico como no nuPureExt
@@ -3586,6 +3625,36 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		return ""
 	case "namepat":
+		// "(names) begin/start/end with X" → glob com âncora: X* / *X.
+		// A cadeia de cues nameattr ("names begin with") não é o valor.
+		for i, t := range toks {
+			pre, suf := "", ""
+			switch t.Fold {
+			case "begin", "begins", "beginning", "start", "starts",
+				"starting", "prefix", "prefixed", "começa", "comeca",
+				"começam", "comecam", "iniciado", "iniciados":
+				suf = "*"
+			case "end", "ends", "ending", "suffix", "suffixed",
+				"termina", "terminam", "acaba", "acabam":
+				pre = "*"
+			default:
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+4; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] {
+					continue
+				}
+				if u.has("nameattr") {
+					continue // "with"/"names" são cue, não valor
+				}
+				if nuIsNumber(u.Fold) || len(u.Fold) < 2 {
+					continue
+				}
+				taken[j] = true
+				return pre + u.Raw + suf
+			}
+		}
 		// "X files"/"arquivos X" nomeia o CONJUNTO por padrão de nome:
 		// "grep 'timeout' in all config files" → name=*config* (não é
 		// dir "config" nem ext). Qualificadores do conjunto ficam fora.
@@ -3761,17 +3830,34 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		// delete_file's name is a FILTER, not the leftover-name sponge that
 		// file_find uses: it only fills when a nameattr cue ("chamados X",
 		// "named X") is present — a bare filename is target material.
+		// "names begin/end with X": a cadeia de cues (names/begin/with são
+		// TODOS nameattr) não é o valor — o glob preserva prefixo/sufixo.
 		for i, t := range toks {
 			if !t.has("nameattr") {
 				continue
 			}
-			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+			pre, suf := "", ""
+			for j := i + 1; j < len(toks) && j <= i+5; j++ {
 				u := &toks[j]
 				if taken[j] || u.Filler || u.Slang {
 					continue
 				}
+				switch u.Fold {
+				case "begin", "begins", "beginning", "start", "starts",
+					"starting", "prefix", "prefixed", "começa", "comeca",
+					"começam", "comecam", "iniciado", "iniciados":
+					suf = "*"
+					continue
+				case "end", "ends", "ending", "suffix", "suffixed",
+					"termina", "terminam", "acaba", "acabam":
+					pre = "*"
+					continue
+				}
+				if u.has("nameattr") {
+					continue // "names"/"with"/"filenames" são cue, não valor
+				}
 				taken[i], taken[j] = true, true
-				return u.Raw
+				return pre + u.Raw + suf
 			}
 			return ""
 		}
@@ -3791,7 +3877,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		scopeFillers := map[string]bool{
 			"projeto": true, "project": true, "repo": true, "repositorio": true,
-			"repositório": true, "current": true, "atual": true, "geral": true,
+			"repositório": true, "repository": true, "current": true,
+			"atual": true, "geral": true,
 			"root": true, "aqui": true, "here": true, "isso": true, "isto": true,
 			"arquivos": true, "files": true, "file": true, "arquivo": true,
 			// "directory tree"/"folder structure" = este projeto recursivo,
@@ -3950,8 +4037,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					break // "no projeto"/"directory tree" falam DESTE escopo — consome a frase, não de um dir
 				}
 				// "config files" — a palavra antes de files descreve o
-				// conjunto (*config*), não a pasta onde procurar
-				if j+1 < len(toks) && fileWords[toks[j+1].Fold] {
+				// conjunto (*config*), não a pasta onde procurar.
+				// "in a git repository" / "in the directory tree" — o
+				// par todo é escopo: repo/tree descrevem ESTE projeto.
+				if j+1 < len(toks) && (fileWords[toks[j+1].Fold] ||
+					scopeFillers[toks[j+1].Fold]) {
 					continue
 				}
 				taken[i], taken[j] = true, true

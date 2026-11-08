@@ -370,3 +370,37 @@ func TestNLUExtListGuards(t *testing.T) {
 		}
 	}
 }
+
+// âncoras de nome: "names begin/start/end with X" → glob X*/*X preservando
+// a borda; "names contain 'log'" é predicado de nome (nametgt→name),
+// não grep; "a git repository" é ESTE projeto, não dir "git".
+func TestNLUNameAnchorGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Delete all the files whose names begin with "heapdump"`, "delete_file",
+			func(s map[string]string) bool { return s["name"] == "heapdump*" }},
+		{`files whose names end with "backup"`, "list_files",
+			func(s map[string]string) bool { return s["namepat"] == "*backup" }},
+		{`display all the directories which start with processor`, "list_files",
+			func(s map[string]string) bool {
+				return s["namepat"] == "processor*" && s["type"] == "dir"
+			}},
+		{`search for all the files which start with "file2015-0"`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "file2015-0*" }},
+		{`find files whose names contain "log"`, "file_find",
+			func(s map[string]string) bool {
+				return s["name"] == "log" && s["ext"] == ""
+			}},
+		{`Counts total number of lines in a git repository`, "wordcount_stats",
+			func(s map[string]string) bool { return s["dir"] == "" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
