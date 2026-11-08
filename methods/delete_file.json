@@ -71,7 +71,9 @@
       "empty": "$slot.empty",
       "exclude": "$slot.exclude",
       "limit": "32",
-      "icase": "$slot.icase"
+      "icase": "$slot.icase",
+      "newer_date": "$slot.newer_date",
+      "older_date": "$slot.older_date"
      },
      "out": "cand"
     },

@@ -126,6 +126,14 @@
    "icase": {
     "type": "string",
     "description": "case-insensitive name matching: 1/true=yes, sensitive=refuse (default insensitive globs, sensitive regex)"
+   },
+   "newer_date": {
+    "type": "string",
+    "description": "modified on/after this date (YYYY-MM-DD, cur/next year allowed)"
+   },
+   "older_date": {
+    "type": "string",
+    "description": "modified before this date (YYYY-MM-DD, ~ suffix = through that day)"
    }
   }
  },

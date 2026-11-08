@@ -1,0 +1,9 @@
+{"methods": [
+ {"name": "date_show.calc", "intent": "date_show", "priority": 10,
+  "doc": "calcula e mostra uma data (hoje/ontem/amanhã/epoch ± offset)",
+  "pre": [],
+  "steps": [{"cap": "date_calc", "in": {"epoch": "$slot.epoch",
+             "offset": "$slot.offset", "when": "$slot.when"}, "out": "date"}],
+  "verify": [{"check": "status_obtained", "arg": "$date"}],
+  "risk": "low", "cost_ms": 5}
+]}

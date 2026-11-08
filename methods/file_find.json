@@ -40,7 +40,9 @@
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
       "max_lines": "$slot.max_lines",
-      "icase": "$slot.icase"
+      "icase": "$slot.icase",
+      "newer_date": "$slot.newer_date",
+      "older_date": "$slot.older_date"
      },
      "out": "res"
     },
@@ -100,7 +102,9 @@
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
       "max_lines": "$slot.max_lines",
-      "icase": "$slot.icase"
+      "icase": "$slot.icase",
+      "newer_date": "$slot.newer_date",
+      "older_date": "$slot.older_date"
      },
      "out": "res"
     }

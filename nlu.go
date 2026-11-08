@@ -1709,6 +1709,37 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	if in.Slots["src_owner"] != "" && in.Slots["owner"] == in.Slots["src_owner"] {
 		delete(in.Slots, "owner")
 	}
+	// name/dir/exclude formado só de vocábulo temporal quando já há filtro
+	// de tempo é leitura roubada da janela ("in March 2007"→dir:March,
+	// "an hour ago"→name:hour, "those modified today"→exclude:modified):
+	// vai pro Dropped em vez de virar nome de arquivo de mentira.
+	if in.Slots["newer"] != "" || in.Slots["older"] != "" ||
+		in.Slots["newer_date"] != "" || in.Slots["older_date"] != "" ||
+		in.Slots["tfield"] != "" {
+		for _, k := range []string{"name", "dir", "target", "exclude"} {
+			v := in.Slots[k]
+			if v == "" || !nuAllTemporal(v) {
+				continue
+			}
+			delete(in.Slots, k)
+			// o token já foi consumido pelo bound/banda ("March" em
+			// "in March 2007") — é phrasing, não operando órfão
+			swallowed := false
+			for _, p := range strings.FieldsFunc(v, func(r rune) bool {
+				return r == ' ' || r == '|'
+			}) {
+				for i := range toks {
+					if taken[i] && (toks[i].Raw == p ||
+						strings.EqualFold(toks[i].Fold, p)) {
+						swallowed = true
+					}
+				}
+			}
+			if !swallowed {
+				drop(v)
+			}
+		}
+	}
 	if unfed > 0 {
 		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavra(s) solta(s) não parecem nome do slot", unfed))
@@ -2487,6 +2518,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuMvArg(toks, sd.From[3:], taken)
 			case strings.HasPrefix(sd.From, "split:"):
 				v = nuSplitArg(toks, sd.From[6:], taken)
+			case strings.HasPrefix(sd.From, "date:"):
+				v = nuDateArg(toks, sd.From[5:], taken)
 			case sd.From == "mk:scope":
 				// "in every directory" é ESCopo do create, não enumeração
 				// — casa antes do prefixo genérico mk: (nuMkArg só conhece
@@ -3573,6 +3606,12 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 				if taken[j] || u.Filler || u.has("article") || dirWord[u.Fold] || vague[u.Fold] {
 					continue
 				}
+				// "under current directory to x": 'current'/'this' são
+				// escopo (este projeto), não destino
+				switch u.Fold {
+				case "current", "atual", "this", "este", "esta":
+					continue
+				}
 				if destCue[u.Fold] || u.has("intocue") {
 					continue // "under current directory to ./newdir" — o 'to' é cue, não destino
 				}
@@ -3802,16 +3841,17 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 			if nuInExceptClause(toks, i) {
 				continue
 			}
-			// "1MB"/"10k" é limite de tamanho, não nome de arquivo
-			if t.Fold != "" && !t.Quoted && nuDigitSize(t.Fold) {
+			// "1MB"/"10k" é limite de tamanho, "30" é idade da janela —
+			// nenhum é nome de arquivo
+			if t.Fold != "" && !t.Quoted && (nuDigitSize(t.Fold) || nuIsNumber(t.Fold)) {
 				continue
 			}
 			// "the folder src" / "directory data": substantivo SINGULAR
 			// cita o operando ("copy the folder src"). Plural é filtro
-			// de conjunto ("files larger than 1MB"), e "directory tree"
-			// é substantivo composto — nenhum cita nome.
-			if i > 0 && nuOperandBare(t.Fold) &&
-				t.Fold != "tree" && t.Fold != "current" && t.Fold != "atual" {
+			// de conjunto ("files larger than 1MB"), "directory tree" é
+			// substantivo composto e stopword é o próprio cue ("directory
+			// to ./x") — nenhum cita nome.
+			if i > 0 && nuOperandBare(t.Fold) && !nuStopBare[t.Fold] {
 				switch toks[i-1].Fold {
 				case "folder", "directory", "diretorio", "diretório",
 					"pasta", "dir", "file", "arquivo":
@@ -4486,8 +4526,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		for j := cueAt + 1; j < len(toks) && j <= cueAt+5; j++ {
 			u := &toks[j]
-			if !u.has("timeref") {
-				continue
+			if !u.has("timeref") || nuTemporalVocab[u.Fold] {
+				continue // unidade de tempo não é arquivo-referência
 			}
 			taken[cueAt], taken[j] = true, true
 			return u.Raw
@@ -4690,6 +4730,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "min_depth", "max_depth":
 		return nuFindDepth(toks, what == "min_depth", taken)
+	case "newer_date", "older_date":
+		return nuFindDateBound(toks, what == "newer_date", taken)
 	case "icase":
 		// "(case insensitive)": modificador de match que pode vir em 1 ou
 		// 2 tokens. "case SENSITIVE" volta marcador — o match do glob é
@@ -5506,6 +5548,129 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 			newerSeen = true
 		}
 	}
+	// negação de janela: "not modified in the last 24h" e "except those
+	// modified today" querem o lado de FORA da janela — vira older. A
+	// polaridade flipa a direção.
+	negated := false
+	for i, t := range toks {
+		if t.Fold != "not" && t.Fold != "não" && t.Fold != "never" &&
+			t.Fold != "haven't" && t.Fold != "hasn't" && t.Fold != "didn't" {
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			u := &toks[j]
+			if u.Filler || u.Fold == "" {
+				continue
+			}
+			switch u.Fold {
+			case "modified", "modificado", "modificada", "modificados",
+				"modificadas", "changed", "alterado", "alterada",
+				"accessed", "acessado", "acessada", "created", "criado",
+				"criada", "touched", "been":
+				negated = true
+			}
+			break
+		}
+	}
+	// "except/without those|that <participle>" — a cláusula de exceção
+	// temporal é uma negação de janela, não uma exclusão de nome
+	for i, t := range toks {
+		if negated {
+			break
+		}
+		if !nuExceptCues[t.Fold] {
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			u := &toks[j]
+			if u.Filler || u.Fold == "" {
+				continue
+			}
+			k := j
+			if u.Fold == "those" || u.Fold == "that" || u.Fold == "the" ||
+				u.Fold == "os" || u.Fold == "as" || u.Fold == "que" {
+				for k = j + 1; k < len(toks) && k <= j+3; k++ {
+					if toks[k].Filler || toks[k].Fold == "" {
+						continue
+					}
+					break
+				}
+			}
+			if k < len(toks) {
+				switch toks[k].Fold {
+				case "modified", "modificado", "modificada", "modificados",
+					"modificadas", "changed", "alterado", "alterada",
+					"accessed", "acessado", "acessada", "created", "criado",
+					"criada", "touched", "been":
+					negated = true
+				}
+			}
+			break
+		}
+	}
+	// nome de dia: "modified yesterday" é a banda [ontem,hoje) — older
+	// recebe o piso (1d), newer o teto (2d). Negada, a banda só é
+	// expressável quando o piso é zero ("not modified today" →
+	// older:1440); banda interior negada é devolvida vazia e o pós-fill
+	// a manda pro Dropped em vez de fingir cobertura.
+	for i, t := range toks {
+		var lo, hi string
+		switch t.Fold {
+		case "yesterday", "ontem":
+			lo, hi = "1440", "2880"
+			for k := i - 2; k < i; k++ {
+				if k >= 0 && (toks[k].Fold == "before" || toks[k].Fold == "antes") {
+					lo, hi = "2880", "4320" // day before yesterday
+				}
+			}
+		case "anteontem":
+			lo, hi = "2880", "4320"
+		case "today", "hoje":
+			lo, hi = "", "1440"
+		}
+		if hi == "" {
+			continue
+		}
+		// o dia e a phrasing em volta são consumidos — senão "modified"/
+		// "those" ficam soltos e o sponge de name/dir os transforma em
+		// operando falso
+		for k := i - 6; k <= i+1 && k < len(toks); k++ {
+			if k < 0 {
+				continue
+			}
+			switch toks[k].Fold {
+			case "modified", "modificado", "modificada", "modificados",
+				"modificadas", "accessed", "acessado", "acessada",
+				"changed", "alterado", "alterada", "created", "criado",
+				"criada", "touched", "been", "were", "was", "that",
+				"which", "those", "these", "the", "in", "on", "of", "a",
+				"an", "not", "não", "before", "antes", "day":
+				taken[k] = true
+			}
+		}
+		if negated {
+			for k := i - 6; k <= i && k < len(toks); k++ {
+				if k >= 0 && nuExceptCues[toks[k].Fold] {
+					taken[k] = true // "except those modified today"
+				}
+			}
+		}
+		if negated {
+			if !newer && lo == "" {
+				taken[i] = true
+				return hi // complemento de [0,hi) é [hi,∞) → older
+			}
+			continue // banda interior negada: sem bound único honesto
+		}
+		taken[i] = true
+		if newer {
+			return hi
+		}
+		return lo
+	}
+	if negated {
+		olderSeen, newerSeen = newerSeen, olderSeen
+	}
 	if newer != newerSeen || olderSeen == newerSeen {
 		return ""
 	}
@@ -5523,6 +5688,12 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 			mult = 1440
 		case "semana", "semanas", "week", "weeks", "w":
 			mult = 10080
+		case "fortnight", "fortnights", "quinzena", "quinzenas":
+			mult = 20160
+		case "month", "months", "mes", "mês", "meses":
+			mult = 43200
+		case "year", "years", "ano", "anos":
+			mult = 525600
 		}
 		if mult == 0 {
 			continue
@@ -5542,11 +5713,84 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 					"changed", "alterado", "alterada", "created", "criado",
 					"criada", "less", "more", "ago", "ha", "há", "within",
 					"last", "past", "older", "newer", "recent", "recente",
-					"than", "do", "que", "in", "em", "at", "least", "most":
+					"than", "do", "que", "in", "em", "at", "least", "most",
+					"were", "was", "are", "been", "is", "that", "which",
+					"those", "these", "them", "the", "of", "a", "an", "s",
+					"have", "has", "not", "touched", "over", "for":
 					taken[k] = true
 				}
 			}
 			return strconv.Itoa(n * mult)
+		}
+	}
+	// unidade nua com cue: "within the last month"/"past year"/"an hour
+	// ago" ≈ 1× — sem isso a unidade colava no sponge de name/dir
+	for i, t := range toks {
+		mult := 0
+		switch t.Fold {
+		case "month", "months", "mes", "mês", "meses":
+			mult = 43200
+		case "year", "years", "ano", "anos":
+			mult = 525600
+		case "week", "weeks", "semana", "semanas":
+			mult = 10080
+		case "fortnight", "fortnights", "quinzena", "quinzenas":
+			mult = 20160
+		case "day", "days", "dia", "dias":
+			mult = 1440
+		case "hour", "hours", "hora", "horas":
+			mult = 60
+		case "minute", "minutes", "minuto", "minutos":
+			mult = 1
+		}
+		if mult == 0 {
+			continue
+		}
+		// "an hour ago" / "a day ago" — o "ago" logo depois da unidade é
+		// cue de idade, mas "less than a day ago" segue sendo newer:
+		// idade < unidade. recência/less vence o ago; more/older vencem.
+		recentCue, lessCue, moreCue, agoCue := false, false, false, false
+		for k := i - 4; k < i; k++ {
+			if k < 0 {
+				continue
+			}
+			switch toks[k].Fold {
+			case "last", "past", "within", "últimos", "últimas", "ultimos",
+				"ultimas", "recent", "recente", "newer":
+				recentCue = true
+			case "less", "menos":
+				lessCue = true
+			case "more", "mais", "older", "over", "before", "antes":
+				moreCue = true
+			}
+		}
+		for k := i + 1; k < len(toks) && k <= i+2; k++ {
+			switch toks[k].Fold {
+			case "ago", "há", "ha", "antes", "after", "later":
+				agoCue = true
+			}
+		}
+		wantNewer := (recentCue || lessCue) && !moreCue
+		wantOlder := (moreCue || agoCue) && !recentCue && !lessCue
+		if !wantNewer && !wantOlder {
+			continue
+		}
+		if (newer && wantNewer) || (!newer && wantOlder) {
+			taken[i] = true
+			for k := i - 4; k <= i+2 && k < len(toks); k++ {
+				if k < 0 {
+					continue
+				}
+				switch toks[k].Fold {
+				case "modified", "modificado", "accessed", "changed",
+					"created", "last", "past", "within", "more", "less",
+					"than", "ago", "older", "newer", "recent", "over",
+					"the", "a", "an", "in", "em", "of", "were", "was",
+					"that", "which", "those", "been", "have", "has", "not":
+					taken[k] = true
+				}
+			}
+			return strconv.Itoa(mult)
 		}
 	}
 	return ""
@@ -7180,6 +7424,30 @@ func nuExceptOperands(toks []nuTok, taken map[int]bool) (cues, ops []int, last m
 		if !nuExceptCues[t.Fold] {
 			continue
 		}
+		if t.Fold == "not" || t.Fold == "não" {
+			// "not modified/changed/accessed in the last X" é negação de
+			// JANELA temporal (older), não exclusão — "not" como cue
+			// roubava o particípio (exclude:modified) E invertia o filtro
+			timeNeg := false
+			for j := i + 1; j < len(toks) && j <= i+4; j++ {
+				u := &toks[j]
+				if u.Filler || u.Fold == "" {
+					continue
+				}
+				switch u.Fold {
+				case "modified", "modificado", "modificada", "modificados",
+					"modificadas", "changed", "alterado", "alterada",
+					"accessed", "acessado", "acessada", "created", "criado",
+					"criada", "touched", "been":
+					timeNeg = true
+					continue
+				}
+				break
+			}
+			if timeNeg {
+				continue
+			}
+		}
 		if t.Fold == "menos" || t.Fold == "less" {
 			// "less than 2 days ago" / "menos de 5 dias" é COMPARATIVO
 			// de quantidade/tempo, não exceção — o slang folda "less
@@ -7321,6 +7589,17 @@ func nuDigitSize(f string) bool {
 	return false
 }
 
+// nuStopBare: palavras que nuOperandBare deixa passar mas nunca são um
+// nome citado — "directory to ./x": o "to" é o cue, não o alvo.
+var nuStopBare = map[string]bool{
+	"tree": true, "current": true, "atual": true, "to": true, "the": true,
+	"a": true, "an": true, "in": true, "for": true, "of": true,
+	"with": true, "from": true, "into": true, "and": true, "or": true,
+	"de": true, "em": true, "para": true, "pra": true, "com": true,
+	"por": true, "at": true, "on": true, "as": true, "by": true,
+	"that": true, "which": true, "under": true, "over": true,
+}
+
 // nuOperandBare: palavra solta sem conceito que vale como nome — o
 // complemento de nuNameShaped para operandos citados por substantivo
 // ("the folder src": 'src' não tem cara de path mas é o nome citado).
@@ -7333,6 +7612,409 @@ func nuOperandBare(f string) bool {
 			continue
 		}
 		return false
+	}
+	return true
+}
+
+// nuMonthNames: mês → MM para datas absolutas ("modified after
+// February 1" / "in March 2007"). EN + PT.
+// nuTemporalVocab: palavras que só pertencem a frase de tempo — quando
+// um slot de nome/dir/exclude sai formado só delas, é vazamento da
+// janela temporal e não operando real.
+var nuTemporalVocab = map[string]bool{
+	"modified": true, "modificado": true, "modificada": true,
+	"modificados": true, "modificadas": true, "accessed": true,
+	"acessado": true, "acessada": true, "changed": true,
+	"alterado": true, "alterada": true, "created": true, "criado": true,
+	"criada": true, "touched": true, "last": true, "past": true,
+	"ago": true, "within": true, "recent": true, "recente": true,
+	"recentes": true, "recently": true, "newer": true, "older": true,
+	"yesterday": true, "today": true, "tomorrow": true, "ontem": true,
+	"hoje": true, "amanha": true, "amanhã": true, "anteontem": true,
+	"minute": true, "minutes": true, "min": true, "mins": true,
+	"hour": true, "hours": true, "day": true, "days": true,
+	"week": true, "weeks": true, "month": true, "months": true,
+	"year": true, "years": true, "fortnight": true, "fortnights": true,
+	"minuto": true, "minutos": true, "hora": true, "horas": true,
+	"dia": true, "dias": true, "semana": true, "semanas": true,
+	"mes": true, "mês": true, "meses": true, "ano": true, "anos": true,
+	"antes": true, "depois": true, "before": true, "after": true,
+	"since": true, "until": true, "desde": true, "até": true, "ate": true,
+	"há": true, "ha": true, "over": true,
+	// auxiliares e phrasing que viajam na cláusula temporal
+	"were": true, "was": true, "been": true, "are": true, "is": true,
+	"that": true, "which": true, "those": true, "these": true,
+	"them": true, "the": true, "of": true, "a": true, "an": true,
+	"s": true, "have": true, "has": true, "in": true, "em": true,
+	"on": true, "at": true, "to": true, "current": true, "atual": true,
+	"this": true, "este": true, "esta": true, "and": true, "or": true,
+	"e": true, "ou": true, "between": true, "entre": true, "from": true,
+	"de": true, "do": true, "da": true, "for": true, "by": true,
+	"not": true, "more": true, "less": true, "than": true,
+	"most": true, "least": true, "about": true, "around": true,
+}
+
+// nuAllTemporal: todo fragmento do valor é vocábulo temporal (ou número
+// de data) — o "nome" é a frase de tempo colada, nunca um arquivo.
+func nuAllTemporal(v string) bool {
+	for _, p := range strings.FieldsFunc(v, func(r rune) bool {
+		return r == ' ' || r == '|'
+	}) {
+		lp := strings.ToLower(p)
+		if nuTemporalVocab[lp] {
+			continue
+		}
+		if _, isM := nuMonthNames[lp]; isM {
+			continue
+		}
+		if nuIsNumber(lp) || nuIsoDateRe.MatchString(lp) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+var nuMonthNames = map[string]string{
+	"january": "01", "february": "02", "march": "03", "april": "04",
+	"may": "05", "june": "06", "july": "07", "august": "08",
+	"september": "09", "october": "10", "november": "11", "december": "12",
+	"janeiro": "01", "fevereiro": "02", "março": "03", "marco": "03",
+	"abril": "04", "maio": "05", "junho": "06", "julho": "07",
+	"agosto": "08", "setembro": "09", "outubro": "10",
+	"novembro": "11", "dezembro": "12",
+}
+
+// nuDateTok: o token i é data absoluta? ISO "2014-08-25", "August 10th",
+// "March 2007" (mês+ano → primeiro dia do mês), "1 February". Devolve
+// "YYYY-MM-DD" e quantos tokens a data ocupa.
+func nuDateTok(toks []nuTok, i int) (string, int) {
+	t := &toks[i]
+	if m := nuIsoDateRe.FindStringSubmatch(t.Fold); m != nil {
+		return t.Fold, 1
+	}
+	if mm, isM := nuMonthNames[t.Fold]; isM && i+1 < len(toks) {
+		d := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(
+			strings.TrimSuffix(toks[i+1].Fold, "th"), "st"), "nd"), "rd")
+		if nuIsNumber(d) && len(d) <= 2 {
+			yr := "cur"
+			if i+2 < len(toks) && len(toks[i+2].Fold) == 4 && nuIsNumber(toks[i+2].Fold) {
+				yr = toks[i+2].Fold
+				return yr + "-" + mm + "-" + pad2(d), 3
+			}
+			return yr + "-" + mm + "-" + pad2(d), 2
+		}
+		if len(toks[i+1].Fold) == 4 && nuIsNumber(toks[i+1].Fold) {
+			return toks[i+1].Fold + "-" + mm + "-01", 2
+		}
+		return "cur-" + mm + "-01", 1
+	}
+	if nuIsNumber(t.Fold) && len(t.Fold) <= 2 && i+1 < len(toks) {
+		if mm, isM := nuMonthNames[toks[i+1].Fold]; isM {
+			yr := "cur"
+			if i+2 < len(toks) && len(toks[i+2].Fold) == 4 && nuIsNumber(toks[i+2].Fold) {
+				yr = toks[i+2].Fold
+				return yr + "-" + mm + "-" + pad2(t.Fold), 3
+			}
+			return yr + "-" + mm + "-" + pad2(t.Fold), 2
+		}
+	}
+	return "", 0
+}
+
+func pad2(s string) string {
+	if len(s) == 1 {
+		return "0" + s
+	}
+	return s
+}
+
+var nuIsoDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// nuFindDateBound: bordas absolutas de data — "between 2014-08-25 and
+// 2014-08-26" (newer=A, older=B~inclusive), "after February 1" (newer),
+// "before X" (older), "in March 2007" (newer=03-01, older=04-01).
+// Sufixo "~" marca borda inclusiva-ate-o-fim-do-dia; "cur" = ano corrente
+// (o script resolve o ano mais recente possível).
+func nuFindDateBound(toks []nuTok, newer bool, taken map[int]bool) string {
+	// "between A and B": A é piso (newer), B é teto inclusivo (older~)
+	for i, t := range toks {
+		if t.Fold != "between" && t.Fold != "entre" {
+			continue
+		}
+		var d1, d2 string
+		var e1, e2 int
+		for j := i + 1; j < len(toks) && j <= i+8; j++ {
+			d, n := nuDateTok(toks, j)
+			if n == 0 {
+				continue
+			}
+			if d1 == "" {
+				d1, e1 = d, j+n-1
+				j += n - 1
+				continue
+			}
+			d2, e2 = d, j+n-1
+			break
+		}
+		if d1 == "" || d2 == "" {
+			return ""
+		}
+		for k := i; k <= e2; k++ {
+			taken[k] = true
+		}
+		_ = e1
+		if newer {
+			return d1
+		}
+		return d2 + "~"
+	}
+	// "in March 2007" / "in March" — o mês inteiro é a janela
+	for i, t := range toks {
+		if t.Fold != "in" && t.Fold != "em" {
+			continue
+		}
+		j := i + 1
+		for j < len(toks) && toks[j].Filler {
+			j++
+		}
+		if j >= len(toks) {
+			continue
+		}
+		mm, isM := nuMonthNames[toks[j].Fold]
+		if !isM {
+			continue
+		}
+		yr := "cur"
+		end := j + 1
+		if end < len(toks) && len(toks[end].Fold) == 4 && nuIsNumber(toks[end].Fold) {
+			yr = toks[end].Fold
+		}
+		mNext := "01"
+		if n, _ := strconv.Atoi(mm); n == 12 {
+			yr = incrYear(yr)
+		} else {
+			mNext = pad2(strconv.Itoa(n + 1))
+		}
+		for k := i; k <= end; k++ {
+			taken[k] = true
+		}
+		if newer {
+			return yr + "-" + mm + "-01"
+		}
+		return yr + "-" + mNext + "-01"
+	}
+	// "after/since/from X" → piso newer; "before/until/older than X" →
+	// teto older (exclusivo)
+	for i, t := range toks {
+		dir := 0
+		switch t.Fold {
+		case "after", "since", "from", "depois", "desde", "após", "apos":
+			dir = 1
+		case "before", "until", "antes", "até", "ate", "prior":
+			dir = -1
+		}
+		if dir == 0 {
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+5; j++ {
+			d, n := nuDateTok(toks, j)
+			if n == 0 {
+				continue
+			}
+			for k := i; k <= j+n-1; k++ {
+				taken[k] = true
+			}
+			nuConsumeYearTail(toks, j+n, taken)
+			if (dir > 0) == newer {
+				return d
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+// nuConsumeYearTail: depois de um bound ("after February 1"), a cauda
+// "of the current year" / "this year" é phrasing da data — sem consumi-la
+// "current year" colava no sponge de name.
+func nuConsumeYearTail(toks []nuTok, from int, taken map[int]bool) {
+	end := from + 6
+	if end > len(toks) {
+		end = len(toks)
+	}
+	seenYear, seenCue := false, false
+	for k := from; k < end; k++ {
+		switch toks[k].Fold {
+		case "year", "ano", "anos":
+			seenYear = true
+		case "current", "atual", "this", "este", "esta":
+			seenCue = true
+		}
+	}
+	if !seenYear || !seenCue {
+		return
+	}
+	for k := from; k < end; k++ {
+		switch toks[k].Fold {
+		case "of", "de", "the", "o", "a", "current", "atual", "this",
+			"este", "esta", "year", "ano", "anos":
+			taken[k] = true
+		}
+	}
+}
+
+func incrYear(yr string) string {
+	if yr == "cur" {
+		return "next"
+	}
+	if n, err := strconv.Atoi(yr); err == nil {
+		return strconv.Itoa(n + 1)
+	}
+	return yr
+}
+
+// nuDateArg: operandos do date_show — epoch (unix seconds), nome de dia
+// (yesterday/tomorrow/today) e offset em minutos com sinal
+// ("+2 days +10 minutes"=+2890, "222 days ago"=-320640).
+func nuDateArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "epoch":
+		for i, t := range toks {
+			if t.Fold != "epoch" && t.Fold != "unix" && t.Fold != "timestamp" &&
+				t.Fold != "timestamps" && t.Fold != "second" && t.Fold != "seconds" {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+4; j++ {
+				u := &toks[j]
+				if u.Filler || u.Fold == "" {
+					continue
+				}
+				if nuAllDigits(u.Fold) && len(u.Fold) >= 6 {
+					taken[i], taken[j] = true, true
+					return u.Fold
+				}
+			}
+		}
+		// número longo solto já é epoch ("convert 1267619929 to date")
+		for i, t := range toks {
+			if taken[i] || !nuAllDigits(t.Fold) || len(t.Fold) < 6 {
+				continue
+			}
+			taken[i] = true
+			return t.Fold
+		}
+	case "when":
+		for i, t := range toks {
+			switch t.Fold {
+			case "yesterday", "ontem", "tomorrow", "amanhã", "amanha",
+				"today", "hoje", "now", "agora":
+				taken[i] = true
+				if i+1 < len(toks) && toks[i+1].Fold == "s" {
+					taken[i+1] = true // "yesterday's"
+				}
+				for k := i - 2; k < i; k++ {
+					if k < 0 {
+						continue
+					}
+					switch toks[k].Fold {
+					case "for", "the", "de", "em", "in", "of", "a", "para",
+						"pra":
+						taken[k] = true // "date for tomorrow"
+					}
+				}
+				return t.Fold
+			}
+		}
+	case "offset":
+		// soma "+N unit" / "N unit" com sinal: "ago"/"antes" negativa,
+		// "+N"/"in N"/"mais N" positiva. Sem cue, "N days" é positivo.
+		total, found := 0, false
+		for i, t := range toks {
+			if taken[i] || !nuIsNumber(t.Fold) {
+				continue
+			}
+			j := i + 1
+			if j >= len(toks) {
+				break
+			}
+			mult := 0
+			switch toks[j].Fold {
+			case "min", "mins", "minute", "minutes", "minuto", "minutos":
+				mult = 1
+			case "h", "hour", "hours", "hora", "horas":
+				mult = 60
+			case "d", "day", "days", "dia", "dias":
+				mult = 1440
+			case "week", "weeks", "semana", "semanas":
+				mult = 10080
+			case "month", "months", "mes", "mês", "meses":
+				mult = 43200
+			case "second", "seconds", "segundo", "segundos":
+				continue // epoch já tem slot próprio
+			}
+			if mult == 0 {
+				continue
+			}
+			n, _ := strconv.Atoi(t.Fold)
+			sign := 1
+			for k := i - 1; k >= 0 && k >= i-3; k-- {
+				switch toks[k].Fold {
+				case "ago", "antes", "before", "há", "ha", "-":
+					sign = -1
+				case "+", "plus", "mais", "in", "em", "after", "depois":
+					sign = 1
+				}
+				if sign == -1 || toks[k].Fold == "+" || toks[k].Fold == "plus" ||
+					toks[k].Fold == "mais" {
+					break
+				}
+			}
+			// "3 days ago" — o ago vem DEPOIS da unidade
+			if j+1 < len(toks) {
+				switch toks[j+1].Fold {
+				case "ago", "antes", "há", "ha", "back":
+					sign = -1
+				}
+			}
+			total += sign * n * mult
+			found = true
+			taken[i], taken[j] = true, true
+			// phrasing do offset não pode contar palavra solta
+			for k := i - 2; k < i; k++ {
+				if k < 0 {
+					continue
+				}
+				switch toks[k].Fold {
+				case "+", "plus", "mais", "in", "em", "for", "the", "a",
+					"para", "pra", "of":
+					taken[k] = true
+				}
+			}
+			if j+1 < len(toks) {
+				switch toks[j+1].Fold {
+				case "ago", "antes", "há", "ha", "back", "later":
+					taken[j+1] = true
+				}
+			}
+		}
+		if found {
+			return strconv.Itoa(total)
+		}
+	}
+	return ""
+}
+
+// nuAllDigits: nuIsNumber tem teto de 6 dígitos (idade em minutos) —
+// epoch/unix precisa de dígitos puros sem limite.
+func nuAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
 	}
 	return true
 }

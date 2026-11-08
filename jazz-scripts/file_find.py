@@ -93,8 +93,41 @@ if newer_min is not None:
     newer_ts = now - as_int("newer_min", 0, 0, 10 * 365 * 24 * 60) * 60
 if older_min is not None:
     older_ts = now - as_int("older_min", 0, 0, 10 * 365 * 24 * 60) * 60
+
+
+def parse_date(s, side):
+    # "2014-08-25" | "cur-03-01" (ano corrente; piso que cai no futuro
+    # volta um ano — "after February 1" em março quer ESTE ano)
+    s = str(s).strip()
+    inclusive = s.endswith("~")
+    s = s.rstrip("~")
+    m = re.fullmatch(r"(cur|next|\d{4})-(\d{2})-(\d{2})", s)
+    if not m:
+        fail("%s must be a date like 2014-08-25" % side)
+    y, mo, dy = m.group(1), int(m.group(2)), int(m.group(3))
+    ty = time.localtime(now)
+    if y == "cur":
+        y = ty.tm_year
+        if (mo, dy) > (ty.tm_mon, ty.tm_mday) and side == "newer_date":
+            y -= 1  # o piso absoluto mais recente é o do ano passado
+    elif y == "next":
+        y = ty.tm_year + 1
+    else:
+        y = int(y)
+    if not (1 <= mo <= 12 and 1 <= dy <= 31):
+        fail("%s out of range" % side)
+    ts = time.mktime((y, mo, dy, 0, 0, 0, 0, 0, -1))
+    if inclusive:
+        ts += 86400
+    return ts
+
+
+if arg("newer_date") is not None:
+    newer_ts = parse_date(arg("newer_date"), "newer_date")
+if arg("older_date") is not None:
+    older_ts = parse_date(arg("older_date"), "older_date")
 if newer_ts and older_ts and newer_ts >= older_ts:
-    fail("newer_min must be a wider window than older_min")
+    fail("newer bound must be a wider window than older bound")
 TFIELD = {"mtime": "st_mtime", "atime": "st_atime", "ctime": "st_ctime"}
 tfield = str(arg("time_field", "mtime")).lower()
 if tfield not in TFIELD:

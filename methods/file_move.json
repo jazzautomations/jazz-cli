@@ -4,7 +4,7 @@
    "name": "file_move.one",
    "intent": "file_move",
    "priority": 11,
-   "doc": "chain anáfora: 'acha X e move eles pra DIR' — um rename por path produzido",
+   "doc": "chain an\u00e1fora: 'acha X e move eles pra DIR' \u2014 um rename por path produzido",
    "needs": [],
    "pre": [
     {
@@ -49,7 +49,7 @@
    "name": "file_move.one_copy",
    "intent": "file_move",
    "priority": 11,
-   "doc": "copia alvo único para o destino — fonte preservada, prova dos dois lados",
+   "doc": "copia alvo \u00fanico para o destino \u2014 fonte preservada, prova dos dois lados",
    "needs": [],
    "pre": [
     {
@@ -98,7 +98,7 @@
    "name": "file_move.each",
    "intent": "file_move",
    "priority": 10,
-   "doc": "move cada item do filtro para o destino — for_each rename",
+   "doc": "move cada item do filtro para o destino \u2014 for_each rename",
    "needs": [],
    "pre": [
     {
@@ -124,7 +124,12 @@
       "type": "$slot.type",
       "exclude": "$slot.exclude",
       "limit": "32",
-      "icase": "$slot.icase"
+      "icase": "$slot.icase",
+      "newer_date": "$slot.newer_date",
+      "older_date": "$slot.older_date",
+      "newer_min": "$slot.newer",
+      "older_min": "$slot.older",
+      "time_field": "$slot.tfield"
      },
      "out": "cand"
     },
@@ -153,7 +158,7 @@
    "name": "file_move.each_copy",
    "intent": "file_move",
    "priority": 10,
-   "doc": "copia cada item do filtro para o destino — for_each cp -r",
+   "doc": "copia cada item do filtro para o destino \u2014 for_each cp -r",
    "needs": [],
    "pre": [
     {
@@ -179,7 +184,12 @@
       "type": "$slot.type",
       "exclude": "$slot.exclude",
       "limit": "32",
-      "icase": "$slot.icase"
+      "icase": "$slot.icase",
+      "newer_date": "$slot.newer_date",
+      "older_date": "$slot.older_date",
+      "newer_min": "$slot.newer",
+      "older_min": "$slot.older",
+      "time_field": "$slot.tfield"
      },
      "out": "cand"
     },

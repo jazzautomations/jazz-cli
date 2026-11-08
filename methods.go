@@ -378,7 +378,38 @@ func init() {
 		"pkg_cmd":      brPkgCmd,
 		"container_op": brContainerOp,
 		"undo":         brUndo,
+		"date_calc":    brDateCalc,
 	}
+}
+
+// brDateCalc: aritmética de data determinística — "print yesterday's
+// date", "tomorrow + 2 days + 10 minutes", "convert epoch 1267619929".
+// Emite ISO + unix para a resposta ser verificável; sem acesso externo.
+func brDateCalc(cx *brCtx, in map[string]string) brStep {
+	base := time.Now()
+	if ep := cx.str(in, "epoch"); ep != "" {
+		n, err := strconv.ParseInt(ep, 10, 64)
+		if err != nil || n < 0 || n > 1<<41 {
+			return brStep{obs: rvNoCmd(), why: "epoch inválido: " + ep}
+		}
+		base = time.Unix(n, 0)
+	}
+	shift := 0
+	switch cx.str(in, "when") {
+	case "yesterday", "ontem":
+		shift -= 1440
+	case "tomorrow", "amanhã", "amanha":
+		shift += 1440
+	}
+	if off := cx.str(in, "offset"); off != "" {
+		if n, err := strconv.Atoi(off); err == nil {
+			shift += n
+		}
+	}
+	t := base.Add(time.Duration(shift) * time.Minute)
+	out := t.Format("2006-01-02 15:04:05 MST")
+	cx.task.AddEvidence("calc", "data = "+out)
+	return brStep{obs: rvNoCmd(), ok: true, val: out}
 }
 
 // brRefill re-reads the request under another intent's slot schema and

@@ -1075,3 +1075,115 @@ func TestNLUIcaseGuards(t *testing.T) {
 		}
 	}
 }
+
+// Janelas temporais: a polaridade e o bound certo, nunca o inverso e
+// nunca a frase virando operando de nome/dir.
+func TestNLUDateWindowGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, c := range []struct {
+		text string
+		want map[string]string
+		miss []string
+	}{
+		// "not modified in the last X" é o complemento — older, nunca
+		// newer, e sem exclusão inventada
+		{"find all files not modified in the last 24 hours",
+			map[string]string{"older": "1440"}, []string{"newer", "exclude"}},
+		{"find files modified within the past 24 hours",
+			map[string]string{"newer": "1440"}, []string{"older"}},
+		{"delete all files modified more than 7 days ago",
+			map[string]string{"older": "10080"}, []string{"newer"}},
+		{"find files modified yesterday",
+			map[string]string{"newer": "2880", "older": "1440"}, nil},
+		// "except those modified today" = fora da banda de hoje
+		{"find files except those modified today",
+			map[string]string{"older": "1440"}, []string{"exclude", "newer"}},
+		{"find files accessed in the last hour",
+			map[string]string{"newer": "60", "tfield": "atime"}, nil},
+		{"find files changed in the last 5 minutes",
+			map[string]string{"newer": "5", "tfield": "ctime"}, nil},
+		{"search for files modified more than an hour ago",
+			map[string]string{"older": "60"}, []string{"name"}},
+		{"find files that were modified in the last fortnight",
+			map[string]string{"newer": "20160"}, []string{"name"}},
+		{"find files modified in March 2007",
+			map[string]string{"newer_date": "2007-03-01",
+				"older_date": "2007-04-01"}, []string{"dir", "name"}},
+	} {
+		in := m.Parse(c.text, w)
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", c.text, k,
+					in.Slots[k], v, in.Slots)
+			}
+		}
+		for _, k := range c.miss {
+			if in.Slots[k] != "" {
+				t.Errorf("%q slots %s=%q devia estar vazio (%v)",
+					c.text, k, in.Slots[k], in.Slots)
+			}
+		}
+		if len(in.Dropped) > 0 {
+			t.Errorf("%q dropped=%v — operando temporal evaporou",
+				c.text, in.Dropped)
+		}
+	}
+}
+
+// Datas absolutas: ISO, nomes de mês com sufixo ordinal e o bound
+// inclusivo do "between A and B" (~ no teto).
+func TestNLUDateBoundGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, c := range []struct {
+		text       string
+		newer, old string
+	}{
+		{"find files modified between 2014-08-25 and 2014-08-26",
+			"2014-08-25", "2014-08-26~"},
+		{"find files modified between August 10th and August 17th",
+			"cur-08-10", "cur-08-17~"},
+		{"find files modified after February 1 of the current year",
+			"cur-02-01", ""},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Slots["newer_date"] != c.newer {
+			t.Errorf("%q newer_date=%q want %q", c.text,
+				in.Slots["newer_date"], c.newer)
+		}
+		if in.Slots["older_date"] != c.old {
+			t.Errorf("%q older_date=%q want %q", c.text,
+				in.Slots["older_date"], c.old)
+		}
+		if in.Slots["name"] != "" || in.Slots["dir"] != "" {
+			t.Errorf("%q frase de data virou operando: %v", c.text, in.Slots)
+		}
+	}
+}
+
+// date_show: nome de dia, epoch e offset com sinal.
+func TestNLUDateShowGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, c := range []struct {
+		text string
+		want map[string]string
+	}{
+		{"print yesterday's date", map[string]string{"when": "yesterday"}},
+		{"show the date for tomorrow + 2 days + 10 minutes",
+			map[string]string{"when": "tomorrow", "offset": "2890"}},
+		{"print the date 3 days ago", map[string]string{"offset": "-4320"}},
+		{"convert epoch second 1267619929 to date",
+			map[string]string{"epoch": "1267619929"}},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != "date_show" {
+			t.Errorf("%q intent=%q want date_show", c.text, in.Name)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("%q slots %s=%q want %q (%v)", c.text, k,
+					in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+}

@@ -843,3 +843,79 @@ func TestBrainGrepIcase(t *testing.T) {
 		t.Fatalf("icase não dobrou o literal:\n%s", r.Text)
 	}
 }
+
+// Janela temporal real: arquivo velho (48h) vs novo — o filtro de
+// minutos separa os dois e a negação inverte o lado certo.
+func TestBrainFindDateWindow(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "fresh.txt", "f\n", "stale.txt", "s\n")
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(filepath.Join(root, "stale.txt"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	env, _ := brTestEnv(t, root, nil, -1)
+
+	r := brRun(context.Background(), env, "find files modified in the last 24 hours")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if !strings.Contains(r.Text, "fresh.txt") || strings.Contains(r.Text, "stale.txt") {
+		t.Errorf("janela 24h devia listar só fresh.txt:\n%s", r.Text)
+	}
+
+	r = brRun(context.Background(), env, "find all files not modified in the last 24 hours")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if !strings.Contains(r.Text, "stale.txt") || strings.Contains(r.Text, "fresh.txt") {
+		t.Errorf("fora da janela devia listar só stale.txt:\n%s", r.Text)
+	}
+}
+
+// Delete por idade: só o arquivo velho some — a janela negada não
+// pode apagar o recente (era o bug do exclude:modified+newer).
+func TestBrainDeleteOlderWindow(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "keep.txt", "k\n", "old.log", "o\n")
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	if err := os.Chtimes(filepath.Join(root, "old.log"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "delete all files modified more than 7 days ago")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "old.log")); !os.IsNotExist(err) {
+		t.Error("old.log devia ter sido deletado")
+	}
+	if _, err := os.Stat(filepath.Join(root, "keep.txt")); err != nil {
+		t.Error("keep.txt sumiu — janela deletou arquivo novo")
+	}
+}
+
+// date_show: calcula e imprime — epoch converte pro valor certo e a
+// data vai pro texto (verificável, sem chamada externa).
+func TestBrainDateShow(t *testing.T) {
+	root := brFixture(t)
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "convert epoch second 1267619929 to date")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if !strings.Contains(r.Text, "2010-03-03") {
+		t.Errorf("epoch 1267619929 devia dar 2010-03-03:\n%s", r.Text)
+	}
+	r = brRun(context.Background(), env, "print yesterday's date")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	want := time.Now().Add(-24 * time.Hour).Format("2006-01-02")
+	if !strings.Contains(r.Text, want) {
+		t.Errorf("yesterday devia mostrar %s:\n%s", want, r.Text)
+	}
+}
