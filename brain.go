@@ -461,6 +461,15 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 			res.Method = f[1] // the last method tried
 		}
 	}
+	// Alexandria: um procedimento do acervo que rodou conta o uso — sucesso
+	// verificado soma, falha objetiva desconta (axUse no-ops fora do acervo
+	// e fora do portão nuForgeOn).
+	switch task.Status {
+	case tkSucceeded:
+		axUse(res.Method, true)
+	case tkFailed:
+		axUse(res.Method, false)
+	}
 	if res.Remember && res.Status == tkSucceeded && nuForgeOn() {
 		// [l] — layer 1 of the forge: the pair text→intent becomes a personal
 		// alias (instant, this machine only); mutating targets still ask for

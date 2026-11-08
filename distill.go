@@ -3241,6 +3241,7 @@ func dsRun(ctx context.Context, root string, o dsOpts) (*dsReport, error) {
 			}
 		}
 		ov.Prov = append(ov.Prov, dsProv{Plan: c.Plan.ID, Task: oneLine(c.Plan.Task, 120), Intent: g.Intent, Method: c.Method.Name, Wins: c.Plan.Wins, Ts: now})
+		axNoteDistilled(c) // a Alexandria guarda o registro causal do que o portão aceitou (alexandria.go)
 	}
 	if len(rep.Added) == 0 {
 		rep.Reason = "rejeitado: nenhum plano passou o portão"

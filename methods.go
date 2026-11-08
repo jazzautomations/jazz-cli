@@ -121,6 +121,7 @@ func mhLibrary() (map[string][]mhMethod, error) {
 		}
 		if nuForgeOn() {
 			dsLoadMethods(mhLib) // métodos aprendidos (distill.go), mesma cerca do overlay da gramática
+			axLoadMethods(mhLib) // procedimentos ativos da Alexandria (alexandria.go), atrás de todos
 		}
 	})
 	return mhLib, mhErr
