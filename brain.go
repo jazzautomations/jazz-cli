@@ -1005,6 +1005,11 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 		ok, unavailable, why := brVerify(cx, m)
 		switch {
 		case ok:
+			if ignored := brSlotIgnored(cx, m); ignored != "" {
+				cx.say("não verificado: %s", ignored)
+				t.must(tkUnverified, ignored)
+				return
+			}
 			t.must(tkSucceeded, "verificado: "+brChecks(m))
 		case unavailable:
 			cx.cat = rvVerifierUnavailable
@@ -1106,6 +1111,46 @@ func brRecover(cx *brCtx, obs rvObs, why string, next *bool) (done bool) {
 		t.must(then, msg)
 	}
 	return true
+}
+
+// brObjectiveSlots — operandos que MUDAM o pedido se ignorados: "saves to
+// output.file" preenche `out`; um método que nunca o referencia respondeu
+// outra pergunta. Filtros (ext, name, newer…) não entram — método sem eles
+// ainda cumpre o mesmo objetivo, só mais largo.
+var brObjectiveSlots = []string{"out", "save", "dest", "to_dir", "new_name", "new_ext", "prefix", "suffix"}
+
+// brSlotIgnored: slot-objetivo preenchido no intent mas nunca referenciado
+// pelo método vencedor (steps, verify, need) — o pedaço do pedido que
+// ninguém executou. Retorna "" ou a razão.
+func brSlotIgnored(cx *brCtx, m mhMethod) string {
+	uses := map[string]bool{}
+	for _, st := range m.Steps {
+		for _, v := range st.In {
+			for _, s := range brObjectiveSlots {
+				if strings.Contains(v, "$slot."+s) {
+					uses[s] = true
+				}
+			}
+		}
+		if st.Cap == "need" {
+			for _, s := range strings.Split(st.In["slots"], "|") {
+				uses[strings.TrimSpace(s)] = true
+			}
+		}
+	}
+	for _, v := range m.Verify {
+		for _, s := range brObjectiveSlots {
+			if strings.Contains(v.Arg, "$slot."+s) || strings.Contains(v.Arg2, "$slot."+s) {
+				uses[s] = true
+			}
+		}
+	}
+	for _, s := range brObjectiveSlots {
+		if v := cx.task.Slots[s]; v != "" && !uses[s] {
+			return fmt.Sprintf("operando %s=%q ignorado — método %s não o consome", s, v, m.Name)
+		}
+	}
+	return ""
 }
 
 func brLastEvidence(t *TaskState) []string {

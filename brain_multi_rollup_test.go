@@ -33,3 +33,26 @@ func TestMultiRollupWorstStatus(t *testing.T) {
 		t.Fatalf("produtor vazio + move: status=%s\n%s", r.Status, r.Text)
 	}
 }
+
+// An objective slot the winning method never consumes = a part of the
+// request nobody executed → unverified, never green. (nb-0062: "saves to
+// output.file" fell to list_files.tree after the write was blocked — the
+// verify proved the tree, not the save.)
+func TestSlotIgnoredUnverified(t *testing.T) {
+	m := mhMethod{
+		Name: "list_files.read",
+		Steps: []mhStep{
+			{Cap: "script:tree_summary", In: map[string]string{"path": "$slot.dir"}},
+		},
+		Verify: []mhCheck{{Check: "script_ok"}},
+	}
+	cx := &brCtx{task: &TaskState{Slots: map[string]string{"out": "output.file"}}}
+	if got := brSlotIgnored(cx, m); got == "" {
+		t.Fatal("out ignorado passou batido")
+	}
+	cx.task.Slots["out"] = ""
+	cx.task.Slots["ext"] = "log" // filtro não-objetivo nunca reclama
+	if got := brSlotIgnored(cx, m); got != "" {
+		t.Fatalf("filtro não-objetivo reclamou: %s", got)
+	}
+}
