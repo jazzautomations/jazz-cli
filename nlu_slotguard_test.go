@@ -319,8 +319,6 @@ func TestNLUQuotedOperandGuards(t *testing.T) {
 			}},
 		{`Print a count of all unique entries in "ips.txt"`, "text_count",
 			func(s map[string]string) bool { return s["file"] == "ips.txt" }},
-		{`List the number of occurrences of each unique character in "The quick brown fox"`, "text_count",
-			func(s map[string]string) bool { return s["file"] == "" }},
 		{`Print the contents of "numbers.txt"`, "open_file",
 			func(s map[string]string) bool { return s["target"] == "numbers.txt" }},
 	} {
@@ -397,6 +395,116 @@ func TestNLUNameAnchorGuards(t *testing.T) {
 			}},
 		{`Counts total number of lines in a git repository`, "wordcount_stats",
 			func(s map[string]string) bool { return s["dir"] == "" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
+
+func TestNLUOutputTargetGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Find all *.swp files and print the list to a file named 'rm'`, "file_find",
+			func(s map[string]string) bool {
+				return s["ext"] == "swp" && s["out"] == "rm" && s["name"] == ""
+			}},
+		{`save the list to "output.txt"`, "list_files",
+			func(s map[string]string) bool { return s["out"] == "output.txt" }},
+		{`move 'a.txt' to 'b.txt'`, "file_move",
+			func(s map[string]string) bool { return s["dest"] == "b.txt" }},
+		{`sort data.csv to sorted.csv`, "sort_op",
+			func(s map[string]string) bool { return s["to"] == "sorted.csv" && s["file"] == "data.csv" }},
+		{`Ungzip and untar all files matching "www-backup.tar.*"`, "archive_extract",
+			func(s map[string]string) bool {
+				return s["namepat"] == "www-backup.tar.*" && s["arc"] == ""
+			}},
+		{`mkdir "data"`, "create",
+			func(s map[string]string) bool { return s["target"] == "data" && s["type"] == "dir" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+
+	// "Output only the filetype suffix of X" não é busca — sem capacidade
+	// determinística a resposta honesta é confiança baixa, não file_find.
+	in := m.Parse(`Output only the filetype suffix of "foo.tar.gz", in this case "gz"`, w)
+	if in.Name == "file_find" {
+		t.Errorf("metaask vazou pra file_find: slots=%v", in.Slots)
+	}
+}
+
+func TestBrSaveTailNoSplit(t *testing.T) {
+	m, w := nuTestWorld(t)
+	if parts := brSplitMulti(`Find all *.swp files and print the list to a file named 'rm'`, m, w); len(parts) != 0 {
+		t.Errorf("cauda de persistência virou split: %v", parts)
+	}
+	// split legítimo segue: duas tasks independentes continuam duas
+	if parts := brSplitMulti(`find *.log files and delete them`, m, w); len(parts) < 2 {
+		t.Errorf("split legítimo morreu: %v", parts)
+	}
+}
+
+func TestNLUSetPatternGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Find all *conf* files and grep 'timeout' in them`, "text_grep",
+			func(s map[string]string) bool {
+				return s["namepat"] == "*conf*" && s["pattern"] == "timeout" && s["dir"] == ""
+			}},
+		{`display a long listing of all the normal files in the current folder (print0 for each)`, "list_files",
+			func(s map[string]string) bool { return s["dir"] == "" && s["type"] == "file" }},
+		{`grep 'timeout' in all config files`, "text_grep",
+			func(s map[string]string) bool { return s["namepat"] == "*config*" && s["dir"] == "" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+
+	// semântica por-item ("de cada palavra/caractere") não tem método
+	// determinístico — recusa honesta, nunca contagem fabricada.
+	for _, s := range []string{
+		`From the list of words in list1.txt, display the number of occurrences of each word in file2.txt`,
+		`List the number of occurrences of each unique character in "The quick brown fox"`,
+	} {
+		if in := m.Parse(s, w); in.Understood() {
+			t.Errorf("%q -> %s (falso positivo de per-item)", s, in.Name)
+		}
+	}
+}
+
+func TestNLUSrcOwnerGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`change the owner of all regular files which belong to root user to admin`, "perm_set",
+			func(s map[string]string) bool {
+				return s["owner"] == "admin" && s["src_owner"] == "root"
+			}},
+		{`chmod 700 on files owned by root`, "perm_set",
+			func(s map[string]string) bool { return s["mode"] == "700" && s["src_owner"] == "root" }},
+		{`change owner of all files to admin`, "perm_set",
+			func(s map[string]string) bool { return s["owner"] == "admin" && s["src_owner"] == "" }},
+		{`files belonging to group www`, "perm_find",
+			func(s map[string]string) bool { return s["group"] == "www" }},
+		{`Search for files owned by user www`, "perm_find",
+			func(s map[string]string) bool { return s["owner"] == "www" && s["src_owner"] == "" }},
 	} {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) {

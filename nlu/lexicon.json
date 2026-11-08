@@ -412,7 +412,11 @@
   "within",
   "without",
   "working",
-  "you"
+  "you",
+  "print0",
+  "printf",
+  "xargs",
+  "-print"
  ],
  "slang": {
   "roda ai": "run",
@@ -2909,6 +2913,18 @@
    "number",
    "número",
    "numero"
+  ],
+  "outtgt": [],
+  "eachitem": [],
+  "regex": [],
+  "metaask": [
+   "filetype",
+   "file type",
+   "suffix",
+   "mimetype",
+   "mime type",
+   "tipo do arquivo",
+   "tipo de arquivo"
   ],
   "extractkind": [
    "emails",

@@ -104,6 +104,11 @@ var brMultiRe = regexp.MustCompile(`\s*(?:;|,\s*e\s+|\s+e\s+depois\s+|\s+depois\
 // arm of a range, never a split point ("entre 2 e 10 minutos").
 var brRangeLeft = regexp.MustCompile(`(?i)\b(between|entre)\s+\S+\s*$`)
 
+// brSaveTail: "…and print/save the list to 'f'" — a cauda de persistência
+// não é task própria: sozinha ela re-listaria TUDO (falso sucesso). O corte
+// é pulado pra frase inteira parsear produtor+out de uma vez.
+var brSaveTailRe = regexp.MustCompile(`(?i)^\s*(print|save|output|write|writes|store|stores|tee|export|exporta|dump|dumps|put|grava|grave|gravar|salva|salve|salvar|escreve|escrever|imprime|imprimir|mostra|mostrar|liste?|lista)\b[^.;]{0,60}\b(list|results?|output|paths?|matches|files|lista|resultados?|arquivos)\b[^.;]{0,40}\b(to|into|para|pra|pro|em|no|na|dentro)\b`)
+
 // brMaskQuotes blanks quoted spans ('...', "...", `...`) so a conjunction
 // inside a file name ("rock and roll.txt") never becomes a split point.
 // The mask preserves offsets — splitting the mask cuts the original right.
@@ -131,6 +136,9 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	for _, loc := range brMultiRe.FindAllStringIndex(masked, -1) {
 		if brRangeLeft.MatchString(text[:loc[0]]) {
 			continue // "entre 2 e 10" — o e pertence à faixa
+		}
+		if brSaveTailRe.MatchString(text[loc[1]:]) {
+			continue // "…e salva a lista em f" — cauda de persistência do produtor
 		}
 		cuts = append(cuts, [2]int{loc[0], loc[1]})
 		if len(cuts) >= 4 {

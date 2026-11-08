@@ -1,6 +1,50 @@
 {
  "methods": [
   {
+   "name": "list_files.save",
+   "intent": "list_files",
+   "priority": 14,
+   "doc": "'save the list to out.txt': file_find produz a listagem do dir, save_list grava e verifica",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.namepat",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "limit": "500"
+     },
+     "out": "res"
+    },
+    {
+     "cap": "save_list",
+     "in": {
+      "from": "$res",
+      "path": "$slot.out"
+     },
+     "out": "saved"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.out"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 600
+  },
+  {
    "name": "list_files.name",
    "intent": "list_files",
    "priority": 13,

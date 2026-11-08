@@ -1,6 +1,129 @@
 {
  "methods": [
   {
+   "name": "perm_set.ownsrc",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'chown files belonging to root to admin': perm_find escopa a fonte (owner), for_each chown, list_owner prova — nunca roda no conjunto inteiro",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:perm_find",
+     "in": {
+      "path": "$slot.dir",
+      "owner": "$slot.src_owner",
+      "type": "$slot.type",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chown",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "max": "256"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_owner",
+     "arg": "$cand",
+     "arg2": "$slot.owner"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 400
+  },
+  {
+   "name": "perm_set.chmodsrc",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'chmod 700 on files owned by root': perm_find escopa (owner/group), for_each chmod — a fonte nunca vira o conjunto inteiro",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:perm_find",
+     "in": {
+      "path": "$slot.dir",
+      "owner": "$slot.src_owner",
+      "type": "$slot.type",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.mode",
+      "max": "256"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_mode",
+     "arg": "$cand",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 400
+  },
+  {
    "name": "perm_set.chmod",
    "intent": "perm_set",
    "priority": 10,
@@ -205,6 +328,14 @@
     {
      "fact": "slot.mode",
      "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -267,6 +398,14 @@
     {
      "fact": "slot.mass",
      "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -327,6 +466,14 @@
     {
      "fact": "slot.mass",
      "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -425,6 +572,14 @@
     {
      "fact": "slot.symexec",
      "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -483,6 +638,14 @@
     {
      "fact": "slot.symexec",
      "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
     }
    ],
    "steps": [
@@ -667,6 +830,14 @@
     },
     {
      "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
      "op": "unset"
     }
    ],

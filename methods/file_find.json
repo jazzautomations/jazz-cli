@@ -1,6 +1,64 @@
 {
  "methods": [
   {
+   "name": "file_find.save",
+   "intent": "file_find",
+   "priority": 12,
+   "doc": "'find X and print list to a file named rm': file_find produz, save_list grava os paths",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.out",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.name",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "sort": "$slot.sort",
+      "newer_min": "$slot.newer",
+      "older_min": "$slot.older",
+      "empty": "$slot.empty",
+      "limit": "$slot.limit",
+      "min_size": "$slot.min_size",
+      "max_size": "$slot.max_size",
+      "name_re": "$slot.name_re",
+      "exclude": "$slot.exclude",
+      "min_depth": "$slot.min_depth",
+      "max_depth": "$slot.max_depth",
+      "time_field": "$slot.tfield",
+      "lines": "$slot.lines",
+      "min_lines": "$slot.min_lines",
+      "max_lines": "$slot.max_lines"
+     },
+     "out": "res"
+    },
+    {
+     "cap": "save_list",
+     "in": {
+      "from": "$res",
+      "path": "$slot.out"
+     },
+     "out": "saved"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.out"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1500
+  },
+  {
    "name": "file_find.script",
    "intent": "file_find",
    "priority": 10,

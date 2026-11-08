@@ -160,7 +160,8 @@
       "who",
       "lineselect",
       "routes",
-      "user"
+      "user",
+      "eachitem"
      ]
     },
     {
@@ -194,7 +195,8 @@
       "envvars",
       "findattr",
       "tag",
-      "perf"
+      "perf",
+      "eachitem"
      ]
     }
    ],
@@ -1015,7 +1017,9 @@
       "net",
       "envvars",
       "findattr",
-      "scaffold"
+      "scaffold",
+      "outtgt",
+      "listverb"
      ]
     }
    ],
@@ -2697,6 +2701,26 @@
       "find",
       "grepword"
      ]
+    },
+    {
+     "all": [
+      "listverb",
+      "outtgt"
+     ],
+     "none": [
+      "sort",
+      "find",
+      "grepword",
+      "mutate",
+      "delete",
+      "content",
+      "forquoted",
+      "nametgt",
+      "permattr",
+      "net",
+      "remote"
+     ],
+     "w": 25
     }
    ],
    "slots": {
@@ -2725,6 +2749,13 @@
       "text"
      ],
      "from": "find:type",
+     "required": false
+    },
+    "out": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:out",
      "required": false
     }
    },
@@ -4269,7 +4300,8 @@
       "create",
       "install",
       "disk",
-      "nametgt"
+      "nametgt",
+      "eachitem"
      ],
      "w": 15
     },
@@ -4285,7 +4317,8 @@
       "create",
       "install",
       "disk",
-      "nametgt"
+      "nametgt",
+      "eachitem"
      ],
      "w": 15
     },
@@ -4306,7 +4339,8 @@
       "move",
       "sort",
       "disk",
-      "nametgt"
+      "nametgt",
+      "eachitem"
      ]
     },
     {
@@ -4326,7 +4360,8 @@
       "move",
       "sort",
       "disk",
-      "nametgt"
+      "nametgt",
+      "eachitem"
      ]
     }
    ],
@@ -4504,7 +4539,8 @@
       "create",
       "makeword",
       "build",
-      "open"
+      "open",
+      "metaask"
      ],
      "w": 15
     },
@@ -4976,6 +5012,13 @@
       "text"
      ],
      "from": "find:namepat"
+    },
+    "out": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:out",
+     "required": false
     }
    },
    "examples": [
@@ -5220,7 +5263,8 @@
       "mutate",
       "sysnoun",
       "envvars",
-      "replace"
+      "replace",
+      "eachitem"
      ],
      "w": 0
     },
@@ -5237,7 +5281,8 @@
       "create",
       "mutate",
       "install",
-      "replace"
+      "replace",
+      "eachitem"
      ],
      "w": 0
     }
@@ -5435,7 +5480,10 @@
       "dedup",
       "session",
       "permattr",
-      "execperm"
+      "execperm",
+      "findattr",
+      "regex",
+      "find"
      ],
      "w": 0
     },
@@ -5461,7 +5509,10 @@
       "dedup",
       "session",
       "permattr",
-      "execperm"
+      "execperm",
+      "findattr",
+      "regex",
+      "find"
      ],
      "w": 5
     },
@@ -5488,7 +5539,10 @@
       "dedup",
       "session",
       "permattr",
-      "execperm"
+      "execperm",
+      "findattr",
+      "regex",
+      "find"
      ],
      "w": 5
     }
@@ -6349,6 +6403,20 @@
       "text"
      ],
      "from": "perm:symnw"
+    },
+    "src_owner": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:src_owner",
+     "required": false
+    },
+    "src_group": {
+     "kinds": [
+      "text"
+     ],
+     "from": "perm:src_group",
+     "required": false
     }
    },
    "examples": [
