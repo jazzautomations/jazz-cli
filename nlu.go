@@ -1469,6 +1469,25 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			conf *= 0.5
 		}
 		in.Evidence = append(in.Evidence, fmt.Sprintf("nenhuma regra; classificador: %s p=%.2f", m.data.Intents[cls].Name, p))
+		if strings.HasPrefix(m.data.Intents[choice].Name, dsLearnedPrefix) {
+			// paráfrase de intenção aprendida é palpite, não veredito: nunca
+			// auto-executa e cede a liderança ao melhor candidato
+			// determinístico. O atalho exato (alias/shape, 0.97) não passa
+			// por aqui — continua disparando normal.
+			var allow []int
+			for i, d := range m.data.Intents {
+				if !strings.HasPrefix(d.Name, dsLearnedPrefix) {
+					allow = append(allow, i)
+				}
+			}
+			if c2, p2 := m.classify(canon, allow); c2 >= 0 {
+				in.Alt = append([]string{m.data.Intents[choice].Name}, in.Alt...)
+				in.Evidence = append(in.Evidence, fmt.Sprintf("aprendida %s por paráfrase cedeu a %s", m.data.Intents[choice].Name, m.data.Intents[c2].Name))
+				choice, conf = c2, p2*0.75
+			} else {
+				conf *= 0.5 // nada determinístico perto: segue sugestão fraca
+			}
+		}
 	case len(matches) == 1 || matches[0].score > matches[1].score:
 		choice = matches[0].intent
 		conf = 0.9
