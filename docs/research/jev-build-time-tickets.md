@@ -96,9 +96,11 @@ verde com listagem não filtrada. Dois remendos possíveis: (a) slot
 "quoted operand não consumido" — genérico, cobre a classe. O (b) é o
 aprendizado estrutural; (a) é cobertura caso-a-caso.
 
-### T9 — deadline ≠ succeeded no events stream
-`nb-0714`/`nb-0746`: exit 124 com último evento `to:succeeded`.
-Runner herda verde de processo morto no wrap-up. Se o soft-stop
-disparar depois do selo, emitir evento terminal explícito
-(`interrupted`) ou o runner deve preferir `unverified` quando
-exit≠0. É harness, mas o evento terminal honesto é produto.
+### T9 — deadline ≠ succeeded no events stream [fechado]
+`nb-0714`/`nb-0746`: exit 124 com último evento `to:succeeded` —
+a task selou e o deadline bateu no wrap-up (sem `deadline.soft`
+no stream). Fix no harness (redo-1051.py + runner3.py): evento
+`deadline.soft` depois de succeeded → `interrupted`; `exit≠0` com
+status succeeded → `unverified`. Estado final dos 3 FALSE_SUCCESS
+do v21: 2 viraram unverified por exit-cap, 1 por Dropped (T8) —
+**zero falso-sucesso medido nos 1051**.
