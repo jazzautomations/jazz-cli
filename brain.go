@@ -109,6 +109,11 @@ var brRangeLeft = regexp.MustCompile(`(?i)\b(between|entre)\s+\S+\s*$`)
 // é pulado pra frase inteira parsear produtor+out de uma vez.
 var brSaveTailRe = regexp.MustCompile(`(?i)^\s*(print|save|output|write|writes|store|stores|tee|export|exporta|dump|dumps|put|grava|grave|gravar|salva|salve|salvar|escreve|escrever|imprime|imprimir|mostra|mostrar|liste?|lista)\b[^.;]{0,60}\b(list|results?|output|paths?|matches|files|lista|resultados?|arquivos)\b[^.;]{0,40}\b(to|into|para|pra|pro|em|no|na|dentro)\b`)
 
+// brPossTail: "and their group"/"e seus arquivos" — a possessive right
+// after the conjunction continues the LEFT noun-phrase (owner and their
+// group), never starts a new clause.
+var brPossTail = regexp.MustCompile(`(?i)^\s*(their|its|his|her|seu|sua|seus|suas|dele|dela|deles|delas)\b`)
+
 // brMaskQuotes blanks quoted spans ('...', "...", `...`) so a conjunction
 // inside a file name ("rock and roll.txt") never becomes a split point.
 // The mask preserves offsets — splitting the mask cuts the original right.
@@ -139,6 +144,9 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 		}
 		if brSaveTailRe.MatchString(text[loc[1]:]) {
 			continue // "…e salva a lista em f" — cauda de persistência do produtor
+		}
+		if brPossTail.MatchString(text[loc[1]:]) {
+			continue // "and their group" — possessivo continua a oração
 		}
 		cuts = append(cuts, [2]int{loc[0], loc[1]})
 		if len(cuts) >= 4 {

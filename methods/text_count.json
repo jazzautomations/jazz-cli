@@ -34,6 +34,179 @@
    ]
   },
   {
+   "name": "text_count.each_ext",
+   "intent": "text_count",
+   "priority": 9,
+   "doc": "conta ocorrências do padrão sobre conjunto (file_find produz, for_each soma count; teto 64)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "ext": "$slot.ext",
+      "type": "file",
+      "limit": "64"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_count",
+      "pattern": "$slot.pattern",
+      "regex": "$slot.rx",
+      "sum": "count",
+      "max": "64"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1200
+  },
+  {
+   "name": "text_count.each_name",
+   "intent": "text_count",
+   "priority": 9,
+   "doc": "conta ocorrências do padrão sobre conjunto (file_find produz, for_each soma count; teto 64)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namepat",
+     "op": "set"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.namepat",
+      "type": "file",
+      "limit": "64"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_count",
+      "pattern": "$slot.pattern",
+      "regex": "$slot.rx",
+      "sum": "count",
+      "max": "64"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1200
+  },
+  {
+   "name": "text_count.each_all",
+   "intent": "text_count",
+   "priority": 9,
+   "doc": "conta ocorrências do padrão sobre conjunto (file_find produz, for_each soma count; teto 64)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.namepat",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "*",
+      "type": "file",
+      "limit": "64"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "script:text_count",
+      "pattern": "$slot.pattern",
+      "regex": "$slot.rx",
+      "sum": "count",
+      "max": "64"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 1200
+  },
+  {
    "name": "text_count.no_python",
    "intent": "text_count",
    "priority": 1,

@@ -1,6 +1,8 @@
 # perm_find: files/dirs under a path selected by permission bits and owner —
 # "which files are 777", "suid bit set", "world-writable". Pure lstat walk,
 # no chmod, 4s budget, sorted output. Python 3.8+ stdlib only.
+import fnmatch
+import re
 import stat
 import time
 
@@ -35,6 +37,14 @@ if mode_s is not None:
         fail("mode must be an octal like 777 or 4755")
     exact = int(mode_s, 8)
 
+bits_s = arg("bits")
+bits = None
+if bits_s is not None:
+    bits_s = str(bits_s).strip().lstrip("0") or "0"
+    if not all(c in "01234567" for c in bits_s) or len(bits_s) > 4:
+        fail("bits must be an octal mask like 220 or 444")
+    bits = int(bits_s, 8)
+
 kind = str(arg("type", "any")).lower()
 if kind not in ("any", "file", "dir"):
     fail("type must be any, file or dir")
@@ -55,6 +65,16 @@ orphan = as_bool(ARGS.get("orphan"), False)
 not_exec = as_bool(ARGS.get("not_executable"), False)
 not_ww = as_bool(ARGS.get("not_world_writable"), False)
 not_mode = as_bool(ARGS.get("not_mode"), False)
+name = arg("name")
+name_l = str(name).lower() if name is not None else None
+ext = arg("ext")
+exts = []
+if ext is not None:
+    for piece in str(ext).lower().split(","):
+        piece = piece.strip().lstrip("*.")
+        if not piece or not re.fullmatch(r"[0-9a-z_]+", piece):
+            fail("ext must be a plain extension like 'log' or '.py'")
+        exts.append(piece)
 for lbl, val in (("owner", owner), ("not_owner", not_owner),
                  ("group", group), ("not_group", not_group)):
     if val is not None:
@@ -68,11 +88,12 @@ except (TypeError, ValueError):
     fail("limit must be an integer")
 limit = max(1, min(limit, 5000))
 
-if (exact is None and not (want_ww or want_suid or want_sgid or want_exec
+if (exact is None and bits is None
+        and not (want_ww or want_suid or want_sgid or want_exec
         or want_exec_all or want_uread or want_aread
         or owner or not_owner or group or not_group or no_owner or no_group
         or orphan or not_exec or not_ww)):
-    fail("pass a filter: mode/not_mode, world_writable, suid, sgid, "
+    fail("pass a filter: mode/not_mode, bits, world_writable, suid, sgid, "
          "executable/not_executable, everyone_exec, "
          "user_readable/world_readable, owner/not_owner, group/not_group, "
          "no_owner, no_group or orphan")
@@ -154,6 +175,8 @@ def match(st):
         return False
     if exact is not None and stat.S_IMODE(m) != exact:
         return False
+    if bits is not None and (stat.S_IMODE(m) & bits) != bits:
+        return False
     if want_ww and not (m & stat.S_IWOTH):
         return False
     if want_suid and not (m & stat.S_ISUID):
@@ -205,6 +228,10 @@ for d, dirs, files in os.walk(top, followlinks=False):
     dirs[:] = sorted(pruned)
     for x in dirs + files:
         if not include_hidden and hidden(x):
+            continue
+        if name_l and not fnmatch.fnmatch(x.lower(), name_l):
+            continue
+        if exts and x.lower().rsplit(".", 1)[-1] not in exts:
             continue
         p = os.path.join(d, x)
         try:

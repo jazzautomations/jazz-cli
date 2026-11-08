@@ -65,6 +65,70 @@
    "cost_ms": 400
   },
   {
+   "name": "perm_set.grpsrc",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'chgrp files with group owner vboxusers to staff': perm_find escopa a fonte (group), for_each chgrp, list_owner prova — nunca roda no conjunto inteiro",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:perm_find",
+     "in": {
+      "path": "$slot.dir",
+      "group": "$slot.src_group",
+      "type": "$slot.type",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chgrp",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "max": "256"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_group",
+     "arg": "$cand",
+     "arg2": "$slot.group"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 400
+  },
+  {
    "name": "perm_set.chmodsrc",
    "intent": "perm_set",
    "priority": 8,
@@ -96,6 +160,65 @@
      "in": {
       "path": "$slot.dir",
       "owner": "$slot.src_owner",
+      "type": "$slot.type",
+      "limit": "256"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.mode",
+      "max": "256"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_mode",
+     "arg": "$cand",
+     "arg2": "$slot.mode"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 400
+  },
+  {
+   "name": "perm_set.chmodgrpsrc",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "'chmod 700 on files with group owner vboxusers': perm_find escopa (group), for_each chmod — a fonte nunca vira o conjunto inteiro",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:perm_find",
+     "in": {
+      "path": "$slot.dir",
+      "group": "$slot.src_group",
       "type": "$slot.type",
       "limit": "256"
      },
@@ -196,6 +319,14 @@
     },
     {
      "fact": "slot.group",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
      "op": "unset"
     }
    ],

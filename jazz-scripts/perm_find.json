@@ -16,6 +16,10 @@
         "type": "string",
         "description": "exact octal permission bits to match ('777', '4755')"
       },
+      "bits": {
+        "type": "string",
+        "description": "octal AND-mask: every listed bit must be set ('220' = owner+group write, '444' = all read)"
+      },
       "world_writable": {
         "type": "boolean",
         "description": "only entries writable by others"

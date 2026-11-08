@@ -512,3 +512,246 @@ func TestNLUSrcOwnerGuards(t *testing.T) {
 		}
 	}
 }
+
+// replace/slice/perm: palavras de contagem não são texto-a-substituir,
+// cue-words de slice não viram unfed, segundo arquivo não cabe em método
+// de arquivo único, e "group owner X" é filtro de origem (nunca alvo).
+func TestNLUSlicePermGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Replace all occurrences of foo (case insensitive) with bar in all *.css files`, "text_replace",
+			func(s map[string]string) bool {
+				return s["from"] == "foo" && s["to"] == "bar" && s["ext"] == "css"
+			}},
+		{`Replace every instance of "bad" with "good" in notes.txt`, "text_replace",
+			func(s map[string]string) bool { return s["from"] == "bad" && s["to"] == "good" }},
+		{`Find out all *.sh owned by user vivek`, "perm_find",
+			func(s map[string]string) bool { return s["owner"] == "vivek" && s["ext"] == "sh" }},
+		{`change owner and group of all files with group owner vboxusers into home directory`, "perm_set",
+			func(s map[string]string) bool {
+				return s["src_group"] == "vboxusers" && s["group"] == ""
+			}},
+		{`tail the last 50 lines of report.txt`, "line_slice",
+			func(s map[string]string) bool { return s["tail"] == "50" && s["file"] == "report.txt" }},
+		{`show first 10 lines of log.txt`, "line_slice",
+			func(s map[string]string) bool { return s["start"] == "1" && s["end"] == "10" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !in.Understood() || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s conf=%.2f slots=%v", tc.text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+
+	// segundo operando-arquivo órfão: o método roda UM arquivo — rodar só
+	// o primeiro seria falso sucesso; cai pra clarify.
+	if in := m.Parse(`Print unique lines in "file_a" and "file_b"`, w); in.Understood() {
+		t.Errorf("multi-file slice -> %s %.2f (falso positivo)", in.Name, in.Confidence)
+	}
+}
+
+// guards do lote: nome de dir não paga shape-penalty, '*dir' não é typo
+// de mkdir, filler não alimenta slot por entity-hit, 'spaces in names'
+// vira glob '* *', e glob nunca entra no slot file (required-backfill).
+func TestNLUMiscGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`mkdir data`, "create",
+			func(s map[string]string) bool { return s["target"] == "data" && s["type"] == "dir" }},
+		{`create a directory called mydir`, "create",
+			func(s map[string]string) bool { return s["target"] == "mydir" && s["type"] == "dir" }},
+		{`list files with spaces in their names`, "list_files",
+			func(s map[string]string) bool { return s["namepat"] == "* *" }},
+		{`find files whose names contain spaces`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "* *" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !in.Understood() || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s conf=%.2f slots=%v", tc.text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+
+	// glob nunca preenche slot file de arquivo único → miss honesto
+	in := m.Parse(`Counts the number of lines in each *.hpp or *.cpp file`, w)
+	if in.Slots["file"] == "*.cpp" || in.Slots["file"] == "*.hpp" {
+		t.Errorf("glob vazou pro slot file: %v", in.Slots)
+	}
+
+	// 'mydir' não é typo de 'mkdir'; 'separated' não é typo de 'separator'
+	for _, s := range []string{
+		`Print out the names of all directories in mydir recursively`,
+		`Print working directory separated by newlines`,
+	} {
+		if in := m.Parse(s, w); in.Name == "create" {
+			t.Errorf("%q -> create (typo-repair engoliu palavra real)", s)
+		}
+	}
+}
+
+// O "quê" do move é o substantivo depois do verbo — "files in sub
+// directories" move ARQUIVOS (dir é lugar), e uma palavra-dir depois de
+// cue de escopo nunca é o tipo. Sem isso o for_each moveria pastas.
+func TestNLUMoveTypeGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Move all regular files under current directory to ./newdir`, "file_move",
+			func(s map[string]string) bool {
+				return s["dest"] == "./newdir" && s["type"] == "file"
+			}},
+		{`move the files in sub directories to /backup`, "file_move",
+			func(s map[string]string) bool { return s["type"] == "file" }},
+		{`move files in the current directory non-recursively to ./flat`, "file_move",
+			func(s map[string]string) bool { return s["type"] == "file" }},
+		{`move directories to dir`, "file_move",
+			func(s map[string]string) bool { return s["type"] == "dir" }},
+		{`move the directory data to /bak`, "file_move",
+			func(s map[string]string) bool { return s["type"] == "dir" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
+
+// Linguagem de contagem nunca é conteúdo do pattern ("count occurrences
+// of foo" conta foo), e "X of foo" depois de palavra de contagem abre o
+// pattern. O arquivo citado vai pro file, nunca pro pattern.
+func TestNLUCountPatternGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`count occurrences of foo in report.txt`, "text_count",
+			func(s map[string]string) bool {
+				return s["file"] == "report.txt" && s["pattern"] == "foo"
+			}},
+		{`Search for the regex '^aaa$' in all *.txt files under current directory and count the number of matches`, "text_count",
+			func(s map[string]string) bool {
+				return s["ext"] == "txt" && s["mass"] == "1" &&
+					s["pattern"] == "^aaa$" && s["rx"] == "1" && s["file"] == ""
+			}},
+		{`how many times does 'error' appear in all *.log files`, "text_count",
+			func(s map[string]string) bool {
+				return s["ext"] == "log" && s["mass"] == "1" && s["pattern"] == "error"
+			}},
+		{`Print a count of all unique entries in "ips.txt"`, "text_count",
+			func(s map[string]string) bool { return s["pattern"] != "ips.txt" }},
+		{`search files containing foo`, "text_grep",
+			func(s map[string]string) bool {
+				return s["mass"] == "1" && s["pattern"] == "foo"
+			}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
+
+// Predicado de nome sem aspas — "named test", "names contain log",
+// "have foo in their names", "begin/end with X" — e uma palavra-ext
+// depois de âncora de nome é literal de prefixo/sufixo, nunca filtro.
+func TestNLUNamePredicateGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`find files named test`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "test" }},
+		{`find files whose names contain log`, "file_find",
+			func(s map[string]string) bool {
+				return s["name"] == "log" && s["ext"] == ""
+			}},
+		{`list files that have foo in their names`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "foo" }},
+		{`find files whose names begin with log`, "file_find",
+			func(s map[string]string) bool {
+				return s["name"] == "log*" && s["ext"] == ""
+			}},
+		{`find files whose names end with bak`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "*bak" }},
+		{`find files matching ERROR`, "find",
+			func(s map[string]string) bool { return s["query"] == "ERROR" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
+
+// "writable by both owner and group" é AND-mask 220 (donO+grupO), nunca
+// world-writable (o+w) — um ww aqui devolveria arquivos errados. O `ww`
+// só dispara com escopo mundo explícito.
+func TestNLUPermBitsGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Search for files/directories which are writable by both their owner and their group`, "perm_find",
+			func(s map[string]string) bool {
+				return s["bits"] == "220" && s["ww"] == ""
+			}},
+		{`find files writable by the owner`, "perm_find",
+			func(s map[string]string) bool {
+				return s["bits"] == "200" && s["ww"] == ""
+			}},
+		{`world-writable files`, "perm_find",
+			func(s map[string]string) bool { return s["ww"] == "true" }},
+		{`find files readable by everyone`, "perm_find",
+			func(s map[string]string) bool {
+				return s["bits"] == "444" || s["aread"] == "true"
+			}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+
+	// "and their group" é posse dentro da mesma oração — nunca split
+	if parts := brSplitMulti(`find files writable by both their owner and their group`, m, w); len(parts) != 0 {
+		t.Errorf("conjunção de classe virou split: %v", parts)
+	}
+}
+
+// Colunas de saída pedidas junto ao find ("with their timestamp and
+// paths", "have been modified") descrevem o LISTING — não viram dir/name.
+func TestNLUFormatWordGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Find all files under current directory with their timestamp and paths and print a sorted list`, "file_find",
+			func(s map[string]string) bool {
+				return s["dir"] == "" && s["name"] == "" && s["type"] == "file"
+			}},
+		{`find all the files in home folder which have been modified in the last 24 hours`, "file_find",
+			func(s map[string]string) bool { return s["name"] == "" && s["newer"] != "" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}

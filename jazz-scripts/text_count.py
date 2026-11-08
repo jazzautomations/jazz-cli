@@ -64,6 +64,8 @@ def bounded_path(value):
 
 if "cmd" in ARGS:
     fail("cmd input is not supported")
+if not arg("file") and arg("path"):
+    ARGS["file"] = arg("path")  # for_each injeta path por item
 if arg("file") is not None:
     bounded_path(arg("file"))
 
