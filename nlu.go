@@ -2142,6 +2142,36 @@ var nuFormatWords = map[string]bool{
 	"modificado": true, "modificada": true,
 }
 
+// nuToolWords: nome de ferramenta/flag de comando e verbo de exibição —
+// "awk used here for print" descreve COMO o usuário faria na mão, nunca
+// um nome de arquivo ou pasta. Cobre os vazamentos tipo dir:"-exec" e
+// name:"will output awk used".
+var nuToolWords = map[string]bool{
+	"awk": true, "sed": true, "xargs": true, "exec": true,
+	"find": true, "grep": true, "egrep": true, "fgrep": true,
+	"will": true, "would": true, "should": true, "shall": true,
+	"output": true, "print": true, "printf": true, "print0": true,
+	"display": true, "displaying": true, "details": true,
+	"discard": true, "discarding": true, "used": true, "using": true,
+	"only": true, "just": true, "somente": true, "here": true,
+	"command": true, "commands": true, "comando": true, "comandos": true,
+}
+
+// nuSizeCueWords: morfologia do predicado de tamanho — "size greater than
+// 100 bytes" é filtro de min_size, o sponge de nome não pode comer
+// "size greater" como se fosse basename.
+var nuSizeCueWords = map[string]bool{
+	"size": true, "sized": true, "tamanho": true,
+	"bytes": true, "byte": true, "kilobytes": true, "kb": true,
+	"megabytes": true, "mb": true, "gigabytes": true, "gb": true,
+	"greater": true, "greatest": true, "larger": true, "largest": true,
+	"bigger": true, "biggest": true, "smaller": true, "smallest": true,
+	"least": true, "most": true, "over": true, "above": true,
+	"below": true, "under": true, "exceeding": true, "longer": true,
+	"maior": true, "maiores": true, "menor": true, "menores": true,
+	"menos": true, "acima": true, "abaixo": true,
+}
+
 var nuCaseFlags = map[string]bool{
 	"case-insensitive": true, "insensitive": true, "case-sensitive": true,
 	"caseinsensitive": true, "sensitive": true, "any-cased": true,
@@ -2461,6 +2491,12 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if nuPermBitToken(toks[i].Fold) {
 						continue // "missing o+w" é sintaxe de permissão
+					}
+					if nuToolWords[toks[i].Fold] || strings.HasPrefix(toks[i].Fold, "-") {
+						continue // ferramenta/flag ("-exec", "awk") nunca é nome
+					}
+					if nuSizeCueWords[toks[i].Fold] {
+						continue // "size greater than" é predicado, não nome
 					}
 					switch toks[i].Fold {
 					case "missing", "missed", "lacking", "faltando",
@@ -4830,8 +4866,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if nuArchiveWord(u.Fold) {
 					continue // "into a tarball" — é o formato do out, não dir
 				}
-				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") {
-					continue // a window, a verb or a shell var is never a dir — leave it for the time slots or unfed
+				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") ||
+					nuToolWords[u.Fold] || strings.HasPrefix(u.Fold, "-") {
+					continue // a window, a verb, a shell var or a tool/flag is never a dir — leave it for the time slots or unfed
 				}
 				if unitWords[u.Fold] {
 					taken[i], taken[j] = true, true
@@ -5930,12 +5967,21 @@ func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
 // "maiores arquivos" stays a sort, not a filter.
 func nuFindSize(toks []nuTok, min bool, taken map[int]bool) string {
 	minSeen, maxSeen, exact := false, false, false
+	// ">100" e ">=100" não são o mesmo filtro — comparativo estrito
+	// ajusta o limiar em ±1 byte (todos os valores viram bytes)
+	strictMin, strictMax := false, false
 	for _, t := range toks {
 		switch t.Fold {
-		case "maior", "maiores", "larger", "bigger", "over", "above", "acima", "exceeding", "least", "more", "minimo", "mínimo", "minimum":
+		case "least", "minimum", "minimo", "mínimo":
 			minSeen = true
-		case "menor", "menores", "menos", "smaller", "under", "below", "less", "ate", "até", "abaixo", "maximo", "máximo", "maximum":
+		case "maior", "maiores", "larger", "bigger", "over", "above", "acima", "exceeding", "more",
+			"greater", "greatest", "largest", "longer":
+			minSeen, strictMin = true, true
+		case "most", "maximum", "maximo", "máximo", "ate", "até":
 			maxSeen = true
+		case "menor", "menores", "menos", "smaller", "under", "below", "less", "abaixo",
+			"smallest", "fewer":
+			maxSeen, strictMax = true, true
 		case "size", "sized", "tamanho", "bytes", "kilobytes", "megabytes", "gigabytes":
 			exact = true // a size cue without a comparative is an exact-size ask
 		}
@@ -5973,7 +6019,15 @@ func nuFindSize(toks []nuTok, min bool, taken map[int]bool) string {
 			continue
 		}
 		taken[i] = true
-		return strconv.FormatInt(int64(n*float64(nuSizeUnit[unit])), 10)
+		v := int64(n * float64(nuSizeUnit[unit]))
+		if minSeen != maxSeen { // comparativo estrito ajusta ±1 byte
+			if min && strictMin {
+				v++
+			} else if !min && strictMax && v > 0 {
+				v--
+			}
+		}
+		return strconv.FormatInt(v, 10)
 	}
 	return ""
 }

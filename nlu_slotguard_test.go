@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Slot guards: a typed slot must never swallow a leftover word of the wrong
 // kind — "regular/normal" is not a limit, "megabytes" is not a directory,
@@ -820,6 +823,31 @@ func TestNLUMassRenameGuards(t *testing.T) {
 		{`find files newer than 3 days`, "file_find",
 			func(s map[string]string) bool {
 				return s["newer"] != "" && s["newer_file"] == ""
+			}},
+		{`move them to backup`, "file_move",
+			func(s map[string]string) bool {
+				return s["dest"] == "backup"
+			}},
+		{`find files with size greater than 100 bytes`, "file_find",
+			func(s map[string]string) bool {
+				return s["min_size"] == "101" && s["max_size"] == "" && s["name"] == ""
+			}},
+		{`find files smaller than 50 bytes`, "file_find",
+			func(s map[string]string) bool {
+				return s["max_size"] == "49" && s["min_size"] == ""
+			}},
+		{`find files at least 100 bytes`, "file_find",
+			func(s map[string]string) bool {
+				return s["min_size"] == "100"
+			}},
+		{`find files at most 200 bytes`, "file_find",
+			func(s map[string]string) bool {
+				return s["max_size"] == "200"
+			}},
+		{`find all file name in curent directory -exec will file all file output awk used here for print only file name`, "file_find",
+			func(s map[string]string) bool {
+				return s["dir"] != "-exec" && !strings.Contains(s["name"], "awk") &&
+					!strings.Contains(s["name"], "output")
 			}},
 	} {
 		in := m.Parse(tc.text, w)

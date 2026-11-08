@@ -172,12 +172,26 @@ func brSplitMulti(text string, m *nuModel, w *nuWorld) []string {
 	return out
 }
 
+// brMissedBeyond reports whether required slots are still missing besides
+// the one the chain itself fills per produced path.
+func brMissedBeyond(missing []string, chainSlot string) bool {
+	for _, m := range missing {
+		if m != chainSlot {
+			return true
+		}
+	}
+	return false
+}
+
 // brChainConsumers: intents that may consume a producer's file list through
 // an anaphora ("apaga eles" → one run per produced path). Value = the slot
 // the produced path fills. Allowlist on purpose: only read/verify-shaped or
 // explicitly-gated ops chain; rename/run/commit never do.
 var brChainConsumers = map[string]string{
 	"delete_file": "target",
+	// file_move encadeia: "acha X e move eles pra DIR" — o destino vem do
+	// re-parse do passo (required), o alvo é cada path produzido
+	"file_move": "target",
 }
 
 // brProducerIntents: intents whose verified output carries `path=` lines the
@@ -245,10 +259,20 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, c
 		var r brResult
 		if i < len(chain) && chain[i] {
 			slot := brChainConsumers[in.Name]
-			if len(produced) == 0 {
+			switch {
+			case len(produced) == 0:
 				r = brResult{Handled: true, Intent: in, Status: tkFailed,
 					Text: "nada pra " + in.Name + " — o passo anterior não produziu arquivos"}
-			} else {
+			case brMissedBeyond(in.Missing, slot):
+				// re-parse do passo deixou slot required vazio ALÉM do que o
+				// chain preenche ("move eles pra outra pasta" falta dest) —
+				// pergunta UMA vez em vez de bloquear cada item do fan-out.
+				// O próprio slot da chain não conta: "apaga eles" tem target
+				// vazio justamente porque a anáfora É o alvo produzido.
+				r = brResult{Handled: true, Intent: in, Status: tkNeedsInput,
+					Miss: true,
+					Text: in.Name + " precisa de: " + strings.Join(in.Missing, ", ")}
+			default:
 				r = brRunEach(ctx, env, parts[i], in, slot, produced)
 			}
 		} else {

@@ -14,7 +14,11 @@
    },
    "name": {
     "type": "string",
-    "description": "glob on the base name ('*.log'); a plain word means contains"
+    "description": "glob on the base name ('*.log'); a plain word is an exact basename ('file' does not match 'file1')"
+   },
+   "namepat": {
+    "type": "string",
+    "description": "substring/pattern on the base name ('*log*' for 'names contain log'); used when name is absent"
    },
    "ext": {
     "type": "string",

@@ -20,6 +20,7 @@
      "in": {
       "path": "$slot.dir",
       "name": "$slot.name",
+      "namepat": "$slot.namepat",
       "ext": "$slot.ext",
       "type": "$slot.type",
       "sort": "$slot.sort",
@@ -74,6 +75,7 @@
      "in": {
       "path": "$slot.dir",
       "name": "$slot.name",
+      "namepat": "$slot.namepat",
       "ext": "$slot.ext",
       "type": "$slot.type",
       "sort": "$slot.sort",

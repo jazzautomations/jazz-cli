@@ -47,14 +47,18 @@ func TestFileFindCardapio(t *testing.T) {
 		t.Errorf("text: %q", txt)
 	}
 
-	// name glob matches base names; a plain word means contains
+	// name glob matches base names; a plain word is EXACT (named X ≠ file1)
 	v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj", "name": "*.log"})
 	if d = scDataOf(v); !scOK(v) || d["count"] != 2.0 {
 		t.Errorf("name=*.log: %v", v)
 	}
-	v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj", "name": "app"})
+	v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj", "name": "app.go"})
 	if d = scDataOf(v); !scOK(v) || d["count"] != 1.0 {
-		t.Errorf("name=app: %v", v)
+		t.Errorf("name=app.go exato: %v", v)
+	}
+	v, _ = scCall(t, tb, "file_find", map[string]any{"path": "proj", "namepat": "*app*"})
+	if d = scDataOf(v); !scOK(v) || d["count"] != 1.0 {
+		t.Errorf("namepat=*app* substring: %v", v)
 	}
 
 	// mtime window: old.log only in the older-than view, today.log only in newer

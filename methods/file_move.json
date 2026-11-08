@@ -1,6 +1,42 @@
 {
  "methods": [
   {
+   "name": "file_move.one",
+   "intent": "file_move",
+   "priority": 11,
+   "doc": "chain anáfora: 'acha X e move eles pra DIR' — um rename por path produzido",
+   "needs": [],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "rename",
+      "path": "$slot.target",
+      "to_dir": "$slot.dest"
+     },
+     "out": "mv"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_gone",
+     "arg": "$slot.target"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 500
+  },
+  {
    "name": "file_move.each",
    "intent": "file_move",
    "priority": 10,

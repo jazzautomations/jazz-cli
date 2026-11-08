@@ -32,6 +32,8 @@ def as_bool(v, default):
 
 
 name = arg("name")
+if name is None:
+    name = arg("namepat") # 'names contain X' → *X* via fnmatch
 if name is not None:
     name = str(name)
 name_re = arg("name_re")
