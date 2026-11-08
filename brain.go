@@ -278,6 +278,15 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, c
 		} else {
 			r = brRunIntent(ctx, env, parts[i], in, brResult{})
 		}
+		if r.Task == nil && (r.Miss || !r.Handled) {
+			// um passo que termina em pergunta/menu sai de brRunIntent ANTES
+			// de newTask — sem evento terminal, o último task da sessão fica
+			// sendo o veredito do passo ANTERIOR e quem lê o stream herda um
+			// sucesso que o run nunca teve (falso sucesso de trabalho parcial)
+			mt := newTask(parts[i], in.Name, in.Slots, env.Sink)
+			mt.must(tkInvestigating, "interpretado")
+			mt.must(tkNeedsInput, oneLine(r.Text, 200))
+		}
 		if brProducerIntents[in.Name] && r.Status == tkSucceeded {
 			produced = brHarvestPaths(r)
 		} else if r.Status != tkSucceeded {
