@@ -7,20 +7,40 @@
    "doc": "chain anáfora: 'acha X e move eles pra DIR' — um rename por path produzido",
    "needs": [],
    "pre": [
-    {"fact": "slot.target", "op": "set"},
-    {"fact": "slot.dest", "op": "set"},
-    {"fact": "slot.pat", "op": "unset"},
-    {"fact": "slot.op", "op": "eq", "val": "rename"}
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.op",
+     "op": "eq",
+     "val": "rename"
+    }
    ],
    "steps": [
     {
      "cap": "file_op",
-     "in": {"op": "rename", "path": "$slot.target", "to_dir": "$slot.dest"},
+     "in": {
+      "op": "rename",
+      "path": "$slot.target",
+      "to_dir": "$slot.dest"
+     },
      "out": "mv"
     }
    ],
    "verify": [
-    {"check": "file_gone", "arg": "$slot.target"}
+    {
+     "check": "file_gone",
+     "arg": "$slot.target"
+    }
    ],
    "risk": "high",
    "cost_ms": 500
@@ -32,21 +52,44 @@
    "doc": "copia alvo único para o destino — fonte preservada, prova dos dois lados",
    "needs": [],
    "pre": [
-    {"fact": "slot.target", "op": "set"},
-    {"fact": "slot.dest", "op": "set"},
-    {"fact": "slot.pat", "op": "unset"},
-    {"fact": "slot.op", "op": "eq", "val": "copy"}
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.op",
+     "op": "eq",
+     "val": "copy"
+    }
    ],
    "steps": [
     {
      "cap": "file_op",
-     "in": {"op": "copy", "path": "$slot.target", "to": "$slot.dest"},
+     "in": {
+      "op": "copy",
+      "path": "$slot.target",
+      "to": "$slot.dest"
+     },
      "out": "mv"
     }
    ],
    "verify": [
-    {"check": "file_exists", "arg": "$mv"},
-    {"check": "file_exists", "arg": "$slot.target"}
+    {
+     "check": "file_exists",
+     "arg": "$mv"
+    },
+    {
+     "check": "file_exists",
+     "arg": "$slot.target"
+    }
    ],
    "risk": "med",
    "cost_ms": 500
@@ -58,24 +101,50 @@
    "doc": "move cada item do filtro para o destino — for_each rename",
    "needs": [],
    "pre": [
-    {"fact": "slot.dest", "op": "set"},
-    {"fact": "slot.pat", "op": "set"},
-    {"fact": "slot.op", "op": "eq", "val": "rename"}
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "set"
+    },
+    {
+     "fact": "slot.op",
+     "op": "eq",
+     "val": "rename"
+    }
    ],
    "steps": [
     {
      "cap": "script:file_find",
-     "in": {"path": "$slot.srcdir", "name": "$slot.pat", "type": "$slot.type", "exclude": "$slot.exclude", "limit": "32"},
+     "in": {
+      "path": "$slot.srcdir",
+      "name": "$slot.pat",
+      "type": "$slot.type",
+      "exclude": "$slot.exclude",
+      "limit": "32",
+      "icase": "$slot.icase"
+     },
      "out": "cand"
     },
     {
      "cap": "for_each",
-     "in": {"from": "$cand", "do": "file_op", "op": "rename", "to_dir": "$slot.dest", "max": "32"},
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "rename",
+      "to_dir": "$slot.dest",
+      "max": "32"
+     },
      "out": "fe"
     }
    ],
    "verify": [
-    {"check": "each_clean", "arg": "$fe"}
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
    ],
    "risk": "high",
    "cost_ms": 2000
@@ -87,24 +156,50 @@
    "doc": "copia cada item do filtro para o destino — for_each cp -r",
    "needs": [],
    "pre": [
-    {"fact": "slot.dest", "op": "set"},
-    {"fact": "slot.pat", "op": "set"},
-    {"fact": "slot.op", "op": "eq", "val": "copy"}
+    {
+     "fact": "slot.dest",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pat",
+     "op": "set"
+    },
+    {
+     "fact": "slot.op",
+     "op": "eq",
+     "val": "copy"
+    }
    ],
    "steps": [
     {
      "cap": "script:file_find",
-     "in": {"path": "$slot.srcdir", "name": "$slot.pat", "type": "$slot.type", "exclude": "$slot.exclude", "limit": "32"},
+     "in": {
+      "path": "$slot.srcdir",
+      "name": "$slot.pat",
+      "type": "$slot.type",
+      "exclude": "$slot.exclude",
+      "limit": "32",
+      "icase": "$slot.icase"
+     },
      "out": "cand"
     },
     {
      "cap": "for_each",
-     "in": {"from": "$cand", "do": "file_op", "op": "copy", "to_dir": "$slot.dest", "max": "32"},
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "copy",
+      "to_dir": "$slot.dest",
+      "max": "32"
+     },
      "out": "fe"
     }
    ],
    "verify": [
-    {"check": "each_clean", "arg": "$fe"}
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
    ],
    "risk": "med",
    "cost_ms": 2000

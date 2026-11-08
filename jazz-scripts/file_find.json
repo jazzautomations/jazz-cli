@@ -122,6 +122,10 @@
    "older_file": {
     "type": "string",
     "description": "project-relative file whose timestamp is the upper bound"
+   },
+   "icase": {
+    "type": "string",
+    "description": "case-insensitive name matching: 1/true=yes, sensitive=refuse (default insensitive globs, sensitive regex)"
    }
   }
  },

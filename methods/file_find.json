@@ -39,7 +39,8 @@
       "older_file": "$slot.older_file",
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
-      "max_lines": "$slot.max_lines"
+      "max_lines": "$slot.max_lines",
+      "icase": "$slot.icase"
      },
      "out": "res"
     },
@@ -98,7 +99,8 @@
       "older_file": "$slot.older_file",
       "lines": "$slot.lines",
       "min_lines": "$slot.min_lines",
-      "max_lines": "$slot.max_lines"
+      "max_lines": "$slot.max_lines",
+      "icase": "$slot.icase"
      },
      "out": "res"
     }

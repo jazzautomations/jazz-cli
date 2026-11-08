@@ -1110,6 +1110,13 @@
       "text"
      ]
     },
+    "icase": {
+     "from": "find:icase",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
     "mass": {
      "from": "find:mass",
      "kinds": [
@@ -4410,6 +4417,13 @@
      ],
      "required": false
     },
+    "icase": {
+     "from": "find:icase",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
     "mass": {
      "from": "find:mass",
      "kinds": [
@@ -4954,6 +4968,13 @@
       "text"
      ]
     },
+    "icase": {
+     "from": "find:icase",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
     "limit": {
      "kinds": [
       "number"
@@ -5416,6 +5437,13 @@
       "file"
      ],
      "required": true
+    },
+    "icase": {
+     "from": "find:icase",
+     "kinds": [
+      "text"
+     ],
+     "required": false
     },
     "mass": {
      "from": "find:mass",
@@ -6741,6 +6769,13 @@
     },
     "ext": {
      "from": "find:ext",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
+    "icase": {
+     "from": "find:icase",
      "kinds": [
       "text"
      ],

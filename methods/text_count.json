@@ -13,7 +13,8 @@
      "cap": "script:text_count",
      "in": {
       "file": "$slot.file",
-      "pattern": "$slot.pattern"
+      "pattern": "$slot.pattern",
+      "ignore_case": "$slot.icase"
      },
      "out": "res"
     }
@@ -79,7 +80,8 @@
       "pattern": "$slot.pattern",
       "regex": "$slot.rx",
       "sum": "count",
-      "max": "64"
+      "max": "64",
+      "ignore_case": "$slot.icase"
      },
      "out": "fe"
     }
@@ -134,7 +136,8 @@
       "pattern": "$slot.pattern",
       "regex": "$slot.rx",
       "sum": "count",
-      "max": "64"
+      "max": "64",
+      "ignore_case": "$slot.icase"
      },
      "out": "fe"
     }
@@ -197,7 +200,8 @@
       "pattern": "$slot.pattern",
       "regex": "$slot.rx",
       "sum": "count",
-      "max": "64"
+      "max": "64",
+      "ignore_case": "$slot.icase"
      },
      "out": "fe"
     }

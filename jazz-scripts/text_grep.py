@@ -54,13 +54,15 @@ try:
     if not 0 <= context <= 10 or not 1 <= limit <= 1000: raise ValueError()
 except (ValueError, TypeError):
     fail("invalid context or limit")
+icase = str(arg("icase", arg("ignore_case", ""))).strip().lower() in ("1", "true", "yes")
+needle = pattern.lower() if icase else pattern
 lines = src.splitlines()
 items = []
 for i, line in enumerate(lines):
     if time.monotonic() - START > 3.5:
         truncated = True
         break
-    if pattern in line:
+    if needle in (line.lower() if icase else line):
         if len(items) >= limit:
             truncated = True
             break

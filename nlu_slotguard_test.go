@@ -1019,3 +1019,59 @@ func TestNLUCopyGuards(t *testing.T) {
 		}
 	}
 }
+
+// "(case insensitive)" é flag de match, nunca operando: "case" não pode
+// colar em name/dir (delete_file name:case deletaria o literal), e o
+// valor flui pro slot icase dos scripts. "less than N days" é
+// comparativo — o slang folda pra "menos" e não pode abrir cláusula de
+// exceção (exclude:days roubava a unidade).
+func TestNLUIcaseGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Search for 'string' case insensitively in all files under current directory tree`, "text_grep",
+			func(s map[string]string) bool {
+				return s["icase"] == "1" && s["pattern"] == "string"
+			}},
+		{`Delete all 1US* (case insensitive) files under current directory`, "delete_file",
+			func(s map[string]string) bool {
+				return s["name"] == "1US*" && s["icase"] == "1"
+			}},
+		{`Delete all files under '/home/backups' directory tree with '.tgz' or '.gz' extension (case insensitive)`, "delete_file",
+			func(s map[string]string) bool {
+				return s["name"] == "" && s["ext"] == "tgz,gz" && s["icase"] == "1"
+			}},
+		{`Find all *.jpg (case-insensitive) files under maximum 2 levels down the temp paths`, "file_find",
+			func(s map[string]string) bool {
+				return s["icase"] == "1" && s["max_depth"] == "2" &&
+					s["name"] != "maximum levels temp"
+			}},
+		{`Find files containing 'blah' in their names modified less than 2 days ago, case insensitive`, "file_find",
+			func(s map[string]string) bool {
+				return s["exclude"] == "" && s["newer"] == "2880" &&
+					s["icase"] == "1" && s["namepat"] == "*blah*"
+			}},
+		{`Search for files/directories with the case insensitive pattern anaconda.* in var/log directory`, "file_find",
+			func(s map[string]string) bool {
+				return s["name"] == "anaconda.*" && s["dir"] == "var/log" && s["icase"] == "1"
+			}},
+		{`Replace all occurrences of foo (case insensitive) with bar in all *.css files`, "text_replace",
+			func(s map[string]string) bool {
+				return s["icase"] == "true" && s["from"] == "foo" && s["to"] == "bar"
+			}},
+		{`find files matching '*.TXT' case sensitive`, "file_find",
+			func(s map[string]string) bool {
+				return s["icase"] == "sensitive"
+			}},
+		{`find all *.txt files`, "file_find",
+			func(s map[string]string) bool { return s["icase"] == "" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}

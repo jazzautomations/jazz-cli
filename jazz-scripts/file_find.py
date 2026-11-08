@@ -36,13 +36,20 @@ if name is None:
     name = arg("namepat") # 'names contain X' → *X* via fnmatch
 if name is not None:
     name = str(name)
+# "(case insensitive)": globs/ext já casam dobrados por padrão; o flag
+# só muda a regex (sensível como no grep). "case sensitive" pedido é
+# impossível de honrar — o match de nome é insensitivo — recusa honesta.
+icase = str(arg("icase", "")).strip().lower()
+if icase == "sensitive":
+    fail("case-sensitive name matching is not supported (names match case-insensitively)")
 name_re = arg("name_re")
 if name_re is not None:
     name_re = str(name_re)
     if len(name_re) > 200:
         fail("name_re too long")
     try:
-        name_re = re.compile(name_re)
+        flags = re.IGNORECASE if icase in ("1", "true", "yes") else 0
+        name_re = re.compile(name_re, flags)
     except re.error as e:
         # glob-shaped text leaked into the regex slot ("pattern '*.rb'") —
         # fnmatch resolves it honestly instead of dying on the regex

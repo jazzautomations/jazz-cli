@@ -2299,6 +2299,16 @@ var nuCaseFlags = map[string]bool{
 	"case-insensitive": true, "insensitive": true, "case-sensitive": true,
 	"caseinsensitive": true, "sensitive": true, "any-cased": true,
 	"anycase": true, "any-case": true, "nocase": true, "caseless": true,
+	"insensitively": true, "sensitively": true, "case-insensitively": true,
+	// "case" solto: "(case insensitive)" tokeniza em duas palavras e o
+	// "case" virava operando de nome/dir (delete_file name:case — deleção
+	// no literal). "in this case" já está no notDirWords do dir_cued.
+	"case": true, "cases": true,
+	// PT: "sem diferenciar maiúsculas de minúsculas"
+	"maiúsculas": true, "minúsculas": true, "maiúscula": true,
+	"minúscula": true, "maiusculas": true, "minusculas": true,
+	"maiúsculo": true, "minúsculo": true,
+	"capitalizado": true, "capitalizada": true,
 }
 
 // fill extracts the slots of def. It also counts unfed — free words a
@@ -3901,12 +3911,41 @@ func nuReplFlag(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 	case "icase":
-		for i := range toks {
-			if toks[i].Fold == "case-insensitive" || toks[i].Fold == "case-insensitively" {
+		// "case insensitive" pode vir em 1 ou 2 tokens; "case sensitive"
+		// volta "" — o replace default JÁ é sensível, é o pedido exato
+		for i, t := range toks {
+			switch t.Fold {
+			case "case-insensitive", "case-insensitively", "caseinsensitive",
+				"caseless", "nocase", "any-cased", "anycase", "any-case",
+				"insensitively":
 				return "true"
-			}
-			if toks[i].Fold == "ignoring" || toks[i].Fold == "ignorando" {
-				return "true"
+			case "insensitive":
+				for j := i - 3; j <= i+3; j++ {
+					if j >= 0 && j < len(toks) && j != i && toks[j].Fold == "case" {
+						return "true"
+					}
+				}
+				return "true" // "insensitive" solto já é flag de case
+			case "ignoring", "ignore", "ignorando", "regardless":
+				for j := i + 1; j <= i+3 && j < len(toks); j++ {
+					if toks[j].Fold == "case" || toks[j].Fold == "casing" {
+						return "true"
+					}
+				}
+			case "case":
+				for j := i + 1; j <= i+3 && j < len(toks); j++ {
+					switch toks[j].Fold {
+					case "insensitive", "insensitively":
+						return "true"
+					}
+				}
+			case "diferenciar", "diferenciando":
+				for j := i + 1; j <= i+4 && j < len(toks); j++ {
+					switch toks[j].Fold {
+					case "maiúsculas", "minúsculas", "maiusculas", "minusculas":
+						return "true"
+					}
+				}
 			}
 		}
 	case "stdin":
@@ -4651,6 +4690,58 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	case "min_depth", "max_depth":
 		return nuFindDepth(toks, what == "min_depth", taken)
+	case "icase":
+		// "(case insensitive)": modificador de match que pode vir em 1 ou
+		// 2 tokens. "case SENSITIVE" volta marcador — o match do glob é
+		// sempre insensitivo e fingir o contrário seria silent wrong.
+		ins, sens := false, false
+		near := func(i int, words ...string) bool {
+			for j := i - 3; j <= i+3; j++ {
+				if j < 0 || j >= len(toks) || j == i {
+					continue
+				}
+				for _, w := range words {
+					if toks[j].Fold == w {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		for i, t := range toks {
+			switch t.Fold {
+			case "case-insensitive", "case-insensitively", "caseinsensitive",
+				"caseless", "nocase", "any-cased", "anycase", "any-case":
+				ins = true
+			case "case-sensitive", "case-sensitively":
+				sens = true
+			case "insensitive", "insensitively":
+				ins = ins || near(i, "case")
+				ins = ins || t.Fold == "insensitively"
+			case "sensitive", "sensitively":
+				sens = sens || near(i, "case")
+			case "case":
+				sens = sens || near(i, "sensitive", "sensitively")
+				ins = ins || near(i, "insensitive", "insensitively",
+					"ignoring", "ignore", "regardless", "without")
+			case "ignoring", "ignore", "ignorando", "regardless":
+				ins = ins || near(i, "case", "casing")
+			case "diferenciar", "diferenciando", "distinction":
+				ins = ins || near(i, "maiúsculas", "minúsculas", "maiusculas",
+					"minusculas", "maiúscula", "minúscula", "case")
+			case "maiúsculas", "maiusculas", "minúsculas", "minusculas",
+				"maiúscula", "minúscula":
+				ins = ins || near(i, "diferenciar", "diferenciando",
+					"ignorando", "ignore", "sem", "ou", "e")
+			}
+		}
+		if sens && !ins {
+			return "sensitive"
+		}
+		if ins {
+			return "1"
+		}
+		return ""
 	case "namelen":
 		// "names are 33 characters long" → name="?×N" (fnmatch ? = 1
 		// char). Só comprimento EXATO — "shorter/longer than N" glob
@@ -5012,13 +5103,28 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					pre = "*"
 					continue
 				}
-				if u.has("nameattr") {
-					continue // "names"/"with"/"filenames" são cue, não valor
+				if u.has("nameattr") || u.has("icase") {
+					continue // "names"/"with"/"filenames" são cue, não
+					// valor; flag de case também ("with .tgz extension
+					// (case insensitive)" não tem name "case")
 				}
 				taken[i], taken[j] = true, true
 				return pre + u.Raw + suf
 			}
 			return ""
+		}
+		// sem cue de nome: um GLOB solto ainda é o filtro do delete —
+		// "Delete all 1US* files" tem "1us*" explícito e sem isso o
+		// mass-delete rodaria SEM nome (catastrófico)
+		for i, t := range toks {
+			if taken[i] || t.Filler || t.has("nametgt") || t.has("forquoted") ||
+				t.has("grepword") || t.has("nameattr") || t.has("icase") {
+				continue
+			}
+			if strings.ContainsAny(t.Raw, "*?[") && !strings.Contains(t.Raw, "/") {
+				taken[i] = true
+				return t.Raw
+			}
 		}
 	case "dir_cued":
 		// "na pasta downloads" / "tmp de arquivos" / "logs of files" — the
@@ -5033,6 +5139,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"em": true, "no": true, "na": true, "nos": true, "nas": true,
 			"in": true, "inside": true, "under": true, "within": true, "dentro": true,
 			"into": true,
+			// "2 levels down the temp paths" — o 'down' da frase de
+			// profundidade é também o cue do escopo
+			"down": true, "abaixo": true,
 		}
 		scopeFillers := map[string]bool{
 			"projeto": true, "project": true, "repo": true, "repositorio": true,
@@ -5156,6 +5265,16 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"ours": true, "their": true, "theirs": true, "its": true,
 			"his": true, "her": true, "hers": true, "if": true,
 			"whether": true, "unless": true, "along": true,
+			// phrasing de janela temporal nunca é pasta: "in their
+			// names modified less than 2 days ago" — 'modified' pode
+			// estar livre ainda (o fill de newer corre em ordem
+			// aleatória vs dir_cued)
+			"modified": true, "modificado": true, "modificada": true,
+			"modificados": true, "modificadas": true, "accessed": true,
+			"changed": true, "created": true, "ago": true, "ha": true,
+			"há": true, "less": true, "fewer": true, "than": true,
+			"within": true, "last": true, "past": true, "older": true,
+			"newer": true, "recent": true, "recente": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -5411,6 +5530,22 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		n, err := strconv.Atoi(t.Fold)
 		if err == nil {
 			taken[i], taken[i+1] = true, true
+			// a phrasing da janela é consumida junto — "modified less
+			// than 2 days ago" deixava "modified" solto e virava dir
+			for k := i - 4; k <= i+3; k++ {
+				if k < 0 || k >= len(toks) {
+					continue
+				}
+				switch toks[k].Fold {
+				case "modified", "modificado", "modificada", "modificados",
+					"modificadas", "accessed", "acessado", "acessada",
+					"changed", "alterado", "alterada", "created", "criado",
+					"criada", "less", "more", "ago", "ha", "há", "within",
+					"last", "past", "older", "newer", "recent", "recente",
+					"than", "do", "que", "in", "em", "at", "least", "most":
+					taken[k] = true
+				}
+			}
 			return strconv.Itoa(n * mult)
 		}
 	}
@@ -6556,7 +6691,7 @@ var nuSizeRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)(b|kb|mb|gb|kib|mib|gib|k|m|g
 // the bound: minimum/more/at least -> min_depth; level N alone or
 // "at most/only" -> max_depth.
 func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
-	cue, minSeen, maxSeen := -1, false, false
+	cue, minSeen, maxSeen := -1, -1, -1
 	for i, t := range toks {
 		switch t.Fold {
 		case "level", "levels", "nível", "níveis", "nivel", "niveis", "depth", "profundidade", "deep":
@@ -6564,20 +6699,24 @@ func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
 				cue = i
 			}
 		case "minimum", "minimo", "mínimo", "least", "at least", "more", "mais", "over", "acima", "deeper":
-			minSeen = true
+			if minSeen < 0 {
+				minSeen = i
+			}
 		case "maximum", "maximo", "máximo", "most", "at most", "only", "ate", "até", "up to", "below", "abaixo", "shallow":
-			maxSeen = true
+			if maxSeen < 0 {
+				maxSeen = i
+			}
 		}
 	}
 	if cue < 0 {
 		return ""
 	}
-	if wantMin != minSeen || (minSeen && maxSeen) {
+	if wantMin != (minSeen >= 0) || (minSeen >= 0 && maxSeen >= 0) {
 		return ""
 	}
-	if !minSeen && !maxSeen && !wantMin {
+	if minSeen < 0 && maxSeen < 0 && !wantMin {
 		// "level 2" with no comparative is an upper bound
-	} else if !wantMin && !maxSeen {
+	} else if !wantMin && maxSeen < 0 {
 		return ""
 	}
 	for i, t := range toks {
@@ -6587,7 +6726,15 @@ func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
 		if i < cue-2 || i > cue+2 {
 			continue
 		}
-		taken[i] = true
+		taken[i], taken[cue] = true, true
+		// o comparativo é phrasing da janela — "maximum levels temp"
+		// solto colava no sponge de name
+		if minSeen >= 0 {
+			taken[minSeen] = true
+		}
+		if maxSeen >= 0 {
+			taken[maxSeen] = true
+		}
 		return t.Fold
 	}
 	return ""
@@ -7032,6 +7179,29 @@ func nuExceptOperands(toks []nuTok, taken map[int]bool) (cues, ops []int, last m
 	for i, t := range toks {
 		if !nuExceptCues[t.Fold] {
 			continue
+		}
+		if t.Fold == "menos" || t.Fold == "less" {
+			// "less than 2 days ago" / "menos de 5 dias" é COMPARATIVO
+			// de quantidade/tempo, não exceção — o slang folda "less
+			// than"→"menos" e o cue engolia a unidade (exclude:days).
+			comparative := false
+			for j := i + 1; j < len(toks) && j <= i+5; j++ {
+				u := &toks[j]
+				if u.Filler || u.Fold == "" {
+					continue
+				}
+				if nuIsNumber(u.Fold) || nuDigitSize(u.Fold) ||
+					u.Fold == "que" || u.Fold == "than" || u.Fold == "de" ||
+					u.Fold == "do" || u.Fold == "of" || u.Fold == "to" ||
+					u.Fold == "a" {
+					comparative = true
+					continue
+				}
+				break
+			}
+			if comparative {
+				continue
+			}
 		}
 		var myOps, pending []int
 		span := i

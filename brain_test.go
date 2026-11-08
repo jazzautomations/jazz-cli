@@ -826,3 +826,20 @@ func TestBrainMassCopyExclude(t *testing.T) {
 		t.Error("secret.txt copiado apesar do except")
 	}
 }
+
+// icase de conteúdo: "case insensitively" dobra o literal — sem o flag
+// o grep perdia 'Error'/'ERROR' num pedido explícito.
+func TestBrainGrepIcase(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "app.log", "INFO ok\nError: falhou\nERROR: de novo\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "search for 'error' case insensitively in file 'app.log'")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if !strings.Contains(r.Text, "Error: falhou") || !strings.Contains(r.Text, "ERROR: de novo") {
+		t.Fatalf("icase não dobrou o literal:\n%s", r.Text)
+	}
+}
