@@ -1,6 +1,108 @@
 {
  "methods": [
   {
+   "name": "rename.sub",
+   "intent": "rename",
+   "priority": 18,
+   "doc": "mass rename por substitui\u00e7\u00e3o no basename: file_find produtor + for_each to_old/to_new (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.old",
+     "op": "set"
+    },
+    {
+     "fact": "slot.new",
+     "op": "set"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "namepat": "$slot.namepat",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "rename",
+      "to_old": "$slot.old",
+      "to_new": "$slot.new",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 2000
+  },
+  {
+   "name": "rename.prefix",
+   "intent": "rename",
+   "priority": 16,
+   "doc": "mass rename por prefixo: file_find produtor + for_each to_prefix (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.prefix",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "namepat": "$slot.namepat",
+      "ext": "$slot.ext",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "rename",
+      "to_prefix": "$slot.prefix",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 2000
+  },
+  {
    "name": "rename.extswap",
    "intent": "rename",
    "priority": 20,

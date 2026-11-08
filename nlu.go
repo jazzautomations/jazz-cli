@@ -2154,6 +2154,81 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			switch {
 			case sd.From == "rename_from" || sd.From == "rename_to":
 				v = nuRenamePart(toks, res, sd.From == "rename_to")
+			case sd.From == "rename:old" || sd.From == "rename:new":
+				// "rename them by replacing 'a' with 'b'" — o par de
+				// substituição só existe com verbo de troca explícito;
+				// "rename png to jpg" (to/intocue) não é replace.
+				// O 'by' que introduz o MÉTODO não é separador — o split
+				// é o 'with/por' DEPOIS do verbo de troca.
+				wantNew := sd.From == "rename:new"
+				verbAt := -1
+				for i, t := range toks {
+					switch t.Fold {
+					case "replace", "replaces", "replacing", "substitute",
+						"substituting", "swap", "swapping", "substitui",
+						"substituindo", "substitua", "troca", "trocando":
+						if verbAt < 0 {
+							verbAt = i
+						}
+					}
+				}
+				if verbAt >= 0 {
+					sep := -1
+					oldAt, newAt := -1, -1
+					for i := verbAt + 1; i < len(toks); i++ {
+						f := toks[i].Fold
+						if f == "with" || f == "por" || f == "com" ||
+							f == "para" || f == "into" {
+							if sep < 0 && oldAt >= 0 {
+								sep = i
+							}
+							continue
+						}
+						if toks[i].Filler || toks[i].has("article") ||
+							toks[i].has("nameattr") || toks[i].has("content") {
+							continue
+						}
+						if f == "and" || f == "e" || f == "or" || f == "in" ||
+							f == "em" || f == "under" || f == "on" {
+							break
+						}
+						if oldAt < 0 {
+							oldAt = i
+						} else if sep >= 0 && newAt < 0 {
+							newAt = i
+							break
+						}
+					}
+					if wantNew && newAt >= 0 {
+						v = toks[newAt].Raw
+						taken[newAt] = true
+					} else if !wantNew && oldAt >= 0 {
+						v = toks[oldAt].Raw
+						taken[oldAt] = true
+					}
+				}
+			case sd.From == "rename:prefix":
+				// "rename them prefixing 'v1'"/"prefixing names with v1"
+				for i, t := range toks {
+					if t.Fold != "prefix" && t.Fold != "prefixing" &&
+						t.Fold != "prefixed" && t.Fold != "prefixo" {
+						continue
+					}
+					for j := i + 1; j < len(toks) && j <= i+5; j++ {
+						u := &toks[j]
+						if u.Filler || u.has("nameattr") || u.has("article") ||
+							u.Fold == "with" || u.Fold == "com" {
+							continue
+						}
+						if u.Fold == "and" || u.Fold == "e" || u.Fold == "or" {
+							break
+						}
+						v = u.Raw
+						taken[i], taken[j] = true, true
+						break
+					}
+					break
+				}
 			case sd.From == "rename:to_ext" || sd.From == "rename:ext":
 				// "rename png files to jpg files": ext = extcue ANTES do
 				// to; to_ext = extcue depois — os dois lados do swap

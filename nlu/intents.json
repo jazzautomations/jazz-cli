@@ -912,15 +912,37 @@
           "kinds": [
             "file",
             "symbol"
-          ],
-          "required": true
+          ]
+        },
+        "namepat": {
+          "from": "find:namepat",
+          "kinds": [
+            "text"
+          ]
+        },
+        "new": {
+          "from": "rename:new",
+          "kinds": [
+            "text"
+          ]
+        },
+        "old": {
+          "from": "rename:old",
+          "kinds": [
+            "text"
+          ]
+        },
+        "prefix": {
+          "from": "rename:prefix",
+          "kinds": [
+            "text"
+          ]
         },
         "to": {
           "from": "rename_to",
           "kinds": [
             "text"
-          ],
-          "required": true
+          ]
         },
         "to_ext": {
           "from": "rename:to_ext",

@@ -882,6 +882,11 @@ func brSafePath(root, p string) (abs, rel string, err error) {
 	if p == "" {
 		return "", "", errors.New("sem caminho")
 	}
+	if strings.HasPrefix(p, "$") {
+		// "$tarFile"/"$sourcePath" é env-var literal — o offline não
+		// expande shell; tratar como path estatá um nome que não existe
+		return "", "", fmt.Errorf("variável %s não resolvida — o offline não expande env; passe o caminho literal", p)
+	}
 	if filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
 		return "", "", errors.New("caminho fora do projeto: " + p + " — rode jazz -C <pasta> para agir lá, ou peça um caminho dentro do projeto")
 	}
@@ -932,6 +937,20 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		stem := strings.TrimSuffix(base, filepath.Ext(base))
 		toAbs = filepath.Join(filepath.Dir(abs), stem+"."+strings.TrimPrefix(ne, "."))
 		toRel = filepath.ToSlash(filepath.Join(filepath.Dir(rel), stem+"."+strings.TrimPrefix(ne, ".")))
+	} else if old, nw := cx.str(in, "to_old"), cx.str(in, "to_new"); old != "" {
+		// mass rename por substituição no basename — "rename them by
+		// replacing 'tmp' with 'final'" faz a_tmp→a_final por item
+		base := filepath.Base(abs)
+		if !strings.Contains(base, old) {
+			return brStep{obs: obs, why: fmt.Sprintf("%s não contém %q — pulado", rel, old), skip: true}
+		}
+		toAbs = filepath.Join(filepath.Dir(abs), strings.ReplaceAll(base, old, nw))
+		toRel = filepath.ToSlash(filepath.Join(filepath.Dir(rel), strings.ReplaceAll(base, old, nw)))
+	} else if pre := cx.str(in, "to_prefix"); pre != "" {
+		// "rename them prefixing 'v1'" — mesmo dir, prefixo no basename
+		base := filepath.Base(abs)
+		toAbs = filepath.Join(filepath.Dir(abs), pre+base)
+		toRel = filepath.ToSlash(filepath.Join(filepath.Dir(rel), pre+base))
 	} else if op == "rename" || op == "copy" {
 		toAbs, toRel, err = brSafePath(cx.env.Root, cx.str(in, "to"))
 		if err != nil {
