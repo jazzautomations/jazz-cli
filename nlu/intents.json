@@ -6681,7 +6681,13 @@
     "mova os .txt para o diretorio textos",
     "find .sh files and move them to folder back.scripts",
     "move every jpg to the images directory",
-    "move all files bigger than 1MB to big/"
+    "move all files bigger than 1MB to big/",
+    "copy all png files into assets",
+    "copia os arquivos txt para a pasta docs",
+    "copy file a.txt to b.txt",
+    "copy dir_b to dir_a",
+    "find all log files and copy them to backup",
+    "copy every jpg to the images directory"
    ],
    "name": "file_move",
    "negatives": [
@@ -6693,7 +6699,7 @@
    "rules": [
     {
      "all": [
-      "move"
+      "move|copy"
      ],
      "none": [
       "rename",
@@ -6726,8 +6732,22 @@
      ],
      "required": true
     },
+    "exclude": {
+     "from": "find:exclude",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
     "ext": {
      "from": "find:ext",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
+    "op": {
+     "from": "mv:op",
      "kinds": [
       "text"
      ],
@@ -6747,15 +6767,15 @@
      ],
      "required": false
     },
-    "type": {
-     "from": "mv:type",
+    "target": {
+     "from": "mv:target",
      "kinds": [
       "text"
      ],
      "required": false
     },
-    "target": {
-     "from": "",
+    "type": {
+     "from": "mv:type",
      "kinds": [
       "text"
      ],

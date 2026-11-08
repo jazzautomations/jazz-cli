@@ -953,3 +953,69 @@ func TestNLUExceptClauseGuards(t *testing.T) {
 		}
 	}
 }
+
+// Copy é um file_move com op=copy — a fonte fica preservada (cp -r em
+// vez de rename). O verbo nunca pode entrar no target ("target:copy"
+// rodaria rename no literal), nem pronomes/ext-size ("them", "jpgs",
+// "1MB"): alvo só vale com evidência de nome, e o resto vira filtro.
+func TestNLUCopyGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`copy all png files into assets`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["pat"] == "*.png" &&
+					s["dest"] == "assets" && s["target"] == ""
+			}},
+		{`copia os arquivos txt para a pasta docs`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["pat"] == "*.txt" && s["dest"] == "docs"
+			}},
+		{`copy file a.txt to b.txt`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["target"] == "a.txt" && s["dest"] == "b.txt"
+			}},
+		{`copy dir_b to dir_a`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["target"] == "dir_b" && s["dest"] == "dir_a"
+			}},
+		{`copy all .txt files except secret.txt to backup`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["exclude"] == "secret.txt" &&
+					s["pat"] == "*.txt"
+			}},
+		{`copy the folder src to backup/src`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["target"] == "src" && s["type"] == "dir"
+			}},
+		{`copy files larger than 1MB to big`, "file_move",
+			func(s map[string]string) bool {
+				return s["target"] == "" && s["op"] == "copy"
+			}},
+		{`move todos os jpgs pra pasta images`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "rename" && s["pat"] == "*.jpg" && s["target"] == ""
+			}},
+		{`move file report.pdf to documents`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "rename" && s["target"] == "report.pdf" &&
+					s["dest"] == "documents"
+			}},
+		{`Move all files excluding hidden files to the subdirectory test`, "file_move",
+			func(s map[string]string) bool {
+				return s["exclude"] == ".*" && s["dest"] == "test" && s["op"] == "rename"
+			}},
+		{`find and copy all log files in the current directory tree to /tmp/x`, "file_move",
+			func(s map[string]string) bool {
+				return s["op"] == "copy" && s["pat"] == "*.log" && s["target"] == ""
+			}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}

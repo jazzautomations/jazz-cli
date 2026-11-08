@@ -746,3 +746,83 @@ func TestBrainHarvestPaths(t *testing.T) {
 		t.Fatalf("paths inseguros deviam ser filtrados: %v", got3)
 	}
 }
+
+// Copy em massa: cp -r por item, fonte PRESERVADA (é a diferença do
+// rename) e destino conferido por existência — sucesso exige ambos.
+func TestBrainMassCopyEach(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "c1.png", "1\n", "c2.png", "2\n", "keep.txt", "k\n", "assets/.keep", "")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "copy all png files into assets")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"c1.png", "c2.png"} {
+		if _, err := os.Stat(filepath.Join(root, "assets", f)); err != nil {
+			t.Errorf("assets/%s não foi copiado:\n%s", f, r.Text)
+		}
+		if _, err := os.Stat(filepath.Join(root, f)); err != nil {
+			t.Errorf("%s fonte sumiu — copy virou rename:\n%s", f, r.Text)
+		}
+	}
+}
+
+// Copy único: destino exato criado e fonte intacta.
+func TestBrainCopyOne(t *testing.T) {
+	root := brFixture(t, "a.txt", "conteúdo\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "copy file a.txt to b.txt")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "b.txt"))
+	if err != nil || string(got) != "conteúdo\n" {
+		t.Fatalf("b.txt errado: %v %q", err, got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "a.txt")); err != nil {
+		t.Error("a.txt sumiu — copy preserva a fonte")
+	}
+}
+
+// Move segue rename: fonte some, destino recebe — regressão do split
+// por op (o copy não pode ter virado o caminho default).
+func TestBrainMoveEachStillRename(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "m1.jpg", "1\n", "m2.jpg", "2\n", "images/.keep", "")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "move todos os jpgs pra pasta images")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	for _, f := range []string{"m1.jpg", "m2.jpg"} {
+		if _, err := os.Stat(filepath.Join(root, "images", f)); err != nil {
+			t.Errorf("images/%s não chegou:\n%s", f, r.Text)
+		}
+		if _, err := os.Stat(filepath.Join(root, f)); !os.IsNotExist(err) {
+			t.Errorf("%s devia ter sumido da origem (rename):\n%s", f, r.Text)
+		}
+	}
+}
+
+// Exclusão no copy em massa: o glob do exclude filtra o for_each.
+func TestBrainMassCopyExclude(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "x1.txt", "1\n", "secret.txt", "s\n", "backup/.keep", "")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "copy all .txt files except secret.txt to backup")
+	if r.Status != tkSucceeded {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "backup", "x1.txt")); err != nil {
+		t.Errorf("backup/x1.txt não copiado:\n%s", r.Text)
+	}
+	if _, err := os.Stat(filepath.Join(root, "backup", "secret.txt")); !os.IsNotExist(err) {
+		t.Error("secret.txt copiado apesar do except")
+	}
+}

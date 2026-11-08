@@ -3549,7 +3549,9 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 	case "dest":
 		destCue := mvDestCues
 		dirWord := map[string]bool{"folder": true, "pasta": true, "dir": true, "directory": true,
-			"diretorio": true, "diretório": true, "destino": true, "target": true, "dest": true}
+			"diretorio": true, "diretório": true, "destino": true, "target": true,
+			"subdirectory": true, "subdirectories": true, "subfolder": true, "folders": true,
+			"directories": true, "dirs": true, "pastas": true}
 		vague := map[string]bool{"another": true, "outra": true, "outro": true,
 			"some": true, "alguma": true, "algum": true, "other": true, "nova": true, "new": true}
 		for i, t := range toks {
@@ -3606,6 +3608,7 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 			// token — o find precisa do glob (*.txt) como filtro de nome,
 			// então o check de taken vem só depois desses ramos.
 			if strings.HasPrefix(t.Raw, "*.") || nuPureExt(t.Fold) {
+				taken[i] = true
 				return "*." + strings.TrimPrefix(strings.TrimPrefix(t.Fold, "*"), ".")
 			}
 			// extensão nua ("jpg files", "every jpg") precisa de âncora:
@@ -3621,11 +3624,13 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 					}
 				}
 				if near {
+					taken[i] = true
 					return "*." + t.Fold
 				}
 			}
 			// plural de extensão é evidência suficiente sozinho: "jpgs"→*.jpg
 			if f := strings.TrimSuffix(t.Fold, "s"); f != t.Fold && nuExtWords[f] {
+				taken[i] = true
 				return "*." + f
 			}
 			if taken[i] {
@@ -3749,7 +3754,69 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 				return u.Raw
 			}
 		}
+	case "op":
+		// copy preserva a fonte (cp -r), move/rename desloca (rename
+		// POSIX). O intent só casa com o conceito move|copy na regra,
+		// então o fallback 'rename' é seguro.
+		for _, t := range toks {
+			if t.has("copy") {
+				return "copy"
+			}
+		}
+		return "rename"
+	case "target":
+		// operando ÚNICO do move/copy: citado, path ou cara-de-arquivo.
+		// O sponge genérico engolia o próprio verbo ("target:copy"),
+		// pronomes ("them"), o filtro de padrão ("jpgs" quando pat já
+		// está *.jpg) e o tamanho ("1MB") — e file_move.one disparava
+		// rename no literal. Alvo só vale se tiver evidência de nome.
+		mvDestCues2 := map[string]bool{"to": true, "para": true, "pra": true,
+			"into": true, "em": true, "no": true, "na": true, "as": true}
+		// anáfora consome-se como alvo implícito: "move them to x" — o
+		// pronome não é operando mas não pode contar palavra solta. Em
+		// outros intents ("delete them") segue livre e derruba a conf.
+		for i, t := range toks {
+			switch t.Fold {
+			case "them", "it", "eles", "elas", "isso", "isto":
+				taken[i] = true
+			}
+		}
+		for i := range toks {
+			t := &toks[i]
+			if taken[i] || t.Filler {
+				continue
+			}
+			if i > 0 && mvDestCues2[toks[i-1].Fold] {
+				continue // depois de cue de destino é o dest, não o alvo
+			}
+			if nuInExceptClause(toks, i) {
+				continue
+			}
+			// "1MB"/"10k" é limite de tamanho, não nome de arquivo
+			if t.Fold != "" && !t.Quoted && nuDigitSize(t.Fold) {
+				continue
+			}
+			// "the folder src" / "directory data": substantivo SINGULAR
+			// cita o operando ("copy the folder src"). Plural é filtro
+			// de conjunto ("files larger than 1MB"), e "directory tree"
+			// é substantivo composto — nenhum cita nome.
+			if i > 0 && nuOperandBare(t.Fold) &&
+				t.Fold != "tree" && t.Fold != "current" && t.Fold != "atual" {
+				switch toks[i-1].Fold {
+				case "folder", "directory", "diretorio", "diretório",
+					"pasta", "dir", "file", "arquivo":
+					taken[i] = true
+					return t.Raw
+				}
+			}
+			if t.Quoted || nuNameShaped(t.Raw) ||
+				(strings.Contains(t.Raw, "/") && !strings.ContainsAny(t.Raw, "*?[")) {
+				taken[i] = true
+				return t.Raw
+			}
+		}
 	}
+
 	return ""
 }
 
@@ -7063,4 +7130,39 @@ func nuExcludeRaw(t *nuTok) string {
 		return t.Raw
 	}
 	return t.Fold
+}
+
+// nuDigitSize: "1mb", "10k", "512b", "2g" — número colado a unidade de
+// tamanho. Filtro de tamanho em pedidos de move/copy não pode virar o
+// alvo do rename ("move files >1MB to x" movia o literal '1MB').
+func nuDigitSize(f string) bool {
+	i := 0
+	for i < len(f) && f[i] >= '0' && f[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return false
+	}
+	switch f[i:] {
+	case "b", "byte", "bytes", "k", "kb", "kbytes", "m", "mb", "mbytes",
+		"g", "gb", "gbytes", "t", "tb", "tbytes":
+		return true
+	}
+	return false
+}
+
+// nuOperandBare: palavra solta sem conceito que vale como nome — o
+// complemento de nuNameShaped para operandos citados por substantivo
+// ("the folder src": 'src' não tem cara de path mas é o nome citado).
+func nuOperandBare(f string) bool {
+	if f == "" {
+		return false
+	}
+	for _, r := range f {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
