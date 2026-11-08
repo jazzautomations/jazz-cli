@@ -54,6 +54,10 @@
    ],
    "verify": [
     {
+     "check": "nonempty",
+     "arg": "$res"
+    },
+    {
      "check": "file_exists",
      "arg": "$slot.out"
     }
@@ -102,6 +106,10 @@
    "verify": [
     {
      "check": "script_ok",
+     "arg": "$res"
+    },
+    {
+     "check": "nonempty",
      "arg": "$res"
     }
    ],

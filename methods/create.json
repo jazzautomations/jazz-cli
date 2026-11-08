@@ -1,11 +1,67 @@
 {
  "methods": [
   {
+   "name": "create.dirs",
+   "intent": "create",
+   "priority": 13,
+   "doc": "enumeração 'dirs X e Y': cada nome vira item do for_each (teto 32, cada mkdir verificado — sucesso só se TODOS existirem)",
+   "pre": [
+    {
+     "fact": "slot.targets",
+     "op": "set"
+    },
+    {
+     "fact": "slot.type",
+     "op": "eq",
+     "val": "dir"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "enum",
+     "in": {
+      "names": "$slot.targets"
+     },
+     "out": "lst"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$lst",
+      "do": "file_op",
+      "op": "mkdir",
+      "max": "32"
+     },
+     "out": "fx"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fx"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$lst"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 50
+  },
+  {
    "name": "create.dir",
    "intent": "create",
    "priority": 12,
    "doc": "file_op mkdir -p: pasta nova dentro do projeto (checkpoint → /undo)",
    "pre": [
+    {
+     "fact": "slot.scope",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.targets",
+     "op": "unset"
+    },
     {
      "fact": "slot.target",
      "op": "set"
@@ -42,6 +98,14 @@
    "doc": "file_op create: arquivo novo dentro do projeto (checkpoint → /undo); conteúdo gerado vai pelo modelo",
    "pre": [
     {
+     "fact": "slot.scope",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.targets",
+     "op": "unset"
+    },
+    {
      "fact": "slot.target",
      "op": "set"
     }
@@ -71,6 +135,14 @@
    "priority": 1,
    "doc": "sem alvo: pergunta o caminho",
    "pre": [
+    {
+     "fact": "slot.scope",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.targets",
+     "op": "unset"
+    },
     {
      "fact": "slot.target",
      "op": "unset"

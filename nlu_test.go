@@ -410,11 +410,11 @@ func TestNLUV5Wiring(t *testing.T) {
 	}
 	// helpers resolve antes dos slots genéricos: nem ".log" vira dir, nem
 	// "10MB" vira limit, nem "set" vira owner (medidos no corpus)
-	if in := m.Parse("acha todos os arquivos .log maiores que 10MB", w); in.Slots["min_size"] != "10485760" || in.Slots["ext"] != "log" || in.Slots["limit"] != "" || in.Slots["dir"] != "" {
-		t.Errorf("maiores que 10MB: slots=%v, want min_size=10485760 ext=log", in.Slots)
+	if in := m.Parse("acha todos os arquivos .log maiores que 10MB", w); in.Slots["min_size"] != "10485761" || in.Slots["ext"] != "log" || in.Slots["limit"] != "" || in.Slots["dir"] != "" {
+		t.Errorf("maiores que 10MB: slots=%v, want min_size=10485761 ext=log", in.Slots)
 	}
-	if in := m.Parse("find files larger than 100kb", w); in.Slots["min_size"] != "102400" || in.Slots["dir"] != "" || in.Slots["name"] != "" {
-		t.Errorf("larger than 100kb: slots=%v, want min_size=102400", in.Slots)
+	if in := m.Parse("find files larger than 100kb", w); in.Slots["min_size"] != "102401" || in.Slots["dir"] != "" || in.Slots["name"] != "" {
+		t.Errorf("larger than 100kb: slots=%v, want min_size=102401", in.Slots)
 	}
 	if in := m.Parse("arquivos com suid setado", w); in.Slots["owner"] != "" || in.Slots["suid"] != "true" {
 		t.Errorf("suid setado: slots=%v, want suid=true sem owner", in.Slots)
@@ -520,8 +520,8 @@ func TestNLUCorpusMethodLayer(t *testing.T) {
 		{"arquivos modificados há mais de 30 dias", "file_find", "older=43200"},
 		// tamanho exato converge min=max; comparativo escolhe a direção
 		{"find all the files which have the size 40 bytes", "file_find", "min_size=40"},
-		{"files smaller than 2 kilobytes", "file_find", "max_size=2048"},
-		{"arquivos maiores que 10mb", "file_find", "min_size=10485760"},
+		{"files smaller than 2 kilobytes", "file_find", "max_size=2047"},
+		{"arquivos maiores que 10mb", "file_find", "min_size=10485761"},
 		// vocabulário EN de busca em árvore de diretórios
 		{"List files ending in .html in the current directory tree", "list_files", ""},
 		{"Remove regular files in the current directory tree", "delete_file", ""},

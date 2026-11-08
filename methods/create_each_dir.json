@@ -1,0 +1,62 @@
+{
+ "methods": [
+  {
+   "name": "create.each_dir",
+   "intent": "create",
+   "priority": 14,
+   "doc": "'mkdir X in every directory': file_find(type=dir, profundidade 1) lista as pastas do escopo, mkdir_in cria <pasta>/<nome> em TODAS — sucesso só se todas existirem; conjunto vazio/truncado bloqueia, nunca cai pro mkdir solto",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.type",
+     "op": "eq",
+     "val": "dir"
+    },
+    {
+     "fact": "slot.scope",
+     "op": "eq",
+     "val": "every_dir"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "dir",
+      "path": "$slot.dir",
+      "max_depth": "1",
+      "limit": "32"
+     },
+     "out": "lst"
+    },
+    {
+     "cap": "mkdir_in",
+     "in": {
+      "parents": "$lst",
+      "name": "$slot.target",
+      "max": "32"
+     },
+     "out": "fx"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fx"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$fx"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 300
+  }
+ ]
+}

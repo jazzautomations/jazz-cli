@@ -2176,6 +2176,16 @@ var nuToolWords = map[string]bool{
 	"command": true, "commands": true, "comando": true, "comandos": true,
 }
 
+// nuFileCueWords: substantivo-cue de arquivo/pasta — antes de um nome,
+// marca operando de arquivo, nunca nome de grupo/dono nem diretório.
+var nuFileCueWords = map[string]bool{
+	"file": true, "files": true, "arquivo": true, "arquivos": true,
+	"folder": true, "folders": true, "pasta": true, "pastas": true,
+	"directory": true, "directories": true, "diretorio": true,
+	"diretório": true, "diretorios": true, "diretórios": true,
+	"dir": true, "dirs": true,
+}
+
 // nuSizeCueWords: morfologia do predicado de tamanho — "size greater than
 // 100 bytes" é filtro de min_size, o sponge de nome não pode comer
 // "size greater" como se fosse basename.
@@ -2371,6 +2381,15 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuSortArg(toks, sd.From[5:], taken)
 			case strings.HasPrefix(sd.From, "mv:"):
 				v = nuMvArg(toks, sd.From[3:], taken)
+			case sd.From == "mk:scope":
+				// "in every directory" é ESCopo do create, não enumeração
+				// — casa antes do prefixo genérico mk: (nuMkArg só conhece
+				// "targets" e retornaria "" de qualquer forma).
+				v = nuMkScope(toks, taken)
+			case sd.From == "mk:scopedir":
+				v = nuMkScopeDir(toks, hits, taken)
+			case strings.HasPrefix(sd.From, "mk:"):
+				v = nuMkArg(toks, sd.From[3:], taken)
 			}
 			// any From is helper-or-nothing: the generic fallbacks would
 			// stuff leftovers into slots the helper deliberately left
@@ -2606,7 +2625,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 	// "delete everything"/"remove all .php in /var/www": o flag mass JÁ é
 	// o alvo — exigir `target` preenchido transformaria um pedido claro em
 	// pergunta ("apagar qual arquivo?") em vez de execução/recusa honesta
-	if slots["mass"] != "" && len(missing) > 0 {
+	if (slots["mass"] != "" || slots["targets"] != "") && len(missing) > 0 {
 		kept := missing[:0]
 		for _, name := range missing {
 			if name == "target" {
@@ -4192,6 +4211,15 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 			}
 			if nuExtWords[f] {
+				// "chgrp to h"/"muda para zip": a palavra-ext depois de
+				// to/para/into é DESTINO (usuário, formato-alvo), não
+				// filtro "*.h" — o alias .ext com ponto segue valendo
+				if i > 0 {
+					switch toks[i-1].Fold {
+					case "to", "para", "into", "pra", "pro", "por", "by":
+						continue
+					}
+				}
 				// "names begin/end with log": depois de âncora de nome
 				// (begin/start/end/prefix/suffix, ou with/com sob
 				// nameattr), a palavra-ext é literal de prefixo/sufixo —
@@ -5352,6 +5380,12 @@ window:
 				"com", "para", "pra", "pro", "em", "de", "do", "da":
 				continue
 			}
+			// "the file myfile to group friends": 'to' é stop-word e some —
+			// o sinal que sobra é o cue de ARQUIVO antes do substantivo.
+			// myfile é o alvo do pedido, não o nome do grupo.
+			if j > 0 && nuFileCueWords[toks[j-1].Fold] {
+				continue
+			}
 			taken[i], taken[j] = true, true
 			return n
 		}
@@ -5373,11 +5407,32 @@ window:
 		if nuNegationNear(toks, i) != neg {
 			continue
 		}
+		jStop := false
 		for j := i + 1; j < len(toks) && j <= i+6; j++ {
+			if jStop {
+				break
+			}
 			if toks[j].Filler || taken[j] {
 				continue
 			}
 			n := toks[j].Fold
+			// "group of the file X to group friends": a frase do outro cue
+			// só abre quando o PRIMEIRO não-filler após `to` é a cue —
+			// "to group friends". "to alice and group..." tem o nome da
+			// MINHA família logo ali (alice) — não é boundary.
+			if n == "to" || n == "into" || n == "para" || n == "pra" {
+				for k := j + 1; k < len(toks); k++ {
+					if toks[k].Filler {
+						continue
+					}
+					if nuGroupCues[toks[k].Fold] || toks[k].Fold == "owner" ||
+						toks[k].Fold == "dono" || toks[k].Fold == "user" ||
+						toks[k].Fold == "usuario" || toks[k].Fold == "usuário" {
+						jStop = true
+					}
+					break
+				}
+			}
 			if n == "or" || n == "and" || n == "e" || n == "ou" || strings.ContainsAny(n, "/.") ||
 				n == "under" || n == "in" || n == "on" || n == "at" || n == "from" ||
 				n == "to" || n == "into" || n == "dentro" || n == "para" ||
@@ -5425,6 +5480,11 @@ window:
 				}
 			}
 			if isFile {
+				continue
+			}
+			// "the file X to group friends": substantivo atrás de cue de
+			// arquivo é o alvo, não o dono/grupo (o 'to' some como stop-word)
+			if j > 0 && nuFileCueWords[toks[j-1].Fold] {
 				continue
 			}
 			if nuGroupCues[n] {
@@ -5498,6 +5558,85 @@ func nuPermClass(toks []nuTok, at int) string {
 
 func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 	switch what {
+	case "file":
+		// alvo da mutação: "the file X", "a pasta X" (cue→nome) e
+		// "the data folder" (nome→cue). "all the files in X" não tem
+		// nome depois do cue plural → alvo massivo via mass, não file.
+		for i, t := range toks {
+			if !nuFileCueWords[t.Fold] || taken[i] {
+				continue
+			}
+			// nome→cue ("the data folder"): olha pra trás
+			if i > 0 {
+				n := toks[i-1].Fold
+				cueish := false
+				for _, c := range toks[i-1].Concs {
+					if nuCueFamilyConcs[c] {
+						cueish = true
+					}
+				}
+				if !taken[i-1] && n != "" && !toks[i-1].Filler && !cueish &&
+					!strings.ContainsAny(n, "/.") && !nuIsNumber(n) &&
+					!nuFileCueWords[n] && !nuGroupCues[n] &&
+					n != "the" && n != "a" && n != "an" &&
+					n != "current" && n != "atual" && n != "this" && n != "that" {
+					taken[i], taken[i-1] = true, true
+					return n
+				}
+			}
+			// cue→nome ("the file myfile"): olha pra frente, mas plural
+			// seguido de preposição/cue é massivo ("all files in dir")
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler {
+					continue
+				}
+				n := u.Fold
+				stop := false
+				switch n {
+				case "in", "on", "at", "of", "de", "do", "da", "em", "no",
+					"na", "under", "inside", "to", "para", "with", "that",
+					"which", "whose", "named", "called":
+					stop = true
+				}
+				if stop || n == "" || taken[j] || nuIsNumber(n) || nuOctalShaped(n) ||
+					nuGroupCues[n] || nuFileCueWords[n] ||
+					nuNegationNear(toks, j) {
+					break
+				}
+				cueish := false
+				for _, c := range u.Concs {
+					if nuCueFamilyConcs[c] {
+						cueish = true
+					}
+				}
+				if cueish {
+					break
+				}
+				taken[i], taken[j] = true, true
+				return u.Fold
+			}
+		}
+		// sem cue: file-shaped solto ("chmod +x script.sh", "on app.log")
+		for i, t := range toks {
+			if taken[i] || t.Filler {
+				continue
+			}
+			isFile := false
+			for _, tag := range t.Tags {
+				if tag == "@file" {
+					isFile = true
+				}
+			}
+			if isFile || (nuFileShaped(t.Fold) && !strings.HasPrefix(t.Fold, ".")) {
+				if i > 0 && (nuFileCueWords[toks[i-1].Fold] || nuGroupCues[toks[i-1].Fold]) {
+					continue // era nome de grupo/pasta, não alvo solto
+				}
+				taken[i] = true
+				return t.Fold
+			}
+		}
+		return ""
 	case "src_owner", "src_group":
 		// filtro de ORIGEM da mutação: "change owner of files which
 		// belong to root TO admin" — root é o conjunto-fonte, admin o
@@ -5868,7 +6007,7 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 				case "o":
 					mask |= bit
 				case "a":
-					mask |= bit*0o111
+					mask |= bit * 0o111
 				}
 			}
 			if !saw {
@@ -5901,6 +6040,160 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 // nuOwnerArg takes the word after a possession cue — "do usuário matheus",
 // "owned by root", "files of user h". Without the cue, a loose word must
 // not become a user filter ("suid bit set" ≠ owner "set").
+var nuPluralDirCues = map[string]bool{
+	"dirs": true, "directories": true, "folders": true, "subdirs": true,
+	"pastas": true, "diretorios": true, "diretórios": true, "subpastas": true,
+	// formas stem: o fold reduz "directories"→"directory", "folders"→"folder"
+	"directory": true, "folder": true, "pasta": true, "diretorio": true,
+	"subdir": true, "subpasta": true,
+}
+
+var nuEnumSeps = map[string]bool{
+	"and": true, "e": true, "ou": true, "&": true, ",": true, "+": true,
+}
+
+var nuEnumStops = map[string]bool{
+	"in": true, "on": true, "inside": true, "under": true, "within": true,
+	"em": true, "no": true, "na": true, "nos": true, "nas": true,
+	"de": true, "do": true, "da": true, "of": true, "at": true,
+	"with": true, "com": true, "to": true, "para": true, "pra": true,
+	"where": true, "that": true, "which": true, "called": true,
+	"named": true, "into": true, "dentro": true, "every": true, "each": true,
+	"all": true, "current": true, "directory": true, "folder": true,
+}
+
+// nuMkArg — alvos de criação. "targets": enumeração explícita após cue de
+// pasta plural ("make directories mnt and point", "cria as pastas a b e c"):
+// coleta nomes citados/soltos separados por and/vírgula até um boundary.
+// Só retorna com ≥2 nomes — alvo único fica no slot `target` de sempre.
+func nuMkArg(toks []nuTok, what string, taken map[int]bool) string {
+	if what != "targets" {
+		return ""
+	}
+	for i, t := range toks {
+		if !nuPluralDirCues[t.Fold] {
+			continue
+		}
+		var names []string
+		var used []int
+		for j := i + 1; j < len(toks); j++ {
+			u := toks[j]
+			if u.Filler {
+				continue
+			}
+			if nuEnumSeps[u.Fold] || u.Fold == "e" {
+				continue
+			}
+			if nuEnumStops[u.Fold] || u.has("permbit") {
+				break
+			}
+			// taken NÃO bloqueia: "mnt and point" — o primeiro nome já
+			// virou `target` antes do targets rodar; a enumeração
+			// reivindica de volta os nomes contíguos à cue plural.
+			// O boundary (in/of/at…) já nos separa de slots distantes.
+			_ = taken
+			// nome: citado, file-shaped, ou palavra sem conceito de
+			// ação/filtro — "mnt", "point" (pega "mountpoint" via frase
+			// multiword mas como nome é legítimo), "backup-dir" valem.
+			isName := !u.Filler && u.Fold != "" && !nuToolWords[u.Fold] &&
+				!u.has("permbit") && !u.has("files") && !u.has("filenoun") &&
+				!u.has("dirnoun") && !u.has("dir") && !u.has("extcue")
+			if !isName {
+				break
+			}
+			name := u.Raw
+			if name == "" {
+				name = u.Fold
+			}
+			names = append(names, name)
+			used = append(used, j)
+		}
+		if len(names) >= 2 {
+			for _, j := range used {
+				taken[j] = true
+			}
+			return strings.Join(names, "|")
+		}
+		return ""
+	}
+	return ""
+}
+
+// nuMkScope — escopo do create. Retorna "every_dir" quando o alvo vai
+// DENTRO de cada pasta existente: "mkdir x in every directory", "cria a
+// pasta x em cada pasta", "em todas as pastas". A pista é uma palavra-pasta
+// precedida (num raio curto, por cima de fillers) por quantificador de
+// varredura — e quantificadores/preposições são TODOS fillers no léxico,
+// então a regra lê fold, não token-kind. Sem o quantificador ("in the
+// current directory") é só localização e a frase não casa.
+// Os tokens casados viram taken pra palavra-pasta e a base do escopo
+// ("in the current directory") não vazarem como resíduo pro slot target.
+func nuMkScope(toks []nuTok, taken map[int]bool) string {
+	quants := map[string]bool{
+		"every": true, "each": true, "all": true, "any": true,
+		"cada": true, "toda": true, "todas": true, "todo": true, "todos": true,
+	}
+	preps := map[string]bool{
+		"in": true, "inside": true, "under": true, "within": true, "into": true,
+		"em": true, "no": true, "na": true, "nos": true, "nas": true,
+		"sob": true, "dentro": true, "por": true,
+	}
+	for i, t := range toks {
+		if t.Filler || t.Quoted || !nuPluralDirCues[t.Fold] {
+			continue
+		}
+		// quantificador nos até-3 anteriores; qualquer palavra real
+		// (não-filler) fecha a janela — "a new directory" não casa.
+		q := -1
+		for j := i - 1; j >= 0 && j >= i-3; j-- {
+			if quants[toks[j].Fold] {
+				q = j
+				break
+			}
+			if !toks[j].Filler {
+				break
+			}
+		}
+		if q < 0 {
+			continue
+		}
+		start := q
+		if q > 0 && preps[toks[q-1].Fold] {
+			start = q - 1 // "in every directory" — a preposição é da frase
+		}
+		end := i
+		// base do escopo à direita ("in the current directory",
+		// "no diretório atual"): preposição + palavra-pasta — marca junto
+		// pra não vazar resíduo. Qualquer outra palavra real encerra.
+		seenPrep := false
+		for j := i + 1; j < len(toks) && j <= i+5; j++ {
+			u := toks[j]
+			if u.Filler {
+				if preps[u.Fold] {
+					seenPrep = true
+				}
+				continue
+			}
+			if seenPrep && nuPluralDirCues[u.Fold] {
+				end = j
+				// adjetivo de lugar colado ("diretório atual")
+				if j+1 < len(toks) && !toks[j+1].Filler {
+					switch toks[j+1].Fold {
+					case "atual", "current", "corrente", "atualmente":
+						end = j + 1
+					}
+				}
+			}
+			break
+		}
+		for j := start; j <= end; j++ {
+			taken[j] = true
+		}
+		return "every_dir"
+	}
+	return ""
+}
+
 func nuOwnerArg(toks []nuTok, taken map[int]bool) string {
 	for i, t := range toks {
 		cue := false
@@ -6249,4 +6542,79 @@ func nuArchiveWord(f string) bool {
 		return true
 	}
 	return nuArchiveName(f)
+}
+
+// nuMkScopeDir — a BASE do escopo "every directory": "…in every directory
+// inside backups" → "backups"; "…in the current directory" → "."
+// (auto-referência); sem base explícita → "" (o método assume "."). O path
+// casa com a MESMA janela de cue do nuMkScope; auto-referências
+// (current/directory/.) e paths inseguros são normalizados.
+func nuMkScopeDir(toks []nuTok, hits []nuHit, taken map[int]bool) string {
+	quants := map[string]bool{
+		"every": true, "each": true, "all": true, "any": true,
+		"cada": true, "toda": true, "todas": true, "todo": true, "todos": true,
+	}
+	preps := map[string]bool{
+		"in": true, "inside": true, "under": true, "within": true, "into": true,
+		"em": true, "no": true, "na": true, "nos": true, "nas": true,
+		"sob": true, "dentro": true, "por": true,
+	}
+	selfRef := map[string]bool{
+		"directory": true, "dir": true, "folder": true, "pasta": true,
+		"diretorio": true, "atual": true, "current": true, "corrente": true,
+		".": true, "aqui": true, "here": true,
+	}
+	for i, t := range toks {
+		if t.Filler || t.Quoted || !nuPluralDirCues[t.Fold] {
+			continue
+		}
+		q := -1
+		for j := i - 1; j >= 0 && j >= i-3; j-- {
+			if quants[toks[j].Fold] {
+				q = j
+				break
+			}
+			if !toks[j].Filler {
+				break
+			}
+		}
+		if q < 0 {
+			continue
+		}
+		// varre à direita do cue: primeira prep + próxima palavra real.
+		// Preps de escopo são FILLERS no léxico ("in", "em", "inside") —
+		// checar preps ANTES do salto de filler ou elas evaporam.
+		for j := i + 1; j < len(toks) && j <= i+6; j++ {
+			u := toks[j]
+			if preps[u.Fold] {
+				for k := j + 1; k < len(toks) && k <= j+4; k++ {
+					c := toks[k]
+					if c.Filler {
+						continue
+					}
+					if selfRef[c.Fold] || nuPluralDirCues[c.Fold] {
+						return "."
+					}
+					p := c.Raw
+					if p == "" {
+						p = c.Fold
+					}
+					if p == "" || strings.Contains(p, "..") || strings.HasPrefix(p, "/") ||
+						strings.HasPrefix(p, "~") || strings.ContainsAny(p, "\\\x00") {
+						return ""
+					}
+					taken[k] = true
+					taken[j] = true
+					return p
+				}
+				return ""
+			}
+			if u.Filler {
+				continue
+			}
+			break
+		}
+		return ""
+	}
+	return ""
 }

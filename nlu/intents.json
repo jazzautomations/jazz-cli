@@ -1012,6 +1012,21 @@
       "text"
      ],
      "required": false
+    },
+    "targets": {
+     "from": "mk:targets",
+     "kinds": [],
+     "required": false
+    },
+    "scope": {
+     "from": "mk:scope",
+     "kinds": [],
+     "required": false
+    },
+    "dir": {
+     "from": "mk:scopedir",
+     "kinds": [],
+     "required": false
     }
    }
   },
@@ -6476,9 +6491,11 @@
      ]
     },
     "file": {
+     "from": "perm:file",
      "kinds": [
-      "file"
-     ]
+      "text"
+     ],
+     "required": false
     },
     "from_mode": {
      "from": "perm:not_mode",

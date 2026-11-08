@@ -1062,6 +1062,185 @@
    ],
    "risk": "high",
    "cost_ms": 200
+  },
+  {
+   "name": "perm_set.chgrpdir",
+   "intent": "perm_set",
+   "priority": 9,
+   "doc": "'recursively change group to X in dir': chgrp [-R] no dir real",
+   "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    },
+    {
+     "fact": "slot.group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chgrp",
+      "path": "$slot.dir",
+      "group": "$slot.group",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_group",
+     "arg": "$p",
+     "arg2": "$slot.group"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 40
+  },
+  {
+   "name": "perm_set.chowndir",
+   "intent": "perm_set",
+   "priority": 9,
+   "doc": "'recursively chown dir to user[:group]': chown [-R] no dir real",
+   "pre": [
+    {
+     "fact": "slot.dir",
+     "op": "set"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "set"
+    },
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chown",
+      "path": "$slot.dir",
+      "owner": "$slot.owner",
+      "group": "$slot.group",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_owner",
+     "arg": "$p",
+     "arg2": "$slot.owner"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 40
+  },
+  {
+   "name": "perm_set.grpall",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "'change group of all files here': mass sem dir — file_find no root + for_each chgrp",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.dir",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.group",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "file",
+      "limit": "256",
+      "path": "."
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chgrp",
+      "group": "$slot.group",
+      "max": "256"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_group",
+     "arg": "$cand",
+     "arg2": "$slot.group"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
+  },
+  {
+   "name": "perm_set.ask",
+   "intent": "perm_set",
+   "priority": -1,
+   "doc": "último recurso: a op foi entendida mas falta dono/grupo/modo — pergunta em vez de 'nenhum método'",
+   "pre": [],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "mudar pra quê? falta o alvo da mutação: dono (owner), grupo (group) ou modo (755/u+x). Ex.: 'muda o dono de X pra h' ou 'chmod 755 em X'",
+      "status": "needs_input"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
   }
  ]
 }

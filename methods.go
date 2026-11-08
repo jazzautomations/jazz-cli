@@ -349,6 +349,8 @@ func init() {
 		"need":         brNeed,
 		"take":         brTake,
 		"for_each":     brForEach,
+		"enum":         brEnum,
+		"mkdir_in":     brMkdirIn,
 		"save_list":    brSaveList,
 		"learned_cmd":  brLearnedCmd,
 		"read_file":    brReadFile,
@@ -491,6 +493,29 @@ func brNeed(cx *brCtx, in map[string]string) brStep {
 	return brStep{obs: rvNoCmd(), ok: true}
 }
 
+// brEnum: produtor de lista literal — "cria as pastas mnt e point" traz os
+// nomes NO pedido, não de um find. Emite {files:[...]} com cada nome seguro
+// (vazio/..~/absoluto pulado) pra for_each consumir item a item, com o mesmo
+// teto implícito de conjunto. Zero nomes válidos = "nada a enumerar" honesto.
+func brEnum(cx *brCtx, in map[string]string) brStep {
+	v, _ := cx.subst(in["names"]).(string)
+	var items []any
+	for _, name := range strings.Split(v, "|") {
+		name = strings.TrimSpace(name)
+		if name == "" || strings.Contains(name, "..") || strings.HasPrefix(name, "/") ||
+			strings.HasPrefix(name, "~") || strings.ContainsAny(name, "\\\x00") {
+			continue
+		}
+		items = append(items, name)
+	}
+	if len(items) == 0 {
+		return brStep{obs: rvNoCmd(), why: "enum sem nomes válidos em " + in["names"]}
+	}
+	cx.say("enum: %d nomes", len(items))
+	return brStep{obs: rvNoCmd(), ok: true,
+		val: map[string]any{"data": map[string]any{"files": items, "total": len(items)}}}
+}
+
 // brForEach: the bounded fan-out for "apaga todos os .tmp" — runs the inner
 // cap once per produced path. Every item passes through the inner cap's own
 // gates (file_op → brSafePath + brPermit + confinamento), paths with ../
@@ -626,6 +651,111 @@ func brToFloat(v any) float64 {
 		return f
 	}
 	return 0
+}
+
+// brMkdirIn: fan-out "mkdir <item>/<name>" — o for_each não sabe montar
+// path filho (injeta sempre path=<item>), então este cap dedicado faz o
+// laço com a mesma contabilidade honesta: recusa conjunto truncado, teto
+// max, item sem path seguro vira falha, e cada mkdir passa pelo file_op
+// (brSafePath + brPermit + confinamento) com stat do filho no fim.
+// Diferença crucial do for_each: NÃO devolve passo falho pro próximo
+// método — conjunto vazio/truncado/parcial PARA a tarefa (cair no
+// create.dir criaria ./<name> e reportaria sucesso pela ação errada).
+// Emite {data:{done,failed,skipped,total,files:[<item>/<name>...]}}:
+// files são os filhos prováveis por list_exists, contagens por each_clean.
+func brMkdirIn(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	name := cx.str(in, "name")
+	// o filho é componente único: "..", separador, ~ e NUL são recusa —
+	// um nome injetado não pode escapar do pai nem do projeto.
+	if name == "" || name == "." || strings.Contains(name, "..") ||
+		strings.ContainsAny(name, "/\\\x00") || strings.HasPrefix(name, "~") {
+		return brStep{obs: obs, why: "nome de subdiretório inseguro: " + name, stop: tkFailed}
+	}
+	v := cx.subst(in["parents"])
+	m, _ := v.(map[string]any)
+	data, _ := m["data"].(map[string]any)
+	if tr, _ := data["truncated"].(bool); tr {
+		return brStep{obs: obs, why: "resultado truncado — recuso agir num conjunto parcial", stop: tkBlocked}
+	}
+	var items []any
+	for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+		if arr, ok := data[k].([]any); ok {
+			items = arr
+			break
+		}
+	}
+	if len(items) == 0 {
+		return brStep{obs: obs, why: "nenhum diretório pra receber " + name + " — nada criado", stop: tkBlocked}
+	}
+	max := 32
+	if s := in["max"]; s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			max = n
+		}
+	}
+	inner := brCap("file_op")
+	if inner == nil {
+		return brStep{obs: obs, why: "mkdir_in: capacidade file_op ausente", stop: tkFailed}
+	}
+	done, failed, skipped := 0, 0, 0
+	firstWhy := ""
+	var children []any
+	if len(items) > max {
+		failed = len(items) - max // excedente conta como não-feito, honesto
+		firstWhy = fmt.Sprintf("%d itens além do teto %d", len(items)-max, max)
+		items = items[:max]
+	}
+	for _, it := range items {
+		path := brItemPath(it)
+		if path == "" || strings.Contains(path, "..") || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "~") {
+			failed++
+			if firstWhy == "" {
+				firstWhy = "item sem path seguro"
+			}
+			continue
+		}
+		child := filepath.ToSlash(filepath.Join(path, name))
+		// "./$kf": nome começando com $ iria cru pro subst do cap e
+		// esvaziaria o path — o prefixo "./" blinda como no for_each.
+		r := inner(cx, map[string]string{"op": "mkdir", "path": "./" + child})
+		if !r.ok {
+			if r.skip {
+				skipped++
+				continue
+			}
+			failed++
+			if firstWhy == "" {
+				firstWhy = path + ": " + r.why
+			}
+			continue
+		}
+		// o file_op diz ok; a prova do filho é o stat — "criado" sem o
+		// diretório lá seria o falso-sucesso que estamos caçando.
+		abs, _, err := brSafePath(cx.env.Root, child)
+		fi, e := os.Stat(abs)
+		if err != nil || e != nil || !fi.IsDir() {
+			failed++
+			if firstWhy == "" {
+				firstWhy = child + " não apareceu como diretório"
+			}
+			continue
+		}
+		children = append(children, child)
+		done++
+	}
+	cx.task.AddEvidence("plan", fmt.Sprintf("mkdir_in %s: %d feito(s), %d falha(s), %d pulado(s)", name, done, failed, skipped))
+	dout := map[string]any{
+		"done": done, "failed": failed, "skipped": skipped,
+		"total": len(items), "files": children,
+	}
+	switch {
+	case failed > 0:
+		return brStep{obs: obs, why: fmt.Sprintf("%d feito(s), %d falha(s), %d pulado(s) — primeira: %s", done, failed, skipped, firstWhy), stop: tkFailed}
+	case done == 0:
+		return brStep{obs: obs, why: fmt.Sprintf("nada criado — %d pulado(s)", skipped), stop: tkBlocked}
+	}
+	return brStep{obs: obs, ok: true, val: map[string]any{"data": dout}}
 }
 
 // brSaveList escreve a lista produzida inteira num arquivo confinado —
@@ -3530,6 +3660,47 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("for_each: %.0f falha(s) de %.0f itens", failed, total)
 			}
 			proofs = append(proofs, fmt.Sprintf("for_each limpo: %.0f/%.0f processados", done, total))
+		case "nonempty":
+			// "0 match(es)" não é sucesso: num pedido que espera resultado,
+			// o produtor devolver o conjunto vazio — ou um conjunto parcial
+			// (truncated) — significa que a resposta não cumpre o pedido;
+			// sem evidência não há verde (falso-sucesso do corpus).
+			// Arg2 opcional é o slot de padrão ("$slot.pattern"): operador
+			// de shell solto no padrão ("& calcule", "a || b") é assinatura
+			// de leitura quebrada — mesmo com itens a resposta não pode ser
+			// afirmada contra o que foi pedido.
+			if c.Arg2 != "" {
+				if pat, _ := cx.subst(c.Arg2).(string); brHasShellOp(pat) {
+					return false, true, fmt.Sprintf("padrão %q parece leitura quebrada (metacaractere de shell)", oneLine(pat, 60))
+				}
+			}
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			var items []any
+			hasList := false
+			for _, k := range []string{"files", "items", "results", "matches", "entries"} {
+				if arr, ok := data[k].([]any); ok {
+					items, hasList = arr, true
+					break
+				}
+			}
+			n := float64(len(items))
+			if !hasList {
+				// produtores de contagem (text_count) não devolvem lista:
+				// o número emitido é a evidência do achado
+				for _, k := range []string{"count", "matches", "lines_matched"} {
+					if f := brToFloat(data[k]); f > n {
+						n = f
+					}
+				}
+			}
+			if n <= 0 {
+				return false, true, "produtor retornou conjunto vazio"
+			}
+			if tr, _ := data["truncated"].(bool); tr {
+				return false, true, fmt.Sprintf("produtor truncou a resposta em %.0f item(ns) — conjunto parcial", n)
+			}
+			proofs = append(proofs, fmt.Sprintf("produtor emitiu %.0f item(ns)", n))
 		case "file_sorted":
 			// Arg = arquivo; Arg2 = spec "flags=numeric,reverse key=N delim=X"
 			// — o verificador repete o comparador do sort, não confia no exit.
@@ -3712,6 +3883,19 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 		cx.say("conferi: %s", p)
 	}
 	return true, false, ""
+}
+
+// brHasShellOp reports a pattern that smells like a fused/misparsed
+// request rather than a literal needle: a shell operator standing alone
+// ("& calcule", "x | y", nas bordas) ou dobrado ("a&&b", "a||b"). Um
+// literal "a|b" ou "x&y" sem espaço continua padrão — a guarda é o
+// contexto de operador, nunca o metacaractere sozinho.
+func brHasShellOp(p string) bool {
+	if strings.Contains(p, "&&") || strings.Contains(p, "||") {
+		return true
+	}
+	t := " " + p + " "
+	return strings.Contains(t, " & ") || strings.Contains(t, " | ")
 }
 
 // brProofFile is the evidence of a file_exists check, in human language.

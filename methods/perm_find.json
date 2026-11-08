@@ -46,6 +46,10 @@
         {
           "arg": "$res",
           "check": "script_ok"
+        },
+        {
+          "arg": "$res",
+          "check": "nonempty"
         }
       ]
     },

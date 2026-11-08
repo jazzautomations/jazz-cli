@@ -22,6 +22,11 @@
     {
      "check": "script_ok",
      "arg": "$res"
+    },
+    {
+     "check": "nonempty",
+     "arg": "$res",
+     "arg2": "$slot.pattern"
     }
    ],
    "risk": "low",
