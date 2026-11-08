@@ -1525,7 +1525,33 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		if !toks[i].has("nametgt") || toks[i].has("outtgt") {
 			continue // outtgt vence: "a file named 'rm'" é destino de saída
 		}
-		if hasName && (in.Slots["name"] == "" || genericName[in.Slots["name"]]) {
+		// qual cue marcou a aspa: "names CONTAIN 'log'" é substring
+		// (namepat=*log*); "named/called 'file'" é basename exato (name)
+		contains := false
+		for j := i - 1; j >= 0 && j >= i-4; j-- {
+			switch toks[j].Fold {
+			case "contain", "contains", "containing", "contem", "contém",
+				"contendo", "have", "has", "tem":
+				contains = true
+			case "named", "called", "nomeado", "nomeada", "chamado", "chamada":
+				contains = false
+			case "name", "names", "filename", "nome", "nomes":
+				continue // atravessa o substantivo-domínio até o verbo
+			default:
+				if !toks[j].Filler && !toks[j].has("article") {
+					goto cueDone // outra palavra fecha a janela
+				}
+			}
+		}
+	cueDone:
+		if contains && hasPat && in.Slots["namepat"] == "" {
+			in.Slots["namepat"] = "*" + toks[i].Raw + "*"
+			if genericName[in.Slots["name"]] {
+				delete(in.Slots, "name") // "in their path names" — meta-palavra não é nome
+			}
+		} else if contains && !hasPat && hasName {
+			in.Slots["name"] = "*" + toks[i].Raw + "*"
+		} else if hasName && (in.Slots["name"] == "" || genericName[in.Slots["name"]]) {
 			in.Slots["name"] = toks[i].Raw
 		} else if !hasName && hasPat && in.Slots["namepat"] == "" {
 			in.Slots["namepat"] = "*" + toks[i].Raw + "*"
@@ -2128,6 +2154,32 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			switch {
 			case sd.From == "rename_from" || sd.From == "rename_to":
 				v = nuRenamePart(toks, res, sd.From == "rename_to")
+			case sd.From == "rename:to_ext" || sd.From == "rename:ext":
+				// "rename png files to jpg files": ext = extcue ANTES do
+				// to; to_ext = extcue depois — os dois lados do swap
+				mark := -1
+				for i := range toks {
+					if nuToWords[toks[i].Fold] && i > 0 {
+						mark = i
+					}
+				}
+				if sd.From == "rename:to_ext" {
+					for i := mark + 1; mark >= 0 && i < len(toks); i++ {
+						if toks[i].has("extcue") {
+							v = toks[i].Fold
+							taken[i] = true
+							break
+						}
+					}
+				} else {
+					for i := 0; mark >= 0 && i < mark; i++ {
+						if toks[i].has("extcue") {
+							v = toks[i].Fold
+							taken[i] = true
+							break
+						}
+					}
+				}
 			case sd.From == "repl_from" || sd.From == "repl_to":
 				v = nuReplacePart(toks, res, sd.From == "repl_to", taken)
 			case strings.HasPrefix(sd.From, "repl:"):
@@ -2380,6 +2432,19 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			}
 		}
 	}
+	// "delete everything"/"remove all .php in /var/www": o flag mass JÁ é
+	// o alvo — exigir `target` preenchido transformaria um pedido claro em
+	// pergunta ("apagar qual arquivo?") em vez de execução/recusa honesta
+	if slots["mass"] != "" && len(missing) > 0 {
+		kept := missing[:0]
+		for _, name := range missing {
+			if name == "target" {
+				continue
+			}
+			kept = append(kept, name)
+		}
+		missing = kept
+	}
 	return slots, missing, hint, unfed, taken
 }
 
@@ -2456,6 +2521,21 @@ func nuRenamePart(toks []nuTok, res []int, to bool) string {
 	}
 	if mark < 0 {
 		return ""
+	}
+	// mass rename por extensão: "rename png files to jpg files" — o lado
+	// é um glob *.ext, não um nome literal. O método extswap decide.
+	if to {
+		for i := mark + 1; i < len(toks); i++ {
+			if toks[i].has("extcue") {
+				return "*." + toks[i].Fold
+			}
+		}
+	} else {
+		for i := 0; i < mark; i++ {
+			if toks[i].has("extcue") {
+				return "*." + toks[i].Fold
+			}
+		}
 	}
 	if to {
 		for i := mark + 1; i < len(toks); i++ {
@@ -3773,6 +3853,21 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 	case "type":
 		dir, file := false, false
 		for i, t := range toks {
+			// "files/directories" tokeniza como um átomo só — a união
+			// pede os DOIS tipos (o default "any" do script responde)
+			if strings.Contains(t.Fold, "/") {
+				for _, part := range strings.Split(t.Fold, "/") {
+					switch part {
+					case "file", "files", "arquivo", "arquivos":
+						file = true
+					case "dir", "dirs", "directory", "directories",
+						"folder", "folders", "pasta", "pastas",
+						"diretorio", "diretório", "diretorios", "diretórios":
+						dir = true
+					}
+				}
+				continue
+			}
 			switch t.Fold {
 			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas":
 				// "in the current directory" — a dir-word depois de

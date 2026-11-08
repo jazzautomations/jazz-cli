@@ -144,8 +144,8 @@ if not (name or name_re or exclude or ext or kind != "any" or min_size or max_si
 
 if name:
     name_l = name.lower()
-    if not any(c in name_l for c in "*?["):
-        name_l = "*" + name_l + "*"
+    # 'named X' é match EXATO do basename — o wrap *X* faria "file" casar
+    # file1/myfile (falso positivo). Substring vem pelo slot namepat.
 if name_re and name:
     # regex named the real pattern; a residual 'name' ("names match
     # expression") is cue noise — regex wins

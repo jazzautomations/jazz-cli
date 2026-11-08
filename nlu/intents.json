@@ -235,7 +235,8 @@
             "run",
             "have",
             "content",
-            "permbit"
+            "permbit",
+            "rename"
           ]
         },
         {
@@ -254,7 +255,8 @@
             "nametgt",
             "have",
             "content",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 10
         }
@@ -893,6 +895,18 @@
         }
       ],
       "slots": {
+        "dir": {
+          "from": "find:dir_cued",
+          "kinds": [
+            "dir"
+          ]
+        },
+        "ext": {
+          "from": "rename:ext",
+          "kinds": [
+            "text"
+          ]
+        },
         "from": {
           "from": "rename_from",
           "kinds": [
@@ -907,6 +921,12 @@
             "text"
           ],
           "required": true
+        },
+        "to_ext": {
+          "from": "rename:to_ext",
+          "kinds": [
+            "text"
+          ]
         }
       }
     },
@@ -2596,7 +2616,8 @@
             "duplicate",
             "sort",
             "find",
-            "grepword"
+            "grepword",
+            "rename"
           ]
         },
         {
@@ -2627,7 +2648,8 @@
             "duplicate",
             "sort",
             "find",
-            "grepword"
+            "grepword",
+            "rename"
           ]
         },
         {
@@ -2646,7 +2668,8 @@
             "nametgt",
             "permattr",
             "net",
-            "remote"
+            "remote",
+            "rename"
           ],
           "w": 25
         }
@@ -4478,7 +4501,8 @@
             "build",
             "open",
             "metaask",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 15
         },
@@ -4520,7 +4544,8 @@
             "v4_wordcount_stats",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 10
         },
@@ -4561,7 +4586,8 @@
             "v4_wordcount_stats",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 0
         },
@@ -4601,7 +4627,8 @@
             "v4_wordcount_stats",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 15
         },
@@ -4644,7 +4671,8 @@
             "move",
             "forquoted",
             "@quoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 5
         },
@@ -4689,7 +4717,8 @@
             "v4_wordcount_stats",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 5
         },
@@ -4709,7 +4738,8 @@
             "user",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 15
         },
@@ -4757,7 +4787,8 @@
             "count",
             "forquoted",
             "@quoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 4
         },
@@ -4793,7 +4824,8 @@
             "symnoun",
             "sort",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 20
         },
@@ -4829,7 +4861,8 @@
             "cron",
             "move",
             "forquoted",
-            "permbit"
+            "permbit",
+            "rename"
           ],
           "w": 20
         }

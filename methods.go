@@ -925,6 +925,13 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 			return brStep{obs: obs, why: "destino: " + e.Error()}
 		}
 		toAbs, toRel = filepath.Join(dAbs, filepath.Base(abs)), filepath.ToSlash(filepath.Join(dRel, filepath.Base(rel)))
+	} else if ne := cx.str(in, "to_ext"); ne != "" {
+		// mass rename por extensão: mesmo dir, basename com o sufixo
+		// trocado — "rename png files to jpg" faz a.png→a.jpg por item
+		base := filepath.Base(abs)
+		stem := strings.TrimSuffix(base, filepath.Ext(base))
+		toAbs = filepath.Join(filepath.Dir(abs), stem+"."+strings.TrimPrefix(ne, "."))
+		toRel = filepath.ToSlash(filepath.Join(filepath.Dir(rel), stem+"."+strings.TrimPrefix(ne, ".")))
 	} else if op == "rename" || op == "copy" {
 		toAbs, toRel, err = brSafePath(cx.env.Root, cx.str(in, "to"))
 		if err != nil {

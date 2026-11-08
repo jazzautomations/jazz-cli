@@ -208,7 +208,7 @@ func TestNLUNameTgtGuards(t *testing.T) {
 	}{
 		{"find all the files that have the word \"fstab\" in their name in a folder", "file_find", "name", "fstab"},
 		{"search all the files in the folder \"myfiles\" which have the word \"blue\" in their name", "file_find", "name", "blue"},
-		{"Search the current directory tree for files containing \"string\" in their path names", "file_find", "name", "string"},
+		{"Search the current directory tree for files containing \"string\" in their path names", "file_find", "namepat", "*string*"},
 		{"Find all directories under current directory whose names are 33 characters long", "file_find", "name", "?????????????????????????????????"},
 	} {
 		in := m.Parse(tc.text, w)
@@ -399,7 +399,7 @@ func TestNLUNameAnchorGuards(t *testing.T) {
 			func(s map[string]string) bool { return s["name"] == "file2015-0*" }},
 		{`find files whose names contain "log"`, "file_find",
 			func(s map[string]string) bool {
-				return s["name"] == "log" && s["ext"] == ""
+				return s["namepat"] == "*log*" && s["ext"] == ""
 			}},
 		{`Counts total number of lines in a git repository`, "wordcount_stats",
 			func(s map[string]string) bool { return s["dir"] == "" }},
@@ -684,10 +684,10 @@ func TestNLUNamePredicateGuards(t *testing.T) {
 			func(s map[string]string) bool { return s["name"] == "test" }},
 		{`find files whose names contain log`, "file_find",
 			func(s map[string]string) bool {
-				return s["name"] == "log" && s["ext"] == ""
+				return s["namepat"] == "*log*" && s["ext"] == ""
 			}},
 		{`list files that have foo in their names`, "file_find",
-			func(s map[string]string) bool { return s["name"] == "foo" }},
+			func(s map[string]string) bool { return s["namepat"] == "*foo*" }},
 		{`find files whose names begin with log`, "file_find",
 			func(s map[string]string) bool {
 				return s["name"] == "log*" && s["ext"] == ""
@@ -780,6 +780,39 @@ func TestNLUFormatWordGuards(t *testing.T) {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) {
 			t.Errorf("%q -> %s slots=%v", tc.text, in.Name, in.Slots)
+		}
+	}
+}
+
+// mass é o alvo (sem pergunta), name exato ≠ substring, files/directories
+// é union (sem type), e rename por extensão vira extswap — nunca list_files.
+func TestNLUMassRenameGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Delete everything in the current directory`, "delete_file",
+			func(s map[string]string) bool { return s["mass"] != "" }},
+		{`Remove all .php files in the /var/www/ directory`, "delete_file",
+			func(s map[string]string) bool { return s["dir"] == "/var/www/" && s["ext"] == "php" }},
+		{`Delete all files/directories named 'file' under current directory tree`, "delete_file",
+			func(s map[string]string) bool {
+				return s["name"] == "file" && s["type"] == "" && s["mass"] != ""
+			}},
+		{`rename all the png files to jpg files in the current folder`, "rename",
+			func(s map[string]string) bool {
+				return s["ext"] == "png" && s["to_ext"] == "jpg" && s["from"] == "*.png"
+			}},
+		{`rename "blah1" to "blah1-new"`, "rename",
+			func(s map[string]string) bool {
+				return s["from"] == "blah1" && s["to"] == "blah1-new" && s["ext"] == ""
+			}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) || len(in.Missing) > 0 {
+			t.Errorf("%q -> %s slots=%v miss=%v", tc.text, in.Name, in.Slots, in.Missing)
 		}
 	}
 }

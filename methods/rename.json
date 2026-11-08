@@ -1,25 +1,203 @@
-{"methods": [
- {"name": "rename.op", "intent": "rename", "priority": 10,
-  "doc": "file_op rename dentro do projeto (slot.from → slot.to)",
-  "pre": [{"fact": "slot.from", "op": "set"}, {"fact": "slot.to", "op": "set"}],
-  "steps": [{"cap": "file_op", "in": {"op": "rename", "path": "$slot.from", "to": "$slot.to"}, "out": "r"}],
-  "verify": [{"check": "file_exists", "arg": "$slot.to"}],
-  "risk": "med", "cost_ms": 50},
- {"name": "rename.ask", "intent": "rename", "priority": 5,
-  "doc": "sem o nome novo: pergunta",
-  "pre": [{"fact": "slot.from", "op": "set"}, {"fact": "slot.to", "op": "unset"}],
-  "steps": [
-   {"cap": "ask_slot", "in": {"slot": "to", "q": "Renomear para qual nome?"}, "out": "slot.to"},
-   {"cap": "file_op", "in": {"op": "rename", "path": "$slot.from", "to": "$slot.to"}, "out": "r"}],
-  "verify": [{"check": "file_exists", "arg": "$slot.to"}],
-  "risk": "med", "cost_ms": 50},
- {"name": "rename.ask_from", "intent": "rename", "priority": 1,
-  "doc": "sem o alvo: pergunta o que renomear",
-  "pre": [{"fact": "slot.from", "op": "unset"}],
-  "steps": [
-   {"cap": "ask_slot", "in": {"slot": "from", "q": "Renomear qual arquivo?"}, "out": "slot.from"},
-   {"cap": "ask_slot", "in": {"slot": "to", "q": "Para qual nome?"}, "out": "slot.to"},
-   {"cap": "file_op", "in": {"op": "rename", "path": "$slot.from", "to": "$slot.to"}, "out": "r"}],
-  "verify": [{"check": "file_exists", "arg": "$slot.to"}],
-  "risk": "med", "cost_ms": 50}
-]}
+{
+ "methods": [
+  {
+   "name": "rename.extswap",
+   "intent": "rename",
+   "priority": 20,
+   "doc": "mass rename por extens\u00e3o: file_find(ext) -> for_each file_op rename to_ext (teto 32)",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to_ext",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "ext": "$slot.ext",
+      "type": "file",
+      "limit": "32"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "file_op",
+      "op": "rename",
+      "to_ext": "$slot.to_ext",
+      "max": "32"
+     },
+     "out": "fe"
+    }
+   ],
+   "verify": [
+    {
+     "check": "each_clean",
+     "arg": "$fe"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 2000
+  },
+  {
+   "name": "rename.op",
+   "intent": "rename",
+   "priority": 10,
+   "doc": "file_op rename dentro do projeto (slot.from \u2192 slot.to)",
+   "pre": [
+    {
+     "fact": "slot.to_ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "rename",
+      "path": "$slot.from",
+      "to": "$slot.to"
+     },
+     "out": "r"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.to"
+    }
+   ],
+   "risk": "med",
+   "cost_ms": 50
+  },
+  {
+   "name": "rename.ask",
+   "intent": "rename",
+   "priority": 5,
+   "doc": "sem o nome novo: pergunta",
+   "pre": [
+    {
+     "fact": "slot.to_ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "set"
+    },
+    {
+     "fact": "slot.to",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "to",
+      "q": "Renomear para qual nome?"
+     },
+     "out": "slot.to"
+    },
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "rename",
+      "path": "$slot.from",
+      "to": "$slot.to"
+     },
+     "out": "r"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.to"
+    }
+   ],
+   "risk": "med",
+   "cost_ms": 50
+  },
+  {
+   "name": "rename.ask_from",
+   "intent": "rename",
+   "priority": 1,
+   "doc": "sem o alvo: pergunta o que renomear",
+   "pre": [
+    {
+     "fact": "slot.to_ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.from",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "from",
+      "q": "Renomear qual arquivo?"
+     },
+     "out": "slot.from"
+    },
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "to",
+      "q": "Para qual nome?"
+     },
+     "out": "slot.to"
+    },
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "rename",
+      "path": "$slot.from",
+      "to": "$slot.to"
+     },
+     "out": "r"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.to"
+    }
+   ],
+   "risk": "med",
+   "cost_ms": 50
+  }
+ ]
+}
