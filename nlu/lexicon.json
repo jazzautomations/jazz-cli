@@ -1069,7 +1069,8 @@
    "salve",
    "scaffold",
    "scaffolding",
-   "make"
+   "make",
+   "mkdir"
   ],
   "delete": [
    "apaga",
@@ -2459,7 +2460,6 @@
    "granted",
    "granting",
    "grants",
-   "mkdir",
    "modifies",
    "modify",
    "modifying",

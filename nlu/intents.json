@@ -456,7 +456,8 @@
       "execperm",
       "filenoun",
       "findattr",
-      "fix"
+      "fix",
+      "files"
      ]
     }
    ],
@@ -1027,6 +1028,13 @@
      ],
      "required": true,
      "shape": "name"
+    },
+    "type": {
+     "kinds": [
+      "text"
+     ],
+     "from": "find:type",
+     "required": false
     }
    },
    "examples": [
@@ -4478,7 +4486,11 @@
       "permattr",
       "remote",
       "run",
-      "session"
+      "session",
+      "create",
+      "makeword",
+      "build",
+      "open"
      ],
      "w": 15
     },

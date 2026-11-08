@@ -330,3 +330,43 @@ func TestNLUQuotedOperandGuards(t *testing.T) {
 		}
 	}
 }
+
+// multi-ext: ".cpp, .c, .h" e ".c or .cpp" viram lista vírgula pro
+// file_find (que aceita a lista desde este batch); "files here" não
+// deixa "here" vazar pro name; mkdir/make-directory vão pro create.dir.
+func TestNLUExtListGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`show all .cpp, .c, .h, .hpp files in the folder src`, "list_files",
+			func(s map[string]string) bool {
+				return s["ext"] == "cpp,c,h,hpp" && s["dir"] == "src"
+			}},
+		{`find all .c or .cpp files here`, "file_find",
+			func(s map[string]string) bool {
+				return s["ext"] == "c,cpp" && s["name"] == ""
+			}},
+		{`list all .txt and .log files`, "list_files",
+			func(s map[string]string) bool { return s["ext"] == "txt,log" }},
+		{`Make directory "aaa/bbb"`, "create",
+			func(s map[string]string) bool {
+				return s["target"] == "aaa/bbb" && s["type"] == "dir"
+			}},
+		{`mkdir "data"`, "create",
+			func(s map[string]string) bool {
+				return s["target"] == "data" && s["type"] == "dir"
+			}},
+		{`create a file hello.py`, "create",
+			func(s map[string]string) bool {
+				return s["target"] == "hello.py" && s["type"] != "dir"
+			}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v miss=%v", tc.text, in.Name, in.Slots, in.Missing)
+		}
+	}
+}

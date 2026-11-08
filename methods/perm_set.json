@@ -212,7 +212,7 @@
      "cap": "script:file_find",
      "in": {
       "path": "$slot.dir",
-      "name": "*.$slot.ext",
+      "ext": "$slot.ext",
       "type": "file",
       "limit": "256"
      },
@@ -432,7 +432,7 @@
      "cap": "script:file_find",
      "in": {
       "path": "$slot.dir",
-      "name": "*.$slot.ext",
+      "ext": "$slot.ext",
       "type": "file",
       "limit": "256"
      },
@@ -733,7 +733,7 @@
      "cap": "script:file_find",
      "in": {
       "path": "$slot.dir",
-      "name": "*.$slot.ext",
+      "ext": "$slot.ext",
       "type": "file",
       "limit": "256"
      },

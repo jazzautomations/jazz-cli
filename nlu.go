@@ -1685,7 +1685,12 @@ func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
 // filter, not a file name. A real ".git" dir is entity-tagged upstream and
 // never reaches the leftover-slot check.
 func nuPureExt(raw string) bool {
-	if len(raw) < 3 || raw[0] != '.' {
+	// ".c"/".h" têm 2 chars mas são extensões de verdade — exigir len>=3
+	// deixava ".c files" escapar pra dir/name
+	if len(raw) < 2 || raw[0] != '.' {
+		return false
+	}
+	if len(raw) == 2 && !nuExtWords[raw[1:]] {
 		return false
 	}
 	for _, r := range raw[1:] {
@@ -1949,6 +1954,13 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						// cue de filtro ("matching"), de nome ("named") ou
 						// de ordenação ("sorted by") nunca é o valor — o
 						// nome/glob vem no token seguinte
+						continue
+					}
+					switch toks[i].Fold {
+					// advérbio de escopo é lugar-de-busca, nunca nome:
+					// "files here" não tem name "here"
+					case "here", "aqui", "ali", "lá", "now", "agora",
+						"currently", "atualmente", "nearby":
 						continue
 					}
 					parts = append(parts, toks[i].Raw)
@@ -3332,6 +3344,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 			case "arquivo", "arquivos", "file", "files":
 				file = true
+			case "mkdir":
+				// verbo-literal: "mkdir data" pede um diretório, sem
+				// depender de substantivo — o scope-check não se aplica
+				dir = true
 			}
 		}
 		if dir == file {
@@ -3379,6 +3395,15 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 			}
 		}
+		var exts []string
+		addExt := func(e string) {
+			for _, x := range exts {
+				if x == e {
+					return
+				}
+			}
+			exts = append(exts, e)
+		}
 		for i := range toks {
 			if taken[i] {
 				continue // "except xml files": o xml já é alvo do exclude
@@ -3396,20 +3421,27 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					}
 				}
 				taken[i] = true
-				return strings.TrimPrefix(strings.TrimPrefix(f, "*"), ".")
+				// lista ".cpp, .c, .h" — todas são filtro, não só a 1ª
+				addExt(strings.TrimPrefix(strings.TrimPrefix(f, "*"), "."))
+				continue
 			}
 			// "text files"/"arquivos de texto" — convenção do corpus:
 			// é o glob *.txt, não um tipo de conteúdo qualquer
 			if f == "text" || f == "texto" || f == "textos" {
+				isFileCtx := false
 				for _, j := range []int{i + 1, i + 2, i - 1, i - 2} {
 					if j < 0 || j >= len(toks) {
 						continue
 					}
 					switch toks[j].Fold {
 					case "file", "files", "arquivo", "arquivos":
-						taken[i] = true
-						return "txt"
+						isFileCtx = true
 					}
+				}
+				if isFileCtx {
+					taken[i] = true
+					addExt("txt")
+					continue
 				}
 			}
 			if nuExtWords[f] {
@@ -3427,8 +3459,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					}
 				}
 				taken[i] = true
-				return f
+				addExt(f)
 			}
+		}
+		if len(exts) > 0 {
+			return strings.Join(exts, ",")
 		}
 	case "name_re":
 		// "names match regex '^x$'" / "nome casa regex 'x'" — only runs when a

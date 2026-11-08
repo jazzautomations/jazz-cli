@@ -60,10 +60,14 @@ max_depth = as_int("max_depth", 200, 0, 200)
 if min_depth > max_depth:
     fail("min_depth is greater than max_depth")
 ext = arg("ext")
+exts = []
 if ext is not None:
-    ext = str(ext).lower().lstrip("*.")
-    if not ext or not re.fullmatch(r"[0-9a-z_]+", ext):
-        fail("ext must be a plain extension like 'log' or '.py'")
+    # lista ".cpp,.c,.h" — "all .cpp, .c, .h files" filtra por qualquer uma
+    for piece in str(ext).lower().split(","):
+        piece = piece.strip().lstrip("*.")
+        if not piece or not re.fullmatch(r"[0-9a-z_]+", piece):
+            fail("ext must be a plain extension like 'log' or '.py'")
+        exts.append(piece)
 kind = str(arg("type", "any")).lower()
 if kind not in ("any", "file", "dir"):
     fail("type must be any, file or dir")
@@ -175,7 +179,7 @@ def match(p, base, st):
                     or fnmatch.fnmatch(p.lower(), exclude)
                     or fnmatch.fnmatch(p.lower(), "*" + exclude + "*")):
         return False
-    if ext and (is_dir or not base.lower().endswith("." + ext)):
+    if exts and (is_dir or not any(base.lower().endswith("." + e) for e in exts)):
         return False
     if is_file and not (min_size <= st.st_size <= max_size):
         return False

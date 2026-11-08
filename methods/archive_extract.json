@@ -25,7 +25,7 @@
    {"fact": "slot.ext", "op": "set"}
   ],
   "steps": [
-   {"cap": "script:file_find", "in": {"path": ".", "name": "*.$slot.ext", "type": "file", "limit": "32"}, "out": "cand"},
+   {"cap": "script:file_find", "in": {"path": ".", "ext": "$slot.ext", "type": "file", "limit": "32"}, "out": "cand"},
    {"cap": "for_each", "in": {"from": "$cand", "do": "archive_op", "op": "extract", "dir": "$slot.dir", "max": "32"}, "out": "fe"}
   ],
   "verify": [{"check": "each_clean", "arg": "$fe"}],

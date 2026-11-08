@@ -67,7 +67,7 @@
      "cap": "script:file_find",
      "in": {
       "path": ".",
-      "name": "*.$slot.ext",
+      "ext": "$slot.ext",
       "limit": "64"
      },
      "out": "f"
