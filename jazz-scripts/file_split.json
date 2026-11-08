@@ -1,0 +1,13 @@
+{"name": "file_split", "version": 1, "run": "python3", "effect": "write",
+ "description": "Split a text file into pieces of N lines (split -l): chunks x<aa> in <file>.parts/, root-confined. Lines only.",
+ "args": {"type": "object", "additionalProperties": false,
+   "required": ["file", "lines"],
+   "properties": {
+     "file": {"type": "string", "description": "text file to split, relative to the project root"},
+     "lines": {"type": "integer", "minimum": 1, "maximum": 16777216, "description": "lines per piece (required — count/byte splits are refused)"},
+     "outdir": {"type": "string", "description": "output directory for the chunks (default <file>.parts next to the source; must stay inside the project)"},
+     "prefix": {"type": "string", "description": "chunk name prefix (default 'x' → xaa, xab, ...)"}}},
+ "output": {"data": {
+   "source": "str", "lines": "int", "dir": "str",
+   "files": [{"path": "str", "lines": "int"}],
+   "count": "int", "lines_source": "int", "lines_total": "int", "text": "str"}}}

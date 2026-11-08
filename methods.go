@@ -3361,6 +3361,54 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, fmt.Sprintf("%d item(ns) produzidos não existem", missing)
 			}
 			proofs = append(proofs, fmt.Sprintf("conferi: %d item(ns) existem", len(items)))
+		case "split_lines":
+			// file_split: a prova é o CONTEÚDO, não a palavra do script —
+			// os chunks existem E as linhas somam exatamente a origem.
+			mm, _ := arg.(map[string]any)
+			data, _ := mm["data"].(map[string]any)
+			src, _ := data["source"].(string)
+			var items []any
+			if arr, ok := data["files"].([]any); ok {
+				items = arr
+			}
+			if src == "" || len(items) == 0 {
+				return false, false, "sem origem/chunks pra conferir"
+			}
+			countLines := func(rel string) (int, error) {
+				abs, _, err := brSafePath(cx.env.Root, rel)
+				if err != nil {
+					return -1, err
+				}
+				b, err := os.ReadFile(abs)
+				if err != nil {
+					return -1, err
+				}
+				nl := bytes.Count(b, []byte("\n"))
+				if len(b) > 0 && b[len(b)-1] != '\n' {
+					nl++
+				}
+				return nl, nil
+			}
+			total := 0
+			for _, it := range items {
+				p := brItemPath(it)
+				if p == "" {
+					return false, false, "chunk produzido sem path"
+				}
+				nl, err := countLines(p)
+				if err != nil {
+					return false, false, "não consegui contar as linhas de " + p
+				}
+				total += nl
+			}
+			want, err := countLines(src)
+			if err != nil {
+				return false, false, "não consegui contar as linhas da origem " + src
+			}
+			if total != want {
+				return false, false, fmt.Sprintf("as partes somam %d linhas, a origem tem %d", total, want)
+			}
+			proofs = append(proofs, fmt.Sprintf("%d pedaço(s) somam %d linhas (origem íntegra)", len(items), total))
 		case "file_mode":
 			// arg=path, arg2=octal — prova o chmod comparando bits reais
 			rel, _ := arg.(string)

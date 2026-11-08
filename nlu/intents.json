@@ -6762,6 +6762,170 @@
      "required": false
     }
    }
+  },
+  {
+   "desc": "divide um arquivo de texto em pedaços de N linhas (split -l)",
+   "examples": [
+    "split file data.csv into pieces per 100 lines",
+    "split server.js into chunks of 50 lines",
+    "split the log every 500 lines",
+    "dividir arquivo data.csv em partes de 100 linhas",
+    "divide o app.log em pedaços de 200 linhas",
+    "divide o arquivo texto a cada 1000 linhas"
+   ],
+   "name": "file_split",
+   "negatives": [
+    "primeiras 10 linhas do arquivo",
+    "count lines in data.csv",
+    "apaga os arquivos",
+    "renomeia a.txt para b.txt",
+    "find files and delete them"
+   ],
+   "rules": [
+    {
+     "all": [
+      "split",
+      "splitnoun"
+     ],
+     "none": [
+      "delete",
+      "service",
+      "remote",
+      "net",
+      "replace",
+      "grepword",
+      "count",
+      "sort",
+      "rename",
+      "archiveverb",
+      "extract",
+      "git",
+      "permattr",
+      "execperm",
+      "user",
+      "find",
+      "listverb",
+      "open",
+      "move",
+      "install",
+      "undo",
+      "history",
+      "run",
+      "test",
+      "build",
+      "scaffold",
+      "fix",
+      "compress",
+      "between"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "split",
+      "lineselect"
+     ],
+     "none": [
+      "delete",
+      "service",
+      "remote",
+      "net",
+      "replace",
+      "grepword",
+      "count",
+      "sort",
+      "rename",
+      "archiveverb",
+      "extract",
+      "git",
+      "permattr",
+      "execperm",
+      "user",
+      "find",
+      "listverb",
+      "open",
+      "move",
+      "install",
+      "undo",
+      "history",
+      "run",
+      "test",
+      "build",
+      "scaffold",
+      "fix",
+      "compress",
+      "between"
+     ],
+     "w": 8
+    },
+    {
+     "all": [
+      "split",
+      "filenoun|@file"
+     ],
+     "none": [
+      "delete",
+      "service",
+      "remote",
+      "net",
+      "replace",
+      "grepword",
+      "count",
+      "sort",
+      "rename",
+      "archiveverb",
+      "extract",
+      "git",
+      "permattr",
+      "execperm",
+      "user",
+      "find",
+      "listverb",
+      "open",
+      "move",
+      "install",
+      "undo",
+      "history",
+      "run",
+      "test",
+      "build",
+      "scaffold",
+      "fix",
+      "compress",
+      "between"
+     ],
+     "w": 6
+    }
+   ],
+   "slots": {
+    "lines": {
+     "from": "split:lines",
+     "kinds": [
+      "number"
+     ],
+     "required": true
+    },
+    "pieces": {
+     "from": "split:pieces",
+     "kinds": [
+      "number"
+     ],
+     "required": false
+    },
+    "stdin": {
+     "from": "repl:stdin",
+     "kinds": [
+      "text"
+     ],
+     "required": false
+    },
+    "target": {
+     "kinds": [
+      "file"
+     ],
+     "required": true
+    }
+   }
   }
  ],
  "version": 1,

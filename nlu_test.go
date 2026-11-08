@@ -315,9 +315,9 @@ func TestNLUV5Wiring(t *testing.T) {
 		"who last touched main.go":             "git_blame",
 		"o que tem dentro do release.zip":      "archive_list",
 		// perm_set nasceu: atributo executável é mutação com cap próprio
-		"deixa o script.sh executável": "perm_set",
-		"torna o script executável":    "perm_set",
-		"chmod 755 no deploy.sh":       "perm_set",
+		"deixa o script.sh executável":  "perm_set",
+		"torna o script executável":     "perm_set",
+		"chmod 755 no deploy.sh":        "perm_set",
 		"muda o dono de a.txt pra mike": "perm_set",
 	}
 	for text, want := range right {
@@ -377,8 +377,8 @@ func TestNLUV5Wiring(t *testing.T) {
 		"baixa o arquivo do release mais novo": nuMinConf,
 		"measure latency to the gateway":       nuMinConf,
 		"mede a latência pro gateway":          nuMinConf,
-		// split/chmod/clean são mutações, não leituras
-		"split file data.csv into pieces per 100 lines": nuMinConf,
+		// chmod/clean são mutações, não leituras (split virou intent file_split —
+		// coberto em nlu_file_split_test.go)
 		// "users logged in" não é file_users (não existe método de sessões)
 		"Print a list of unique users who are logged in": nuMinConf,
 		"Print a column of CPU usage numbers":            nuMinConf,
@@ -629,7 +629,7 @@ func TestNLUSortOpRouting(t *testing.T) {
 func TestNLUFileMove(t *testing.T) {
 	m, w := nuTestWorld(t)
 	cases := map[string]string{
-		"move todos os jpgs pra pasta images":                "file_move",
+		"move todos os jpgs pra pasta images":                 "file_move",
 		"find .sh files and move them to folder back.scripts": "file_move",
 		"move all the .txt files into docs":                   "file_move",
 		"move every jpg to the images directory":              "file_move",

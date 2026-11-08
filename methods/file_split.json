@@ -1,0 +1,302 @@
+{
+ "methods": [
+  {
+   "name": "file_split.split",
+   "intent": "file_split",
+   "priority": 10,
+   "doc": "script:file_split: divide o arquivo em pedaços de N linhas (<alvo>.parts/xaa…) — verifica existência e soma de linhas",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.lines",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pieces",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_split",
+     "in": {
+      "file": "$slot.target",
+      "lines": "$slot.lines"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$res"
+    },
+    {
+     "check": "split_lines",
+     "arg": "$res"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 900
+  },
+  {
+   "name": "file_split.ask_lines",
+   "intent": "file_split",
+   "priority": 6,
+   "doc": "tem o arquivo mas não o critério: pergunta quantas linhas por pedaço",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.lines",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pieces",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "lines",
+      "q": "Quantas linhas por pedaço? (ex.: 500)"
+     },
+     "out": "slot.lines"
+    },
+    {
+     "cap": "script:file_split",
+     "in": {
+      "file": "$slot.target",
+      "lines": "$slot.lines"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$res"
+    },
+    {
+     "check": "split_lines",
+     "arg": "$res"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 900
+  },
+  {
+   "name": "file_split.ask_target",
+   "intent": "file_split",
+   "priority": 5,
+   "doc": "tem o critério mas não o arquivo: pergunta qual",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.lines",
+     "op": "set"
+    },
+    {
+     "fact": "slot.pieces",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "target",
+      "q": "Dividir qual arquivo?"
+     },
+     "out": "slot.target"
+    },
+    {
+     "cap": "script:file_split",
+     "in": {
+      "file": "$slot.target",
+      "lines": "$slot.lines"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$res"
+    },
+    {
+     "check": "split_lines",
+     "arg": "$res"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 900
+  },
+  {
+   "name": "file_split.pieces_refused",
+   "intent": "file_split",
+   "priority": 4,
+   "doc": "pedido por QUANTIDADE de partes ('into 4 pieces') ou critérios conflitantes: recusa honesta — só se divide por linhas",
+   "pre": [
+    {
+     "fact": "slot.pieces",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "ainda não sei dividir por quantidade de partes nem por bytes — só por linhas; diga quantas linhas por pedaço (ex.: 'em partes de 500 linhas')",
+      "status": "blocked",
+      "category": "plan_impossible"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  },
+  {
+   "name": "file_split.ask_both",
+   "intent": "file_split",
+   "priority": 3,
+   "doc": "sem arquivo nem critério: pergunta os dois",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.target",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.lines",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.pieces",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "target",
+      "q": "Dividir qual arquivo?"
+     },
+     "out": "slot.target"
+    },
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "lines",
+      "q": "Quantas linhas por pedaço? (ex.: 500)"
+     },
+     "out": "slot.lines"
+    },
+    {
+     "cap": "script:file_split",
+     "in": {
+      "file": "$slot.target",
+      "lines": "$slot.lines"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    },
+    {
+     "check": "list_exists",
+     "arg": "$res"
+    },
+    {
+     "check": "split_lines",
+     "arg": "$res"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 900
+  },
+  {
+   "name": "file_split.no_python",
+   "intent": "file_split",
+   "priority": 1,
+   "doc": "sem python3 o script file_split não roda",
+   "pre": [
+    {
+     "fact": "bin.python3",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "report",
+     "in": {
+      "text": "isso usa o script file_split, que precisa de python3 (não achei no PATH)",
+      "status": "blocked",
+      "category": "command_missing"
+     }
+    }
+   ],
+   "verify": [],
+   "risk": "low",
+   "cost_ms": 1
+  }
+ ]
+}

@@ -1948,6 +1948,7 @@ var nuMutConcepts = map[string]bool{
 	"start": true, "stop": true, "restart": true, "kill": true, "rename": true,
 	"format": true, "build": true, "compress": true,
 	"mutate": true, "recover": true, "extract": true, "enable": true,
+	"split": true,
 }
 
 // nuOpinionConcepts mark an utterance about the assistant's own judgment
@@ -2474,6 +2475,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuSortArg(toks, sd.From[5:], taken)
 			case strings.HasPrefix(sd.From, "mv:"):
 				v = nuMvArg(toks, sd.From[3:], taken)
+			case strings.HasPrefix(sd.From, "split:"):
+				v = nuSplitArg(toks, sd.From[6:], taken)
 			case sd.From == "mk:scope":
 				// "in every directory" é ESCopo do create, não enumeração
 				// — casa antes do prefixo genérico mk: (nuMkArg só conhece
@@ -3746,6 +3749,51 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 				return u.Raw
 			}
 		}
+	}
+	return ""
+}
+
+// nuSplitArg: operandos do file_split — "pieces per 100 lines" /
+// "partes de 100 linhas". `lines` é o número logo ANTES da palavra linha
+// ("per 100 lines", "de 100 linhas", "every 500 lines", "a cada 1000 linhas");
+// `pieces` é o número antes do substantivo de parte ("into 4 pieces",
+// "em 4 partes"). Um número fora dessas posições não preenche nada: pedido
+// de divisão por quantidade de partes ou por bytes fica honestamente sem
+// critério (needs_input/recusa), nunca vira contagem de linhas por engano.
+func nuSplitArg(toks []nuTok, what string, taken map[int]bool) string {
+	var isCue func(t *nuTok) bool
+	switch what {
+	case "lines":
+		isCue = func(t *nuTok) bool {
+			switch t.Fold {
+			case "line", "lines", "linha", "linhas":
+				return true
+			}
+			return false
+		}
+	case "pieces":
+		isCue = func(t *nuTok) bool { return t.has("splitnoun") }
+	default:
+		return ""
+	}
+	for i := range toks {
+		if taken[i] || !isCue(&toks[i]) {
+			continue
+		}
+		for j := i - 1; j >= 0 && j >= i-3; j-- {
+			u := &toks[j]
+			if taken[j] {
+				continue
+			}
+			if nuIsNumber(u.Fold) {
+				taken[i], taken[j] = true, true
+				return u.Fold
+			}
+			if !u.Filler {
+				return "" // a palavra densa antes do cue não é número — sem critério
+			}
+		}
+		return ""
 	}
 	return ""
 }

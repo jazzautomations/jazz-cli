@@ -23,7 +23,7 @@ import (
 // 8 of cardápio v1 and 10 of v2 (docs/research/cardapio-offline.md),
 // plus ui_lint (the frontend-craft detector, uilint.go) and api_map (the
 // project API map, apimap.go).
-var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "csv_to_json", "date_normalize", "dep_graph", "dep_outdated", "detect_project", "diff_apply_check", "diff_quality", "dir_diff", "disk_usage", "dotenv_check", "dup_code", "env_get", "env_tools", "extract_stacktrace", "extract_versions", "file_dupes", "file_find", "file_hash_diff", "file_users", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "json_schema_infer", "large_funcs", "license_scan", "line_slice", "lint_run", "log_errors_recent", "md_outline", "mem_top", "net_ifaces", "net_route", "parse_build_errors", "parse_log_lines", "parse_test_output", "perm_find", "pkg_installed", "port_free", "proc_ports", "regex_test", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "table_render", "text_count", "text_extract", "text_grep", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "url_parse", "wordcount_stats", "yaml_get"}
+var scShipped = []string{"api_map", "archive_list", "config_get", "cron_list", "csv_stats", "csv_to_json", "date_normalize", "dep_graph", "dep_outdated", "detect_project", "diff_apply_check", "diff_quality", "dir_diff", "disk_usage", "dotenv_check", "dup_code", "env_get", "env_tools", "extract_stacktrace", "extract_versions", "file_dupes", "file_find", "file_hash_diff", "file_split", "file_users", "find_symbol", "fs_recent", "git_blame_hot", "git_branch_status", "git_cochange", "git_conflict_scan", "git_safe", "git_state", "hash_verify", "http_check", "json_edit", "json_schema_infer", "large_funcs", "license_scan", "line_slice", "lint_run", "log_errors_recent", "md_outline", "mem_top", "net_ifaces", "net_route", "parse_build_errors", "parse_log_lines", "parse_test_output", "perm_find", "pkg_installed", "port_free", "proc_ports", "regex_test", "run_tests", "service_status", "snapshot_cmd", "symbol_refs", "table_render", "text_count", "text_extract", "text_grep", "todo_scan", "tree_summary", "ui_lint", "uptime_load", "url_parse", "wordcount_stats", "yaml_get"}
 
 func scTestEnv(t *testing.T) {
 	t.Helper()
@@ -143,8 +143,8 @@ func TestScriptSpecCompactAndStable(t *testing.T) {
 		t.Errorf("description has %d lines, want <= 3", n)
 	}
 	b, _ := json.Marshal(last)
-	if est := len(b) / 4; est > 910 { // 70 scripts (cardápio v1–v5), ~13 tokens each after capping optionals at 2; raise only with the same arithmetic
-		t.Errorf("script spec ~%d tokens, keep it small (<910)", est)
+	if est := len(b) / 4; est > 923 { // 71 scripts (cardápio v1–v5 + file_split), ~13 tokens each after capping optionals at 2; raise only with the same arithmetic
+		t.Errorf("script spec ~%d tokens, keep it small (<923)", est)
 	}
 	props := last.Params["properties"].(map[string]any)
 	enum := props["name"].(map[string]any)["enum"].([]string)
@@ -1027,6 +1027,13 @@ func TestScriptsEachBuiltin(t *testing.T) {
 		scWrite(t, root, "ff/app.go", "package main\n")
 		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "ff", "ext": "go"})
 		if !scOK(v) {
+			t.Fatalf("result: %v", v)
+		}
+	})
+	run("file_split", func(t *testing.T) {
+		scWrite(t, root, "fs/big.txt", "1\n2\n3\n4\n5\n")
+		v, _ := scCall(t, tb, "file_split", map[string]any{"file": "fs/big.txt", "lines": 2})
+		if !scOK(v) || scDataOf(v)["count"] != float64(3) {
 			t.Fatalf("result: %v", v)
 		}
 	})
