@@ -307,6 +307,44 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, c
 			t += " (precisa de entrada)"
 		}
 		texts = append(texts, "» "+strings.TrimSpace(parts[i])+"\n"+t)
+		if r.Status == tkNeedsInput || r.Status == tkFailed || r.Status == tkBlocked {
+			// um passo que pergunta/falha/bloqueia encerra a cadeia —
+			// continuar executando passos seguintes e selar com o veredito
+			// DELES é o falso sucesso do multi ("Apagar qual arquivo?" →
+			// needs_input no passo 1, list_files verde no passo 2)
+			if i+1 < len(ins) {
+				texts = append(texts, fmt.Sprintf("(parou no passo %d de %d: %s)", i+1, len(ins), r.Status))
+			}
+			break
+		}
+	}
+	// rollup: o evento-pai carrega o PIOR status da cadeia — quem lê o
+	// stream pega o veredito do run, não do último passo que emitiu.
+	pt := newTask(strings.Join(parts, " && "), "multi", nil, env.Sink)
+	pt.must(tkInvestigating, "cadeia de "+strconv.Itoa(len(ins))+" passos")
+	switch res.Status {
+	case tkSucceeded:
+		pt.AddEvidence("plan", fmt.Sprintf("%d/%d passos verificados", len(res.Sub), len(ins)))
+		pt.must(tkPlanning, "planejou")
+		pt.must(tkReady, "pronto")
+		pt.must(tkRunning, "executou")
+		pt.must(tkVerifying, "conferindo")
+		pt.must(tkSucceeded, "todos os passos verificados")
+	case tkNeedsInput:
+		pt.must(tkNeedsInput, oneLine(res.Text, 200))
+	case tkBlocked:
+		pt.must(tkBlocked, oneLine(res.Text, 200))
+	case tkUnverified:
+		pt.must(tkPlanning, "planejou")
+		pt.must(tkReady, "pronto")
+		pt.must(tkRunning, "executou")
+		pt.must(tkVerifying, "conferindo")
+		pt.must(tkUnverified, oneLine(res.Text, 200))
+	default:
+		pt.must(tkPlanning, "planejou")
+		pt.must(tkReady, "pronto")
+		pt.must(tkRunning, "executou")
+		pt.must(tkFailed, oneLine(res.Text, 200))
 	}
 	res.Text = strings.Join(texts, "\n\n")
 	return res

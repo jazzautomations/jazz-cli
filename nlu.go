@@ -1512,7 +1512,11 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 		cls, p := m.classify(canon, tied)
 		choice = cls
-		conf = 0.55 + 0.45*p
+		// Empate é evidência de ambiguidade, não de confiança: p é a
+		// probabilidade do classificador ENTRE os empatados — usar direto
+		// (0.64 entre find×env_status não pode virar 0.84 e agir sozinho;
+		// vira miss/menu com os empatados em in.Alt).
+		conf = p
 		var names []string
 		for _, t := range tied {
 			names = append(names, m.data.Intents[t].Name)
