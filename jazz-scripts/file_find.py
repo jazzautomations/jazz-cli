@@ -54,9 +54,10 @@ if name_re is not None:
             fail("name_re is not a valid regex: %s" % e)
 exclude = arg("exclude")
 if exclude is not None:
-    exclude = str(exclude).lower()
-    if not exclude or len(exclude) > 120:
-        fail("exclude must be a short glob like '.git*' or '*_test.go'")
+    # "a|b|c" — um glob por operando da cláusula ("except a and b")
+    exclude = [g for g in str(exclude).lower().split("|") if g]
+    if not exclude or sum(len(g) for g in exclude) > 120 or any(len(g) > 60 for g in exclude):
+        fail("exclude must be short globs like '.git*' or '*_test.go'")
 min_depth = as_int("min_depth", 0, 0, 200)
 max_depth = as_int("max_depth", 200, 0, 200)
 if min_depth > max_depth:
@@ -199,9 +200,10 @@ def match(p, base, st):
         return False
     if name_re and not name_re.search(base):
         return False
-    if exclude and (fnmatch.fnmatch(base.lower(), exclude)
-                    or fnmatch.fnmatch(p.lower(), exclude)
-                    or fnmatch.fnmatch(p.lower(), "*" + exclude + "*")):
+    if exclude and any(fnmatch.fnmatch(base.lower(), g)
+                       or fnmatch.fnmatch(p.lower(), g)
+                       or fnmatch.fnmatch(p.lower(), "*" + g + "*")
+                       for g in exclude):
         return False
     if exts and (is_dir or not any(base.lower().endswith("." + e) for e in exts)):
         return False

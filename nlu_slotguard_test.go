@@ -24,14 +24,14 @@ func TestNLUSlotGuards(t *testing.T) {
 	}
 	// units and time words after "in" are never a directory
 	for text, bad := range map[string]string{
-		"search files in megabytes":                 "megabytes",
-		"find files in kilobytes":                   "kilobytes",
-		"list files in bytes":                       "bytes",
-		"find files modified in the last week":      "last",
-		"show files from in the past month":         "past",
-		"files modified in the previous 2 days":     "previous",
-		"find files inside $DIR":                    "$DIR",
-		"find files in the future releases":         "future",
+		"search files in megabytes":             "megabytes",
+		"find files in kilobytes":               "kilobytes",
+		"list files in bytes":                   "bytes",
+		"find files modified in the last week":  "last",
+		"show files from in the past month":     "past",
+		"files modified in the previous 2 days": "previous",
+		"find files inside $DIR":                "$DIR",
+		"find files in the future releases":     "future",
 	} {
 		in := m.Parse(text, w)
 		if in.Slots["dir"] == bad {
@@ -51,11 +51,11 @@ func TestNLUSlotGuards(t *testing.T) {
 	// owner/group names: quoted names, conjunctions, paths and the
 	// "no owner" EN-negation that the PT "no" preposition must not eat
 	ownerw := map[string]map[string]string{
-		"files owned by user 'takuya'":                    {"owner": "takuya"},
-		"files that belong to the group adm":              {"group": "adm"},
-		"files which belong to id":                        {"owner": "id"},
-		"files with no owner or group":                    {"orphan": "true"},
-		"files not owned by 'daniel' in the logs dir":     {"not_owner": "daniel"},
+		"files owned by user 'takuya'":                {"owner": "takuya"},
+		"files that belong to the group adm":          {"group": "adm"},
+		"files which belong to id":                    {"owner": "id"},
+		"files with no owner or group":                {"orphan": "true"},
+		"files not owned by 'daniel' in the logs dir": {"not_owner": "daniel"},
 	}
 	for text, wants := range ownerw {
 		in := m.Parse(text, w)
@@ -71,10 +71,10 @@ func TestNLUSlotGuards(t *testing.T) {
 	// pronouns, qualifiers and dotted filenames are never owner/group names;
 	// "for group" near a mode word is a permission CLASS (g-w), not a chgrp
 	permcases := map[string]map[string]string{
-		"change owner to alice and group to staff on app.log":       {"file": "app.log", "owner": "alice", "group": "staff"},
-		"remove write permission for group on data.csv":             {"file": "data.csv", "symnw": "g-w"},
-		"remove write permission for the user on run.sh":            {"file": "run.sh", "symnw": "u-w"},
-		"make script.sh executable":                                 {"file": "script.sh", "symexec": "a+x"},
+		"change owner to alice and group to staff on app.log":                    {"file": "app.log", "owner": "alice", "group": "staff"},
+		"remove write permission for group on data.csv":                          {"file": "data.csv", "symnw": "g-w"},
+		"remove write permission for the user on run.sh":                         {"file": "run.sh", "symnw": "u-w"},
+		"make script.sh executable":                                              {"file": "script.sh", "symexec": "a+x"},
 		"Change all directories under ./storage/ to owner apache and group lara": {"dir": "./storage/", "owner": "apache", "group": "lara"},
 	}
 	for text, wants := range permcases {
@@ -244,7 +244,7 @@ func TestNLUArchiveMassGuards(t *testing.T) {
 
 	for _, tc := range []struct {
 		text, intent string
-		check      func(map[string]string) bool
+		check        func(map[string]string) bool
 	}{
 		{"Unzip all *.zip files under current directory", "archive_extract",
 			func(s map[string]string) bool { return s["ext"] == "zip" && s["arc"] == "" }},
@@ -853,6 +853,103 @@ func TestNLUMassRenameGuards(t *testing.T) {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) || len(in.Missing) > 0 {
 			t.Errorf("%q -> %s slots=%v miss=%v", tc.text, in.Name, in.Slots, in.Missing)
+		}
+	}
+}
+
+// Cláusula de EXCEÇÃO ("except/without/excluding…"): o operando só
+// alimenta o slot exclude — nunca vira name/dir/pattern de outro slot,
+// nunca evapora em silêncio. Lista vira "a|b"; intent sem o slot
+// devolve o operando em Dropped (unverified); slots de negação/limite
+// (not_*, min_*, max_*) são a semântica do cue e ficam intactos.
+func TestNLUExceptClauseGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	// operando pousa em exclude — inclusive o que outro extrator roubaria
+	for _, tc := range []struct {
+		text, intent, exclude string
+	}{
+		{"find files excluding hidden files", "file_find", ".*"},
+		{"find files except build/external", "file_find", "build/external"},
+		{"search files except in tmp", "file_find", "tmp"},
+		{"find all files except those named foo", "file_find", "foo"},
+		{"find files except alpha and beta", "file_find", "alpha|beta"},
+		{"find files except alpha, beta and gamma", "file_find", "alpha|beta|gamma"},
+		{"find files except *.log", "file_find", "*.log"},
+		{"delete all files except the .md ones", "delete_file", ".md"},
+		{"find files without the extension .tmp", "file_find", ".tmp"},
+		{"delete everything except backups", "delete_file", "backups"},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || in.Slots["exclude"] != tc.exclude {
+			t.Errorf("%q -> %s slots=%v, queria %s exclude=%q", tc.text, in.Name, in.Slots, tc.intent, tc.exclude)
+		}
+	}
+
+	// o escopo/destino fora do span da cláusula não é varrido
+	for _, tc := range []struct {
+		text, slot, want string
+	}{
+		{"find files under docs except path docs/x", "dir", "docs"},
+		{"find files except a.txt in dir", "dir", "dir"},
+		{"find regular files except in the cache dir", "exclude", "cache"},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Slots[tc.slot] != tc.want {
+			t.Errorf("%q -> slots=%v, queria %s=%q", tc.text, in.Slots, tc.slot, tc.want)
+		}
+	}
+
+	// slots de negação/limite sobrevivem ao lado do cue — são a
+	// semântica do pedido, não conjunto excluído
+	for _, tc := range []struct {
+		text, slot, want string
+	}{
+		{"files not owned by wnj", "not_owner", "wnj"},
+		{"find files without 777 permission", "not_mode", "777"},
+		{"arquivos com mais de 5 linhas exceto x.txt", "min_lines", "6"},
+		{"arquivos com mais de 5 linhas exceto x.txt", "exclude", "x.txt"},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Slots[tc.slot] != tc.want || len(in.Dropped) > 0 {
+			t.Errorf("%q -> slots=%v dropped=%v, queria %s=%q sem dropped", tc.text, in.Slots, in.Dropped, tc.slot, tc.want)
+		}
+	}
+
+	// operando que não cabe (intent sem slot exclude) vira Dropped —
+	// unverified honesto, nunca exclusão ignorada verde
+	for _, tc := range []struct {
+		text  string
+		drops []string
+	}{
+		{"list files except alpha and beta", []string{"alpha", "beta"}},
+		{"show files excluding .git", []string{".git"}},
+		{"find files excluding paths containing 'a'", []string{"a"}},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Slots["exclude"] != "" {
+			t.Errorf("%q: exclude=%q num intent sem o slot", tc.text, in.Slots["exclude"])
+		}
+		for _, d := range tc.drops {
+			found := false
+			for _, got := range in.Dropped {
+				if got == d {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%q: %q devia estar em dropped=%v", tc.text, d, in.Dropped)
+			}
+		}
+	}
+
+	// o operando da cláusula nunca vira nome-alvo (o oposto do pedido)
+	for _, text := range []string{
+		"find all files except those named foo",
+		"find files except alpha, beta and gamma",
+	} {
+		if in := m.Parse(text, w); in.Slots["name"] != "" {
+			t.Errorf("%q: name=%q — operando de exclusão virou alvo", text, in.Slots["name"])
 		}
 	}
 }

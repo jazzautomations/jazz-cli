@@ -1614,7 +1614,92 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 		break
 	}
-	in.Dropped = nuDroppedOps(toks, taken, in.Slots)
+	// invariante de exceção: token dentro de cláusula "except/without/…"
+	// só alimenta o slot exclude — qualquer outro slot que tenha
+	// engolido o operando ("excluding paths containing 'a'" → pattern=a,
+	// "except in tmp" → dir=tmp, "except those named foo" → name=foo)
+	// perde o valor; o operando volta pro exclude — ou vira Dropped
+	// quando o intent nem tem o slot. O pedido fica honestamente
+	// incompleto, nunca verde com exclusão ignorada.
+	// EXCEÇÃO da invariante: slots de NEGAÇÃO/limite existem exatamente
+	// pro operando atrás do cue — "files not owned by wnj" (not_owner),
+	// "without 777 permission" (not_mode), "pelo menos 5 linhas"
+	// (min_lines). Aí o cue não exclui um conjunto, é a própria
+	// semântica do slot; tirar o valor apagaria o pedido inteiro.
+	deletedRaw := map[string]bool{}
+	for i := range toks {
+		if !nuInExceptClause(toks, i) || toks[i].Raw == "" {
+			continue
+		}
+		raw := toks[i].Raw
+		for name, sv := range in.Slots {
+			if name == "exclude" || strings.HasPrefix(name, "not_") ||
+				strings.HasPrefix(name, "no_") || strings.HasPrefix(name, "min_") ||
+				strings.HasPrefix(name, "max_") ||
+				name == "nx" || name == "nww" || name == "orphan" ||
+				name == "newer" || name == "older" {
+				continue
+			}
+			// o token alimentou o slot: direto ("docs/x"→dir), embrulhado
+			// ("a"→namepat "*a*"), ou ext que trima o ponto (".git"→"git")
+			if sv != "" && (strings.Contains(sv, raw) || sv == strings.TrimLeft(raw, ".")) {
+				delete(in.Slots, name)
+				deletedRaw[raw] = true
+			}
+		}
+	}
+	// todo operando da cláusula precisa pousar em exclude (intent com
+	// o slot) ou em Dropped (sem o slot → unverified). Match exato por
+	// item — "a" não pode fingir que já está em "alpha|beta".
+	_, hasExclude := def.Slots["exclude"]
+	_, ops, _ := nuExceptOperands(toks, nil)
+	opSet := map[int]bool{}
+	drop := func(r string) {
+		for _, d := range in.Dropped {
+			if d == r {
+				return
+			}
+		}
+		in.Dropped = append(in.Dropped, r)
+	}
+	for _, j := range ops {
+		opSet[j] = true
+		r := nuExcludeRaw(&toks[j])
+		if r == "" {
+			continue
+		}
+		if !hasExclude {
+			drop(r)
+			continue
+		}
+		seen := false
+		for _, p := range strings.Split(in.Slots["exclude"], "|") {
+			if p == r {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			if in.Slots["exclude"] == "" {
+				in.Slots["exclude"] = r
+			} else {
+				in.Slots["exclude"] += "|" + r
+			}
+		}
+	}
+	// operando varrido de um slot que não coube no exclude (newest→sort,
+	// filtro de tempo/dono — não vira glob): não pode sumir em silêncio.
+	for i := range toks {
+		if opSet[i] || !nuInExceptClause(toks, i) || toks[i].Raw == "" {
+			continue
+		}
+		if deletedRaw[toks[i].Raw] {
+			drop(nuExcludeRaw(&toks[i]))
+		}
+	}
+	for _, r := range nuDroppedOps(toks, taken, in.Slots) {
+		drop(r)
+	}
 	// "with group owner X" / "belonging to root": X é predicado de ORIGEM;
 	// como alvo do chgrp/chown seria no-op (mesmo grupo/dono) e esconderia
 	// que o destino real ficou vazio.
@@ -2422,6 +2507,9 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if toks[h.tok].Filler {
 							continue // "print OUT the names" — partícula, não o dir 'out'
 						}
+						if nuInExceptClause(toks, h.tok) {
+							continue // operando de exclusão nunca é valor de outro slot
+						}
 						v = h.Name
 						if h.Kind == "file" || h.Kind == "test" || h.Kind == "dir" {
 							v = toks[h.tok].Raw // keep what was typed: the method resolves it with context
@@ -2478,6 +2566,9 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				for _, i := range res {
 					if taken[i] {
 						continue
+					}
+					if nuInExceptClause(toks, i) {
+						continue // "except X" — X alimenta só o slot exclude
 					}
 					if strict {
 						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
@@ -2637,7 +2728,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				// a word whose concept no rule used ("instala o git": git)
 				for i := len(toks) - 1; i >= 0; i-- {
 					t := &toks[i]
-					if t.Filler || t.Slang || taken[i] {
+					if t.Filler || t.Slang || taken[i] || nuInExceptClause(toks, i) {
 						continue
 					}
 					if t.has("glob") {
@@ -4425,25 +4516,23 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 	case "exclude":
-		// "except git files" / "exceto os .o" — the pattern follows the cue
-		for i, t := range toks {
-			switch t.Fold {
-			case "except", "exceto", "excluding", "excluindo", "without", "ignoring", "ignore", "not", "expect":
-				for j := i + 1; j < len(toks) && j <= i+5; j++ {
-					f := toks[j].Fold
-					if f == "" || toks[j].Filler || nuIsNumber(f) || taken[j] {
-						continue
-					}
-					// palavra de extensão/glob é candidato natural de
-					// exclusão ("except xml files", "not matching
-					// '*/vendor/*'") — conceito sintético não bloqueia
-					concsOK := len(toks[j].Concs) == 0 || toks[j].has("extcue") || toks[j].has("glob")
-					if concsOK && (nuNameShaped(toks[j].Raw) || strings.HasPrefix(f, ".") || nuExtWords[f] || strings.ContainsAny(f, "*?[")) {
-						taken[i], taken[j] = true, true
-						return f
-					}
-				}
+		// "except git files" / "exceto os .o" / "excluding paths
+		// containing 'a'" / "except alpha and beta" — os operandos vêm
+		// depois do cue atravessando pontes; listas saem unidas por "|"
+		// (o script casa cada glob). O que a cláusula marca NUNCA é
+		// alvo de outro slot — a invariante pós-fill (Parse) reembola
+		// aqui o que outro extrator roubou ("except in tmp" → dir).
+		cues, ops, _ := nuExceptOperands(toks, taken)
+		if len(ops) > 0 {
+			var parts []string
+			for _, c := range cues {
+				taken[c] = true
 			}
+			for _, j := range ops {
+				taken[j] = true
+				parts = append(parts, nuExcludeRaw(&toks[j]))
+			}
+			return strings.Join(parts, "|")
 		}
 	case "min_depth", "max_depth":
 		return nuFindDepth(toks, what == "min_depth", taken)
@@ -5004,6 +5093,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
+				}
+				if nuInExceptClause(toks, j) {
+					continue // "under docs except path docs/x" — x é exclusão, não escopo
 				}
 				if u.has("filequoted") || u.has("forquoted") || u.has("nametgt") {
 					continue // a aspa já foi reivindicada como nome/conteúdo
@@ -6756,4 +6848,171 @@ func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string) []s
 		}
 	}
 	return out
+}
+
+// nuExceptCues — marcadores que abrem cláusula de EXCEÇÃO: o que vem
+// depois é o que NÃO se quer, nunca o alvo de um slot comum.
+var nuExceptCues = map[string]bool{
+	"except": true, "exceto": true, "excluding": true, "excluindo": true,
+	"without": true, "ignoring": true, "ignore": true, "menos": true,
+	"expect": true, "not": true,
+}
+
+// nuInExceptClause — o token i está dentro do SPAN de uma cláusula de
+// exceção? O span vai do cue ao seu último operando ("except path
+// docs/x" cobre path e docs/x; "except a.txt IN dir" NÃO cobre dir —
+// o escopo depois do operando já é outra cláusula).
+func nuInExceptClause(toks []nuTok, i int) bool {
+	cues, _, last := nuExceptOperands(toks, nil)
+	for _, cue := range cues {
+		if i >= cue && i <= last[cue] {
+			return true
+		}
+	}
+	return false
+}
+
+// nuExceptBridge — palavras-ponte entre o cue e o operando ("except
+// PATHS CONTAINING 'a'", "except IN tmp", "except those NAMED foo").
+// Só contam ANTES do primeiro operando — depois dele, "in dir" já é
+// escopo novo ("except a.txt in dir" não exclui dir).
+var nuExceptBridge = map[string]bool{
+	"path": true, "paths": true, "caminho": true, "caminhos": true,
+	"dir": true, "directory": true, "directories": true,
+	"folder": true, "folders": true, "pasta": true, "pastas": true,
+	"named": true, "called": true, "nomeado": true, "chamado": true,
+	"containing": true, "matching": true, "match": true,
+	"contendo": true, "pattern": true, "padrao": true, "padrão": true,
+	"like": true, "como": true, "the": true, "o": true, "a": true,
+	"os": true, "as": true, "in": true, "inside": true, "under": true,
+	"em": true, "no": true, "na": true, "from": true, "de": true,
+	"regular": true, "those": true, "that": true,
+}
+
+// nuExceptClass — substantivo-classe que ROTULA o operando sem ser um
+// ("except git FILES", "except hidden files", "without the EXTENSION
+// .tmp") — nunca entra na lista.
+var nuExceptClass = map[string]bool{
+	"files": true, "file": true, "dirs": true, "directories": true,
+	"folders": true, "arquivos": true, "arquivo": true,
+	"pastas": true, "subdirs": true, "subdirectories": true,
+	"ones": true, "one": true, "uns": true, "umas": true,
+	"extension": true, "extensão": true, "extensao": true,
+	"permission": true, "permissions": true, "permissão": true,
+	"permissões": true, "permissoes": true, "mode": true, "modo": true,
+	"owner": true, "dono": true, "user": true, "usuario": true,
+	"usuário": true, "group": true, "grupo": true, "size": true,
+	"tamanho": true, "name": true, "nome": true, "names": true,
+}
+
+// nuExceptOperands — cue→operandos de cada cláusula de exceção.
+// Depois do cue atravessa fillers/pontes/classes até o 1º operando;
+// a lista continua via sep ("except a AND b"); palavra solta depois
+// do operando fica PENDENTE — um sep posterior a confirma como item
+// ("alpha beta and gamma" → os 3), sem sep ela só estende o span pra
+// ninguém roubar ("alpha beta" → beta nunca vira name). `last` é o
+// fim do span de cada cue. taken!=nil pula o consumido (extrator).
+func nuExceptOperands(toks []nuTok, taken map[int]bool) (cues, ops []int, last map[int]int) {
+	last = map[int]int{}
+	for i, t := range toks {
+		if !nuExceptCues[t.Fold] {
+			continue
+		}
+		var myOps, pending []int
+		span := i
+		wantOperand := true
+		for j := i + 1; j < len(toks) && j <= i+6; j++ {
+			u := &toks[j]
+			f := u.Fold
+			if nuExceptCues[f] {
+				break // outro cue fecha a cláusula
+			}
+			if nuEnumStops[f] && !nuExceptBridge[f] {
+				break // escopo/destino fecha ("with/where/every") — mas
+				// "in/under/named" são PONTE: "except in tmp" marca tmp
+			}
+			if nuEnumSeps[f] {
+				myOps = append(myOps, pending...) // "a b and c": b era pendente
+				pending = nil
+				wantOperand = true
+				continue
+			}
+			if f == "" || u.Filler || nuIsNumber(f) {
+				continue
+			}
+			if !wantOperand {
+				// palavra solta pós-operando: item suspeito de lista sem
+				// sep — pendente até um sep confirmar; o span cobre pra
+				// ninguém reivindicar como name/dir.
+				if len(u.Concs) == 0 && !u.Quoted && u.Fold != "" {
+					pending = append(pending, j)
+					span = j
+					continue
+				}
+				break
+			}
+			if nuExceptBridge[f] && !u.Quoted {
+				continue
+			}
+			if nuExceptClass[f] && !u.Quoted {
+				continue // "except files in tmp" — a classe rotula, não exclui
+			}
+			if taken != nil && taken[j] {
+				continue
+			}
+			// operando: palavra solta, literal citado, ou conceito-META
+			// de nome ("except those named foo" → foo é nametgt; "hidden
+			// files" → hidden é findattr; "the extension .tmp" → extcue).
+			// Conceito de OUTRO slot (newest→sort, user→owner…) fecha a
+			// cláusula — aquilo não cabe em glob de exclusão e vira
+			// Dropped honesto na invariante, nunca exclusão inventada.
+			classNext := j+1 < len(toks) && nuExceptClass[toks[j+1].Fold]
+			metaName := u.has("nametgt") || u.has("nameattr") || u.has("extcue") ||
+				u.has("glob") || u.has("findattr") || u.has("filequoted") ||
+				u.has("forquoted") || u.has("outtgt") || u.has("intocue")
+			concsOK := len(u.Concs) == 0 || metaName || classNext || u.Quoted
+			if !concsOK {
+				// conceito de outro slot antes de ponte/classe é
+				// qualificador ("shell PATTERN 'x'", "newest FILES") —
+				// atravessa; sozinho ("owned BY wnj") fecha a cláusula
+				// e o operando dele fica livre pro próprio slot.
+				nf := ""
+				for k := j + 1; k < len(toks) && k <= j+3; k++ {
+					if toks[k].Filler || toks[k].Fold == "" {
+						continue
+					}
+					nf = toks[k].Fold
+					break
+				}
+				if nf != "" && (nuExceptBridge[nf] || nuExceptClass[nf]) {
+					span = j
+					continue
+				}
+				break
+			}
+			myOps = append(myOps, j)
+			span = j
+			wantOperand = false
+		}
+		if len(myOps) > 0 || span > i {
+			cues = append(cues, i)
+			ops = append(ops, myOps...)
+			last[i] = span
+		}
+	}
+	return cues, ops, last
+}
+
+// nuExcludeRaw — o valor do operando pro slot exclude: "hidden" vira o
+// glob de dotfile; o resto vai como foi digitado (Raw preserva aspa/
+// maiúscula; Fold é o fallback).
+func nuExcludeRaw(t *nuTok) string {
+	switch t.Fold {
+	case "hidden", "oculto", "oculta", "ocultos", "ocultas", "dotfiles":
+		return ".*"
+	}
+	if t.Raw != "" {
+		return t.Raw
+	}
+	return t.Fold
 }
