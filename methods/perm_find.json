@@ -23,6 +23,7 @@
             "name": "$slot.namepat",
             "no_group": "$slot.no_group",
             "no_owner": "$slot.no_owner",
+            "not_bits": "$slot.not_bits",
             "not_executable": "$slot.nx",
             "not_group": "$slot.not_group",
             "not_mode": "$slot.not_mode",

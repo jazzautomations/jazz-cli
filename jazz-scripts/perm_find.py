@@ -45,6 +45,14 @@ if bits_s is not None:
         fail("bits must be an octal mask like 220 or 444")
     bits = int(bits_s, 8)
 
+not_bits_s = arg("not_bits")
+not_bits = None
+if not_bits_s is not None:
+    not_bits_s = str(not_bits_s).strip().lstrip("0") or "0"
+    if not all(c in "01234567" for c in not_bits_s) or len(not_bits_s) > 4:
+        fail("not_bits must be an octal mask like 022")
+    not_bits = int(not_bits_s, 8)
+
 kind = str(arg("type", "any")).lower()
 if kind not in ("any", "file", "dir"):
     fail("type must be any, file or dir")
@@ -88,12 +96,12 @@ except (TypeError, ValueError):
     fail("limit must be an integer")
 limit = max(1, min(limit, 5000))
 
-if (exact is None and bits is None
+if (exact is None and bits is None and not_bits is None
         and not (want_ww or want_suid or want_sgid or want_exec
         or want_exec_all or want_uread or want_aread
         or owner or not_owner or group or not_group or no_owner or no_group
         or orphan or not_exec or not_ww)):
-    fail("pass a filter: mode/not_mode, bits, world_writable, suid, sgid, "
+    fail("pass a filter: mode/not_mode, bits/not_bits, world_writable, suid, sgid, "
          "executable/not_executable, everyone_exec, "
          "user_readable/world_readable, owner/not_owner, group/not_group, "
          "no_owner, no_group or orphan")
@@ -176,6 +184,8 @@ def match(st):
     if exact is not None and stat.S_IMODE(m) != exact:
         return False
     if bits is not None and (stat.S_IMODE(m) & bits) != bits:
+        return False
+    if not_bits is not None and (stat.S_IMODE(m) & not_bits):
         return False
     if want_ww and not (m & stat.S_IWOTH):
         return False

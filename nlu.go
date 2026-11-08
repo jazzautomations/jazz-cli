@@ -420,6 +420,11 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, "glob")
 			continue
 		}
+		// "g+w"/"o+x" soltos são sintaxe de permissão — conceito próprio
+		// pra vetar buscas de nome ("files missing o+w" ≠ name "o+w")
+		if nuPermBitToken(t.Fold) {
+			t.Concs = append(t.Concs, "permbit")
+		}
 		// "print list to a file named 'rm'" / "save the list to 'out.txt'" —
 		// destino de ESCRITA, não nome de busca: prep+file-cue na janela
 		// de lookback marca outtgt. Roda ANTES do shape e do cue de nome:
@@ -2010,6 +2015,55 @@ var nuCountNouns = map[string]bool{
 	"number": true, "numero": true, "número": true, "count": true,
 }
 
+// nuPermBitToken: "g+w"/"o+w"/"u+x"/"a-r" — sintaxe simbólica de
+// permissão, nunca nome de arquivo/dir. "missing g+w" é predicado de
+// modo negado, não name.
+func nuPermBitToken(f string) bool {
+	_, ok := nuPermBitMask(f)
+	return ok
+}
+
+// nuPermBitMask: "g+w"→020, "ug+x"→110, "a-r"→444 — classes antes de
+// +/- somam os blocos octal das letras de modo depois.
+func nuPermBitMask(f string) (int, bool) {
+	if len(f) < 3 || len(f) > 7 {
+		return 0, false
+	}
+	i := strings.IndexAny(f, "+-")
+	if i < 1 || i >= len(f)-1 {
+		return 0, false
+	}
+	mask := 0
+	for _, c := range f[i+1:] {
+		var bit int
+		switch c {
+		case 'r':
+			bit = 4
+		case 'w':
+			bit = 2
+		case 'x':
+			bit = 1
+		default:
+			return 0, false
+		}
+		for _, k := range f[:i] {
+			switch k {
+			case 'u':
+				mask |= bit << 6
+			case 'g':
+				mask |= bit << 3
+			case 'o':
+				mask |= bit
+			case 'a':
+				mask |= bit * 0o111
+			default:
+				return 0, false
+			}
+		}
+	}
+	return mask, true
+}
+
 // nuFormatWords: colunas de saída pedidas junto ao find — "with their
 // timestamp and paths" descreve o LISTING desejado, nunca um nome de
 // arquivo ou diretório. Auxiliares verbais ("been modified") idem.
@@ -2224,6 +2278,14 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if nuFormatWords[toks[i].Fold] {
 						continue // coluna de saída/auxiliar, nunca nome
+					}
+					if nuPermBitToken(toks[i].Fold) {
+						continue // "missing o+w" é sintaxe de permissão
+					}
+					switch toks[i].Fold {
+					case "missing", "missed", "lacking", "faltando",
+						"falta", "ausente", "ausentes":
+						continue // auxiliar de negação ("files missing o+w")
 					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
@@ -4790,12 +4852,29 @@ func nuNegationNear(toks []nuTok, i int) bool {
 			continue
 		}
 		switch toks[j].Fold {
-		case "not", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto", "lack", "lacks", "lacking", "falta", "faltando":
+		case "not", "non", "não", "nao", "nunca", "sem", "without", "except", "excluding", "exceto", "lack", "lacks", "lacking", "falta", "faltando", "missing", "missed", "ausente", "ausentes":
 			return true
 		case "no":
 			if j+1 < len(toks) && nuNegatableNouns[toks[j+1].Fold] {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// nuMissingNear: "files missing g+w"/"missing read permission" — a
+// ausência explícita de um bit é predicado negado (not_bits), não
+// presença. Janela curta pra trás: o verbo de ausência precede o bit.
+func nuMissingNear(toks []nuTok, i int) bool {
+	for j := i - 4; j < i; j++ {
+		if j < 0 {
+			continue
+		}
+		switch toks[j].Fold {
+		case "missing", "missed", "lacking", "lacks", "lack",
+			"falta", "faltando", "ausente", "ausentes":
+			return true
 		}
 	}
 	return false
@@ -5345,10 +5424,11 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		return ""
-	case "bits":
+	case "bits", "not_bits":
 		// "writable by both their owner and their group" = AND-mask 220 —
 		// o ww (S_IWOTH) é outra coisa: mundo, não dono+grupo. Cada
-		// palavra-classe depois de cue soma o seu bloco octal.
+		// palavra-classe depois de cue soma o seu bloco octal. "missing
+		// g+w"/"not writable by group" = not_bits (bit AUSENTE exigido).
 		permWord := map[string]int{
 			"writable": 2, "write": 2, "escrevivel": 2, "escrevível": 2,
 			"gravavel": 2, "gravável": 2, "escrita": 2,
@@ -5358,8 +5438,31 @@ func nuPermArg(toks []nuTok, what string, taken map[int]bool) string {
 			"execute": 1, "rodavel": 1, "rodável": 1,
 		}
 		for i, t := range toks {
+			// "missing g+w and o+w": a forma simbólica já é a máscara —
+			// tokens permbit encadeados por 'and' somam seus bits
+			if m0, ok := nuPermBitMask(t.Fold); ok {
+				neg := nuNegationNear(toks, i) || nuMissingNear(toks, i)
+				if neg != (what == "not_bits") {
+					continue
+				}
+				taken[i] = true
+				for j := i + 1; j < len(toks) && j <= i+4; j++ {
+					switch toks[j].Fold {
+					case "and", "e", ",":
+						continue
+					}
+					if m1, ok := nuPermBitMask(toks[j].Fold); ok {
+						taken[j] = true
+						m0 |= m1
+						continue
+					}
+					break
+				}
+				return fmt.Sprintf("%03o", m0)
+			}
 			bit, isPerm := permWord[t.Fold]
-			if !isPerm || nuNegationNear(toks, i) {
+			neg := isPerm && (nuNegationNear(toks, i) || nuMissingNear(toks, i))
+			if !isPerm || neg != (what == "not_bits") {
 				continue
 			}
 			mask, saw := 0, false

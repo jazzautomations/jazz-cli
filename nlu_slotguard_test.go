@@ -720,6 +720,20 @@ func TestNLUPermBitsGuards(t *testing.T) {
 			func(s map[string]string) bool {
 				return s["bits"] == "444" || s["aread"] == "true"
 			}},
+		{`find files missing g+w and o+w`, "perm_find",
+			func(s map[string]string) bool {
+				return s["not_bits"] == "022" && s["bits"] == "" && s["name"] == ""
+			}},
+		{`Search the /path directory tree for files missing g+w and o+w bits`, "perm_find",
+			func(s map[string]string) bool {
+				return s["not_bits"] == "022" && s["name"] == ""
+			}},
+		{`find files missing read permission`, "perm_find",
+			func(s map[string]string) bool {
+				return s["aread"] == "" && s["bits"] == ""
+			}},
+		{`files not world-writable`, "perm_find",
+			func(s map[string]string) bool { return s["nww"] == "true" }},
 	} {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) {
