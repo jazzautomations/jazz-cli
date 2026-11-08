@@ -293,6 +293,14 @@ func TestNLUFindNameGuards(t *testing.T) {
 			func(s map[string]string) bool { return s["name"] == "file??" && s["name_re"] == "" }},
 		{`find files whose names match regex '^ab.*z$'`, "file_find",
 			func(s map[string]string) bool { return s["name_re"] == "^ab.*z$" }},
+		{`List all *.ogg files under your home directory along with their size`, "file_find",
+			func(s map[string]string) bool {
+				return s["dir"] == "~" && s["name"] == "" && s["ext"] == "ogg"
+			}},
+		{`Find directory "your/dir" if it is empty`, "file_find",
+			func(s map[string]string) bool {
+				return s["dir"] == "" && s["name"] == "your/dir" && s["empty"] == "true"
+			}},
 	} {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) {
@@ -734,6 +742,12 @@ func TestNLUPermBitsGuards(t *testing.T) {
 			}},
 		{`files not world-writable`, "perm_find",
 			func(s map[string]string) bool { return s["nww"] == "true" }},
+		{`Find all files owned by "shadow" group`, "perm_find",
+			func(s map[string]string) bool {
+				return s["group"] == "shadow" && s["owner"] == ""
+			}},
+		{`find files belonging to the admin group`, "perm_find",
+			func(s map[string]string) bool { return s["group"] == "admin" }},
 	} {
 		in := m.Parse(tc.text, w)
 		if in.Name != tc.intent || !tc.check(in.Slots) {

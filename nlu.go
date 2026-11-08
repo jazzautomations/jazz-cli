@@ -2275,6 +2275,18 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					case "here", "aqui", "ali", "lá", "now", "agora",
 						"currently", "atualmente", "nearby":
 						continue
+					// possessivo/determinante nunca é nome: "your home
+					// directory" não tem name "your"
+					case "your", "yours", "my", "our", "ours", "their",
+						"theirs", "its", "his", "her", "hers",
+						"seu", "sua", "seus", "suas", "meu", "minha",
+						"nosso", "nossa", "dele", "dela", "deles", "delas":
+						continue
+					// conjunção adverbial abre oração nova — "along with
+					// their size" não faz parte do nome
+					case "along", "together", "junto", "juntamente":
+						clause = true
+						continue
 					}
 					if nuFormatWords[toks[i].Fold] {
 						continue // coluna de saída/auxiliar, nunca nome
@@ -4515,6 +4527,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			// paths") descrevem o LISTING, nunca um diretório
 			"timestamp": true, "timestamps": true, "paths": true,
 			"attributes": true, "sizes": true, "dates": true,
+			// possessivo/condicional/conjunção adverbial nunca é pasta:
+			// "under your home directory" não tem dir "your"; "if it is
+			// empty" não tem dir "if"
+			"your": true, "yours": true, "my": true, "our": true,
+			"ours": true, "their": true, "theirs": true, "its": true,
+			"his": true, "her": true, "hers": true, "if": true,
+			"whether": true, "unless": true, "along": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -4599,6 +4618,22 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if j+1 < len(toks) && (fileWords[toks[j+1].Fold] ||
 					scopeFillers[toks[j+1].Fold]) {
 					continue
+				}
+				// "your/my home directory" é a HOME do usuário — resolve pra
+				// "~" e deixa o confinamento recusar fora do root (honesto),
+				// em vez de procurar uma pasta literal chamada "home"
+				if u.Fold == "home" || u.Fold == "casa" {
+					if j+1 < len(toks) && nounCues[toks[j+1].Fold] {
+						taken[i], taken[j], taken[j+1] = true, true, true
+						return "~"
+					}
+					for k := i + 1; k < j; k++ {
+						switch toks[k].Fold {
+						case "your", "my", "our", "seu", "sua", "minha", "meu", "nosso", "nossa":
+							taken[i], taken[j], taken[k] = true, true, true
+							return "~"
+						}
+					}
 				}
 				taken[i], taken[j] = true, true
 				return u.Raw // tagged entities (@dir, /etc) are exactly the right values
@@ -4981,6 +5016,60 @@ func nuOwnerLikeArg(toks []nuTok, cues map[string]bool, neg bool, taken map[int]
 		}
 	}
 window:
+	// família GRUPO: "owned by X group"/"belonging to the admin group" —
+	// o nome precede a palavra-cue (padrão invertido do owner).
+	if cues["group"] {
+		for i, t := range toks {
+			if !nuGroupCues[t.Fold] || i == 0 || taken[i] {
+				continue
+			}
+			if nuNegationNear(toks, i) != neg {
+				continue
+			}
+			j := i - 1
+			// só artigos/determinantes são transparentes — filler genérico
+			// ('and', 'to') PARA o lookback: "group to staff" tem o nome
+			// DEPOIS do cue, e pular 'and' roubaria o valor do slot vizinho
+			for j > 0 {
+				switch toks[j].Fold {
+				case "the", "a", "an", "o", "um", "uma", "this", "that",
+					"these", "those", "their", "its", "seu", "sua":
+					j--
+				default:
+					goto nameAt
+				}
+			}
+		nameAt:
+			if j < 0 {
+				continue
+			}
+			n := toks[j].Fold
+			if n == "" || taken[j] || strings.ContainsAny(n, "/.") ||
+				nuIsNumber(n) || nuGroupCues[n] {
+				continue
+			}
+			cueish := false
+			for _, c := range toks[j].Concs {
+				if nuCueFamilyConcs[c] {
+					cueish = true
+				}
+			}
+			if cueish {
+				continue
+			}
+			// verbos auxiliares/preposições/conjunções logo antes não são
+			// nome de grupo
+			switch n {
+			case "to", "by", "in", "on", "of", "the", "a", "an", "is", "are",
+				"was", "were", "no", "any", "and", "or", "e", "ou", "nor",
+				"change", "set", "assign", "give", "make", "with", "for",
+				"com", "para", "pra", "pro", "em", "de", "do", "da":
+				continue
+			}
+			taken[i], taken[j] = true, true
+			return n
+		}
+	}
 	for i, t := range toks {
 		cue := cues[t.Fold]
 		// 'owned/belonging by' é cue de DONO — nunca de grupo
@@ -5054,6 +5143,12 @@ window:
 			}
 			if nuGroupCues[n] {
 				continue // "user group staff" → o 'staff' pertence ao 'group'
+			}
+			// "owned by X group"/"belong to the X group": o substantivo
+			// 'group' DEPOIS do nome manda ele pra família grupo — o dono
+			// não pode comê-lo ("shadow group" ≠ usuário shadow)
+			if j+1 < len(toks) && nuGroupCues[toks[j+1].Fold] && !cues["group"] {
+				continue
 			}
 			taken[i], taken[j] = true, true
 			return n
