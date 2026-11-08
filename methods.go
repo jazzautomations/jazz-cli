@@ -955,6 +955,9 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		done = "diretório criado"
 	case "delete":
 		synth = "rm " + rel
+		if fi, e := os.Lstat(abs); e == nil && fi.IsDir() {
+			synth = "rm -r " + rel // dir não vazio pede remoção recursiva
+		}
 		done = "apagado"
 	case "rename":
 		synth = "mv " + rel + " " + toRel
@@ -990,7 +993,11 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 	case "mkdir":
 		err = os.MkdirAll(abs, 0o755)
 	case "delete":
-		err = os.Remove(abs)
+		if fi, e := os.Lstat(abs); e == nil && fi.IsDir() {
+			err = os.RemoveAll(abs)
+		} else {
+			err = os.Remove(abs)
+		}
 	case "rename":
 		err = os.Rename(abs, toAbs)
 	case "copy":
