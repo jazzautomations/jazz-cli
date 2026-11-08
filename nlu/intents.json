@@ -1001,7 +1001,8 @@
      "kinds": [
       "file",
       "test",
-      "text"
+      "text",
+      "dir"
      ],
      "required": true,
      "shape": "name"

@@ -96,3 +96,36 @@ func TestEnumEveryDirEmptyBlocked(t *testing.T) {
 		t.Fatalf("conjunto vazio não pode sair verde\n%s", r.Text)
 	}
 }
+
+// Bare create-target: o nome a criar NÃO existe no mundo ainda — a
+// palavra logo após o cue (directory/file) É o alvo. Qualificador
+// antes do cue ("a rust file") e verbo dentro de oração ("a file
+// that logs") nunca nomeiam o alvo — sem nome honesto, needs_input.
+func TestCreateBareTarget(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want string
+	}{
+		{`make a directory novad`, "novad"},
+		{`create file parser.go`, "parser.go"},
+		{`make a new directory "quoted-name"`, "quoted-name"},
+		{`create a folder named scratch`, "scratch"},
+	} {
+		in := nuGet().Parse(tc.text, &nuWorld{})
+		if in.Name != "create" || in.Slots["target"] != tc.want {
+			t.Fatalf("%q -> %s slots=%v, quero target=%q", tc.text, in.Name, in.Slots, tc.want)
+		}
+	}
+}
+
+func TestCreateNoNameStaysMissing(t *testing.T) {
+	for _, text := range []string{
+		`create a rust file`,             // rust é tipo, não nome
+		`create a file that logs errors`, // logs é verbo da oração
+	} {
+		in := nuGet().Parse(text, &nuWorld{})
+		if in.Slots["target"] != "" {
+			t.Fatalf("%q -> target=%q inventado", text, in.Slots["target"])
+		}
+	}
+}

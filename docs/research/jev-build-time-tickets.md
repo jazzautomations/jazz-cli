@@ -69,3 +69,36 @@ latência do cérebro offline em Pentium M.
 - `succeeded` exige verify + evidência cobrindo TODOS os operandos.
 - Produtor vazio/truncado não alimenta mutação.
 - Nada de Jev/API no binário — ele destila tabela/regra/seed e morre.
+
+## Re-score v21 (redo1051 — MISSED_refusal + BUG_doable)
+
+Mesmos 1051 casos, binário novo, Jev nos mesmos labels:
+
+| label | v20 | v21 |
+|---|---|---|
+| BUG_doable | 819 | 810 |
+| honest_refusal | 232 | 238 |
+| FALSE_SUCCESS | 0 | 3 |
+
+Os 3 FALSE_SUCCESS dissecados: `nb-0714`/`nb-0746` são artefato de
+timeout do runner (exit 124 — produto selou succeeded, morreu no
+wrap-up, a Warn de deadline vazou como "answer"). `nb-1920` é gap
+real: `net_ifaces` parseou `slots={}` — `pattern "venet0:0|eth0"` e
+`first` nunca viraram slot → `brSlotIgnored` não pode ver operando que
+não existe. Nova classe: **operando nunca extraído** — residência em
+`unfed`/residual devia derrubar o selo quando uma string citada do
+pedido não alimentou nenhum slot.
+
+### T8 — operando citado sem slot (nb-1920)
+Pedido com `"pattern X"` / `first` que nenhum slot consome → hoje
+verde com listagem não filtrada. Dois remendos possíveis: (a) slot
+`pattern`+`first` em `net_ifaces` com filtro real; (b) tripwire de
+"quoted operand não consumido" — genérico, cobre a classe. O (b) é o
+aprendizado estrutural; (a) é cobertura caso-a-caso.
+
+### T9 — deadline ≠ succeeded no events stream
+`nb-0714`/`nb-0746`: exit 124 com último evento `to:succeeded`.
+Runner herda verde de processo morto no wrap-up. Se o soft-stop
+disparar depois do selo, emitir evento terminal explícito
+(`interrupted`) ou o runner deve preferir `unverified` quando
+exit≠0. É harness, mas o evento terminal honesto é produto.

@@ -2439,6 +2439,35 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				}
 			}
 			if v == "" && !derived {
+				// create.target é mundo ao contrário: o nome NÃO existe
+				// ainda — a palavra logo depois do cue de criação
+				// ("directory novad") É o alvo, mesmo fora de res/shape/
+				// entidade ("novad" carrega conceito create/new e some do
+				// residual).
+				if def.Name == "create" && name == "target" {
+					for i, t := range toks {
+						if !(t.has("files") || t.has("filenoun") || t.has("dirnoun") || t.has("dir")) {
+							continue
+						}
+						for j := i + 1; j < len(toks); j++ {
+							u := toks[j]
+							if nuClauseMark[u.Fold] {
+								break // marcador de oração fecha o alvo — "a file that logs"
+							}
+							if u.Filler || u.has("nameattr") || u.has("intocue") {
+								continue // "a folder named scratch" — named aponta o nome
+							}
+							if taken[j] || nuToolWords[u.Fold] || nuPureExt(u.Raw) ||
+								u.has("files") || u.has("filenoun") || u.has("dirnoun") ||
+								u.has("glob") || u.has("permbit") {
+								break
+							}
+							v, taken[j] = u.Raw, true
+							break
+						}
+						break
+					}
+				}
 				// the words no rule explained, as typed
 				var parts []string
 				clause := false
@@ -2449,6 +2478,29 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					if strict {
 						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
 							continue // a number or an entity of another kind is not a free name
+						}
+						// qualificador ANTES do cue de nome não é alvo:
+						// "a rust file" — rust precede 'file', é o tipo.
+						// E palavra DEPOIS de oração descreve, não nomeia:
+						// "a file that logs errors" — logs não é alvo.
+						if def.Name == "create" && name == "target" {
+							n := i + 1
+							for n < len(toks) && toks[n].Filler {
+								n++
+							}
+							if n < len(toks) && (toks[n].has("files") || toks[n].has("filenoun") ||
+								toks[n].has("dirnoun") || toks[n].has("dir")) {
+								continue
+							}
+							p := i - 1
+							for p >= 0 && toks[p].Filler {
+								p--
+							}
+							if p >= 0 && (nuClauseMark[toks[p].Fold] ||
+								toks[p].has("files") || toks[p].has("filenoun") ||
+								toks[p].has("dirnoun") || toks[p].has("dir")) {
+								continue
+							}
 						}
 						if toks[i].has("glob") || toks[i].has("timeref") {
 							continue // glob é namepat; timeref é comparação temporal — nunca UM nome
@@ -2545,13 +2597,37 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						"falta", "ausente", "ausentes":
 						continue // auxiliar de negação ("files missing o+w")
 					}
+					if def.Name == "create" && name == "target" {
+						// vizinho não-filler fecha o nome: qualificador
+						// ANTES do cue ("a rust file" — rust é tipo) e
+						// palavra DEPOIS de oração ("a file that logs"
+						// — logs descreve, não nomeia) nunca são alvo.
+						pn := i - 1
+						for pn >= 0 && toks[pn].Filler {
+							pn--
+						}
+						nn := i + 1
+						for nn < len(toks) && toks[nn].Filler {
+							nn++
+						}
+						isCue := func(t nuTok) bool {
+							return t.has("files") || t.has("filenoun") ||
+								t.has("dirnoun") || t.has("dir")
+						}
+						if (pn >= 0 && (nuClauseMark[toks[pn].Fold] || isCue(toks[pn]))) ||
+							(nn < len(toks) && isCue(toks[nn])) {
+							continue
+						}
+					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
 					if !kinds["text"] || len(parts) >= 4 {
 						break
 					}
 				}
-				v = strings.Join(parts, " ")
+				if v == "" {
+					v = strings.Join(parts, " ")
+				}
 			}
 			if v == "" && sd.Required && !derived {
 				// a word whose concept no rule used ("instala o git": git)
@@ -2575,6 +2651,27 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					if !usedTok && len(t.Concs) > 0 && !nuAllCue(t, m) {
 						if strict && !m.slotTokOK(kinds, t, w) {
 							continue
+						}
+						if def.Name == "create" && name == "target" {
+							// mesma regra do res-parts: qualificador
+							// antes do cue e palavra dentro de oração
+							// nunca nomeiam o que se vai criar.
+							p := i - 1
+							for p >= 0 && toks[p].Filler {
+								p--
+							}
+							nx := i + 1
+							for nx < len(toks) && toks[nx].Filler {
+								nx++
+							}
+							cue := func(x nuTok) bool {
+								return x.has("files") || x.has("filenoun") ||
+									x.has("dirnoun") || x.has("dir")
+							}
+							if (p >= 0 && (nuClauseMark[toks[p].Fold] || cue(toks[p]))) ||
+								(nx < len(toks) && cue(toks[nx])) {
+								continue
+							}
 						}
 						v, taken[i] = t.Raw, true
 						break
@@ -6050,6 +6147,13 @@ var nuPluralDirCues = map[string]bool{
 	// formas stem: o fold reduz "directories"→"directory", "folders"→"folder"
 	"directory": true, "folder": true, "pasta": true, "diretorio": true,
 	"subdir": true, "subpasta": true,
+}
+
+var nuClauseMark = map[string]bool{
+	"that": true, "which": true, "who": true, "whose": true, "where": true,
+	"when": true, "que": true, "quem": true, "onde": true, "com": true,
+	"with": true, "to": true, "para": true, "in": true, "em": true,
+	"de": true, "of": true, "and": true, "e": true, "ou": true, "or": true,
 }
 
 var nuEnumSeps = map[string]bool{
