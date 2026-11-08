@@ -300,3 +300,33 @@ func TestNLUFindNameGuards(t *testing.T) {
 		}
 	}
 }
+
+// operandos quoted: "file1"/"ips.txt" são nomes de arquivo mesmo sem ponto
+// ou precedidos de cue; texto multi-palavra quoted NUNCA é file slot;
+// "lines in 'filename'" é operando de contagem, não escopo de diretório.
+func TestNLUQuotedOperandGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, tc := range []struct {
+		text, intent string
+		check        func(map[string]string) bool
+	}{
+		{`Count the number of differing lines in "file1" and "file2"`, "wordcount_stats",
+			func(s map[string]string) bool { return s["target"] == "file1" }},
+		{`Print a count of duplicate lines in "filename"`, "wordcount_stats",
+			func(s map[string]string) bool {
+				return s["target"] == "filename" && s["dir"] == ""
+			}},
+		{`Print a count of all unique entries in "ips.txt"`, "text_count",
+			func(s map[string]string) bool { return s["file"] == "ips.txt" }},
+		{`List the number of occurrences of each unique character in "The quick brown fox"`, "text_count",
+			func(s map[string]string) bool { return s["file"] == "" }},
+		{`Print the contents of "numbers.txt"`, "open_file",
+			func(s map[string]string) bool { return s["target"] == "numbers.txt" }},
+	} {
+		in := m.Parse(tc.text, w)
+		if in.Name != tc.intent || !tc.check(in.Slots) {
+			t.Errorf("%q -> %s slots=%v miss=%v", tc.text, in.Name, in.Slots, in.Missing)
+		}
+	}
+}

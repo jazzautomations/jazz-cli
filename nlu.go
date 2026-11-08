@@ -420,16 +420,17 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = append(t.Concs, "glob")
 			continue
 		}
-		// aspas com forma de arquivo ("foo.txt", "/etc/x") = nome de
-		// arquivo citado — vence forquoted: "find the file \"x.c\""
-		if t.Quoted && (strings.Contains(t.Raw, ".") || strings.Contains(t.Raw, "/")) {
+		// aspas com forma de arquivo ("foo.txt", "/etc/x", "file1") =
+		// nome de arquivo citado — vence forquoted: "find the file \"x.c\""
+		if t.Quoted && (nuFileShaped(t.Fold) || strings.Contains(t.Raw, ".") || strings.Contains(t.Raw, "/")) {
 			t.Concs = append(t.Concs, "filequoted")
 			continue
 		}
 		// aspa precedida de cue de nome de arquivo é o NOME mesmo sem
 		// ponto: "locate file 'file1'", "files whose filename is 'x'",
 		// "a file named 'apt'" — o cue marca o slot, não a forma.
-		if t.Quoted && i > 0 {
+		// Multi-palavra segue texto, nunca nome.
+		if t.Quoted && i > 0 && !strings.Contains(t.Raw, " ") {
 			for j := i - 1; j >= 0 && j >= i-3; j-- {
 				u := &out[j]
 				if u.Filler {
@@ -438,6 +439,12 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				switch u.Fold {
 				case "file", "filename", "filenames", "named", "called",
 					"name", "names", "arquivo", "nome", "nomes", "is", "are":
+					t.Concs = append(t.Concs, "filequoted")
+				}
+				// "lines in 'filename'" — a aspa após unidade de contagem
+				// é o OPERANDO (arquivo), não escopo de diretório. Só
+				// lineselect: "count 'x'" conta o padrão x, não um file.
+				if u.has("lineselect") {
 					t.Concs = append(t.Concs, "filequoted")
 				}
 				j = 0 // só a primeira palavra útil manda
@@ -1626,7 +1633,9 @@ func (m *nuModel) slotTokOK(kinds map[string]bool, t *nuTok, w *nuWorld) bool {
 	}
 	if t.Quoted {
 		if fileish {
-			return true
+			// aspa multi-palavra é TEXTO ('The quick brown fox'), não
+			// nome de arquivo — mesmo citada entre aspas
+			return !strings.Contains(t.Raw, " ")
 		}
 		if w == nil {
 			return false
@@ -1692,6 +1701,22 @@ func nuPureExt(raw string) bool {
 // sufixo precisa ser uma extensão do vocabulário, então "release.2" e
 // "my.dir" continuam podendo nomear diretórios.
 func nuFileShaped(fold string) bool {
+	// "file1"/"arquivo2" — file+dígitos é nome de arquivo de corpus,
+	// nunca diretório nem palavra solta
+	for _, p := range []string{"file", "arquivo", "fichero"} {
+		if rest := strings.TrimPrefix(fold, p); rest != fold && rest != "" {
+			digits := true
+			for _, r := range rest {
+				if r < '0' || r > '9' {
+					digits = false
+					break
+				}
+			}
+			if digits {
+				return true
+			}
+		}
+	}
 	dot := strings.LastIndexByte(fold, '.')
 	if dot <= 0 || dot == len(fold)-1 {
 		return false
@@ -3864,6 +3889,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
+				}
+				if u.has("filequoted") || u.has("forquoted") || u.has("nametgt") {
+					continue // a aspa já foi reivindicada como nome/conteúdo
 				}
 				if nuPureExt(u.Fold) || nuExtWords[u.Fold] {
 					continue // ".txt files" é seletor do slot ext, não dir —
