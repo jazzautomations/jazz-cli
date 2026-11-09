@@ -1558,6 +1558,12 @@ func brArchiveOp(cx *brCtx, in map[string]string) brStep {
 			}
 			rel = base + ext
 			abs = filepath.Join(cx.env.Root, filepath.FromSlash(rel))
+		} else if nuArchiveWord(rel) && !nuArchiveName(rel) {
+			// "compress them using bzip2" — palavra-formato/ferramenta
+			// nua sem suporte; sem o check ela caía no ramo tar-puro
+			// e criava um arquivo chamado "bzip2". Nome archive-shaped
+			// (pack.tar.gz) segue o caminho normal
+			return brStep{obs: obs, why: "formato de archive não suportado: " + rel + " (tar/tar.gz/tgz/zip)"}
 		}
 		var files []string
 		for _, s := range srcs {

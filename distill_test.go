@@ -1070,6 +1070,17 @@ func TestBrArchiveOp(t *testing.T) {
 	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "x.rar", "srcs": "one.txt"}); st.ok {
 		t.Error("rar devia recusar")
 	}
+	// palavra-formato/ferramenta sem suporte ("compress using bzip2")
+	// recusa em vez de criar um tar chamado "bzip2"
+	for _, tool := range []string{"bzip2", "xz", "pigz", "7z", "rar", "pbzip2"} {
+		if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": tool, "srcs": "one.txt"}); st.ok {
+			t.Errorf("%s devia recusar (formato não suportado)", tool)
+		}
+	}
+	// formato suportado por palavra deriva o nome da fonte
+	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "gzip", "srcs": "one.txt"}); !st.ok || !exists("one.txt.tar.gz") {
+		t.Errorf("gzip devia derivar one.txt.tar.gz: %+v", st)
+	}
 	// destino fora do root recusa
 	if st = brArchiveOp(mk(), map[string]string{"op": "create", "out": "../x.tar", "srcs": "one.txt"}); st.ok {
 		t.Error("out fora do root devia recusar")

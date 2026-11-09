@@ -2062,12 +2062,14 @@ func TestNLUCorpusMineGuards(t *testing.T) {
 			"perm_find", map[string]string{"owner": "matheus"}, []string{"dir"}},
 		{"search the word NEEDLE and substitute it with REPLACEMENT in all the php files of the current folder",
 			"text_replace", map[string]string{"from": "NEEDLE", "to": "REPLACEMENT", "ext": "php"}, []string{"file"}},
-		{"Search for $S in all regular files under $DIR directory tree",
-			"text_grep", map[string]string{"dir": "$DIR", "pattern": "$S"}, []string{"file"}},
 		{"Search the Movies folder in the user's home directory for files larger than 1024 megabytes in size",
 			"file_find", map[string]string{"dir": "~/Movies"}, []string{"name"}},
 		{"find  file which case-insensitive name is too in currect directory",
 			"file_find", map[string]string{"name": "too", "icase": "1"}, []string{"dir"}},
+		// 'the pattern REGEX' — o vocábulo é phrasing do cue; o
+		// operando é só o literal citado
+		{"find all java files in the current folder and search for the pattern REGEX",
+			"find", map[string]string{"query": "REGEX", "ext": "java"}, []string{"file"}},
 	} {
 		in := m.Parse(c.text, w)
 		if in.Name != c.intent || nuPredict(in) != c.intent {
@@ -2107,6 +2109,37 @@ func TestNLUCorpusMineGuards(t *testing.T) {
 		"Go into the directory whose name is selected in the X window system, ie. double-clicked in a terminal window.",
 		"Creates temporary file in a TMPDIR folder with name like tmp.XXXXXXXXXX.",
 		`Mathematically sum each line in "infile"`,
+		// var de shell em slot de padrão/nome = literal silencioso;
+		// em path-slot o brPath recusa, no padrão é o drop que empurra
+		`Search for $S in all regular files under $DIR directory tree`,
+		`Search for 'Processed Files' in all $srch* (case insensitive) files under current directory`,
+		`Search for 'stuff' in all *,txt files under current directory`,
+		`grep from bottom of file`,
+		`Count the number of files in the directory trees whose pathnames match pattern '/dev/sd*[a-z]'`,
+		`Display the number of sub-directories for all directories under current directory tree, sort them according to the decreasing order of the number and show only the first 10 of them`,
+		`Find number of different rows between File1 and File2.`,
+		// sentença aspada não é basename nem pasta — é payload de
+		// echo/test, e a variável nunca resolve no offline
+		`Print "$somedir is empty" if $somedir is empty`,
+		`Print 'Empty dir' if $some_dir is empty`,
+		// comando entre aspas no slot de nome — exec não roda
+		`Find all files in ~/clang+llvm-3.3/bin/ and print 'basename /file/path' for each file`,
+		`Reports time consumed by command 'sleep 1' to the file time.txt together with command error output.`,
+		// phrasing multi-palavra não-aspado nunca é basename —
+		// "name of lines" casaria o literal, vacuoso
+		`Count the number of lines in all ".php" files in the current directory tree`,
+		`Find all *.c files on the system and feed the output to wc`,
+		`Find all files under /path and calculate their md5sum`,
+		// quantificador/descritor de papel nunca é operando
+		`Updates all software in a system, skipping packages that have a failed dependencies.`,
+		`Look for files in the current directory tree to which the group users have full access`,
+		`Print all group names known to the system.`,
+		`Find regular files in the current directory tree that have executable bits set for the user and group but not for the other`,
+		`search for the text file "file.txt" and display its parent directory`,
+		`Change directory to the alphabetically last path under the current directory`,
+		`Find "file.xml" under the current directory and change directory to its parent`,
+		`Move all files that contain "Subject: \[SPAM\]" to "your_file"`,
+		`Find all *.sql files in maximum 1 level down the current directory, process it with sed and then send the output to a mysql command`,
 	} {
 		in := m.Parse(text, w)
 		if nuPredict(in) != "none" {
@@ -2359,5 +2392,134 @@ func TestNLUDepSysGuards(t *testing.T) {
 	if in := m.Parse("npm install", w); in.Name != "install_dep" ||
 		in.Slots["dep"] != "" || len(in.Missing) == 0 {
 		t.Errorf("npm install sem pacote devia dar miss=[dep]: %v miss=%v", in.Slots, in.Missing)
+	}
+}
+
+// archive/create cluster: ferramenta de compressão não é srcs nem
+// nome de out; spec remota, comando-com-flag, var-duração e create
+// negado/tamanho/backup-op nunca viram operando executável.
+func TestNLUArchiveCreateGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	// rotas e slots certos
+	for _, c := range []struct {
+		text, intent string
+		want         map[string]string
+	}{
+		{"compacta a pasta logs em tar.gz", "archive_create",
+			map[string]string{"srcs": "logs", "out": "tar.gz"}},
+		{"Archive the directory structure under .. directory into dirstructure.tar",
+			"archive_create", map[string]string{"dir": "..", "out": "dirstructure.tar"}},
+		{"Find all *.gz files under asia and emea directory and print their names",
+			"file_find", map[string]string{"dir": "asia|emea"}},
+		{"View gzip's help documentation", "help", map[string]string{}},
+		{"procura ParseArgs", "find",
+			map[string]string{"query": "ParseArgs"}},
+		{"find files sorted by date", "find",
+			map[string]string{"query": "sorted date"}},
+		{"encontra a string 'connection refused'", "text_grep",
+			map[string]string{"pattern": "connection refused"}},
+		// faixa de tamanho posicional — "between X and Y"
+		{"Find all .gif files in the /var/www directory tree that are between 5 kB and 10 kB in size",
+			"file_find", map[string]string{"ext": "gif",
+				"min_size": "5120", "max_size": "10240"}},
+		{"Search for files whose size is between 100 kilobytes and 500 kilobytes",
+			"file_find", map[string]string{"min_size": "102400",
+				"max_size": "512000"}},
+		{"Search the current directory recursively for files whose size is between 10 and 50 MB",
+			"file_find", map[string]string{"min_size": "10485760",
+				"max_size": "52428800"}},
+	} {
+		in := m.Parse(c.text, w)
+		if nuPredict(in) != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+
+	// recusas honestas — o operando crítico vai pro Dropped ou o
+	// slot required fica Missing; nenhuma executa com slot inventado
+	for _, text := range []string{
+		// create negado — o pedido é mktemp -u, não criar
+		"Prints name of temporary file but doesn`t create nothing.",
+		// tamanho não é nome de arquivo
+		"create a 100MB test file",
+		// backup é operação, não mkdir
+		"create a backup of all the files in the home folder on a partition and save the log to a file",
+		// enum de phrasing/var não é fan-out
+		"display all the directories in specific path ( saved in $x ) excluding those that are present in a path and save the ouput to a file",
+		// alternação de ferramenta não é fonte
+		`get info about "lbzip2|plzip|pigz" from tar command`,
+		// spec remota user@host:path não é dir
+		`Archive "<SOURCE_DIR>" to "rsyncuser@192.168.1.110:/srv/www/prj112/myfolder"`,
+		// pipe-into-comando não é dir de extract
+		`Unzip all files matching "file_*" and pipe into "agrep -dEOE 'grep'"`,
+		// var-duração não fabrica janela nem alvo
+		"Delete files in $DIR_TO_CLEAN older than $DAYS_TO_SAVE days",
+		// escopo "em todos os configs" não é suportado pelo sed
+		"substitui localhost por 127.0.0.1 em todos os configs",
+		// pedido de man/help não é símbolo do grep de código
+		"Show manual page of find",
+		"Show the explanation of find's debugging options",
+		// número aleatório não é padrão de contagem
+		"Print a random number between 1 and 10",
+		// jobs/inode/classe não são literal de grep
+		"count amount of jobs running",
+		"get the job number from the stored PID",
+		"Find the file whose inode number is 1316256",
+		"count all the html files having a specifc word in a folder.",
+		// phrasing de listagem de diretório não é literal
+		"List all leaf directories (directories which don't contain any sub-directory) under current directory",
+		"display all the files in the current folder which contains form feed (^L) and does not contain NULL",
+		// fonte por variável é indireção não resolvida
+		`Archive directory specified by variable "myFolder" to current directory.`,
+		// diff de diretórios não é grep de símbolo
+		"Find .cpp files that differs in subdirectories PATH1 and PATH2.",
+		"Find PHP files with abstract classes",
+		// função-word/pronome não é operando
+		"Find all files you have modified in the last two days",
+		"Search for first match of the case insensitive regex 're' in all *.coffee files under current directory",
+		"find all files in the file system which belong to no user or which have no user",
+		"Find all files & directory which have write permission for group , remove the permission from group",
+		"find all the directories in the current folder and change to these directories and run a command",
+		// metacaractere não suportado em slot de nome/path
+		"Find files/directories named<filetype> under current directory which were accessed less than 5 days ago",
+		"Search directories /path/to/directory/folder{1..50} for .txt files",
+		"delete all the empty files(files with size 0 bytes) in the current folder",
+		"Delete the text matched by the regex '<script>if(window.*<\\/script>' in all index.html files under current directory",
+		"Copy directory hierarchy from \"./<SOURCE_DIR>/\" to \"<DEST_DIR>\"",
+		"find all the video files in the folder /home/<user>",
+		"Rename all *.jpg files to *.jpg$.jpg files under ../<dirname>  directory by appending the parent directory name at the beginning of their names",
+		// glob em slot de path/conta
+		"find files in the current directory with pattern` '*.[ch]' which are contain ‘thing’ string and print file names",
+		"Find all directories under current directory and make them read, write, and executable for owner & group and remove read-write-execute permission for other",
+		"Print virtual memory usage of all processes owned by \"jbos[s]\"",
+		// path vazado dentro de padrão de extensão
+		"Replace all occurrences of edx (case insensitive) with gurukul in all *.css (case insensitive) files under ./cms/djangoapps/contentstore/management/commands/tests directory",
+		// quantificador regex em slot glob / aspas tipográficas
+		"Search for 'specific string' in all files matching the name pattern '“*.[txt|TXT]”' under current directory tree",
+		"Ensure all 5 of UEDP0{1..5}_20120821.csv files exist, creating empty files for any missing ones (updates the file's timestamps)",
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+
+	// palavra-ferramenta vira out — o CAP recusa o formato
+	for _, text := range []string{
+		"create an archive using 'pigz' as a compress program",
+		"create an archive using pbzip2 as a compress program",
+		"Find all .log files in the /var/log directory tree and compress them using bzip2",
+	} {
+		in := m.Parse(text, w)
+		if in.Name != "archive_create" || !nuArchiveWord(in.Slots["out"]) {
+			t.Errorf("tool->out: %s -> %s %v", text, in.Name, in.Slots)
+		}
 	}
 }

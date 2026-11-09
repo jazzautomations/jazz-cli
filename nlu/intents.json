@@ -275,7 +275,8 @@
       "extract",
       "archiveverb",
       "remote",
-      "connect"
+      "connect",
+      "help"
      ]
     },
     {
@@ -294,7 +295,8 @@
       "extract",
       "archiveverb",
       "remote",
-      "connect"
+      "connect",
+      "help"
      ],
      "w": 0
     }
@@ -379,7 +381,8 @@
       "create",
       "delete",
       "rename",
-      "dotenv"
+      "dotenv",
+      "replace"
      ]
     },
     {
@@ -392,7 +395,8 @@
       "delete",
       "rename",
       "dotenv",
-      "explain"
+      "explain",
+      "replace"
      ]
     }
    ],
