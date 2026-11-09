@@ -176,12 +176,15 @@ def bounded_path(value):
     return p
 
 
-top_arg = path_in_root(arg("path", "."))
+tops_raw = arg("path", ".").split("|")
+top_arg = path_in_root(tops_raw[0])
 if os.path.islink(top_arg):
     fail("path is a symlink (not followed): %s" % rel(top_arg))
-top = bounded_path(arg("path", "."))
-if not os.path.exists(top):
-    fail("path not found: %s" % rel(top))
+tops = [bounded_path(v) for v in tops_raw]
+for tp in tops:
+    if not os.path.exists(tp):
+        fail("path not found: %s" % rel(tp))
+top = tops[0]
 def ref_ts(p):
     # o arquivo-referência vive dentro do scan root — fora disso é fuga
     if os.path.isabs(p) or ".." in p.split(os.sep):
@@ -276,52 +279,63 @@ hits, scanned, truncated, warnings = [], 0, False, []
 stop = False
 hidden = lambda n: n.startswith(".")
 
-if os.path.isfile(top):
-    try:
-        st = os.lstat(top)
-        if match(top, os.path.basename(top), st):
-            hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
-        scanned = 1
-    except (IOError, OSError) as e:
-        fail("cannot stat: %s" % e)
-else:
-    for d, dirs, files in os.walk(top, followlinks=False):
-        pruned = []
-        for x in dirs:
-            if x in SKIP or (not include_hidden and hidden(x)):
-                continue
-            if os.path.islink(os.path.join(d, x)):
-                continue
-            pruned.append(x)
-        dirs[:] = sorted(pruned)
-        for x in dirs:
-            p = os.path.join(d, x)
-            try:
-                st = os.lstat(p)
-            except (IOError, OSError):
-                continue
+def _roots():
+    # "asia|emea": cada raiz é varrida em sequência; top vira a raiz
+    # corrente pra depth_of/rel calcularem contra a base certa
+    for tp in tops:
+        if os.path.isfile(tp):
+            yield (tp, "__FILE__", None, None)
+        else:
+            for d, ds, fs in os.walk(tp, followlinks=False):
+                yield (tp, d, ds, fs)
+
+
+for top, d, dirs, files in _roots():
+    if d == "__FILE__":
+        try:
+            st = os.lstat(top)
+            if match(top, os.path.basename(top), st):
+                hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
             scanned += 1
-            if match(p, x, st):
-                hits.append((rel(p).replace(os.sep, "/"), 0, "dir", st.st_mtime))
-        for f in sorted(files):
-            if not include_hidden and hidden(f):
-                continue
-            p = os.path.join(d, f)
-            try:
-                st = os.lstat(p)
-            except (IOError, OSError):
-                continue
-            scanned += 1
-            if match(p, f, st):
-                hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
-        if scanned >= MAX_SCAN:
-            truncated, stop = True, True
-            warnings.append("stopped at %d entries" % MAX_SCAN)
-        if not stop and time.time() - T0 > BUDGET_S:
-            truncated, stop = True, True
-            warnings.append("time budget reached after %d entries" % scanned)
-        if stop:
-            break
+        except (IOError, OSError) as e:
+            fail("cannot stat: %s" % e)
+        continue
+    pruned = []
+    for x in dirs:
+        if x in SKIP or (not include_hidden and hidden(x)):
+            continue
+        if os.path.islink(os.path.join(d, x)):
+            continue
+        pruned.append(x)
+    dirs[:] = sorted(pruned)
+    for x in dirs:
+        p = os.path.join(d, x)
+        try:
+            st = os.lstat(p)
+        except (IOError, OSError):
+            continue
+        scanned += 1
+        if match(p, x, st):
+            hits.append((rel(p).replace(os.sep, "/"), 0, "dir", st.st_mtime))
+    for f in sorted(files):
+        if not include_hidden and hidden(f):
+            continue
+        p = os.path.join(d, f)
+        try:
+            st = os.lstat(p)
+        except (IOError, OSError):
+            continue
+        scanned += 1
+        if match(p, f, st):
+            hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
+    if scanned >= MAX_SCAN:
+        truncated, stop = True, True
+        warnings.append("stopped at %d entries" % MAX_SCAN)
+    if not stop and time.time() - T0 > BUDGET_S:
+        truncated, stop = True, True
+        warnings.append("time budget reached after %d entries" % scanned)
+    if stop:
+        break
 
 if sort_by == "size":
     hits.sort(key=lambda h: (-h[1], h[0]))

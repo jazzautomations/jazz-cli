@@ -1030,6 +1030,15 @@ func TestScriptsEachBuiltin(t *testing.T) {
 			t.Fatalf("result: %v", v)
 		}
 	})
+	run("file_find", func(t *testing.T) {
+		scWrite(t, root, "asia/x.gz", "x\n")
+		scWrite(t, root, "emea/y.gz", "y\n")
+		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "asia|emea", "ext": "gz"})
+		d := scDataOf(v)
+		if !scOK(v) || d["count"] != float64(2) {
+			t.Fatalf("multi-root find: %v", v)
+		}
+	})
 	run("file_split", func(t *testing.T) {
 		scWrite(t, root, "fs/big.txt", "1\n2\n3\n4\n5\n")
 		v, _ := scCall(t, tb, "file_split", map[string]any{"file": "fs/big.txt", "lines": 2})

@@ -5406,6 +5406,18 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					scopeFillers[toks[j+1].Fold]) {
 					continue
 				}
+				// "the user's home directory" — 'user' não é dir; quando
+				// 'home/casa' vem logo depois (com ou sem 's), o escopo
+				// inteiro resolve pra "~" como no your/my home
+				switch u.Fold {
+				case "user", "usuario", "usuário", "owner", "dono":
+					for k := j + 1; k < len(toks) && k <= j+3; k++ {
+						if toks[k].Fold == "home" || toks[k].Fold == "casa" {
+							taken[i], taken[j], taken[k] = true, true, true
+							return "~"
+						}
+					}
+				}
 				// "your/my home directory" é a HOME do usuário — resolve pra
 				// "~" e deixa o confinamento recusar fora do root (honesto),
 				// em vez de procurar uma pasta literal chamada "home"
@@ -5423,7 +5435,45 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					}
 				}
 				taken[i], taken[j] = true, true
-				return u.Raw // tagged entities (@dir, /etc) are exactly the right values
+				// enumeração: "under asia and emea directory" — nomes
+				// ligados por and/, antes de cue de pasta plural viram
+				// "asia|emea" (o script itera cada raiz)
+				val := u.Raw
+				if val == "" {
+					val = u.Fold
+				}
+				extra := 0
+				for k := j + 1; k+1 < len(toks) && extra < 3; {
+					if !nuEnumSeps[toks[k].Fold] {
+						break
+					}
+					v := &toks[k+1]
+					okName := !v.Filler && !v.Slang && !taken[k+1] &&
+						v.Fold != "" && !nuIsNumber(v.Fold) &&
+						!nuFileShaped(v.Fold) && !nuPureExt(v.Fold) &&
+						len(v.Concs) == 0 && !nuToolWords[v.Fold] &&
+						!timeWords[v.Fold] && !scopeFillers[v.Fold] &&
+						!unitWords[v.Fold] && !clauseBoundaries[v.Fold]
+					// o último nome pode ser seguido do substantivo
+					// ("emea directory") — intermediários não
+					trail := k+2 < len(toks) &&
+						(nounCues[toks[k+2].Fold] || nuEnumSeps[toks[k+2].Fold])
+					if !okName || !trail {
+						break
+					}
+					name := v.Raw
+					if name == "" {
+						name = v.Fold
+					}
+					val += "|" + name
+					taken[k], taken[k+1] = true, true
+					if nounCues[toks[k+2].Fold] {
+						taken[k+2] = true
+					}
+					k += 2
+					extra++
+				}
+				return val // tagged entities (@dir, /etc) are exactly the right values
 			}
 			// sem break: uma cue que só achou escopo/janela ("in all files")
 			// não pode esconder a próxima ("under /myprojects")

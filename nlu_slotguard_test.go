@@ -1218,3 +1218,22 @@ func TestNLUPermClusterGuards(t *testing.T) {
 		t.Errorf("targets engoliu perm/mode: %v", in.Slots)
 	}
 }
+
+// ext/glob cluster: multi-dir enumeração vira "a|b" (nunca name:), e
+// "user's home directory" resolve pra ~ sem inventar owner/dir.
+func TestNLUDirEnumGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse("Find all *.gz files under asia and emea directory and print their names", w)
+	if in.Slots["dir"] != "asia|emea" || in.Slots["name"] != "" {
+		t.Errorf("asia+emea: %v", in.Slots)
+	}
+	in = m.Parse("Find all .txt files in the user's home directory and below", w)
+	if in.Slots["dir"] != "~" || in.Slots["owner"] == "home" || in.Slots["dir"] == "user" {
+		t.Errorf("user home: %v", in.Slots)
+	}
+	// "under asia and print" — o 'and' que liga outra ação não é enum
+	in = m.Parse("find files under asia and print them", w)
+	if in.Slots["dir"] == "asia|print" || in.Slots["name"] == "print" {
+		t.Errorf("and-ação: %v", in.Slots)
+	}
+}
