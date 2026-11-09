@@ -1,0 +1,16 @@
+2026-11-02 09:00:01 INFO cache aquecendo
+2026-11-02 09:00:04 ERROR fila cheia (37 pendentes)
+2026-11-02 09:01:02 INFO reinicio realizado
+WARN: disco quase cheio
+2026-11-02 09:02:00 ERROR credencial rejeitada
+2026-11-02 09:02:11 INFO sinal de vida
+ERROR no parse do relatorio (linha 12)
+2026-11-02 09:03:33 INFO fila ok
+2026-11-02 09:04:15 ERROR timeout no no 3
+2026-11-02 [aviso] queda breve de rede
+2026-11-02 09:05:40 ERROR retry do no 3 falhou
+2026-11-02 09:06:00 INFO no 3 de volta
+2026-11-02 09:06:05 ERROR no 3 fora de novo
+2026-11-02 09:07:10 WARN no 3 lento
+2026-11-02 09:08:02 INFO pico de carga
+2026-11-02 09:09:30 ERROR saude do no 2

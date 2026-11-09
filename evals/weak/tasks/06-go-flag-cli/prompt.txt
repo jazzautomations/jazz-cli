@@ -1,0 +1,6 @@
+no projeto `grita`, adiciona uma flag --grite que imprime a saida em MAIUSCULAS.
+Exemplos do comportamento desejado:
+  ./grita maria          => Ola, maria!
+  ./grita --grite maria  => OLA, MARIA!
+  ./grita                => Ola, mundo!
+A saida normal (sem a flag) nao pode mudar. Compila com `go build -o grita .` e testa na mao.

@@ -145,6 +145,8 @@ type nuModel struct {
 	vocab    map[string]bool       // lexicon words >= 4 letters (typo repair)
 	byName   map[string]int
 	nbOnce   sync.Once
+	ppmOnce  sync.Once
+	ppm      *nuPPM
 	nb       *nuNB
 	loadErr  error
 	cueConcs map[string]bool
@@ -5956,6 +5958,65 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 	}
+	// phrasing de lugar/modo vazando como operando de path/padrão —
+	// "to another folder"/"to console"/"srcdir using" não nomeiam
+	// destino: é pedido de destino indefinido (Missing→ask) ou
+	// resíduo de modo, nunca uma pasta chamada "another".
+	// Constraint/negação ("except if", "doesn't") dropa — é
+	// restrição descoberta que nenhum slot expressa. Escopo
+	// file_move/rename — pat/all/files em outros intents são
+	// operandos válidos
+	if in.Name == "file_move" || in.Name == "rename" {
+		for _, lsk := range []string{"srcdir", "dest", "target", "pat",
+			"exclude", "link", "file"} {
+			lv := in.Slots[lsk]
+			if lv == "" {
+				continue
+			}
+			lvQuoted := false
+			for _, t := range toks {
+				if t.Quoted && (t.Raw == lv || t.Fold == lv) {
+					lvQuoted = true
+				}
+			}
+			if lvQuoted {
+				continue
+			}
+			switch strings.ToLower(lv) {
+			case "home", "casa":
+				if lsk == "srcdir" || lsk == "dest" {
+					in.Slots[lsk] = "~"
+				}
+				continue
+			case "if", "doesn", "dont", "does", "not", "no",
+				"except", "unless", "but", "variable", "variavel",
+				"variável", "defined", "yes", "upper", "uppercase",
+				"lowercase", "each", "every", "all", "one":
+				delete(in.Slots, lsk)
+				drop(lv)
+			case "using", "another", "somewhere", "anywhere",
+				"elsewhere", "console", "stdout", "stderr",
+				"files", "copied", "case-insensitive", "begin",
+				"default", "temporary", "tmp", "temp", "new",
+				"output", "info", "message", "progress",
+				"verbose":
+				delete(in.Slots, lsk)
+			}
+			// required podado vira Missing — o método cai no ask
+			// ("qual o destino?") em vez de executar incompleto
+			if in.Slots[lsk] == "" && def.Slots[lsk].Required {
+				seenMiss := false
+				for _, ms := range in.Missing {
+					if ms == lsk {
+						seenMiss = true
+					}
+				}
+				if !seenMiss {
+					in.Missing = append(in.Missing, lsk)
+				}
+			}
+		}
+	}
 	// "UID=1000"/"user=wnj" como owner/group: o rótulo é o TIPO do
 	// operando, o valor é o id/nome — find -user aceita o número,
 	// o rótulo grudado falharia quieto no runtime
@@ -7130,6 +7191,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				}
 				// the words no rule explained, as typed
 				var parts []string
+				var held []int
 				clause := false
 				for _, i := range res {
 					if taken[i] {
@@ -7195,6 +7257,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if m.slotTokOK(kinds, &toks[i], w) {
 							parts = append(parts, toks[i].Raw)
 							taken[i] = true
+							held = append(held, i)
 							break
 						}
 						continue
@@ -7205,6 +7268,11 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						}
 						if toks[i].has("outtgt") || toks[i].has("nametgt") || toks[i].has("timeref") {
 							continue // destino de escrita / predicado de nome / referência temporal
+						}
+						// a palavra entre aspas é o valor inteiro: solta
+						// as acumuladas até aqui pros slots seguintes
+						for _, j := range held {
+							delete(taken, j)
 						}
 						parts = []string{toks[i].Raw}
 						taken[i] = true
@@ -7337,6 +7405,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
+					held = append(held, i)
 					if !kinds["text"] || len(parts) >= 4 {
 						break
 					}
@@ -9249,6 +9318,10 @@ func (m *nuModel) nuTrain(skip func(intent, ex int) bool) *nuNB {
 // classify returns the best intent (restricted to among, nil = all) and its
 // posterior probability.
 func (m *nuModel) classify(canon string, among []int) (int, float64) {
+	if nuClassifierPPM() { // compression classifier, opt-in (nlu_ppm.go)
+		m.ppmOnce.Do(func() { m.ppm = m.nuTrainPPM() })
+		return m.ppm.predict(canon, among)
+	}
 	m.nbOnce.Do(func() { m.nb = m.nuTrain(nil) })
 	return m.nb.predict(canon, among)
 }
@@ -14170,6 +14243,35 @@ func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue
 				}
 				break
+			}
+			// "print 2 lines of x" — número ANTES de lines é a janela
+			// de cabeça (1..N → end). Não vale quando o número já é de
+			// um cue first/last/tail (esses slots tratam dele).
+			if what == "end" && len(nums) == 0 {
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					u := &toks[j]
+					if u.Filler {
+						continue
+					}
+					if !nuIsNumber(u.Fold) {
+						break
+					}
+					owner := false
+					for k := j - 1; k >= 0 && k >= j-3; k-- {
+						switch toks[k].Fold {
+						case "ultimas", "últimas", "ultimos", "últimos",
+							"last", "tail", "finais", "final",
+							"primeiras", "primeiros", "first", "head",
+							"iniciais":
+							owner = true
+						}
+					}
+					if owner {
+						break
+					}
+					taken[j] = true
+					return u.Fold
+				}
 			}
 		}
 	}

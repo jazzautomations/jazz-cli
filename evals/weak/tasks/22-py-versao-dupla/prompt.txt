@@ -1,0 +1,3 @@
+sobe a versao deste pacote para 1.8.2 nos lugares em que ela aparece: `versao.py` e a
+linha `Instalado: vX.Y.Z` do `README.md`. No fim roda os testes:
+  python3 -m unittest -v

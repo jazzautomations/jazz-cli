@@ -1,0 +1,3 @@
+tem uma funcao `eh_palindromo` aqui sem teste nenhum. Cria `test_palindromo.py` com
+unittest cobrindo: um palindromo simples, uma frase com espacos (ex. "a caneta mental"),
+e um nao-palindromo. No fim: `python3 -m unittest -v` tem que passar.

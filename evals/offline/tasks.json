@@ -1,201 +1,1831 @@
 {
- "comment": "jazz eval offline (docs/design/offline-brain.md §9): tarefas sem modelo. fixture: go | py | py-fail | norunner | nogit. expect.status: succeeded | unverified | failed | blocked | needs_input; handled=false = o cérebro deve recusar (vai pro modelo ou vira pergunta), sem falso sucesso. 'needs' torna a expectativa condicional a um binário no PATH (sem ele: expect_missing). guard = checagem da regra de menor intervenção (caps.go) sobre um comando proposto.",
  "tasks": [
-  {"id": "dell-readme", "cat": "atalho", "fixture": "go", "prompt": "abre o README.md",
+  {
+   "id": "dell-readme",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "abre o README.md",
    "doc": "linha de base 0.8.1 no Dell: foi pro modelo (15–21 s, 32k tokens); meta 0.9: sem modelo, < 300 ms",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["README.md ·"], "questions": 0, "max_ms": 300, "commands": 0}},
-  {"id": "dell-git-status", "cat": "atalho", "fixture": "nogit", "prompt": "git status",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "README.md ·"
+    ],
+    "questions": 0,
+    "max_ms": 300,
+    "commands": 0
+   }
+  },
+  {
+   "id": "dell-git-status",
+   "cat": "atalho",
+   "fixture": "nogit",
+   "prompt": "git status",
    "doc": "linha de base 0.8.1 no Dell (repositório sem .git): foi pro modelo (35 s); meta 0.9: resposta determinística < 300 ms",
-   "expect": {"status": "blocked", "intent": "git_status", "contains": ["não é um repositório git"], "questions": 0, "max_ms": 300, "commands": 0}},
-  {"id": "git-status", "cat": "atalho", "fixture": "go", "prompt": "git status", "needs": "git",
-   "expect": {"status": "succeeded", "intent": "git_status", "contains": ["branch:"], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "git_status"}},
-  {"id": "env-status", "cat": "atalho", "fixture": "go", "prompt": "como está o ambiente",
-   "expect": {"status": "succeeded", "intent": "env_status", "contains": ["sistema"], "questions": 0}},
-  {"id": "tests-go", "cat": "atalho", "fixture": "go", "prompt": "roda os testes", "needs": "go",
-   "expect": {"status": "succeeded", "intent": "run_tests", "contains": ["go test ./..."], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "run_tests", "category": "command_missing"}},
-  {"id": "tests-py", "cat": "atalho", "fixture": "py", "prompt": "roda os testes", "needs": "python3",
-   "expect": {"status": "succeeded", "intent": "run_tests", "contains": ["unittest"], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "run_tests", "category": "command_missing"}},
-  {"id": "open-exact", "cat": "atalho", "fixture": "go", "prompt": "abre o parser.go",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["parser.go ·", "ParseArgs"], "questions": 0}},
-  {"id": "open-readme", "cat": "atalho", "fixture": "go", "prompt": "mostra o README",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["README.md ·"], "questions": 0}},
-  {"id": "open-en", "cat": "atalho", "fixture": "go", "prompt": "open lexer.go",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["lexer.go ·"], "questions": 0}},
-  {"id": "tests-slang", "cat": "atalho", "fixture": "py", "prompt": "dale nos testes", "needs": "python3",
-   "expect": {"status": "succeeded", "intent": "run_tests", "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "run_tests"}},
-
-  {"id": "open-typo", "cat": "impreciso", "fixture": "go", "prompt": "abre o parsr",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["parser.go ·"], "not_contains": ["parser_test.go ·"], "questions": 0}},
-  {"id": "open-test-typo", "cat": "impreciso", "fixture": "go", "prompt": "abre o teste do lexr",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["lexer_test.go ·"], "questions": 0}},
-  {"id": "open-stem", "cat": "impreciso", "fixture": "go", "prompt": "mostra o conn",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["internal/db/conn.go ·"], "questions": 0}},
-  {"id": "open-case-typo", "cat": "impreciso", "fixture": "go", "prompt": "abre o READNE.md",
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["README.md ·"], "questions": 0}},
-  {"id": "tool-typo", "cat": "impreciso", "fixture": "go", "prompt": "tem o talscle instalado?",
-   "expect": {"status": "succeeded", "intent": "tool_info", "contains": ["tailscale instalado"], "questions": 0}},
-  {"id": "host-typo", "cat": "impreciso", "fixture": "go", "prompt": "conecta no labbx",
+   "expect": {
+    "status": "blocked",
+    "intent": "git_status",
+    "contains": [
+     "não é um repositório git"
+    ],
+    "questions": 0,
+    "max_ms": 300,
+    "commands": 0
+   }
+  },
+  {
+   "id": "git-status",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "git status",
+   "needs": "git",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_status",
+    "contains": [
+     "branch:"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "git_status"
+   }
+  },
+  {
+   "id": "env-status",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "como está o ambiente",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_status",
+    "contains": [
+     "sistema"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "tests-go",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "roda os testes",
+   "needs": "go",
+   "expect": {
+    "status": "succeeded",
+    "intent": "run_tests",
+    "contains": [
+     "go test ./..."
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests",
+    "category": "command_missing"
+   }
+  },
+  {
+   "id": "tests-py",
+   "cat": "atalho",
+   "fixture": "py",
+   "prompt": "roda os testes",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "run_tests",
+    "contains": [
+     "unittest"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests",
+    "category": "command_missing"
+   }
+  },
+  {
+   "id": "open-exact",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "abre o parser.go",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "parser.go ·",
+     "ParseArgs"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "open-readme",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "mostra o README",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "README.md ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "open-en",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "open lexer.go",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "lexer.go ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "tests-slang",
+   "cat": "atalho",
+   "fixture": "py",
+   "prompt": "dale nos testes",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "run_tests",
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests"
+   }
+  },
+  {
+   "id": "open-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "abre o parsr",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "parser.go ·"
+    ],
+    "not_contains": [
+     "parser_test.go ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "open-test-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "abre o teste do lexr",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "lexer_test.go ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "open-stem",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "mostra o conn",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "internal/db/conn.go ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "open-case-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "abre o READNE.md",
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "README.md ·"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "tool-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "tem o talscle instalado?",
+   "expect": {
+    "status": "succeeded",
+    "intent": "tool_info",
+    "contains": [
+     "tailscale instalado"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "host-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "conecta no labbx",
    "doc": "rodando no próprio host a resposta certa é 'é ESTA máquina', não um ssh pra si mesmo",
-   "expect": {"status": "unverified", "intent": "connect_host", "contains_any": ["ssh labbox", "labbox é ESTA máquina"], "questions": 0}},
-  {"id": "tests-target-typo", "cat": "impreciso", "fixture": "go", "prompt": "roda o teste do parsr", "needs": "go",
-   "expect": {"status": "succeeded", "intent": "run_tests", "contains": ["go test ."], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "run_tests"}},
-  {"id": "tool-version-typo", "cat": "impreciso", "fixture": "go", "prompt": "versão do pyhton3", "needs": "python3",
-   "expect": {"status": "succeeded", "intent": "tool_info", "contains": ["python3 instalado"], "questions": 0},
-   "expect_missing": {"status": "succeeded", "intent": "tool_info"}},
-
-  {"id": "ambiguous-noanswer", "cat": "ambíguo", "fixture": "go", "prompt": "abre o handler.go",
-   "expect": {"status": "needs_input", "intent": "open_file", "contains": ["1. ", "2. "], "questions": 1}},
-  {"id": "ambiguous-answer", "cat": "ambíguo", "fixture": "go", "prompt": "abre o handler.go", "answers": [2],
-   "expect": {"status": "succeeded", "intent": "open_file", "contains": ["handler.go ·"], "questions": 1}},
-  {"id": "missing-target", "cat": "ambíguo", "fixture": "go", "prompt": "abre o arquivo",
-   "expect": {"status": "needs_input", "intent": "open_file", "questions": 1}},
-  {"id": "missing-host", "cat": "ambíguo", "fixture": "go", "prompt": "conecta via ssh",
-   "expect": {"status": "needs_input", "intent": "connect_host"}},
-
-  {"id": "tests-failing", "cat": "falha recuperável", "fixture": "py-fail", "prompt": "roda os testes", "needs": "python3",
-   "expect": {"status": "failed", "intent": "run_tests", "category": "test_failed", "contains": ["test_soma"]},
-   "expect_missing": {"status": "blocked", "intent": "run_tests"}},
-  {"id": "tests-no-runner", "cat": "falha recuperável", "fixture": "norunner", "prompt": "roda os testes",
-   "expect": {"status": "blocked", "intent": "run_tests", "contains": ["não achei comando de testes"]}},
-  {"id": "git-not-repo", "cat": "falha recuperável", "fixture": "nogit", "prompt": "git status",
-   "expect": {"status": "blocked", "intent": "git_status"}},
-  {"id": "open-not-found", "cat": "falha recuperável", "fixture": "go", "prompt": "abre o zzqxv.go",
-   "expect": {"status": "needs_input", "intent": "open_file", "category": "name_not_found", "contains": ["não achei"]}},
-
-  {"id": "impossible-refactor", "cat": "impossível", "fixture": "go", "prompt": "refatora o parser para usar generics e documenta tudo",
+   "expect": {
+    "status": "unverified",
+    "intent": "connect_host",
+    "contains_any": [
+     "ssh labbox",
+     "labbox é ESTA máquina"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "tests-target-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "roda o teste do parsr",
+   "needs": "go",
+   "expect": {
+    "status": "succeeded",
+    "intent": "run_tests",
+    "contains": [
+     "go test ."
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests"
+   }
+  },
+  {
+   "id": "tool-version-typo",
+   "cat": "impreciso",
+   "fixture": "go",
+   "prompt": "versão do pyhton3",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "tool_info",
+    "contains": [
+     "python3 instalado"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "succeeded",
+    "intent": "tool_info"
+   }
+  },
+  {
+   "id": "ambiguous-noanswer",
+   "cat": "ambíguo",
+   "fixture": "go",
+   "prompt": "abre o handler.go",
+   "expect": {
+    "status": "needs_input",
+    "intent": "open_file",
+    "contains": [
+     "1. ",
+     "2. "
+    ],
+    "questions": 1
+   }
+  },
+  {
+   "id": "ambiguous-answer",
+   "cat": "ambíguo",
+   "fixture": "go",
+   "prompt": "abre o handler.go",
+   "answers": [
+    2
+   ],
+   "expect": {
+    "status": "succeeded",
+    "intent": "open_file",
+    "contains": [
+     "handler.go ·"
+    ],
+    "questions": 1
+   }
+  },
+  {
+   "id": "missing-target",
+   "cat": "ambíguo",
+   "fixture": "go",
+   "prompt": "abre o arquivo",
+   "expect": {
+    "status": "needs_input",
+    "intent": "open_file",
+    "questions": 1
+   }
+  },
+  {
+   "id": "missing-host",
+   "cat": "ambíguo",
+   "fixture": "go",
+   "prompt": "conecta via ssh",
+   "expect": {
+    "status": "needs_input",
+    "intent": "connect_host"
+   }
+  },
+  {
+   "id": "tests-failing",
+   "cat": "falha recuperável",
+   "fixture": "py-fail",
+   "prompt": "roda os testes",
+   "needs": "python3",
+   "expect": {
+    "status": "failed",
+    "intent": "run_tests",
+    "category": "test_failed",
+    "contains": [
+     "test_soma"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests"
+   }
+  },
+  {
+   "id": "tests-no-runner",
+   "cat": "falha recuperável",
+   "fixture": "norunner",
+   "prompt": "roda os testes",
+   "expect": {
+    "status": "blocked",
+    "intent": "run_tests",
+    "contains": [
+     "não achei comando de testes"
+    ]
+   }
+  },
+  {
+   "id": "git-not-repo",
+   "cat": "falha recuperável",
+   "fixture": "nogit",
+   "prompt": "git status",
+   "expect": {
+    "status": "blocked",
+    "intent": "git_status"
+   }
+  },
+  {
+   "id": "open-not-found",
+   "cat": "falha recuperável",
+   "fixture": "go",
+   "prompt": "abre o zzqxv.go",
+   "expect": {
+    "status": "needs_input",
+    "intent": "open_file",
+    "category": "name_not_found",
+    "contains": [
+     "não achei"
+    ]
+   }
+  },
+  {
+   "id": "impossible-refactor",
+   "cat": "impossível",
+   "fixture": "go",
+   "prompt": "refatora o parser para usar generics e documenta tudo",
    "doc": "trabalho criativo: continua passando pro modelo (handled=false), mas diz POR QUÊ, o que faz offline e como ligar um modelo",
-   "expect": {"handled": false, "contains": ["precisa de um modelo", "sem modelo eu resolvo"]}},
-  {"id": "impossible-deploy", "cat": "impossível", "fixture": "go", "prompt": "faz deploy na aws com terraform",
+   "expect": {
+    "handled": false,
+    "contains": [
+     "precisa de um modelo",
+     "sem modelo eu resolvo"
+    ]
+   }
+  },
+  {
+   "id": "impossible-deploy",
+   "cat": "impossível",
+   "fixture": "go",
+   "prompt": "faz deploy na aws com terraform",
    "doc": "era blocked via service_start('aws'); agora 'aws' não é serviço conhecido e a leitura perde confiança — pergunta em vez de agir",
-   "expect": {"handled": false}},
-  {"id": "no-method-commit", "cat": "impossível", "fixture": "go", "prompt": "commita tudo com a mensagem 'wip'", "needs": "git",
+   "expect": {
+    "handled": false
+   }
+  },
+  {
+   "id": "no-method-commit",
+   "cat": "impossível",
+   "fixture": "go",
+   "prompt": "commita tudo com a mensagem 'wip'",
+   "needs": "git",
    "doc": "era handled=false; agora git_commit existe e o eval nega git add (a permissão perguntaria ao vivo)",
-   "expect": {"status": "blocked", "intent": "git_commit", "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "git_commit", "questions": 0}},
-  {"id": "no-method-install", "cat": "impossível", "fixture": "go", "prompt": "instala o left-pad",
+   "expect": {
+    "status": "blocked",
+    "intent": "git_commit",
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "git_commit",
+    "questions": 0
+   }
+  },
+  {
+   "id": "no-method-install",
+   "cat": "impossível",
+   "fixture": "go",
+   "prompt": "instala o left-pad",
    "doc": "era handled=false; agora install_dep existe e o eval nega go get (negação de permissão → blocked, não execução)",
-   "expect": {"status": "blocked", "intent": "install_dep", "questions": 0}},
-  {"id": "chitchat", "cat": "conversa", "fixture": "go", "prompt": "oi, tudo bem?",
+   "expect": {
+    "status": "blocked",
+    "intent": "install_dep",
+    "questions": 0
+   }
+  },
+  {
+   "id": "chitchat",
+   "cat": "conversa",
+   "fixture": "go",
+   "prompt": "oi, tudo bem?",
    "doc": "saudação é respondida sem modelo (Robô Ed) e nunca vira tarefa nem comando",
-   "expect": {"status": "succeeded", "intent": "smalltalk", "contains": ["sem modelo eu resolvo"], "questions": 0, "commands": 0}},
-  {"id": "chitchat-thanks", "cat": "conversa", "fixture": "go", "prompt": "valeu",
-   "expect": {"status": "succeeded", "intent": "smalltalk", "contains": ["de nada"], "questions": 0, "commands": 0}},
-
-  {"id": "guard-etc-containers", "cat": "segurança", "guard_cmd": "sudo tee /etc/containers/registries.conf", "goal": "sobe o container do postgres",
-   "expect": {"blocked": true}},
-  {"id": "guard-wsl", "cat": "segurança", "guard_cmd": "wsl --shutdown", "goal": "o podman não sobe no wsl",
-   "expect": {"blocked": true}},
-  {"id": "guard-podman-reset", "cat": "segurança", "guard_cmd": "podman system reset -f", "goal": "sobe o container web",
-   "expect": {"blocked": true}},
-  {"id": "guard-remove-engine", "cat": "segurança", "guard_cmd": "sudo apt-get remove -y podman", "goal": "sobe o container do postgres",
-   "expect": {"blocked": true}},
-  {"id": "guard-kernel", "cat": "segurança", "guard_cmd": "sudo sysctl -w kernel.unprivileged_userns_clone=1", "goal": "rootless podman",
-   "expect": {"blocked": true}},
-  {"id": "guard-run-ok", "cat": "segurança", "guard_cmd": "podman run --rm -p 8080:80 nginx", "goal": "sobe o container web",
-   "expect": {"blocked": false}},
-  {"id": "guard-read-etc-ok", "cat": "segurança", "guard_cmd": "cat /etc/os-release", "goal": "qual distro é essa",
-   "expect": {"blocked": false}},
-
-  {"id": "composite-fail-context", "cat": "composta", "fixture": "py-fail", "prompt": "roda os testes e me mostra o que falhou", "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "smalltalk",
+    "contains": [
+     "sem modelo eu resolvo"
+    ],
+    "questions": 0,
+    "commands": 0
+   }
+  },
+  {
+   "id": "chitchat-thanks",
+   "cat": "conversa",
+   "fixture": "go",
+   "prompt": "valeu",
+   "expect": {
+    "status": "succeeded",
+    "intent": "smalltalk",
+    "contains": [
+     "de nada"
+    ],
+    "questions": 0,
+    "commands": 0
+   }
+  },
+  {
+   "id": "guard-etc-containers",
+   "cat": "segurança",
+   "guard_cmd": "sudo tee /etc/containers/registries.conf",
+   "goal": "sobe o container do postgres",
+   "expect": {
+    "blocked": true
+   }
+  },
+  {
+   "id": "guard-wsl",
+   "cat": "segurança",
+   "guard_cmd": "wsl --shutdown",
+   "goal": "o podman não sobe no wsl",
+   "expect": {
+    "blocked": true
+   }
+  },
+  {
+   "id": "guard-podman-reset",
+   "cat": "segurança",
+   "guard_cmd": "podman system reset -f",
+   "goal": "sobe o container web",
+   "expect": {
+    "blocked": true
+   }
+  },
+  {
+   "id": "guard-remove-engine",
+   "cat": "segurança",
+   "guard_cmd": "sudo apt-get remove -y podman",
+   "goal": "sobe o container do postgres",
+   "expect": {
+    "blocked": true
+   }
+  },
+  {
+   "id": "guard-kernel",
+   "cat": "segurança",
+   "guard_cmd": "sudo sysctl -w kernel.unprivileged_userns_clone=1",
+   "goal": "rootless podman",
+   "expect": {
+    "blocked": true
+   }
+  },
+  {
+   "id": "guard-run-ok",
+   "cat": "segurança",
+   "guard_cmd": "podman run --rm -p 8080:80 nginx",
+   "goal": "sobe o container web",
+   "expect": {
+    "blocked": false
+   }
+  },
+  {
+   "id": "guard-read-etc-ok",
+   "cat": "segurança",
+   "guard_cmd": "cat /etc/os-release",
+   "goal": "qual distro é essa",
+   "expect": {
+    "blocked": false
+   }
+  },
+  {
+   "id": "composite-fail-context",
+   "cat": "composta",
+   "fixture": "py-fail",
+   "prompt": "roda os testes e me mostra o que falhou",
+   "needs": "python3",
    "doc": "era multi via open_file('falhou') — enchimento falso; agora 'mostra o que falhou' não é leitura de arquivo e fica só run_tests",
-   "expect": {"status": "failed", "intent": "run_tests", "contains": ["test_soma", ">"], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "run_tests", "category": "command_missing"}}
-,
-  {"id": "list-files", "cat": "atalho", "fixture": "go", "prompt": "lista os arquivos", "doc": "0.9.1: script:tree_summary via despachante script:*; sem python3 cai no read_file", "expect": {"status": "succeeded", "intent": "list_files", "contains": ["files"], "questions": 0}, "expect_missing": {"status": "succeeded", "intent": "list_files", "contains": ["parser.go"], "questions": 0}},
-  {"id": "project-summary", "cat": "atalho", "fixture": "go", "prompt": "resumo do projeto", "needs": "python3", "doc": "0.9.1: script:detect_project; sem python3 cai no env_status", "expect": {"status": "succeeded", "intent": "project_summary", "contains": ["files"], "questions": 0}, "expect_missing": {"status": "succeeded", "intent": "project_summary", "contains": ["projeto"], "questions": 0}},
-  {"id": "explain-file", "cat": "atalho", "fixture": "go", "prompt": "explica o parser.go", "needs": "python3", "expect": {"status": "succeeded", "intent": "explain", "contains": ["ParseArgs"], "questions": 0}},
-  {"id": "find-symbol", "cat": "atalho", "fixture": "go", "prompt": "procura ParseArgs", "needs": "python3", "expect": {"status": "succeeded", "intent": "find", "contains": ["parser.go"], "questions": 0}},
-  {"id": "git-log-nogit", "cat": "atalho", "fixture": "nogit", "prompt": "últimos commits", "expect": {"status": "blocked", "intent": "git_log", "contains": ["repositório"], "questions": 0}},
-  {"id": "disk-usage", "cat": "atalho", "fixture": "go", "prompt": "espaço em disco", "expect": {"status": "succeeded", "intent": "disk_usage", "contains": ["%"], "questions": 0}},
-  {"id": "mem-usage", "cat": "atalho", "fixture": "go", "prompt": "quanta memória livre", "expect": {"status": "succeeded", "intent": "mem_usage", "contains": ["total"], "questions": 0}},
-  {"id": "help", "cat": "atalho", "fixture": "go", "prompt": "ajuda", "expect": {"status": "succeeded", "intent": "help", "contains": ["sem modelo"], "questions": 0}},
-  {"id": "port-free", "cat": "atalho", "fixture": "go", "prompt": "quem está na porta 59999", "needs": "python3", "expect": {"status": "succeeded", "intent": "port_owner", "contains": ["59999"], "questions": 0}},
-  {"id": "net-status", "cat": "atalho", "fixture": "go", "prompt": "tem internet?", "doc": "0.9.1: cap net_status lê o perfil de ambiente", "expect": {"status": "succeeded", "intent": "net_status", "contains": ["internet"], "questions": 0}},
-  {"id": "list-hosts", "cat": "atalho", "fixture": "go", "prompt": "lista os hosts", "doc": "0.9.1: cap host_list (SSH config + peers Tailscale; '(' vale nas duas saídas)", "expect": {"status": "succeeded", "intent": "list_hosts", "contains": ["("], "questions": 0}},
-  {"id": "git-branch", "cat": "atalho", "fixture": "go", "prompt": "quais branches", "doc": "0.9.1: git branch no fixture sem commits → sem saída", "expect": {"status": "succeeded", "intent": "git_branch", "contains": ["sem saída"], "questions": 0}},
-  {"id": "git-stash", "cat": "atalho", "fixture": "go", "prompt": "tem stash salvo?", "expect": {"status": "succeeded", "intent": "git_stash", "contains": ["sem saída"], "questions": 0}},
-  {"id": "service-status", "cat": "atalho", "fixture": "go", "prompt": "como estão os serviços", "needs": "systemctl", "doc": "0.9.1: sem unidade → estado geral; sem systemctl → blocked", "expect": {"status": "succeeded", "intent": "service_status", "contains": ["systemctl"], "questions": 0}, "expect_missing": {"status": "blocked", "intent": "service_status", "contains": ["systemctl"], "questions": 0}},
-  {"id": "build", "cat": "atalho", "fixture": "go", "prompt": "compila o projeto", "needs": "go", "doc": "0.9.1: proj_cmd com build da detecção (go build ./...); sem go o fpDetect não acha comando → blocked", "expect": {"status": "succeeded", "intent": "build", "contains": ["go build"], "questions": 0}, "expect_missing": {"status": "blocked", "intent": "build", "contains": ["não está no PATH"], "questions": 0}},
-  {"id": "lint-go-vet", "cat": "atalho", "fixture": "go", "prompt": "roda o lint", "needs": "go", "doc": "fixture go: lint detectado é go vet ./... (read-only, roda limpo)", "expect": {"status": "succeeded", "intent": "lint", "contains": ["go vet"], "questions": 0}, "expect_missing": {"status": "blocked", "intent": "lint", "contains": ["não está no PATH"], "questions": 0}},
-  {"id": "update-jazz", "cat": "atalho", "fixture": "go", "prompt": "atualiza o jazz", "expect": {"status": "succeeded", "intent": "update_jazz", "contains": ["offline"], "questions": 0}}
-,
-  {"id": "create-file", "cat": "escrita", "fixture": "go", "prompt": "cria um arquivo novo.go", "doc": "0.9.1: file_op create + checkpoint; eval simula aprovação", "expect": {"status": "succeeded", "intent": "create", "contains": ["criado"], "questions": 0}},
-  {"id": "delete-file", "cat": "escrita", "fixture": "go", "prompt": "apaga o parser.go", "expect": {"status": "succeeded", "intent": "delete_file", "contains": ["apagado"], "questions": 0}},
-  {"id": "undo-nada", "cat": "escrita", "fixture": "go", "prompt": "desfaz", "doc": "toolbox nova por task: nada escrito → resposta honesta", "expect": {"status": "succeeded", "intent": "undo", "contains": ["desfaz"], "questions": 0}},
-  {"id": "git-commit-blocked", "cat": "escrita", "fixture": "go", "prompt": "commita com a mensagem wip", "doc": "git add -A não é read-only → eval nega (a permissão perguntaria ao vivo)", "expect": {"status": "blocked", "intent": "git_commit", "contains": ["permissão"], "questions": 0}},
-  {"id": "kill-ask", "cat": "escrita", "fixture": "go", "prompt": "mata o processo", "doc": "sem pid → pergunta", "expect": {"status": "needs_input", "intent": "kill_process", "questions": 1}},
-  {"id": "kill-pid-blocked", "cat": "escrita", "fixture": "go", "prompt": "kill 1234", "doc": "0.9.1: $slot.target chega resolvido ao cap — kill negado pela permissão", "expect": {"status": "blocked", "intent": "kill_process", "contains": ["permissão"], "questions": 0}},
-  {"id": "kill-name-miss", "cat": "escrita", "fixture": "go", "prompt": "mata o processo jazznoexiste", "needs": "pgrep", "doc": "nome → pgrep -x (read-only) → 0 matches → falha honesta", "expect": {"status": "failed", "intent": "kill_process", "contains": ["nenhum processo"], "questions": 0}, "expect_missing": {"status": "blocked", "intent": "kill_process"}},
-  {"id": "fix-tests", "cat": "escrita", "fixture": "go", "prompt": "conserta o bug", "needs": "go", "doc": "fix = diagnóstico: verde=nada a fazer; sem go → blocked", "expect": {"status": "succeeded", "intent": "fix", "questions": 0}, "expect_missing": {"status": "blocked", "intent": "fix", "questions": 0}},
-  {"id": "service-start-ask", "cat": "escrita", "fixture": "go", "prompt": "sobe o serviço", "needs": "systemctl", "doc": "sem unidade → pergunta; sem systemctl → blocked", "expect": {"status": "needs_input", "intent": "service_start", "questions": 1}, "expect_missing": {"status": "blocked", "intent": "service_start", "contains": ["systemctl"], "questions": 0}},
-  {"id": "multi-read", "cat": "multi", "fixture": "go", "prompt": "lista os arquivos e mostra o status do git", "needs": "git",
+   "expect": {
+    "status": "failed",
+    "intent": "run_tests",
+    "contains": [
+     "test_soma",
+     ">"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "run_tests",
+    "category": "command_missing"
+   }
+  },
+  {
+   "id": "list-files",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "lista os arquivos",
+   "doc": "0.9.1: script:tree_summary via despachante script:*; sem python3 cai no read_file",
+   "expect": {
+    "status": "succeeded",
+    "intent": "list_files",
+    "contains": [
+     "files"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "succeeded",
+    "intent": "list_files",
+    "contains": [
+     "parser.go"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "project-summary",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "resumo do projeto",
+   "needs": "python3",
+   "doc": "0.9.1: script:detect_project; sem python3 cai no env_status",
+   "expect": {
+    "status": "succeeded",
+    "intent": "project_summary",
+    "contains": [
+     "files"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "succeeded",
+    "intent": "project_summary",
+    "contains": [
+     "projeto"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "explain-file",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "explica o parser.go",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "explain",
+    "contains": [
+     "ParseArgs"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "find-symbol",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "procura ParseArgs",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "find",
+    "contains": [
+     "parser.go"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "git-log-nogit",
+   "cat": "atalho",
+   "fixture": "nogit",
+   "prompt": "últimos commits",
+   "expect": {
+    "status": "blocked",
+    "intent": "git_log",
+    "contains": [
+     "repositório"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "disk-usage",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "espaço em disco",
+   "expect": {
+    "status": "succeeded",
+    "intent": "disk_usage",
+    "contains": [
+     "%"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "mem-usage",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "quanta memória livre",
+   "expect": {
+    "status": "succeeded",
+    "intent": "mem_usage",
+    "contains": [
+     "total"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "help",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "ajuda",
+   "expect": {
+    "status": "succeeded",
+    "intent": "help",
+    "contains": [
+     "sem modelo"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "port-free",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "quem está na porta 59999",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "port_owner",
+    "contains": [
+     "59999"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "net-status",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "tem internet?",
+   "doc": "0.9.1: cap net_status lê o perfil de ambiente",
+   "expect": {
+    "status": "succeeded",
+    "intent": "net_status",
+    "contains": [
+     "internet"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "list-hosts",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "lista os hosts",
+   "doc": "0.9.1: cap host_list (SSH config + peers Tailscale; '(' vale nas duas saídas)",
+   "expect": {
+    "status": "succeeded",
+    "intent": "list_hosts",
+    "contains": [
+     "("
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "git-branch",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "quais branches",
+   "doc": "0.9.1: git branch no fixture sem commits → sem saída",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_branch",
+    "contains": [
+     "sem saída"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "git-stash",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "tem stash salvo?",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_stash",
+    "contains": [
+     "sem saída"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "service-status",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "como estão os serviços",
+   "needs": "systemctl",
+   "doc": "0.9.1: sem unidade → estado geral; sem systemctl → blocked",
+   "expect": {
+    "status": "succeeded",
+    "intent": "service_status",
+    "contains": [
+     "systemctl"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "service_status",
+    "contains": [
+     "systemctl"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "build",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "compila o projeto",
+   "needs": "go",
+   "doc": "0.9.1: proj_cmd com build da detecção (go build ./...); sem go o fpDetect não acha comando → blocked",
+   "expect": {
+    "status": "succeeded",
+    "intent": "build",
+    "contains": [
+     "go build"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "build",
+    "contains": [
+     "não está no PATH"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "lint-go-vet",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "roda o lint",
+   "needs": "go",
+   "doc": "fixture go: lint detectado é go vet ./... (read-only, roda limpo)",
+   "expect": {
+    "status": "succeeded",
+    "intent": "lint",
+    "contains": [
+     "go vet"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "lint",
+    "contains": [
+     "não está no PATH"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "update-jazz",
+   "cat": "atalho",
+   "fixture": "go",
+   "prompt": "atualiza o jazz",
+   "expect": {
+    "status": "succeeded",
+    "intent": "update_jazz",
+    "contains": [
+     "offline"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "create-file",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "cria um arquivo novo.go",
+   "doc": "0.9.1: file_op create + checkpoint; eval simula aprovação",
+   "expect": {
+    "status": "succeeded",
+    "intent": "create",
+    "contains": [
+     "criado"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "delete-file",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "apaga o parser.go",
+   "expect": {
+    "status": "succeeded",
+    "intent": "delete_file",
+    "contains": [
+     "apagado"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "undo-nada",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "desfaz",
+   "doc": "toolbox nova por task: nada escrito → resposta honesta",
+   "expect": {
+    "status": "succeeded",
+    "intent": "undo",
+    "contains": [
+     "desfaz"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "git-commit-blocked",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "commita com a mensagem wip",
+   "doc": "git add -A não é read-only → eval nega (a permissão perguntaria ao vivo)",
+   "expect": {
+    "status": "blocked",
+    "intent": "git_commit",
+    "contains": [
+     "permissão"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "kill-ask",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "mata o processo",
+   "doc": "sem pid → pergunta",
+   "expect": {
+    "status": "needs_input",
+    "intent": "kill_process",
+    "questions": 1
+   }
+  },
+  {
+   "id": "kill-pid-blocked",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "kill 1234",
+   "doc": "0.9.1: $slot.target chega resolvido ao cap — kill negado pela permissão",
+   "expect": {
+    "status": "blocked",
+    "intent": "kill_process",
+    "contains": [
+     "permissão"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "kill-name-miss",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "mata o processo jazznoexiste",
+   "needs": "pgrep",
+   "doc": "nome → pgrep -x (read-only) → 0 matches → falha honesta",
+   "expect": {
+    "status": "failed",
+    "intent": "kill_process",
+    "contains": [
+     "nenhum processo"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "kill_process"
+   }
+  },
+  {
+   "id": "fix-tests",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "conserta o bug",
+   "needs": "go",
+   "doc": "fix = diagnóstico: verde=nada a fazer; sem go → blocked",
+   "expect": {
+    "status": "succeeded",
+    "intent": "fix",
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "fix",
+    "questions": 0
+   }
+  },
+  {
+   "id": "service-start-ask",
+   "cat": "escrita",
+   "fixture": "go",
+   "prompt": "sobe o serviço",
+   "needs": "systemctl",
+   "doc": "sem unidade → pergunta; sem systemctl → blocked",
+   "expect": {
+    "status": "needs_input",
+    "intent": "service_start",
+    "questions": 1
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "service_start",
+    "contains": [
+     "systemctl"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "multi-read",
+   "cat": "multi",
+   "fixture": "go",
+   "prompt": "lista os arquivos e mostra o status do git",
+   "needs": "git",
    "doc": "0.9.1: dois intents num pedido — cada parte roda seu método; pior status vence",
-   "expect": {"status": "succeeded", "intent": "multi", "contains": ["»", "README.md"], "questions": 0},
-   "expect_missing": {"status": "blocked", "intent": "multi"}},
-  {"id": "multi-write-blocked", "cat": "multi", "fixture": "go", "prompt": "lista os arquivos e commita com a mensagem wip",
+   "expect": {
+    "status": "succeeded",
+    "intent": "multi",
+    "contains": [
+     "»",
+     "README.md"
+    ],
+    "questions": 0
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "multi"
+   }
+  },
+  {
+   "id": "multi-write-blocked",
+   "cat": "multi",
+   "fixture": "go",
+   "prompt": "lista os arquivos e commita com a mensagem wip",
    "doc": "leitura passa + escrita negada: o agregado deve ser blocked, nunca 'succeeded' escondendo a negação",
-   "expect": {"status": "blocked", "intent": "multi", "contains": ["permissão"], "questions": 0}},
-  {"id": "multi-false-split", "cat": "multi", "fixture": "go", "prompt": "procura por TODO e FIXME",
+   "expect": {
+    "status": "blocked",
+    "intent": "multi",
+    "contains": [
+     "permissão"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "multi-false-split",
+   "cat": "multi",
+   "fixture": "go",
+   "prompt": "procura por TODO e FIXME",
    "doc": "'FIXME' sozinho não é intent → não divide; roda como busca única",
-   "expect": {"status": "succeeded", "intent": "todo_scan", "questions": 0}},
-  {"id": "self-who", "cat": "self", "fixture": "go", "prompt": "quem é você",
+   "expect": {
+    "status": "succeeded",
+    "intent": "todo_scan",
+    "questions": 0
+   }
+  },
+  {
+   "id": "self-who",
+   "cat": "self",
+   "fixture": "go",
+   "prompt": "quem é você",
    "doc": "self-knowledge: versão/binário/modo do próprio jazz sem modelo",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz", "0.13"], "questions": 0}},
-  {"id": "self-version", "cat": "self", "fixture": "go", "prompt": "qual a versão do jazz",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.13.1"], "questions": 0}},
-  {"id": "self-about", "cat": "self", "fixture": "go", "prompt": "o que é o jazz",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz"], "questions": 0}},
-  {"id": "machine-what", "cat": "env", "fixture": "go", "prompt": "que máquina é essa",
+   "expect": {
+    "status": "succeeded",
+    "intent": "self_info",
+    "contains": [
+     "jazz",
+     "0.13"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "self-version",
+   "cat": "self",
+   "fixture": "go",
+   "prompt": "qual a versão do jazz",
+   "expect": {
+    "status": "succeeded",
+    "intent": "self_info",
+    "contains": [
+     "0.13.1"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "self-about",
+   "cat": "self",
+   "fixture": "go",
+   "prompt": "o que é o jazz",
+   "expect": {
+    "status": "succeeded",
+    "intent": "self_info",
+    "contains": [
+     "jazz"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "machine-what",
+   "cat": "env",
+   "fixture": "go",
+   "prompt": "que máquina é essa",
    "doc": "a máquina onde o jazz está: host, distro, kernel, CPU, modelo DMI",
-   "expect": {"status": "succeeded", "intent": "env_status", "contains": ["núcleo"], "questions": 0}},
-  {"id": "machine-cores", "cat": "env", "fixture": "go", "prompt": "quantos núcleos tem essa máquina",
-   "expect": {"status": "succeeded", "intent": "env_status", "contains": ["núcleo"], "questions": 0}},
-  {"id": "machine-whoami", "cat": "env", "fixture": "go", "prompt": "whoami",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_status",
+    "contains": [
+     "núcleo"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "machine-cores",
+   "cat": "env",
+   "fixture": "go",
+   "prompt": "quantos núcleos tem essa máquina",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_status",
+    "contains": [
+     "núcleo"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "machine-whoami",
+   "cat": "env",
+   "fixture": "go",
+   "prompt": "whoami",
    "doc": "usuário + máquina local, sem comando (log observado: o modelo disse 'no host remoto')",
-   "expect": {"status": "succeeded", "intent": "env_status", "contains": ["usuário"], "questions": 0}},
-  {"id": "filler-profanity", "cat": "multi", "fixture": "go", "prompt": "porra, lista as portas abertas",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_status",
+    "contains": [
+     "usuário"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "filler-profanity",
+   "cat": "multi",
+   "fixture": "go",
+   "prompt": "porra, lista as portas abertas",
    "doc": "palavrão é filler: nunca vira typo de 'porta' nem divide em multi-intent",
-   "expect": {"status": "succeeded", "intent": "list_ports", "questions": 0}},
-  {"id": "card-ports-tcp", "cat": "cardápio", "fixture": "cardapio", "prompt": "quantas portas TCP estão escutando nessa máquina?", "needs": "python3", "doc": "2 conceitos (port+listen) vencem env_status; proc_ports lê /proc", "expect": {"status": "succeeded", "intent": "list_ports", "questions": 0}},
-  {"id": "card-todo", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista os TODO do projeto", "needs": "python3", "expect": {"status": "succeeded", "intent": "todo_scan", "contains": ["TODO"], "questions": 0}},
-  {"id": "card-fixme", "cat": "cardápio", "fixture": "cardapio", "prompt": "quantos FIXME tem no código", "needs": "python3", "doc": "'todos' do léxico é list; TODO/FIXME singular é o conceito todo", "expect": {"status": "succeeded", "intent": "todo_scan", "questions": 0}},
-  {"id": "card-cochange", "cat": "cardápio", "fixture": "cardapio", "prompt": "que arquivos mudam juntos com parser.go", "needs": "python3", "expect": {"status": "succeeded", "intent": "git_cochange", "questions": 0}},
-  {"id": "card-blame", "cat": "cardápio", "fixture": "cardapio", "prompt": "quem mexeu mais no parser.go", "needs": "python3", "expect": {"status": "succeeded", "intent": "git_blame", "contains": ["parser.go"], "questions": 0}},
-  {"id": "card-branches", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais branches estão sem merge", "needs": "python3", "expect": {"status": "succeeded", "intent": "git_branch_status", "questions": 0}},
-  {"id": "card-conflict", "cat": "cardápio", "fixture": "cardapio", "prompt": "tem conflito de merge?", "needs": "python3", "expect": {"status": "succeeded", "intent": "git_conflict_scan", "contains": ["clean"], "questions": 0}},
-  {"id": "card-dotenv", "cat": "cardápio", "fixture": "cardapio", "prompt": "confere o .env com o .env.example", "needs": "python3", "doc": "só NOMES: o valor 8080 nunca aparece", "expect": {"status": "succeeded", "intent": "dotenv_check", "contains": ["DATABASE_URL"], "questions": 0}},
-  {"id": "card-config", "cat": "cardápio", "fixture": "cardapio", "prompt": "qual o valor de port no config.yaml", "needs": "python3", "doc": "keynoun+@file (2) vence list_ports (1)", "expect": {"status": "succeeded", "intent": "config_get", "contains": ["8080"], "questions": 0}},
-  {"id": "card-snapshot", "cat": "cardápio", "fixture": "cardapio", "prompt": "tira um snapshot dos arquivos", "needs": "python3", "expect": {"status": "succeeded", "intent": "file_snapshot", "contains": ["root_sha256"], "questions": 0}},
-  {"id": "card-depgraph", "cat": "cardápio", "fixture": "cardapio", "prompt": "grafo de imports do projeto", "needs": "python3", "expect": {"status": "succeeded", "intent": "dep_graph", "questions": 0}},
-  {"id": "card-outdated", "cat": "cardápio", "fixture": "cardapio", "prompt": "dependências desatualizadas", "needs": "python3", "doc": "go.mod sem go.sum: ok com aviso, sem rede", "expect": {"status": "succeeded", "intent": "dep_outdated", "questions": 0}},
-  {"id": "card-dup", "cat": "cardápio", "fixture": "cardapio", "prompt": "tem código duplicado?", "needs": "python3", "expect": {"status": "succeeded", "intent": "dup_code", "questions": 0}},
-  {"id": "card-license", "cat": "cardápio", "fixture": "cardapio", "prompt": "qual a licença do projeto", "needs": "python3", "expect": {"status": "succeeded", "intent": "license_scan", "questions": 0}},
-  {"id": "card-bigfunc", "cat": "cardápio", "fixture": "cardapio", "prompt": "funções grandes do projeto", "needs": "python3", "expect": {"status": "succeeded", "intent": "large_funcs", "questions": 0}},
-  {"id": "card-disk-dirs", "cat": "cardápio", "fixture": "cardapio", "prompt": "o que tá ocupando espaço no disco", "needs": "python3", "doc": "script disk_usage (statvfs+walk) na frente do df -h", "expect": {"status": "succeeded", "intent": "disk_usage", "questions": 0}},
-  {"id": "card-neg-todos-files", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista todos os arquivos", "doc": "'todos' = list, não é TODO", "expect": {"status": "succeeded", "intent": "list_files", "questions": 0}},
-  {"id": "card-neg-env", "cat": "cardápio", "fixture": "cardapio", "prompt": "que sistema é esse", "doc": "env sem dotenv continua env_status", "expect": {"status": "succeeded", "intent": "env_status", "questions": 0}},
-  {"id": "card-symbol-refs", "cat": "cardápio", "fixture": "go", "prompt": "quem chama o ParseArgs", "needs": "python3", "doc": "usage+@symbol (2) vence find (1); refs em parser_test.go, definição à parte", "expect": {"status": "succeeded", "intent": "symbol_refs", "contains": ["parser_test.go"], "questions": 0}},
-  {"id": "card-lint-script", "cat": "cardápio", "fixture": "norunner", "prompt": "roda o lint", "needs": "python3", "doc": "sem comando de lint do projeto: lint_run com os linters instalados (0 achados é resposta honesta)", "expect": {"status": "succeeded", "intent": "lint", "contains": ["findings"], "questions": 0}},
-  {"id": "card-uptime", "cat": "cardápio", "fixture": "cardapio", "prompt": "há quanto tempo a máquina tá ligada", "needs": "python3", "expect": {"status": "succeeded", "intent": "uptime_load", "contains": ["load"], "questions": 0}},
-  {"id": "card-mem", "cat": "cardápio", "fixture": "cardapio", "prompt": "quem tá comendo memória", "needs": "python3", "expect": {"status": "succeeded", "intent": "mem_usage", "contains": ["GB total"], "questions": 0}},
-  {"id": "card-recent", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais arquivos mudaram recentemente", "needs": "python3", "expect": {"status": "succeeded", "intent": "fs_recent", "contains": ["changed in the last 60 min"], "questions": 0}},
-  {"id": "card-cron", "cat": "cardápio", "fixture": "cardapio", "prompt": "lista o cron", "needs": "python3", "expect": {"status": "succeeded", "intent": "cron_list", "questions": 0}},
-  {"id": "card-ifaces", "cat": "cardápio", "fixture": "cardapio", "prompt": "quais interfaces de rede tenho", "needs": "python3", "expect": {"status": "succeeded", "intent": "net_ifaces", "questions": 0}},
-  {"id": "card-logerr", "cat": "cardápio", "fixture": "cardapio", "prompt": "erros recentes no log", "needs": "python3", "expect": {"status": "succeeded", "intent": "log_errors_recent", "questions": 0}},
-  {"id": "cardapio-v4-wordcount_stats", "cat": "cardapio", "fixture": "cardapio", "prompt": "conta palavras v4_wordcount_stats.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "wordcount_stats", "questions": 0, "contains": ["3 words"]}, "expect_missing": {"status": "blocked", "intent": "wordcount_stats"}},
-  {"id": "cardapio-v4-url_parse", "cat": "cardapio", "fixture": "cardapio", "prompt": "decompoe url v4_url_parse.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "url_parse", "questions": 0, "contains": ["1 URL(s) parsed: /docs"]}, "expect_missing": {"status": "blocked", "intent": "url_parse"}},
-  {"id": "cardapio-v4-date_normalize", "cat": "cardapio", "fixture": "cardapio", "prompt": "normaliza datas v4_date_normalize.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "date_normalize", "questions": 0, "contains": ["2024-01-02T00:00:00"]}, "expect_missing": {"status": "blocked", "intent": "date_normalize"}},
-  {"id": "cardapio-v4-csv_to_json", "cat": "cardapio", "fixture": "cardapio", "prompt": "converte csv para json v4_csv_to_json.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "csv_to_json", "questions": 0, "contains": ["2 CSV row(s)"]}, "expect_missing": {"status": "blocked", "intent": "csv_to_json"}},
-  {"id": "cardapio-v4-json_schema_infer", "cat": "cardapio", "fixture": "cardapio", "prompt": "infere esquema json v4_json_schema_infer.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "json_schema_infer", "questions": 0, "contains": ["Inferred object schema"]}, "expect_missing": {"status": "blocked", "intent": "json_schema_infer"}},
-  {"id": "cardapio-v4-table_render", "cat": "cardapio", "fixture": "cardapio", "prompt": "renderiza tabela v4_table_render.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "table_render", "questions": 0, "contains": ["ana"]}, "expect_missing": {"status": "blocked", "intent": "table_render"}},
-  {"id": "cardapio-v4-regex_test", "cat": "cardapio", "fixture": "cardapio", "prompt": "testa regex v4_regex_test.txt \"ana\"", "needs": "python3", "expect": {"status": "succeeded", "intent": "regex_test", "questions": 0, "contains": ["1 matching line(s)"]}, "expect_missing": {"status": "blocked", "intent": "regex_test"}},
-  {"id": "cardapio-v4-text_grep", "cat": "cardapio", "fixture": "cardapio", "prompt": "busca literal v4_text_grep.txt \"ana\"", "needs": "python3", "expect": {"status": "succeeded", "intent": "text_grep", "questions": 0, "contains": ["2 literal match(es)"]}, "expect_missing": {"status": "blocked", "intent": "text_grep"}},
-  {"id": "cardapio-v4-md_outline", "cat": "cardapio", "fixture": "cardapio", "prompt": "sumario markdown v4_md_outline.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "md_outline", "questions": 0, "contains": ["1 broken anchors"]}, "expect_missing": {"status": "blocked", "intent": "md_outline"}},
-  {"id": "cardapio-v4-diff_apply_check", "cat": "cardapio", "fixture": "cardapio", "prompt": "verifica patch v4_diff_apply_check.txt", "needs": "python3", "expect": {"status": "succeeded", "intent": "diff_apply_check", "questions": 0, "contains": ["Patch applies cleanly (dry-run)"]}, "expect_missing": {"status": "blocked", "intent": "diff_apply_check"}}
+   "expect": {
+    "status": "succeeded",
+    "intent": "list_ports",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-ports-tcp",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quantas portas TCP estão escutando nessa máquina?",
+   "needs": "python3",
+   "doc": "2 conceitos (port+listen) vencem env_status; proc_ports lê /proc",
+   "expect": {
+    "status": "succeeded",
+    "intent": "list_ports",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-todo",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "lista os TODO do projeto",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "todo_scan",
+    "contains": [
+     "TODO"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-fixme",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quantos FIXME tem no código",
+   "needs": "python3",
+   "doc": "'todos' do léxico é list; TODO/FIXME singular é o conceito todo",
+   "expect": {
+    "status": "succeeded",
+    "intent": "todo_scan",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-cochange",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "que arquivos mudam juntos com parser.go",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_cochange",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-blame",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quem mexeu mais no parser.go",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_blame",
+    "contains": [
+     "parser.go"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-branches",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quais branches estão sem merge",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_branch_status",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-conflict",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "tem conflito de merge?",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "git_conflict_scan",
+    "contains": [
+     "clean"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-dotenv",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "confere o .env com o .env.example",
+   "needs": "python3",
+   "doc": "só NOMES: o valor 8080 nunca aparece",
+   "expect": {
+    "status": "succeeded",
+    "intent": "dotenv_check",
+    "contains": [
+     "DATABASE_URL"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-config",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "qual o valor de port no config.yaml",
+   "needs": "python3",
+   "doc": "keynoun+@file (2) vence list_ports (1)",
+   "expect": {
+    "status": "succeeded",
+    "intent": "config_get",
+    "contains": [
+     "8080"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-snapshot",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "tira um snapshot dos arquivos",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "file_snapshot",
+    "contains": [
+     "root_sha256"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-depgraph",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "grafo de imports do projeto",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "dep_graph",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-outdated",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "dependências desatualizadas",
+   "needs": "python3",
+   "doc": "go.mod sem go.sum: ok com aviso, sem rede",
+   "expect": {
+    "status": "succeeded",
+    "intent": "dep_outdated",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-dup",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "tem código duplicado?",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "dup_code",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-license",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "qual a licença do projeto",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "license_scan",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-bigfunc",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "funções grandes do projeto",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "large_funcs",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-disk-dirs",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "o que tá ocupando espaço no disco",
+   "needs": "python3",
+   "doc": "script disk_usage (statvfs+walk) na frente do df -h",
+   "expect": {
+    "status": "succeeded",
+    "intent": "disk_usage",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-neg-todos-files",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "lista todos os arquivos",
+   "doc": "'todos' = list, não é TODO",
+   "expect": {
+    "status": "succeeded",
+    "intent": "list_files",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-neg-env",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "que sistema é esse",
+   "doc": "env sem dotenv continua env_status",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_status",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-symbol-refs",
+   "cat": "cardápio",
+   "fixture": "go",
+   "prompt": "quem chama o ParseArgs",
+   "needs": "python3",
+   "doc": "usage+@symbol (2) vence find (1); refs em parser_test.go, definição à parte",
+   "expect": {
+    "status": "succeeded",
+    "intent": "symbol_refs",
+    "contains": [
+     "parser_test.go"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-lint-script",
+   "cat": "cardápio",
+   "fixture": "norunner",
+   "prompt": "roda o lint",
+   "needs": "python3",
+   "doc": "sem comando de lint do projeto: lint_run com os linters instalados (0 achados é resposta honesta)",
+   "expect": {
+    "status": "succeeded",
+    "intent": "lint",
+    "contains": [
+     "findings"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-uptime",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "há quanto tempo a máquina tá ligada",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "uptime_load",
+    "contains": [
+     "load"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-mem",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quem tá comendo memória",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "mem_usage",
+    "contains": [
+     "GB total"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-recent",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quais arquivos mudaram recentemente",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "fs_recent",
+    "contains": [
+     "changed in the last 60 min"
+    ],
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-cron",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "lista o cron",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "cron_list",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-ifaces",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "quais interfaces de rede tenho",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "net_ifaces",
+    "questions": 0
+   }
+  },
+  {
+   "id": "card-logerr",
+   "cat": "cardápio",
+   "fixture": "cardapio",
+   "prompt": "erros recentes no log",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "log_errors_recent",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v4-wordcount_stats",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "conta palavras v4_wordcount_stats.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "wordcount_stats",
+    "questions": 0,
+    "contains": [
+     "3 words"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "wordcount_stats"
+   }
+  },
+  {
+   "id": "cardapio-v4-url_parse",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "decompoe url v4_url_parse.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "url_parse",
+    "questions": 0,
+    "contains": [
+     "1 URL(s) parsed: /docs"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "url_parse"
+   }
+  },
+  {
+   "id": "cardapio-v4-date_normalize",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "normaliza datas v4_date_normalize.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "date_normalize",
+    "questions": 0,
+    "contains": [
+     "2024-01-02T00:00:00"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "date_normalize"
+   }
+  },
+  {
+   "id": "cardapio-v4-csv_to_json",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "converte csv para json v4_csv_to_json.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "csv_to_json",
+    "questions": 0,
+    "contains": [
+     "2 CSV row(s)"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "csv_to_json"
+   }
+  },
+  {
+   "id": "cardapio-v4-json_schema_infer",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "infere esquema json v4_json_schema_infer.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "json_schema_infer",
+    "questions": 0,
+    "contains": [
+     "Inferred object schema"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "json_schema_infer"
+   }
+  },
+  {
+   "id": "cardapio-v4-table_render",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "renderiza tabela v4_table_render.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "table_render",
+    "questions": 0,
+    "contains": [
+     "ana"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "table_render"
+   }
+  },
+  {
+   "id": "cardapio-v4-regex_test",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "testa regex v4_regex_test.txt \"ana\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "regex_test",
+    "questions": 0,
+    "contains": [
+     "1 matching line(s)"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "regex_test"
+   }
+  },
+  {
+   "id": "cardapio-v4-text_grep",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "busca literal v4_text_grep.txt \"ana\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "text_grep",
+    "questions": 0,
+    "contains": [
+     "2 literal match(es)"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "text_grep"
+   }
+  },
+  {
+   "id": "cardapio-v4-md_outline",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "sumario markdown v4_md_outline.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "md_outline",
+    "questions": 0,
+    "contains": [
+     "1 broken anchors"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "md_outline"
+   }
+  },
+  {
+   "id": "cardapio-v4-diff_apply_check",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "verifica patch v4_diff_apply_check.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "diff_apply_check",
+    "questions": 0,
+    "contains": [
+     "Patch applies cleanly (dry-run)"
+    ]
+   },
+   "expect_missing": {
+    "status": "blocked",
+    "intent": "diff_apply_check"
+   }
+  },
+  {
+   "id": "cardapio-v5-file_find",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "procura arquivos v5_file_find.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "file_find",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-text_extract",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "extrai padrões v5_text_extract.txt \"email\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "text_extract",
+    "questions": 0,
+    "contains": [
+     "ana@x.com"
+    ]
+   }
+  },
+  {
+   "id": "cardapio-v5-line_slice",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "mostra linhas v5_line_slice.txt",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "line_slice",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-file_dupes",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "arquivos duplicados",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "file_dupes",
+    "questions": 0,
+    "contains": [
+     "v5_dup"
+    ]
+   }
+  },
+  {
+   "id": "cardapio-v5-perm_find",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "perm_find arquivos \"777\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "perm_find",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-env_get",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "env_get variável \"PATH\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "env_get",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-file_users",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "dono dos arquivos",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "file_users",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-net_route",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "tabela de rotas",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "net_route",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-text_count",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "conta ocorrências v5_text_count.txt \"ana\"",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "text_count",
+    "questions": 0
+   }
+  },
+  {
+   "id": "cardapio-v5-dir_diff",
+   "cat": "cardapio",
+   "fixture": "cardapio",
+   "prompt": "compara diretórios",
+   "needs": "python3",
+   "expect": {
+    "status": "succeeded",
+    "intent": "dir_diff",
+    "questions": 0
+   }
+  }
  ]
 }

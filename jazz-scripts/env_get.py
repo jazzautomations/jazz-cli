@@ -20,6 +20,9 @@ if name is not None and prefix is not None:
     fail("pass name or prefix, not both")
 
 env = dict(os.environ)
+# scrubEnv removes secret-valued variables before we run: JAZZ_ENV_NAMES tells
+# us they exist so we can answer "set, redacted" instead of lying "not set".
+hidden = set(env.pop("JAZZ_ENV_NAMES", "").split(",")) - set(env) - {"", "JAZZ_ENV_NAMES"}
 
 if name is not None:
     name = str(name)
@@ -33,13 +36,16 @@ if name is not None:
             emit(True, {"name": name, "set": True, "redacted": False,
                         "value": env[name],
                         "truncated": False, "text": "%s=%s" % (name, clip(env[name], 120))}, 1.0)
+    elif name in hidden:
+        emit(True, {"name": name, "set": True, "redacted": True,
+                    "truncated": False, "text": "%s is set (value redacted)" % name}, 1.0)
     else:
         emit(True, {"name": name, "set": False,
                     "truncated": False, "text": "%s is not set" % name}, 1.0)
 
 pfx = str(prefix).upper() if prefix is not None else None
-names = sorted(n for n in env if pfx is None or n.upper().startswith(pfx))
-vars_out = [{"name": n, "redacted": sensitive(n)} for n in names]
+names = sorted(n for n in list(env) + sorted(hidden) if pfx is None or n.upper().startswith(pfx))
+vars_out = [{"name": n, "redacted": sensitive(n) or n in hidden} for n in names]
 n_red = sum(1 for v in vars_out if v["redacted"])
 
 scope = "matching %s*" % pfx if pfx else "in the environment"

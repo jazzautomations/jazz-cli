@@ -1,0 +1,2 @@
+implementa a funcao `slug` que esta vazia em slug.py — o docstring explica tudo.
+Confere com:  python3 -m unittest test_slug -v

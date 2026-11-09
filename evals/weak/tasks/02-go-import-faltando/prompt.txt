@@ -1,0 +1,2 @@
+o pacote nao compila mais (roda `go test ./...` e voce ve o erro de compilacao).
+Alguem mexeu em texto.go tempos atras e acho que esqueceu alguma coisa. Conserta, por favor.

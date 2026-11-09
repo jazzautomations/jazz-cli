@@ -1,0 +1,4 @@
+vamos renomear CalcPreco para CalcularPreco (combina melhor com o resto do projeto).
+O teste ja usa o nome novo, por isso `go test ./...` nao compila.
+Renomeia a funcao e as chamadas em TODOS os arquivos; nao pode sobrar nenhum
+CalcPreco no projeto. Objetivo: testes verdes.

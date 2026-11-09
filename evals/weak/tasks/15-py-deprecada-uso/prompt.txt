@@ -1,0 +1,4 @@
+a funcao antiga `registra` ja foi deprecada; o nome certo hoje e `registrar`.
+Troque TODOS os usos de registra( por registrar( pelo projeto e remova a definicao
+antiga de `registra` — nada pode mais referenciar ela, so o registrar.
+No fim: `python3 -m unittest -v` tem que passar.
