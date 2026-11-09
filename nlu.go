@@ -5923,6 +5923,39 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			in.Slots["srcs"] = strings.Join(kept, " ")
 		}
 	}
+	// "files ending with undo" — undo é operando-nome ali, não o
+	// verbo: undo.last restauraria o checkpoint sem o pedido pedir.
+	// Contexto de arquivo/busca junto ao intent undo denuncia o
+	// roteamento errado
+	if in.Name == "undo" || in.Name == "redo" {
+		fileCtx := false
+		for _, t := range toks {
+			// só phrasing de BUSCA conta — "reverta o arquivo
+			// parser.go" é undo legit com nome de arquivo
+			switch t.Fold {
+			case "ending", "ends", "named", "match",
+				"matching", "pattern", "glob",
+				"search", "find", "size", "calculate",
+				"sum", "total", "count", "suffix",
+				"containing", "starts", "starting", "prefix",
+				"files", "directories", "folders":
+				fileCtx = true
+			}
+		}
+		if fileCtx {
+			for _, t := range toks {
+				switch t.Fold {
+				case "undo", "redo", "desfaz", "desfazer",
+					"reverte", "reverter":
+					if t.Raw != "" {
+						drop(t.Raw)
+					} else {
+						drop(t.Fold)
+					}
+				}
+			}
+		}
+	}
 	// "UID=1000"/"user=wnj" como owner/group: o rótulo é o TIPO do
 	// operando, o valor é o id/nome — find -user aceita o número,
 	// o rótulo grudado falharia quieto no runtime

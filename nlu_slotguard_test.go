@@ -2605,3 +2605,22 @@ func TestNLUOwnerIdGuards(t *testing.T) {
 		}
 	}
 }
+
+// TestNLUUndoNameGuards: "undo" como nome de arquivo (ending with undo)
+// não pode acionar undo.last — restauraria o checkpoint sem pedido.
+// Undo legit sem contexto de busca preservado.
+func TestNLUUndoNameGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse("find all the files ending with undo in the current folder and calculate the total size of these files", w)
+	if nuPredict(in) != "none" {
+		t.Errorf("undo-name should refuse: %v %.2f", in.Slots, in.Confidence)
+	}
+	for _, q := range []string{
+		"desfaz", "undo the last change", "reverta o arquivo parser.go",
+		"reverte o último commit",
+	} {
+		if in := m.Parse(q, w); nuPredict(in) != "undo" {
+			t.Errorf("legit undo: %s -> %s %v", q, in.Name, in.Dropped)
+		}
+	}
+}
