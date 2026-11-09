@@ -1,0 +1,3 @@
+neste repo: 1) cria uma branch nova chamada `melhorias`; 2) nela, muda o arquivo
+versao.txt de "1.5" para "2.0 FINAL"; 3) faz commit dessa mudanca na melhorias com a
+mensagem exata `versao 2.0 FINAL`.

@@ -1,0 +1,4 @@
+caiu um `logs.txt` no repositorio sem querer e ele acabou commitado. Por favor:
+1) tire o logs.txt do repositorio mas MANTENHA o arquivo no disco (nao apagar);
+2) adicione `logs.txt` no .gitignore;
+3) faca um commit com a mensagem exata `limpa logs` com essas mudancas.
