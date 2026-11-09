@@ -84,7 +84,8 @@ type Agent struct {
 
 	uiLint map[string]string // per UI file, hash of the last ui_lint findings ("" = clean) (uilint.go)
 
-	gr grState // injection guard and supply-chain checks (guardrails.go)
+	gr grState   // injection guard and supply-chain checks (guardrails.go)
+	nl nlConsent // session grants from explicit NL consent + the sudo credential (consent.go)
 	// UntrustedBash: headless run in a folder the user has not trusted (F1):
 	// bash commands that are not read-only need an allow rule (--allow-tools)
 	// or --yolo, otherwise they are refused.
@@ -425,6 +426,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 		input = a.grSanitizeInput(input) // pasted text can smuggle invisible instructions (sanitize.go)
 	}
 	lt = a.acBeginTurnLoop(ctx, input)
+	a.nlScanConsent(lt.input)     // explicit NL consent → audited session grants (consent.go)
 	a.obTurnStart(lt.input)       // obs.go
 	a.sessAutoTitleTurn(lt.input) // first turn of a new session: its title (sessions_ui.go)
 	if !a.sub && a.Hooks.Has(HookUserPromptSubmit) {
@@ -735,6 +737,7 @@ turnLoop:
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
+				a.nlScanConsent(strings.Join(steer, "\n\n"))
 				a.append(Message{Role: "user", Content: strings.Join(steer, "\n\n")})
 				continue
 			}
@@ -897,6 +900,7 @@ turnLoop:
 			continue
 		}
 		if steer := a.takeSteer(); len(steer) > 0 {
+			a.nlScanConsent(strings.Join(steer, "\n\n"))
 			a.append(Message{Role: "user", Content: "<system-reminder>The user sent this while you were working:</system-reminder>\n" + strings.Join(steer, "\n\n")})
 		}
 		a.qInject("tool") // queued steer messages, at the tool boundary (queue.go)
@@ -1554,7 +1558,7 @@ func (a *Agent) execBody(ctx context.Context, tc ToolCall) (ToolCall, ToolOutput
 			out, runDur = early, d
 			a.ptLane = ptLanePar
 		} else {
-			out = a.tools.Exec(ctx, tc.Name, tc.Args)
+			out = a.nlExecMaybeElevated(ctx, tc) // bash sudo → runner elevado (consent.go)
 		}
 		if hardenNote != "" {
 			out.Text += "\n\n" + hardenNote
@@ -1657,27 +1661,28 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			why := "model tool access to Jazz private configuration, credentials, trust data, or sessions is blocked (" + p + ")"
 			if a.blockUX() {
 				a.blockWhy = why
-				return false, blockMsg(what, why), true
+				return false, a.nlDenied(nlGatePrivate, blockMsg(what, why)), true
 			}
-			return false, "Blocked: " + why + ". Use Jazz's built-in configuration or session features instead.", true
+			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+". Use Jazz's built-in configuration or session features instead."), true
 		}
 	}
 	dec, rule := a.Perms.Check(tool, args)
 	if dec == PermDeny {
 		if a.blockUX() {
 			a.blockWhy = "regra de permissão " + rule
-			return false, blockMsg(what, "permission rule "+rule+" forbids it"), true
+			return false, a.nlDenied(nlGateRuleDeny, blockMsg(what, "permission rule "+rule+" forbids it")), true
 		}
-		return false, fmt.Sprintf("Blocked by permission rule %s. Do not retry it; choose another approach or ask the user.", rule), true
+		return false, a.nlDenied(nlGateRuleDeny, fmt.Sprintf("Blocked by permission rule %s. Do not retry it; choose another approach or ask the user.", rule)), true
 	}
 	if a.sub && isMCP && dec != PermAllow && !a.mcp.ReadOnly(tool) {
 		// the subagent is advertised as side-effect free (mirrors the plan-mode rule)
 		return false, "The research subagent may not call MCP tools that can change state. Report what should be done instead.", false
 	}
 	// work-dir fence (fence.go): outside the project asks, jazz's own config never
-	fenceReason, fenceEN := "", ""
+	fenceReason, fenceEN, fencePriv := "", "", false
 	if out := a.fenceCheck(tool, args, cmd, isMCP); out != "" {
 		if fencePrivate(resolvePath(out)) {
+			fencePriv = true
 			fenceReason = "configuração/dados do jazz (credenciais, sessões): " + out
 			fenceEN = "it reaches jazz's own config/data directory (" + out + "), which holds credentials and sessions"
 		} else {
@@ -1698,26 +1703,31 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}); btCrit != "" {
 			if a.blockUX() {
 				a.blockWhy = btCrit
-				return false, blockMsg(what, "the build target or script it runs is hostile: "+btCrit), true
+				return false, a.nlDenied(nlGateHostile, blockMsg(what, "the build target or script it runs is hostile: "+btCrit)), true
 			}
-			return false, "Blocked: the build target or script it runs is hostile (" + btCrit + "). Do not retry it; choose another approach or ask the user.", true
+			return false, a.nlDenied(nlGateHostile, "Blocked: the build target or script it runs is hostile ("+btCrit+"). Do not retry it; choose another approach or ask the user."), true
 		}
 	}
 	mode := a.mode()
+	autoRule := "" // why a call that some mode would confirm runs without a prompt (audit)
 	// menor intervenção (caps.go): writing /etc, the kernel, system binaries or
 	// container-engine/WSL configuration is CRITICAL — except in yolo, where the
-	// user already opted into low-level system work explicitly
+	// user already opted into low-level system work explicitly, or under an
+	// audited session grant of the system-ops class (consent.go)
 	if !isMCP && mode != "yolo" {
 		goal := ""
 		if a.oj != nil {
 			goal = a.oj.input
 		}
 		if crit := cbMinimalIntervention(tool, args, cmd, goal); crit != "" {
-			if a.blockUX() {
+			if r := a.nlConsentRule(nlGateSysOps, tool, args, cmd, isMCP); r != "" {
+				autoRule = r
+			} else if a.blockUX() {
 				a.blockWhy = crit
-				return false, blockMsg(what, crit), true
+				return false, a.nlDenied(nlGateSysOps, blockMsg(what, crit)), true
+			} else {
+				return false, a.nlDenied(nlGateSysOps, "Blocked: "+crit+". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves."), true
 			}
-			return false, "Blocked: " + crit + ". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves.", true
 		}
 	}
 	sensitiveEgress := tool == "bash" && !isMCP && jazzSensitiveEgress(cmd, a.tools.Root, a.fenceCwd())
@@ -1727,7 +1737,6 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if mode == "turbo" {
 		mode = "auto"
 	}
-	autoRule := ""                           // why a call that some mode would confirm runs without a prompt (audit)
 	apClass, apTarget, apLabel := "", "", "" // what "a" (sempre) remembers for a prompt with a reason (approvals.go)
 	apOnAllow := false                       // turbo egress: the first approval already remembers the host
 	// Approval memory is scoped to a risk class. A target-level HIGH finding
@@ -1737,7 +1746,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	}
 	if tool == "script" && !isMCP { // read-only scripts only in plan/subagent; Bash deny rules cover a script's cmd (scripts.go)
 		if deny, byRule := a.scGate(args, mode); deny != "" {
-			return false, deny, byRule
+			return false, a.nlDenied(nlGatePolicy, deny), byRule
 		}
 	}
 	// a suspected prompt injection earlier in this turn: anything that changes
@@ -1767,7 +1776,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			return false, "Plan mode: fetching URLs is disabled unless a WebFetch permission rule allows the domain; web search (query) is allowed. Present your plan instead.", false
 		}
 	}
-	reason, whyEN := "", "" // whyEN: the same reason in English for the model (blockux.go)
+	reason, whyEN, gate := "", "", "" // whyEN: the same reason in English for the model (blockux.go); gate: the consent class that could cover it (consent.go)
 	need := false
 	switch {
 	case tool == "bash":
@@ -1776,28 +1785,31 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			why, autoRule = "", "turbo:git-discard-checkpoint" // /undo restores it (checkpoint.go)
 		}
 		if cmd != "" && why != "" {
-			reason, need = why, true // dangerous commands are always confirmed
+			reason, need, gate = why, true, nlGateDanger // dangerous commands are always confirmed
 			whyEN = "it is a destructive or dangerous command (" + why + ")"
+			if nlSudoCmd(cmd) && DangerReason(nlStripSudo(cmd)) == "" {
+				gate = nlGateSudo // sudo é o único risco: o que roda como root é benigno
+			}
 			if c, tg := tbDangerClass(cmd); c != "" {
 				apClass, apTarget, apLabel = c, tg, c+": "+tg
 			}
 		} else if why := SecretReason(cmd); cmd != "" && why != "" && mode != "yolo" {
-			reason, need = why, true // its output (credentials) would go to the provider
+			reason, need, gate = why, true, nlGateSecret // its output (credentials) would go to the provider
 			whyEN = "it would read credentials or secrets (" + why + ")"
 		} else if why := a.sgGuard(ctx, cmd, dec == PermAllow); cmd != "" && why != "" && mode != "yolo" {
-			reason, need = why, true // supply-chain guard (guardrails.go)
+			reason, need, gate = why, true, nlGateSupply // supply-chain guard (guardrails.go)
 			whyEN = "a package failed the supply-chain check (" + why + ")"
 			apClass, apTarget = "supply", strings.Join(strings.Fields(cmd), " ")
 			apLabel = "supply: " + apTarget
 		} else if h, eg := EgressTarget(cmd); eg && (sensitiveEgress || mode != "yolo" && !egressAllowed(h, a.cfg.EgressAllow)) {
-			reason, need = "envia dados para fora da máquina (destino: "+h+")", true // egress gate (AML.T0086)
+			reason, need, gate = "envia dados para fora da máquina (destino: "+h+")", true, nlGateEgress // egress gate (AML.T0086)
 			whyEN = "it sends data off this machine (to " + h + ")"
 			if !strings.HasPrefix(h, "(") { // "(host no código inline)": no host to remember
 				apClass, apTarget, apLabel = "egress", strings.ToLower(h), "egress: "+strings.ToLower(h)
 				apOnAllow = turbo
 			}
 		} else if (mode == "ask" || a.UntrustedBash) && (jobKill || cmd != "" && !IsReadOnly(cmd) && !cbReadGranted(ctx, cmd)) {
-			need = true
+			need, gate = true, nlGatePrompt
 			if a.UntrustedBash {
 				whyEN = "this folder is not trusted, so only read-only commands run without the user's approval"
 			} else {
@@ -1805,7 +1817,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			}
 		}
 		if btHigh != "" && reason == "" {
-			reason, need = "alvo de build ou script do projeto: "+btHigh, true
+			reason, need, gate = "alvo de build ou script do projeto: "+btHigh, true, nlGateHigh
 			whyEN = "the build target or script it runs does something risky (" + btHigh + ")"
 		}
 		if ctx.Err() != nil {
@@ -1813,47 +1825,54 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 	case tool == "read" && !isMCP:
 		if p, _ := argStr(args, "path"); p != "" && secretPath(a.tools.abs(p)) {
-			reason, need = "arquivo sensível (credenciais)", true
+			reason, need, gate = "arquivo sensível (credenciais)", true, nlGateSecret
 			whyEN = "the file holds credentials"
 		}
 	case (tool == "write" || tool == "edit") && !isMCP:
 		if p, _ := argStr(args, "path"); p != "" && protectedPath(a.tools.abs(p), a.tools.Root) {
-			reason, need = "arquivo sensível (credenciais ou configuração)", true
+			reason, need, gate = "arquivo sensível (credenciais ou configuração)", true, nlGateSecret
+			if cbSysPath(a.tools.abs(p)) != "" && !secretPath(a.tools.abs(p)) {
+				gate = nlGateSysOps // /etc, /boot, /usr: território system-ops, não credencial
+			}
 			whyEN = "it is a sensitive file (credentials, hooks or agent configuration)"
 		} else if why := h2WriteDanger(args); why != "" { // hardening2.go
-			reason, need = why, true
+			reason, need, gate = why, true, nlGateDanger
 			whyEN = "it writes a compose file that gives a container host access (" + why + ")"
 		} else if mode == "ask" {
-			need = true
+			need, gate = true, nlGatePrompt
 			whyEN = "ask mode needs the user's approval for file changes"
 		}
 	case (tool == "fetch" || tool == "docs") && !isMCP:
-		need = mode == "ask"
+		need, gate = mode == "ask", nlGatePrompt
 		whyEN = "ask mode needs the user's approval"
 	case tool == "script" && !isMCP:
 		reason, need = a.scPrompt(args, mode)
+		gate = nlGatePrompt
 		whyEN = "this script needs the user's approval"
 	default:
-		need = isMCP && mode == "ask"
+		need, gate = isMCP && mode == "ask", nlGatePrompt
 		whyEN = "ask mode needs the user's approval"
 	}
 	if sensitiveEgress {
 		// Sensitive input egress always gets a fresh, scoped confirmation. Never
 		// inherit yolo, a permission rule, or an earlier remembered approval.
 		if h, eg := EgressTarget(cmd); eg {
-			reason, need = "envia arquivo/configuração sensível para fora da máquina (destino: "+h+")", true
+			reason, need, gate = "envia arquivo/configuração sensível para fora da máquina (destino: "+h+")", true, nlGateSecEgr
 			whyEN = "it sends a protected or secret local file off this machine (to " + h + ")"
 			apClass, apTarget, apLabel, apOnAllow = "", "", "", false
 		}
 	}
 	if isMCP && mode != "yolo" {
 		if changed, _ := a.mcp.Poisoned(tool); changed {
-			reason, need = "a descrição desta ferramenta MCP mudou desde que você confiou no servidor (rug-pull): confirme antes de usar", true
+			reason, need, gate = "a descrição desta ferramenta MCP mudou desde que você confiou no servidor (rug-pull): confirme antes de usar", true, nlGateInject
 			whyEN = "the MCP tool's description changed since the user trusted the server"
 		}
 	}
 	if fenceReason != "" && reason == "" {
-		reason, need, whyEN = fenceReason, true, fenceEN
+		reason, need, whyEN, gate = fenceReason, true, fenceEN, nlGateFence
+		if fencePriv {
+			gate = nlGatePrivate // dados do próprio jazz: hard gate
+		}
 		if out := a.fenceCheck(tool, args, cmd, isMCP); out != "" && !fencePrivate(resolvePath(out)) {
 			// Remember the exact fenced target. Saving its parent (especially
 			// $HOME) made one approval silently cover unrelated siblings.
@@ -1867,11 +1886,11 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		apClass = "" // a suspected injection or a hook that asks: never answered from the store
 	}
 	if injReason != "" && reason == "" {
-		reason, need = injReason, true
+		reason, need, gate = injReason, true, nlGateInject
 		whyEN = "a suspected prompt injection was read earlier in this turn, so actions that change things need the user's approval"
 	}
 	if hook.ask && reason == "" {
-		reason, need = "hook pediu confirmação", true
+		reason, need, gate = "hook pediu confirmação", true, nlGateHook
 		if hook.reason != "" {
 			reason += ": " + hook.reason
 		}
@@ -1881,6 +1900,9 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		need = true
 		if reason == "" {
 			whyEN = "a permission rule requires the user's approval"
+		}
+		if l, _ := nlGateLevel(gate); l < 1 {
+			gate = nlGateRuleAsk // uma regra ask explícita pede toda vez: só go-ahead cobre
 		}
 	}
 	if (dec == PermAllow || hook.approve) && reason == "" {
@@ -1904,7 +1926,14 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if need && reason != "" && apClass != "" && dec != PermAsk && a.approvals().Has(apClass, apTarget) {
 		need, autoRule = false, "approvals:"+apClass // "a" (sempre) earlier in this project
 	}
-	if mode == "smart" && !need && dec != PermAllow && !hook.approve {
+	if need {
+		// session grants from explicit NL consent cover the gates of their
+		// class (consent.go); hard gates (level 2) never pass here
+		if r := a.nlConsentRule(gate, tool, args, cmd, isMCP); r != "" {
+			need, autoRule = false, r
+		}
+	}
+	if mode == "smart" && !need && dec != PermAllow && !hook.approve && !strings.HasPrefix(autoRule, "consent:") {
 		need = a.smartNeedsPrompt(ctx, tool, args, cmd, fetchURL, isMCP, jobKill)
 		whyEN = "the safety classifier wants the user's approval"
 		if ctx.Err() != nil {
@@ -1944,7 +1973,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	if ap, ok := a.apBatchAnswer(tc.ID); ok {
 		a.apb.answering = true
 		defer func() { a.apb.answering = false }()
-		return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, ap, "")
+		return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, gate, ap, "")
 	}
 	if h, ok := a.ui.(approveHinter); ok && reason == "" && a.Perms != nil {
 		scope := "neste projeto"
@@ -1967,13 +1996,13 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		h.ApproveExtra(apPreview(tool, args))
 	}
 	ap, feedback := a.ui.Approve(ctx, tool, apDetail, reason)
-	return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, ap, feedback)
+	return a.permitAnswer(ctx, tc, tool, args, key, apDetail, reason, whyEN, apClass, apTarget, apLabel, apOnAllow, gate, ap, feedback)
 }
 
 // permitAnswer applies the user's answer to a confirmation (asked alone or
 // merged with others, approve_batch.go): audit, remembered approvals and
 // rules, and the refusal text for the model.
-func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args map[string]any, key, apDetail, reason, whyEN, apClass, apTarget, apLabel string, apOnAllow bool, ap Approval, feedback string) (bool, string, bool) {
+func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args map[string]any, key, apDetail, reason, whyEN, apClass, apTarget, apLabel string, apOnAllow bool, gate string, ap Approval, feedback string) (bool, string, bool) {
 	a.obApproval(tool, apDetail, reason, ap) // overrides are audited (obs.go)
 	if reason != "" && apClass != "" && (ap == AllowAlways || ap == Allow && apOnAllow) {
 		if err := a.approvals().Add(apClass, apTarget, apLabel); err != nil {
@@ -2033,13 +2062,13 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 		} else {
 			why = "the user denied it (" + why + ")"
 		}
-		return false, blockMsg(blockWhat(tool, apDetail), why), true
+		return false, a.nlDenied(gate, blockMsg(blockWhat(tool, apDetail), why)), true
 	}
 	msg := "The user denied this action"
 	if reason != "" {
 		msg += " (" + reason + ")"
 	}
-	return false, msg + ". Do not retry it; ask the user or choose another approach.", true
+	return false, a.nlDenied(gate, msg+". Do not retry it; ask the user or choose another approach."), true
 }
 
 // alwaysSession reports whether "Sim, e não perguntar de novo" lasts only
