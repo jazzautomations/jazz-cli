@@ -2633,16 +2633,16 @@ func TestNLUUndoNameGuards(t *testing.T) {
 
 // Under-refusal (T5): o pedido doable não pode parar no penhasco de
 // confiança nem rotear errado —
-//  * a aspa do "testa regex F 'pat'" é o pattern (era operando solto
-//    → conf 0.22); sem ela, vocábulo-cardápio ("testa regex") não cola
-//    como padrão falso (dropped fantasma → conf 0.44);
-//  * "busca literal" tem regra determinística (era só classificador →
-//    0.55);
-//  * marcador maiúsculo depois de "por" é a tarefa do todo_scan —
-//    "procura por TODO e FIXME" virava text_grep com file=FIXME;
-//  * "tira um snapshot" é fotografia (file_snapshot), não remoção —
-//    'tira' só perde o removeword quando `snapshot` é a 1ª palavra útil
-//    à direita ("tira os arquivos de snapshot" continua delete_file).
+//   - a aspa do "testa regex F 'pat'" é o pattern (era operando solto
+//     → conf 0.22); sem ela, vocábulo-cardápio ("testa regex") não cola
+//     como padrão falso (dropped fantasma → conf 0.44);
+//   - "busca literal" tem regra determinística (era só classificador →
+//     0.55);
+//   - marcador maiúsculo depois de "por" é a tarefa do todo_scan —
+//     "procura por TODO e FIXME" virava text_grep com file=FIXME;
+//   - "tira um snapshot" é fotografia (file_snapshot), não remoção —
+//     'tira' só perde o removeword quando `snapshot` é a 1ª palavra útil
+//     à direita ("tira os arquivos de snapshot" continua delete_file).
 func TestNLUUnderRefusalGuards(t *testing.T) {
 	m, w := nuTestWorld(t)
 	in := m.Parse(`testa regex v4_regex_test.txt "ana"`, w)
@@ -2705,11 +2705,11 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	// "remoto" em intent git é o git-remote (vocábulo de domínio),
 	// não spec de execução remota — o passe não pode dropar
 	for q, want := range map[string]string{
-		"envia pro remoto":                    "git_push",
-		"manda pro github":                    "git_push",
-		"estou atrás do remoto?":              "git_branch_status",
+		"envia pro remoto":                      "git_push",
+		"manda pro github":                      "git_push",
+		"estou atrás do remoto?":                "git_branch_status",
 		"quantos commits estou ahead do origin": "git_branch_status",
-		"baixa do remoto":                     "git_pull",
+		"baixa do remoto":                       "git_pull",
 	} {
 		in = m.Parse(q, w)
 		if in.Name != want || in.Confidence < 0.7 || len(in.Dropped) > 0 {
@@ -2750,22 +2750,22 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 		// temporal ("do que" segue comparando)
 		"tem versão nova do jazz? atualiza": "update_jazz",
 		// vocábulos de domínio que o roteiro genérico engolia
-		"em que branch eu tô":                    "git_branch",
-		"arquivos modificados na última hora":    "fs_recent",
-		"quais arquivos mudam juntos":            "git_cochange",
-		"quais timers do systemd existem":        "cron_list",
-		"limpa o docker":                         "container_prune",
-		"gera o binário":                         "build",
-		"verifica o checksum do download":        "hash_verify",
-		"gera os checksums do projeto":           "file_snapshot",
-		"mostra o codigo do lexer.go":            "open_file",
-		"your version":                           "self_info",
-		"se apresenta":                           "self_info",
-		"who is connected":                       "logged_in",
-		"quem tá conectado no servidor":          "logged_in",
-		"o ssh está ativo?":                      "service_status",
-		"o tailscaled tá rodando?":               "service_status",
-		"o zip é seguro de extrair?":             "archive_list",
+		"em que branch eu tô":                 "git_branch",
+		"arquivos modificados na última hora": "fs_recent",
+		"quais arquivos mudam juntos":         "git_cochange",
+		"quais timers do systemd existem":     "cron_list",
+		"limpa o docker":                      "container_prune",
+		"gera o binário":                      "build",
+		"verifica o checksum do download":     "hash_verify",
+		"gera os checksums do projeto":        "file_snapshot",
+		"mostra o codigo do lexer.go":         "open_file",
+		"your version":                        "self_info",
+		"se apresenta":                        "self_info",
+		"who is connected":                    "logged_in",
+		"quem tá conectado no servidor":       "logged_in",
+		"o ssh está ativo?":                   "service_status",
+		"o tailscaled tá rodando?":            "service_status",
+		"o zip é seguro de extrair?":          "archive_list",
 	} {
 		in = m.Parse(q, w)
 		if in.Name != want || in.Confidence < 0.7 {
@@ -2775,18 +2775,80 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	// os vetos de domínio seguem decidindo: stop≠prune, arquivo≠docker,
 	// snapshot de apagar é delete, extrair explícito é extract
 	for q, want := range map[string]string{
-		"status das branches":  "git_branch_status",
-		"cria branch foo":      "git_branch",
-		"apaga o container":    "container_stop",
-		"limpa a pasta":        "delete_file",
-		"apaga o snapshot":     "delete_file",
-		"extrai o zip":         "archive_extract",
+		"status das branches":     "git_branch_status",
+		"cria branch foo":         "git_branch",
+		"apaga o container":       "container_stop",
+		"limpa a pasta":           "delete_file",
+		"apaga o snapshot":        "delete_file",
+		"extrai o zip":            "archive_extract",
 		"lista o conteúdo do zip": "archive_list",
-		"ssh no servidor":      "connect_host",
-		"valeu":                "none",
+		"ssh no servidor":         "connect_host",
+		"valeu":                   "none",
 	} {
 		in = m.Parse(q, w)
 		if in.Name != want {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// conf-cliff: typo-form entra com força de lexema (slang), o idiom
+	// "dar uma olhada" é open e "o conteúdo de X" é phrasing coberto
+	// pela regra (used[content]), nunca operando dropado
+	for q, want := range map[string]string{
+		"corrije o erro do build":         "fix",
+		"mostra o conteudo do config.yml": "open_file",
+		"mostra o conteudo do parser.go":  "open_file",
+		"quero dar uma olhada no conn.go": "open_file",
+		"take a look at conn.go":          "open_file",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// uso de símbolo é refs, não locate: usage/callers vetam o find
+	for q, want := range map[string]string{
+		"usages of handleLogin":     "symbol_refs",
+		"referências de NewServer":  "symbol_refs",
+		"where is Tokenize used":    "symbol_refs",
+		"grep NewServer":            "find",
+		"procura ParseArgs":         "find",
+		"acha onde tem fmt.Println": "find",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// o verbo decide a rota: pull+objeto-diff é pull (não diff);
+	// typo-form e idiom de pedido de capacidade seguem cardápio
+	for q, want := range map[string]string{
+		"puxa as mudança do remoto": "git_pull",
+		"puxa do remoto":            "git_pull",
+		"puxa as mudanças":          "git_pull",
+		"mostra o diff do pull":     "git_diff",
+		"ultimos comits":            "git_log",
+		"switch pra main":           "git_checkout",
+		"git switch main":           "git_checkout",
+		"opn parser.go":             "open_file",
+		"git psuh":                  "git_push",
+		"o que vc sabe fazer?":      "help",
+		"what can you do":           "help",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "troca X por Y" é replace — replto marca o novo valor e veta o
+	// checkout; 'pra'/'para' seguem direção de branch
+	for q, want := range map[string]string{
+		"troca 'foo' por 'bar' em config.txt": "text_replace",
+		"replace foo with bar in app.log":     "text_replace",
+		"troca pra main":                      "git_checkout",
+		"volta pra main":                      "git_checkout",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
 			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
 		}
 	}

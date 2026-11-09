@@ -3179,7 +3179,9 @@
       "rename",
       "filenoun",
       "files",
-      "grepword"
+      "grepword",
+      "usage",
+      "callers"
      ],
      "w": 15
     },
@@ -3209,7 +3211,9 @@
       "filenoun",
       "files",
       "replace",
-      "count"
+      "count",
+      "usage",
+      "callers"
      ],
      "w": 10
     }
@@ -3555,8 +3559,10 @@
       "checkout"
      ],
      "none": [
-      "rename"
-     ]
+      "rename",
+      "replto"
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -3794,6 +3800,46 @@
       "copy",
       "move",
       "extract"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "remote"
+     ],
+     "none": [
+      "connect",
+      "install",
+      "delete",
+      "mutate",
+      "copy",
+      "move",
+      "extract"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "diff"
+     ],
+     "none": [
+      "open",
+      "explain"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "diff",
+      "remote"
+     ],
+     "none": [
+      "open",
+      "explain",
+      "connect",
+      "install",
+      "delete",
+      "mutate"
      ]
     }
    ],
@@ -5217,6 +5263,9 @@
       "routes",
       "user",
       "eachitem"
+     ],
+     "any": [
+      "content"
      ]
     },
     {
@@ -5285,7 +5334,10 @@
       "nameattr",
       "medianoun"
      ],
-     "w": 10
+     "w": 10,
+     "any": [
+      "content"
+     ]
     }
    ],
    "slots": {
@@ -7259,6 +7311,9 @@
       "service",
       "permattr",
       "install"
+     ],
+     "any": [
+      "replto"
      ]
     }
    ],

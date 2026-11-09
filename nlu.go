@@ -1272,6 +1272,32 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			break
 		}
 	}
+	// "troca X por Y" — 'por'/'with'/'com' depois de verbo-replace abre
+	// o NOVO valor, não o destino: o operando seguinte é replto e veta
+	// o checkout ('troca' é replace E checkout — "troca pra main" com
+	// 'pra'/'para' segue direção de branch, não marca)
+	for i := range out {
+		if !out[i].has("replace") {
+			continue
+		}
+		sep := false
+		for j := i + 1; j < len(out) && j <= i+6; j++ {
+			u := &out[j]
+			switch u.Fold {
+			case "por", "with", "com":
+				sep = true
+				continue
+			}
+			if u.Filler || u.Slang || u.has("article") {
+				continue
+			}
+			if !sep {
+				continue // o operando antigo não é o novo valor
+			}
+			u.Concs = append(u.Concs, "replto")
+			break
+		}
+	}
 	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
 	// colateral do comando, não o critério da busca: a frase inteira é
 	// filler (o verbo vira nome falso, error/message vetam file_find).
