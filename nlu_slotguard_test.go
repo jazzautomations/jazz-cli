@@ -2504,6 +2504,14 @@ func TestNLUArchiveCreateGuards(t *testing.T) {
 		// quantificador regex em slot glob / aspas tipográficas
 		"Search for 'specific string' in all files matching the name pattern '“*.[txt|TXT]”' under current directory tree",
 		"Ensure all 5 of UEDP0{1..5}_20120821.csv files exist, creating empty files for any missing ones (updates the file's timestamps)",
+		// verbo real do pedido não é o do intent roteado
+		"update the permission of all the php files in current directory and save the output to a file",
+		"Run mycommand in /tmp without changing the current shell's working directory",
+		"replace localhost with 127.0.0.1 in every config",
+		"Replace all non-punctuation characters with newlines from standard input",
+		"kill all jobs",
+		"kill all background jobs",
+		"search for the directory \"config\" in the current folder and change directory to it",
 	} {
 		in := m.Parse(text, w)
 		if nuPredict(in) != "none" {

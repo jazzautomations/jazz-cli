@@ -2911,6 +2911,99 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	// ("the system IP address") como `to` não é literal — sed não
 	// avalia hostname; vai pro Dropped em vez de inserir o texto cru.
 	if in.Name == "text_replace" {
+		// o verbo real do pedido não é replace: "Run mycommand" é
+		// execução de comando — sed -i 's/mycommand//' em /tmp
+		// mutaria arquivos por engano
+		hasRun, hasReplace := false, false
+		for i, t := range toks {
+			switch t.Fold {
+			case "run", "runs", "ran", "execute", "executes",
+				"executed", "executing", "exec", "rodar", "roda",
+				"rode", "executa", "corre", "corra", "launch",
+				"launches", "start", "starts", "invoke",
+				"invokes", "call", "calls":
+				hasRun = true
+			case "change", "changes", "changed", "changing",
+				"mudar", "muda", "mude":
+				// "change directory/shell/cwd" é navegação,
+				// não replace de texto
+				cd := false
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					u := &toks[j]
+					if u.Filler {
+						continue
+					}
+					switch u.Fold {
+					case "directory", "dir", "folder", "pasta",
+						"diretorio", "diretório", "shell",
+						"cwd", "location", "path":
+						cd = true
+					}
+					break
+				}
+				if !cd {
+					hasReplace = true
+				}
+			case "replace", "replaces", "replaced", "replacing",
+				"substitui", "substitua", "substituir", "troca",
+				"trocar", "troque", "alter", "alters", "altera",
+				"altere", "swap", "swaps", "override",
+				"overwrite", "substitute", "substituting":
+				hasReplace = true
+			}
+		}
+		if hasRun && !hasReplace {
+			for _, t := range toks {
+				switch t.Fold {
+				case "run", "execute", "exec", "rodar", "roda",
+					"executa", "corre", "launch", "start",
+					"invoke", "call":
+					drop(t.Raw)
+				}
+			}
+		}
+		// "change directory to X" — cd não é operação de texto
+		for i, t := range toks {
+			if (t.Fold == "change" || t.Fold == "muda" ||
+				t.Fold == "mude" || t.Fold == "switch") &&
+				i+1 < len(toks) {
+				switch toks[i+1].Fold {
+				case "directory", "dir", "folder", "diretorio",
+					"diretório", "pasta":
+					drop(t.Raw)
+					drop(toks[i+1].Raw)
+				}
+			}
+		}
+		// "in every config" = todo arquivo de configuração, não a
+		// pasta 'config' — o sed varreria o dir errado
+		if dv := in.Slots["dir"]; dv == "config" ||
+			dv == "configs" || dv == "configuration" {
+			for _, t := range toks {
+				switch t.Fold {
+				case "every", "each", "all", "any", "cada",
+					"todo", "toda", "todos", "todas":
+					delete(in.Slots, "dir")
+					drop(dv)
+				}
+			}
+		}
+		// classe de caractere não é literal — "non-punctuation"
+		// descreve um conjunto que o replace não expressa
+		for _, sk := range []string{"from", "to", "new", "old"} {
+			v := in.Slots[sk]
+			switch strings.ToLower(v) {
+			case "punctuation", "non-punctuation", "alphanumeric",
+				"alphanumerics", "digit", "digits", "numeric",
+				"numerics", "uppercase", "lowercase",
+				"whitespace", "non-whitespace", "printable",
+				"non-printable", "alpha", "alphabetic", "vowel",
+				"vowels", "consonant", "consonants",
+				"character", "characters", "chars":
+				delete(in.Slots, sk)
+				drop(v)
+			}
+		}
 		// aspa de escopo sem forma de pasta é o ARQUIVO-alvo — 'a,b'
 		// em `in "a,b"` é onde o sed opera, não um diretório
 		if dv := in.Slots["dir"]; dv != "" && in.Slots["file"] == "" {
@@ -3954,6 +4047,49 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 					// default do método — redundante, não dropa
 				default:
 					drop(t.Raw)
+				}
+			}
+		}
+		// "kill all jobs"/"background jobs" é jobspec de shell
+		// (%1 %2...), não pid — o método sem alvo mataria por
+		// engano ou falharia; jobs não é suportado
+		if in.Slots["target"] == "" {
+			for _, t := range toks {
+				switch t.Fold {
+				case "jobs", "job", "background",
+					"foreground", "all", "every",
+					"each", "todos", "todas", "cada":
+					drop(t.Raw)
+				}
+			}
+		}
+	}
+	// "update the permission" é chmod roteado pra apt — vocábulo
+	// de permissão sem pacote denuncia o misroute; "update deps"/
+	// "instala o tailscale" genérico segue (dep vazio vira
+	// Missing e o método pergunta)
+	if in.Name == "update_dep" || in.Name == "install_dep" {
+		if in.Slots["dep"] == "" {
+			permVocab := false
+			for _, t := range toks {
+				switch t.Fold {
+				case "permission", "permissions", "permissao",
+					"permissão", "permissoes", "permissões",
+					"chmod", "mode", "umask", "perms",
+					"writable", "readable", "executable":
+					permVocab = true
+				}
+			}
+			if permVocab {
+				for _, t := range toks {
+					switch t.Fold {
+					case "update", "updates", "updated",
+						"upgrade", "upgrades", "upgraded",
+						"atualiza", "atualize", "atualizar",
+						"install", "installs", "installed",
+						"installing", "instala", "instale":
+						drop(t.Raw)
+					}
 				}
 			}
 		}
