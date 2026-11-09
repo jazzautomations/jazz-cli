@@ -742,6 +742,72 @@
    }
   },
   {
+   "desc": "criar link simbólico/hard",
+   "examples": [
+    "create a symbolic link named mylink to target.txt",
+    "cria um link simbolico chamado atalho apontando para /etc/hosts",
+    "make a hard link foo to bar.txt",
+    "create symlink subl to /usr/bin/sublime"
+   ],
+   "name": "link_create",
+   "negatives": [],
+   "rules": [
+    {
+     "all": [
+      "create|mkverb",
+      "linknoun"
+     ],
+     "none": [
+      "find",
+      "delete",
+      "archive",
+      "extract",
+      "listverb",
+      "service"
+     ],
+     "w": 30
+    },
+    {
+     "all": [
+      "linknoun",
+      "create|mkverb|mutate"
+     ],
+     "none": [
+      "find",
+      "delete",
+      "archive",
+      "extract",
+      "listverb",
+      "service",
+      "grepword"
+     ],
+     "w": 10
+    }
+   ],
+   "slots": {
+    "hard": {
+     "from": "link:hard",
+     "kinds": [
+      "text"
+     ]
+    },
+    "link": {
+     "from": "link:path",
+     "kinds": [
+      "text"
+     ],
+     "required": true
+    },
+    "target": {
+     "from": "link:target",
+     "kinds": [
+      "text"
+     ],
+     "required": true
+    }
+   }
+  },
+  {
    "desc": "cron e timers agendados",
    "examples": [
     "lista o cron",
@@ -968,6 +1034,20 @@
       "open"
      ],
      "w": 10
+    },
+    {
+     "all": [
+      "delete|removeword",
+      "linknoun"
+     ],
+     "none": [
+      "find",
+      "create",
+      "archive",
+      "listverb",
+      "service"
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -1098,6 +1178,18 @@
     },
     "type": {
      "from": "find:type",
+     "kinds": [
+      "text"
+     ]
+    },
+    "orphan": {
+     "from": "find:orphan",
+     "kinds": [
+      "text"
+     ]
+    },
+    "follow": {
+     "from": "find:follow",
      "kinds": [
       "text"
      ]
@@ -2103,6 +2195,50 @@
       "rename"
      ],
      "w": 12
+    },
+    {
+     "all": [
+      "find|listverb",
+      "linknoun"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "permattr",
+      "archive",
+      "rename",
+      "service",
+      "install",
+      "run",
+      "net",
+      "remote",
+      "grepword",
+      "forquoted"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
+      "linknoun",
+      "findattr"
+     ],
+     "none": [
+      "delete",
+      "create",
+      "mutate",
+      "permattr",
+      "archive",
+      "rename",
+      "service",
+      "install",
+      "run",
+      "net",
+      "remote",
+      "grepword",
+      "forquoted"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -2267,6 +2403,24 @@
     },
     "type": {
      "from": "find:type",
+     "kinds": [
+      "text"
+     ]
+    },
+    "follow": {
+     "from": "find:follow",
+     "kinds": [
+      "text"
+     ]
+    },
+    "links": {
+     "from": "find:links",
+     "kinds": [
+      "text"
+     ]
+    },
+    "orphan": {
+     "from": "find:orphan",
      "kinds": [
       "text"
      ]

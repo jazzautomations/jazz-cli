@@ -491,8 +491,10 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			}
 		}
 		// aspas com forma de arquivo ("foo.txt", "/etc/x", "file1") =
-		// nome de arquivo citado — vence forquoted: "find the file \"x.c\""
-		if t.Quoted && (nuFileShaped(t.Fold) || strings.Contains(t.Raw, ".") || strings.Contains(t.Raw, "/")) {
+		// nome de arquivo citado — vence forquoted: "find the file \"x.c\"".
+		// Terminada em "/" é forma de PASTA ('/usr/ports/'), nunca file.
+		if t.Quoted && !strings.HasSuffix(t.Raw, "/") &&
+			(nuFileShaped(t.Fold) || strings.Contains(t.Raw, ".") || strings.Contains(t.Raw, "/")) {
 			t.Concs = append(t.Concs, "filequoted")
 			continue
 		}
@@ -550,9 +552,37 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					continue
 				}
 				switch u.Fold {
-				case "file", "filename", "filenames", "named", "called",
-					"name", "names", "arquivo", "nome", "nomes", "is", "are":
+				case "file", "filename", "filenames", "name", "names",
+					"arquivo", "nome", "nomes", "is", "are":
 					t.Concs = append(t.Concs, "filequoted")
+				case "named", "called":
+					// "contain a file named 'bin'" — a aspa rotula o
+					// item contido, não o arquivo da busca
+					contained := false
+					for k := j - 1; k >= 0 && k >= j-5; k-- {
+						w := &out[k]
+						if w.Filler || nuArcTypeWord(w.Fold) ||
+							nuAllFormatWords(w.Fold) ||
+							w.Fold == "file" || w.Fold == "files" {
+							continue
+						}
+						switch w.Fold {
+						case "contain", "contains", "containing", "contem",
+							"contém", "contendo", "tem", "tenha", "hold",
+							"holds", "holding", "have", "has", "having",
+							"with", "without", "missing", "lacking":
+							contained = true
+						}
+						break
+					}
+					if !contained {
+						t.Concs = append(t.Concs, "filequoted")
+					} else {
+						// marcação negativa: a aspa pertence à cláusula
+						// "contains a file named X" — não é padrão de
+						// conteúdo nem nome do alvo da busca
+						t.Concs = append(t.Concs, "conttgt")
+					}
 				}
 				// "lines in 'filename'" — a aspa após unidade de contagem
 				// é o OPERANDO (arquivo), não escopo de diretório. Só
@@ -790,6 +820,52 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				}
 			}
 			t.Concs = kept
+		}
+	}
+	// "dirs that contain a file named 'bin'" — o 'named' rotula o item
+	// CONTIDO (predicado existencial), não o filtro de nome da busca:
+	// o nameattr residual roubava 'bin' pro slot name
+	for i := range out {
+		t := &out[i]
+		switch t.Fold {
+		case "named", "called", "nomeado", "nomeada", "chamado", "chamada":
+		default:
+			continue
+		}
+		if !t.has("nameattr") {
+			continue
+		}
+		for j := i - 1; j >= 0 && j >= i-5; j-- {
+			u := &out[j]
+			if u.Filler || nuArcTypeWord(u.Fold) || nuAllFormatWords(u.Fold) ||
+				u.Fold == "file" || u.Fold == "files" {
+				continue // "a file/directory named" — substantivo-classe é ponte
+			}
+			switch u.Fold {
+			case "contain", "contains", "containing", "contem", "contém",
+				"contendo", "tem", "tenha", "hold", "holds", "holding",
+				"have", "has", "having", "with", "without", "missing",
+				"lacking", "falta", "faltando":
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "nameattr" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+				// o 'contain' também perde grepword/content — seu
+				// objeto é uma descrição de arquivo ("a file named"),
+				// não um padrão de texto; senão o pedido roteia pra
+				// text_grep e finge busca de conteúdo
+				ck := u.Concs[:0]
+				for _, c := range u.Concs {
+					if c != "grepword" && c != "content" {
+						ck = append(ck, c)
+					}
+				}
+				u.Concs = ck
+			}
+			break
 		}
 	}
 	// "search the X folder FOR files larger than..." — o 'for' introduz
@@ -1789,6 +1865,67 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		!strings.ContainsAny(re, "*?[") {
 		delete(in.Slots, "name")
 	}
+	// "under 'Books' directory tree located in user's home" — o dir
+	// relativo qualificado por cláusula de home do usuário resolve
+	// composto "~/Books"; solto, procuraria "Books" na raiz
+	if d := in.Slots["dir"]; d != "" && !strings.HasPrefix(d, "/") &&
+		!strings.HasPrefix(d, "~") && !strings.HasPrefix(d, ".") &&
+		!strings.HasPrefix(d, "$") && !strings.ContainsAny(d, "/\\") {
+		for i, t := range toks {
+			if t.Fold != "home" && t.Fold != "casa" {
+				continue
+			}
+			ownerNear := false
+			for k := i - 1; k >= 0 && k >= i-3; k-- {
+				u := &toks[k]
+				if u.Filler || u.Slang || u.Fold == "s" || u.Raw == "'s" {
+					continue
+				}
+				switch u.Fold {
+				case "user", "usuario", "usuário", "owner", "dono":
+					ownerNear = true
+				}
+				break
+			}
+			if ownerNear {
+				in.Slots["dir"] = "~/" + d
+				break
+			}
+		}
+	}
+	// "symlinks pointing to anywhere within /mnt" — restrição por ALVO
+	// do link não é predicado suportado; dropar calado acharia TODOS
+	// os links (superset fingindo sucesso). O operando vai pro Dropped.
+	if in.Slots["type"] == "link" {
+		for i, t := range toks {
+			if t.Fold != "pointing" && t.Fold != "targeting" &&
+				t.Fold != "aiming" && t.Fold != "apontando" {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				switch u.Fold {
+				case "to", "para", "at", "em", "pro", "pra":
+					continue
+				}
+				if !nuInExceptClause(toks, j) {
+					seen := false
+					for _, d0 := range in.Dropped {
+						if d0 == u.Raw {
+							seen = true
+						}
+					}
+					if !seen {
+						in.Dropped = append(in.Dropped, u.Raw)
+					}
+				}
+				break
+			}
+		}
+	}
 	// invariante de exceção: token dentro de cláusula "except/without/…"
 	// só alimenta o slot exclude — qualquer outro slot que tenha
 	// engolido o operando ("excluding paths containing 'a'" → pattern=a,
@@ -1914,6 +2051,51 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				drop(v)
 			}
 		}
+	}
+	// "find files and delete them" — 'them' é anáfora do conjunto
+	// achado: quando NENHUM slot material especifica o objeto da
+	// mutação (só type/manner sobraram), o pronome é o único operando
+	// — e está não-resolvido. Cai no Dropped em vez de fingir que a
+	// frase traz alvo (mass-delete sem filtro seria falso sucesso).
+	// "remove them" com name/dir/mass já especificado continua phrasing.
+	if in.Name == "delete_file" || in.Name == "file_move" ||
+		in.Name == "link_create" || in.Name == "rename" ||
+		in.Name == "file_split" {
+		objectish := false
+		for k := range in.Slots {
+			switch k {
+			case "type", "icase", "follow", "sort", "limit",
+				"include_hidden", "exclude", "op":
+			default:
+				objectish = true
+			}
+		}
+		if !objectish {
+			for _, t := range toks {
+				switch t.Fold {
+				case "them", "it", "eles", "elas", "deles", "delas":
+					seen := false
+					for _, d0 := range in.Dropped {
+						if d0 == t.Raw {
+							seen = true
+						}
+					}
+					if !seen {
+						in.Dropped = append(in.Dropped, t.Raw)
+					}
+				}
+			}
+		}
+	}
+	// operando semântico em Dropped = o pedido carrega restrição que
+	// nenhum slot cobriu — reportar sucesso seria fingir cobertura.
+	// (não dobra com unfed: drop costuma ser vocábulo de papel, fora
+	// da contagem de palavra livre)
+	if len(in.Dropped) > 0 {
+		conf *= 0.45
+		in.Evidence = append(in.Evidence,
+			fmt.Sprintf("operando sem cobertura de slot: %s",
+				strings.Join(in.Dropped, ", ")))
 	}
 	if unfed > 0 {
 		conf *= 0.5 // a free word is not a path, a unit or a tool just because it sat there
@@ -2490,6 +2672,37 @@ var nuFormatWords = map[string]bool{
 	// nametgt "named empty")
 	"empty": true, "vazio": true, "vazia": true,
 	"vazios": true, "vazias": true,
+	// auxiliar negado/contraído é phrasing de filtro, nunca nome:
+	// "that doesn't contain 'bin'" não tem name "doesn"
+	"doesn": true, "doesnt": true, "dont": true, "don": true,
+	"didn": true, "didnt": true, "isn": true, "isnt": true,
+	"aren": true, "arent": true, "wasn": true, "wasnt": true,
+	"weren": true, "werent": true, "haven": true, "havent": true,
+	"hasn": true, "hasnt": true, "hadn": true, "hadnt": true,
+	"won": true, "wont": true, "wouldn": true, "wouldnt": true,
+	"couldn": true, "couldnt": true, "shouldn": true, "shouldnt": true,
+	"mustn": true, "mustnt": true, "can": true, "cannot": true,
+	// sujeito possessivo é escopo, não nome: "in user's home" não tem
+	// name "user home" — o dir_cued resolve "~"
+	"home": true, "casa": true,
+	// adjetivo de escopo vago é phrasing de local, nunca parte de um
+	// glob: "in the specified directory" não tem name "specified"
+	// (typo "specfied" chega sem reparo — o fold fica sujo)
+	"specified": true, "specfied": true, "specfic": true,
+	"specific": true, "certain": true, "particular": true,
+	"given": true, "determinado": true, "determinada": true,
+	"especificado": true, "especificada": true,
+	"especifico": true, "específico": true,
+	// condicional/direcional é phrasing da restrição, nunca nome:
+	// "following symlinks if needed" não tem name "if"; "pointing to
+	// anywhere within /mnt" não tem name "pointing anywhere"
+	"if": true, "needed": true, "necessario": true, "necessário": true,
+	"necessaria": true, "preciso": true, "precisa": true,
+	"pointing": true, "targeting": true, "aiming": true,
+	"apontando": true, "anywhere": true, "anyplace": true,
+	"everywhere": true, "somewhere": true,
+	// abreviação de exemplo é phrasing, nunca nome: "(ie. X)"/"etc."
+	"ie": true, "eg": true, "etc": true, "ex": true,
 }
 
 // nuAllFormatWords: alternância "normal/regular"/"files-or-dirs" — todo
@@ -2736,6 +2949,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuSortArg(toks, sd.From[5:], taken)
 			case strings.HasPrefix(sd.From, "mv:"):
 				v = nuMvArg(toks, sd.From[3:], taken)
+			case strings.HasPrefix(sd.From, "link:"):
+				v = nuLinkArg(toks, sd.From[5:], taken)
 			case strings.HasPrefix(sd.From, "split:"):
 				v = nuSplitArg(toks, sd.From[6:], taken)
 			case strings.HasPrefix(sd.From, "date:"):
@@ -2940,6 +3155,25 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					case "along", "together", "junto", "juntamente":
 						clause = true
 						continue
+					}
+					// "user('s) home" — o par é escopo ~, nunca name:
+					// "in user's home directory" não tem name "user"/"home"
+					if toks[i].Fold == "user" || toks[i].Fold == "usuario" ||
+						toks[i].Fold == "usuário" {
+						nearHome := false
+						for k := i + 1; k < len(toks) && k <= i+3; k++ {
+							if toks[k].Fold == "home" || toks[k].Fold == "casa" {
+								nearHome = true
+								break
+							}
+							if !toks[k].Filler && toks[k].Fold != "'s" &&
+								toks[k].Fold != "s" {
+								break
+							}
+						}
+						if nearHome {
+							continue
+						}
 					}
 					if nuFormatWords[toks[i].Fold] || nuAllFormatWords(toks[i].Fold) {
 						continue // coluna de saída/auxiliar, nunca nome
@@ -3635,7 +3869,8 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 	}
 	for i, t := range toks {
-		if !taken[i] && t.Quoted && t.Raw != "" && !t.has("filequoted") {
+		if !taken[i] && t.Quoted && t.Raw != "" && !t.has("filequoted") &&
+			!t.has("conttgt") {
 			taken[i] = true
 			return t.Raw
 		}
@@ -3658,6 +3893,26 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			cue = prev.has("count") || nuCountNouns[prev.Fold]
 		}
 		if !cue || taken[i] {
+			continue
+		}
+		// "contain a file/directory named 'bin'" — o objeto da
+		// contenção é uma DESCRIÇÃO ESTRUTURAL (existe/não-existe um
+		// arquivo assim), não um padrão de texto. O primeiro
+		// substantivo após o cue sendo file/dir-noun fecha essa
+		// interpretação — o cue é ignorado e a aspa cai no Dropped.
+		structural := false
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			u := &toks[j]
+			if u.Filler || u.Slang || u.has("article") {
+				continue
+			}
+			if nuArcTypeWord(u.Fold) || nuArcAllTypeWords(u.Fold) ||
+				nuFileCueWords[u.Fold] {
+				structural = true
+			}
+			break
+		}
+		if structural {
 			continue
 		}
 		taken[i] = true
@@ -3862,6 +4117,189 @@ func nuSortArg(toks []nuTok, what string, taken map[int]bool) string {
 				return ","
 			}
 		}
+	}
+	return ""
+}
+
+// nuLinkArg: operandos do link_create — path (o link NOVO: "named X"),
+// target (pra onde aponta: "to Y"/"for Y"), hard (hard link → os.Link).
+// O link é sempre o lado novo da mutação; o alvo é o caminho existente
+// — inverter os dois criaria um link no lugar errado (silent-wrong).
+func nuLinkArg(toks []nuTok, what string, taken map[int]bool) string {
+	switch what {
+	case "hard":
+		// "hard link" pode chegar fundido (linknoun contém "hard") ou
+		// solto ("create a hard link" → 'hard' + 'link')
+		for i, t := range toks {
+			if !t.has("linknoun") {
+				continue
+			}
+			if strings.Contains(t.Fold, "hard") ||
+				strings.Contains(t.Fold, "fisico") ||
+				strings.Contains(t.Fold, "físico") {
+				taken[i] = true
+				return "true"
+			}
+		}
+		for i, t := range toks {
+			if t.Fold != "hard" && t.Fold != "fisico" && t.Fold != "físico" {
+				continue
+			}
+			for j := i - 3; j <= i+3 && j < len(toks); j++ {
+				if j < 0 || j == i {
+					continue
+				}
+				u := &toks[j]
+				if u.has("linknoun") || u.Fold == "link" || u.Fold == "links" {
+					taken[i], taken[j] = true, true
+					return "true"
+				}
+			}
+		}
+		return ""
+	case "target":
+		// "named X to Y"/"link X to Y"/"link for Y" — a preposição de
+		// destino introduz o caminho EXISTENTE que o link apontará
+		cues := map[string]bool{
+			"to": true, "para": true, "pra": true, "pro": true,
+			"for": true, "por": true, "towards": true,
+			"apontando": true, "pointing": true, "targeting": true,
+			"at": true,
+		}
+		for i, t := range toks {
+			if taken[i] || !cues[t.Fold] {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+4; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				// "apontando para X"/"pointing to X" — a preposição
+				// direcional depois do cue é ponte, não alvo
+				switch u.Fold {
+				case "para", "pra", "pro", "to", "a", "o", "em", "no":
+					continue
+				}
+				// "to file X"/"to the file X" — o substantivo-classe
+				// é ponte; o path vem depois
+				if nuFileCueWords[u.Fold] || nuArcTypeWord(u.Fold) {
+					continue
+				}
+				if taken[j] {
+					return ""
+				}
+				if len(u.Concs) > 0 && !u.Quoted {
+					return "" // palavra-conceito é predicado, não path
+				}
+				if !u.Quoted && !nuNameShaped(u.Raw) &&
+					!strings.ContainsAny(u.Raw, "/.$~") {
+					return ""
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+		}
+		return ""
+	case "path":
+		// "named X"/"called X"/"com o nome X" — depois do cue de nome
+		// vem o caminho do link novo; sem ele o pedido não tem lado
+		// novo definido ("create link for each file" → missing honesto)
+		for i, t := range toks {
+			if taken[i] || !t.has("nameattr") {
+				continue
+			}
+			// "with the same name" — nameattr de igualdade é phrasing,
+			// não cue de nome do link ('same' é filler: checar a fold
+			// ANTES de pular, senão ele escapa da peneira)
+			same := false
+			for k := i - 1; k >= 0 && k >= i-3; k-- {
+				u := &toks[k]
+				if u.Fold == "same" || u.Fold == "mesmo" || u.Fold == "mesma" ||
+					u.Fold == "mesmos" || u.Fold == "mesmas" {
+					same = true
+					break
+				}
+				if u.Filler || u.Slang {
+					continue
+				}
+				break
+			}
+			if same {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				if taken[j] {
+					return ""
+				}
+				taken[i], taken[j] = true, true
+				name := u.Raw
+				// "create link in DIR named X" — o path do link é
+				// DIR/X, não X na raiz do confinamento
+				if !strings.ContainsAny(name, "/\\") {
+					for k := 0; k+1 < len(toks); k++ {
+						switch toks[k].Fold {
+						case "in", "em", "no", "na", "inside", "under", "dentro":
+						default:
+							continue
+						}
+						for l := k + 1; l < len(toks) && l <= k+3; l++ {
+							v := &toks[l]
+							if v.Filler || v.Slang || nuArcTypeWord(v.Fold) ||
+								nuFileCueWords[v.Fold] {
+								continue
+							}
+							if l == j || taken[l] ||
+								(!v.Quoted && len(v.Concs) > 0) {
+								break
+							}
+							taken[k], taken[l] = true, true
+							return v.Raw + "/" + name
+						}
+					}
+				}
+				return name
+			}
+		}
+		// "create symlink subl to X"/"hard link foo to bar" — a palavra
+		// nua logo depois do substantivo-link (antes do cue de alvo) é
+		// o nome do link novo; sem nameattr ela ficava solta e o slot
+		// required saía missing. Nome de link é palavra livre — a
+		// posição após o substantivo JÁ é a evidência, não a forma.
+		linkNameCues := map[string]bool{
+			"to": true, "para": true, "pra": true, "pro": true,
+			"for": true, "por": true, "at": true, "named": true,
+			"called": true, "nome": true, "chamado": true, "in": true,
+			"em": true, "pointing": true, "targeting": true,
+			"apontando": true, "from": true, "de": true, "of": true,
+		}
+		for i, t := range toks {
+			// a âncora linknoun pode já estar taken ("hard link foo" —
+			// o slot hard marcou 'hard'+'link'): o que importa é o
+			// candidato livre depois dela
+			if !t.has("linknoun") && t.Fold != "link" &&
+				t.Fold != "links" && t.Fold != "symlink" &&
+				t.Fold != "symlinks" {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				if taken[j] || len(u.Concs) > 0 || u.has("linknoun") ||
+					linkNameCues[u.Fold] {
+					break
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+		}
+		return ""
 	}
 	return ""
 }
@@ -4137,6 +4575,16 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 			// hidden files under $D" tem dir=$D, não target=$D
 			if strings.HasPrefix(t.Raw, "$") {
 				continue
+			}
+			// path depois de cue de escopo é o ONDE (dir), nunca o alvo:
+			// "remove them under '/usr/ports/'" não deleta /usr/ports
+			if i > 0 {
+				switch toks[i-1].Fold {
+				case "under", "below", "in", "inside", "within", "into",
+					"em", "no", "na", "nos", "nas", "down", "abaixo",
+					"from", "de", "dentro":
+					continue
+				}
 			}
 			// "the folder src" / "directory data": substantivo SINGULAR
 			// cita o operando ("copy the folder src"). Plural é filtro
@@ -4727,7 +5175,7 @@ func nuDiskPath(toks []nuTok, taken map[int]bool) string {
 func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 	switch what {
 	case "type":
-		dir, file := false, false
+		dir, file, link := false, false, false
 		for i, t := range toks {
 			// "files/directories" tokeniza como um átomo só — a união
 			// pede os DOIS tipos (o default "any" do script responde)
@@ -4740,9 +5188,22 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 						"folder", "folders", "pasta", "pastas",
 						"diretorio", "diretório", "diretorios", "diretórios":
 						dir = true
+					case "symlink", "symlinks", "link", "links":
+						link = true
 					}
 				}
 				continue
+			}
+			switch {
+			// substantivo-link é TIPO quando nenhum outro slot o
+			// consumiu ("2 links" quantificado vira links:2, não tipo)
+			case t.has("linknoun") || t.Fold == "symlink" ||
+				t.Fold == "symlinks" || t.Fold == "link" || t.Fold == "links" ||
+				t.Fold == "atalho" || t.Fold == "atalhos":
+				if !taken[i] {
+					link = true
+					taken[i] = true
+				}
 			}
 			switch t.Fold {
 			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas":
@@ -4753,13 +5214,34 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					// preposições de escopo são fillers — checar a fold
 					// ANTES do skip, senão "in" some na peneira
 					switch toks[j].Fold {
-					case "in", "on", "em", "no", "na", "under", "inside", "sob", "through", "within":
+					case "in", "on", "em", "no", "na", "under", "inside", "sob", "through", "within",
+						"from", "de", "do", "da", "of":
 						scope = true
 					}
 					if toks[j].Filler || scope {
 						continue
 					}
 					break
+				}
+				// "the X directory tree/structure" — a dir-word é o
+				// NOME do recorte (a hierarquia sob X), não o tipo de
+				// objeto pedido: sem isso "broken symlinks in the X
+				// directory tree" virava type:dir e ignorava os links
+				if !scope {
+					for j := i + 1; j < len(toks) && j <= i+2; j++ {
+						u := &toks[j]
+						if u.Filler || u.Slang {
+							continue
+						}
+						switch u.Fold {
+						case "tree", "trees", "structure", "hierarchy",
+							"arvore", "árvore", "arvores", "árvores",
+							"estrutura", "estruturas", "hierarquia":
+							scope = true
+							taken[j] = true
+						}
+						break
+					}
 				}
 				if !scope {
 					dir = true
@@ -4772,6 +5254,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				dir = true
 			}
 		}
+		if link && !dir && !file {
+			return "link"
+		}
 		if dir == file {
 			return "" // both or neither: the script's "any" default applies
 		}
@@ -4779,6 +5264,92 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			return "dir"
 		}
 		return "file"
+	case "links":
+		// contagem de hardlinks: "exactly 2 links"/"have 2 links" —
+		// o número adjacente quantifica o substantivo link
+		for i, t := range toks {
+			if taken[i] || (!t.has("linknoun") && t.Fold != "link" &&
+				t.Fold != "links") {
+				continue
+			}
+			for j := i - 1; j >= 0 && j >= i-3; j-- {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				if nuIsNumber(u.Fold) {
+					taken[i], taken[j] = true, true
+					return u.Fold
+				}
+				break
+			}
+		}
+		return ""
+	case "orphan":
+		// symlink quebrado: "broken/dangling/cyclic/orphaned links" —
+		// o qualificador tem que valer pra palavra-link (não pra
+		// arquivo qualquer: "broken files" não é predicado suportado)
+		broken := map[string]bool{
+			"broken": true, "dangling": true, "cyclic": true,
+			"dead": true, "orphaned": true, "stale": true,
+			"quebrado": true, "quebrada": true, "quebrados": true,
+			"quebradas": true, "orfao": true, "orfão": true,
+			"orfa": true, "orfas": true, "órfã": true, "orfãs": true,
+			"corrompido": true, "corrompida": true,
+		}
+		for i, t := range toks {
+			if taken[i] || !broken[t.Fold] {
+				continue
+			}
+			for j := i - 4; j <= i+4 && j < len(toks); j++ {
+				if j < 0 || j == i {
+					continue
+				}
+				u := &toks[j]
+				if u.has("linknoun") || u.Fold == "link" || u.Fold == "links" {
+					// todo qualificador-broken do grupo é predicado —
+					// "broken and cyclic links" não deixa 'cyclic' solto
+					for k := i - 4; k <= i+4 && k < len(toks); k++ {
+						if k >= 0 && broken[toks[k].Fold] {
+							taken[k] = true
+						}
+					}
+					// o substantivo-link NÃO é marcado: ele é também o
+					// TYPE do pedido ("broken symlinks" = links órfãos)
+					// — o slot type o reivindica como type:link. Marcar
+					// aqui deixaria "directory tree" roubar o tipo.
+					return "true"
+				}
+			}
+		}
+		return ""
+	case "follow":
+		// "following symlinks"/"seguindo links" — o verbo follow só
+		// vale como flag -L quando o objeto é link ("the following
+		// files" é phrasing, nunca traversal)
+		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
+			switch t.Fold {
+			case "follow", "follows", "following", "followed",
+				"seguir", "seguindo", "siga", "sigam":
+			default:
+				continue
+			}
+			for j := i - 3; j <= i+3 && j < len(toks); j++ {
+				if j < 0 || j == i {
+					continue
+				}
+				u := &toks[j]
+				if u.has("linknoun") || u.Fold == "link" || u.Fold == "links" ||
+					u.Fold == "symlink" || u.Fold == "symlinks" {
+					taken[i], taken[j] = true, true
+					return "true"
+				}
+			}
+		}
+		return ""
 	case "sort":
 		for i, t := range toks {
 			if taken[i] {
@@ -5752,6 +6323,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"em": true, "no": true, "na": true, "nos": true, "nas": true,
 			"in": true, "inside": true, "under": true, "within": true, "dentro": true,
 			"into": true,
+			// "remove X from DIR"/"arquivos da pasta Y" — from/de é
+			// cue de ORIGEM=escopo; sem ele o path vazava pro target e
+			// o delete mass apagava a pasta inteira. ("of" inglês é
+			// genitivo — "count of duplicate lines" não tem dir
+			// "duplicate" — e fica de fora; gated por arcCtx abaixo)
+			"from": true, "de": true, "do": true, "da": true,
+			"dos": true, "das": true,
 			// "2 levels down the temp paths" — o 'down' da frase de
 			// profundidade é também o cue do escopo
 			"down": true, "abaixo": true,
@@ -5808,12 +6386,14 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"ext2": true, "ext3": true, "ext4": true, "ntfs": true,
 			"fat32": true, "vfat": true, "btrfs": true, "xfs": true,
 			"output": true, "input": true, "given": true, "specified": true,
+			"specfied": true, "specfic": true, "especificado": true,
+			"especificada": true, "determinado": true, "determinada": true,
 			"regular": true, "normal": true, "standard": true, "certain": true,
 			"particular": true, "specific": true, "common": true,
 			"where": true, "path": true, "location": true, "place": true,
 			// vocab de filesystem descreve o alvo, não um diretório —
 			// "in ext2 partitions" não tem dir "partitions"
-			"partition": true, "partitions": true, "filesystem": true,
+			"partition": true, "partitions": true,
 			"volume": true, "volumes": true, "mount": true, "mounts": true,
 			// unidade de contagem é atributo, não path — "with 20 lines"
 			// não tem dir "lines"
@@ -5951,7 +6531,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		arcCtx := false
 		for _, t := range toks {
-			if t.has("compress") || t.has("archiveverb") || t.has("extract") {
+			if t.has("compress") || t.has("archiveverb") || t.has("extract") ||
+				t.has("archive") {
 				arcCtx = true
 				break
 			}
@@ -5980,6 +6561,15 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			if arcCtx && nounCues[t.Fold] {
 				continue
+			}
+			// "create archive X from src"/"extrai tar de backup" — no
+			// contexto archive o from/de introduz a FONTE (slot srcs),
+			// nunca o escopo de busca
+			if arcCtx {
+				switch t.Fold {
+				case "from", "de", "do", "da", "dos", "das":
+					continue
+				}
 			}
 			// "no owner"/"no group": EN negation, not the PT "em+o" preposition
 			if t.Fold == "no" && i+1 < len(toks) && nuNegatableNouns[toks[i+1].Fold] {
@@ -6068,8 +6658,40 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue // a format spec is explained phrasing, not a path
 				}
 				if scopeFillers[u.Fold] {
+					// "in the entire filesystem" — filesystem inteiro
+					// é a raiz, não este projeto
+					for k := j + 1; k < len(toks) && k <= j+2; k++ {
+						v := &toks[k]
+						if v.Filler || v.Slang {
+							continue
+						}
+						if v.Fold == "filesystem" || v.Fold == "system" ||
+							v.Fold == "sistema" {
+							taken[i], taken[j], taken[k] = true, true, true
+							return "/"
+						}
+						break
+					}
 					taken[i], taken[j] = true, true
 					break // "no projeto"/"directory tree" falam DESTE escopo — consome a frase, não de um dir
+				}
+				if u.Fold == "filesystem" {
+					taken[i], taken[j] = true, true
+					return "/" // "in the filesystem" — a raiz toda
+				}
+				// qualquer candidato antes de "filesystem" é phrasing —
+				// "in the entrie filesystem" (typo ou não) tem dir=/,
+				// nunca dir=entrie
+				for k := j + 1; k < len(toks) && k <= j+3; k++ {
+					v := &toks[k]
+					if v.Filler || v.Slang {
+						continue
+					}
+					if v.Fold == "filesystem" {
+						taken[i], taken[j], taken[k] = true, true, true
+						return "/"
+					}
+					break
 				}
 				// "config files" — a palavra antes de files descreve o
 				// conjunto (*config*), não a pasta onde procurar.

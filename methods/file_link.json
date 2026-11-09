@@ -1,0 +1,84 @@
+{
+ "methods": [
+  {
+   "name": "link_create.symlink",
+   "intent": "link_create",
+   "priority": 10,
+   "doc": "'create symbolic link X to Y': os.Symlink + prova readlink — sucesso só se o link existe E aponta pro alvo declarado",
+   "pre": [
+    {
+     "fact": "slot.link",
+     "op": "set"
+    },
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.hard",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "symlink",
+      "path": "$slot.link",
+      "to": "$slot.target"
+     },
+     "out": "w"
+    }
+   ],
+   "verify": [
+    {
+     "check": "link_points",
+     "arg": "$slot.link",
+     "arg2": "$slot.target"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 50
+  },
+  {
+   "name": "link_create.hard",
+   "intent": "link_create",
+   "priority": 10,
+   "doc": "'create hard link X to Y': os.Link + prova de inode — sucesso só se o nome novo é o mesmo arquivo do alvo",
+   "pre": [
+    {
+     "fact": "slot.link",
+     "op": "set"
+    },
+    {
+     "fact": "slot.target",
+     "op": "set"
+    },
+    {
+     "fact": "slot.hard",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "file_op",
+     "in": {
+      "op": "link",
+      "path": "$slot.link",
+      "to": "$slot.target"
+     },
+     "out": "w"
+    }
+   ],
+   "verify": [
+    {
+     "check": "link_points",
+     "arg": "$slot.link",
+     "arg2": "$slot.target"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 50
+  }
+ ]
+}

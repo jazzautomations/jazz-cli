@@ -79,8 +79,13 @@ if ext is not None:
             fail("ext must be a plain extension like 'log' or '.py'")
         exts.append(piece)
 kind = str(arg("type", "any")).lower()
-if kind not in ("any", "file", "dir"):
-    fail("type must be any, file or dir")
+if kind not in ("any", "file", "dir", "link"):
+    fail("type must be any, file, dir or link")
+follow_links = as_bool(ARGS.get("follow"), False)
+# symlink quebrado/cíclico: o lstat vê o link, o stat do alvo falha
+orphan_only = as_bool(ARGS.get("orphan"), False)
+# contagem de hardlinks: "exactly 2 links" → st_nlink == N
+links_eq = as_int("links", -1, -1, 1 << 30)
 min_size = as_int("min_size", 0, 0, 1 << 40)
 max_size = as_int("max_size", 1 << 40, 0, 1 << 40)
 if min_size > max_size:
@@ -178,11 +183,15 @@ def bounded_path(value):
 
 tops_raw = arg("path", ".").split("|")
 top_arg = path_in_root(tops_raw[0])
-if os.path.islink(top_arg):
+top_is_link = os.path.islink(top_arg)
+# busca de links (type/orphan/links) enxerga o próprio top-symlink;
+# follow resolve e caminha (o bounded_path já confina o realpath)
+if top_is_link and not (follow_links or kind == "link" or
+                        orphan_only or links_eq >= 0):
     fail("path is a symlink (not followed): %s" % rel(top_arg))
 tops = [bounded_path(v) for v in tops_raw]
 for tp in tops:
-    if not os.path.exists(tp):
+    if not os.path.exists(tp) and not os.path.islink(tp):
         fail("path not found: %s" % rel(tp))
 top = tops[0]
 def ref_ts(p):
@@ -205,7 +214,8 @@ if older_file is not None:
     older_strict = True
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
         or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"
-        or line_filter or newer_file or older_file):
+        or line_filter or newer_file or older_file or orphan_only or
+        links_eq >= 0):
     # "find all files under X" is a literal request — unbounded in intent,
     # still bounded by limit/MAX_SCAN like every other query
     name = "*"
@@ -230,14 +240,26 @@ def depth_of(p):
 def match(p, base, st):
     is_dir = stat.S_ISDIR(st.st_mode)
     is_file = stat.S_ISREG(st.st_mode)
-    if not (is_dir or is_file):
-        return False  # symlink, fifo, socket: not a find hit
+    is_link = stat.S_ISLNK(st.st_mode)
+    if not (is_dir or is_file or is_link):
+        return False  # fifo, socket: not a find hit
+    # links só entram quando pedidos — type:link, orphan, links:N ou
+    # a enumeração "any" (find(1) lista symlinks do mesmo jeito)
+    if is_link and kind in ("file", "dir") and not orphan_only:
+        return False
     d = depth_of(p)
     if not (min_depth <= d <= max_depth):
         return False
     if kind == "file" and not is_file:
         return False
     if kind == "dir" and not is_dir:
+        return False
+    if kind == "link" and not is_link:
+        return False
+    # quebrado/cíclico: existe o lstat do link, falha o stat do alvo
+    if orphan_only and not (is_link and not os.path.exists(p)):
+        return False
+    if links_eq >= 0 and st.st_nlink != links_eq:
         return False
     if name and not fnmatch.fnmatch(base.lower(), name_l):
         return False
@@ -286,16 +308,30 @@ def _roots():
         if os.path.isfile(tp):
             yield (tp, "__FILE__", None, None)
         else:
-            for d, ds, fs in os.walk(tp, followlinks=False):
+            for d, ds, fs in os.walk(tp, followlinks=follow_links):
                 yield (tp, d, ds, fs)
 
+
+# o próprio top pode ser um symlink ("find broken links in LINKED") —
+# quando a busca é sobre links, o top entra como candidato além de
+# abrir o passeio no caminho já resolvido
+if top_is_link:
+    try:
+        st = os.lstat(top_arg)
+        if match(top_arg, os.path.basename(top_arg.rstrip("/")), st):
+            hits.append((rel(top_arg).replace(os.sep, "/"), st.st_size,
+                         "link", st.st_mtime))
+    except (IOError, OSError):
+        pass
 
 for top, d, dirs, files in _roots():
     if d == "__FILE__":
         try:
             st = os.lstat(top)
             if match(top, os.path.basename(top), st):
-                hits.append((rel(top).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
+                hits.append((rel(top).replace(os.sep, "/"), st.st_size,
+                             "link" if stat.S_ISLNK(st.st_mode) else "file",
+                             st.st_mtime))
             scanned += 1
         except (IOError, OSError) as e:
             fail("cannot stat: %s" % e)
@@ -305,6 +341,19 @@ for top, d, dirs, files in _roots():
         if x in SKIP or (not include_hidden and hidden(x)):
             continue
         if os.path.islink(os.path.join(d, x)):
+            # symlink de diretório é CANDIDATO nas buscas de link — e
+            # com follow ele também desce (os.walk followlinks)
+            if follow_links:
+                pruned.append(x)
+            p = os.path.join(d, x)
+            try:
+                st = os.lstat(p)
+            except (IOError, OSError):
+                continue
+            scanned += 1
+            if match(p, x, st):
+                hits.append((rel(p).replace(os.sep, "/"), 0, "link",
+                             st.st_mtime))
             continue
         pruned.append(x)
     dirs[:] = sorted(pruned)
@@ -327,7 +376,9 @@ for top, d, dirs, files in _roots():
             continue
         scanned += 1
         if match(p, f, st):
-            hits.append((rel(p).replace(os.sep, "/"), st.st_size, "file", st.st_mtime))
+            hits.append((rel(p).replace(os.sep, "/"), st.st_size,
+                         "link" if stat.S_ISLNK(st.st_mode) else "file",
+                         st.st_mtime))
     if scanned >= MAX_SCAN:
         truncated, stop = True, True
         warnings.append("stopped at %d entries" % MAX_SCAN)

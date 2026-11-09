@@ -1474,3 +1474,129 @@ func TestNLUSizeGuards(t *testing.T) {
 		t.Errorf("maiores: %v", in.Slots)
 	}
 }
+
+func TestNLUNameExactGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "named X under PATH" — o path depois de under é dir, nunca target;
+	// delete precisa de name+dir+mass com confiança executável (them é
+	// anáfora/filler, não palavra solta)
+	in := m.Parse("Find directories named 'work' under '/usr/ports/' directory tree and remove them", w)
+	if in.Name != "delete_file" || in.Slots["dir"] != "/usr/ports/" ||
+		in.Slots["name"] != "work" || in.Slots["target"] != "" ||
+		in.Slots["mass"] == "" || in.Confidence < 0.6 {
+		t.Errorf("named under remove: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	in = m.Parse("Find files named 'core' in or below the directory /tmp and delete them", w)
+	if in.Name != "delete_file" || in.Slots["dir"] != "/tmp" ||
+		in.Slots["name"] != "core" || in.Confidence < 0.6 {
+		t.Errorf("named delete: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "doesn't contain a file named 'bin'" — contenção estrutural NÃO é
+	// busca de conteúdo nem filtro de nome; 'bin' é o item contido e o
+	// pedido fica honestamente sem suporte (conf baixa → recusa)
+	in = m.Parse("Find all directories under /home that doesn't contain a file/directory named 'bin'", w)
+	if in.Slots["name"] == "bin" || in.Slots["pattern"] == "bin" ||
+		(in.Name == "text_grep" && in.Confidence >= 0.6) {
+		t.Errorf("contain named: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "entrie filesystem" (typo) — o escopo é a raiz; a palavra defeituosa
+	// antes de filesystem é phrasing, nunca dir
+	in = m.Parse("Find all files/directories named 'apt' in the entrie filesystem", w)
+	if in.Slots["dir"] != "/" || in.Slots["name"] != "apt" {
+		t.Errorf("entrie filesystem: %v", in.Slots)
+	}
+	// "specfied directory" — adjetivo de escopo vago é phrasing; o glob
+	// não absorve o typo ("*blast* specfied" seria nome inexistente)
+	in = m.Parse("Find file names *blast* in specfied directory", w)
+	if in.Slots["name"] != "*blast*" || in.Slots["dir"] == "specfied" {
+		t.Errorf("specfied: %v", in.Slots)
+	}
+	// "under 'Books' ... located in user's home" — dir relativo +
+	// cláusula de home compõe "~/Books"
+	in = m.Parse("Find all files/directories named 'Waldo' under 'Books' directory tree that is located in user's home directory", w)
+	if in.Slots["dir"] != "~/Books" || in.Slots["name"] != "Waldo" {
+		t.Errorf("waldo home: %v", in.Slots)
+	}
+	// "under / directory" — a raiz citada é dir, não target
+	in = m.Parse("Find all directories named postgis-2.0.0 under / directory", w)
+	if in.Slots["dir"] != "/" || in.Slots["name"] != "postgis-2.0.0" {
+		t.Errorf("postgis: %v", in.Slots)
+	}
+}
+
+func TestNLUSymlinkGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// criação básica: "named X to Y" — X é o link NOVO, Y o alvo
+	in := m.Parse(`Create a symbolic link named "mylink" to "target.txt"`, w)
+	if in.Name != "link_create" || in.Slots["link"] != "mylink" ||
+		in.Slots["target"] != "target.txt" || in.Confidence < 0.6 {
+		t.Errorf("link create: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "to file X" — 'file' é substantivo-ponte, não parte do alvo
+	in = m.Parse(`create a symbolic link named "www" to file "www1"`, w)
+	if in.Name != "link_create" || in.Slots["link"] != "www" ||
+		in.Slots["target"] != "www1" || in.Confidence < 0.6 {
+		t.Errorf("to file: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "in directory D named X to Y" — compõe link=D/X
+	in = m.Parse(`create a symbolic link in directory "dest" named "lk" to "src/f"`, w)
+	if in.Name != "link_create" || in.Slots["link"] != "dest/lk" ||
+		in.Slots["target"] != "src/f" || in.Confidence < 0.6 {
+		t.Errorf("dest compose: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// hard link separado: "hard" + "link" → hard=true (os.Link, não symlink)
+	in = m.Parse(`create a hard link named "h" to "orig"`, w)
+	if in.Name != "link_create" || in.Slots["hard"] != "true" ||
+		in.Slots["link"] != "h" || in.Slots["target"] != "orig" ||
+		in.Confidence < 0.6 {
+		t.Errorf("hard link: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "broken symlinks" = type:link AND orphan:true — o substantivo-link
+	// é os dois predicados; sem type:link o find retornaria qq órfão
+	in = m.Parse(`Find all broken symlinks under /tmp`, w)
+	if in.Name != "file_find" || in.Slots["orphan"] != "true" ||
+		in.Slots["type"] != "link" || in.Slots["dir"] != "/tmp" ||
+		in.Confidence < 0.6 {
+		t.Errorf("broken find: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "broken and cyclic" — segundo qualificador não vaza pra name
+	in = m.Parse(`List all broken symlinks including cyclic links under current directory`, w)
+	if in.Name != "file_find" || in.Slots["orphan"] != "true" ||
+		in.Slots["type"] != "link" || in.Slots["name"] != "" {
+		t.Errorf("cyclic: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "X directory tree" é phrasing de escopo — o type do delete é o
+	// link (orphan), nunca dir; type:dir apagaria diretórios inteiros
+	in = m.Parse(`Remove all broken symlinks from the /usr/ports/packages directory tree`, w)
+	if in.Name != "delete_file" || in.Slots["type"] != "link" ||
+		in.Slots["orphan"] != "true" ||
+		in.Slots["dir"] != "/usr/ports/packages" {
+		t.Errorf("broken delete: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "following symlinks" → follow=true; 'if needed' é phrasing
+	in = m.Parse(`Find all files/directories under /myfiles following symlinks if needed`, w)
+	if in.Name != "file_find" || in.Slots["follow"] != "true" ||
+		in.Slots["dir"] != "/myfiles" || in.Slots["name"] != "" {
+		t.Errorf("follow: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "exactly 2 links" — contagem de hardlinks, não tipo
+	in = m.Parse(`search in root ( / ) directory downwards all files which have exactly 2 links`, w)
+	if in.Name != "file_find" || in.Slots["links"] != "2" ||
+		in.Slots["type"] == "link" {
+		t.Errorf("links count: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "pointing to anywhere within X" — restrição por alvo do link não
+	// é predicado suportado: o operando cai no Dropped e derruba a
+	// confiança (superset de todos os links seria falso sucesso)
+	in = m.Parse(`Search for symlinks pointing to anywhere within /mnt/oldname/`, w)
+	if len(in.Dropped) == 0 || in.Confidence > 0.6 {
+		t.Errorf("pointing: %s %.2f %v dropped=%v",
+			in.Name, in.Confidence, in.Slots, in.Dropped)
+	}
+	// "same name" não é cue de nome — mass-link sem path/target fica
+	// honestamente missing, nunca inventa link:directory
+	in = m.Parse(`Create symlinks to all /home/folder1/*.txt files with the same name in current directory`, w)
+	if in.Slots["link"] == "directory" || in.Slots["link"] == "name" {
+		t.Errorf("same name: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+}

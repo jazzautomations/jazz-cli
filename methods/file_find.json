@@ -42,7 +42,10 @@
       "max_lines": "$slot.max_lines",
       "icase": "$slot.icase",
       "newer_date": "$slot.newer_date",
-      "older_date": "$slot.older_date"
+      "older_date": "$slot.older_date",
+      "follow": "$slot.follow",
+      "links": "$slot.links",
+      "orphan": "$slot.orphan"
      },
      "out": "res"
     },
@@ -104,7 +107,10 @@
       "max_lines": "$slot.max_lines",
       "icase": "$slot.icase",
       "newer_date": "$slot.newer_date",
-      "older_date": "$slot.older_date"
+      "older_date": "$slot.older_date",
+      "follow": "$slot.follow",
+      "links": "$slot.links",
+      "orphan": "$slot.orphan"
      },
      "out": "res"
     }

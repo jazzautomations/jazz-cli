@@ -73,7 +73,10 @@
       "limit": "32",
       "icase": "$slot.icase",
       "newer_date": "$slot.newer_date",
-      "older_date": "$slot.older_date"
+      "older_date": "$slot.older_date",
+      "orphan": "$slot.orphan",
+      "follow": "$slot.follow",
+      "links": "$slot.links"
      },
      "out": "cand"
     },

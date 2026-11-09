@@ -3223,6 +3223,35 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 				return false, false, "o arquivo não existe: " + rel
 			}
 			proofs = append(proofs, brProofFile(rel, fi))
+		case "link_points":
+			// prova do link_create: o link existe E aponta pro alvo
+			// pedido — soft compara o readlink literal, hard compara
+			// inode (mesmo arquivo, outro nome)
+			rel, _ := arg.(string)
+			tgt, _ := cx.subst(c.Arg2).(string)
+			if rel == "" || tgt == "" {
+				return false, false, "link_points sem link ou alvo"
+			}
+			abs := filepath.Join(cx.env.Root, filepath.FromSlash(rel))
+			fi, err := os.Lstat(abs)
+			if err != nil {
+				return false, false, "o link não existe: " + rel
+			}
+			if fi.Mode()&os.ModeSymlink != 0 {
+				got, err := os.Readlink(abs)
+				if err != nil || got != tgt {
+					return false, false, fmt.Sprintf("link %s aponta pra %q, não %q", rel, got, tgt)
+				}
+				proofs = append(proofs, rel+" → "+got)
+				break
+			}
+			// não é symlink: hard link prova mesmo inode do alvo
+			tAbs, _, e := brSafePath(cx.env.Root, tgt)
+			tFi, e2 := os.Stat(tAbs)
+			if e != nil || e2 != nil || !os.SameFile(fi, tFi) {
+				return false, false, rel + " não é link de " + tgt
+			}
+			proofs = append(proofs, rel+" == "+tgt)
 		case "file_gone":
 			rel, _ := arg.(string)
 			if rel == "" {

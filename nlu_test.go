@@ -635,7 +635,9 @@ func TestNLUFileMove(t *testing.T) {
 		"move every jpg to the images directory":              "file_move",
 		"find directories named work and move them to trash":  "file_move",
 		"move all files to backup":                            "file_move",
-		"move them to another folder":                         "file_move",
+		// "another folder" é destino VAGO — o extrator não inventa
+		// path; dest required fica missing e o parse recusa honesto
+		"move them to another folder":                         "none",
 		"renomeia a.txt para b.txt":                           "rename",
 		"find files and delete them":                          "none",
 	}

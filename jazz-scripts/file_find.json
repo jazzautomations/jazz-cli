@@ -29,9 +29,23 @@
     "enum": [
      "any",
      "file",
-     "dir"
+     "dir",
+     "link"
     ],
-    "description": "entry kind (default any)"
+    "description": "entry kind (default any; 'link' matches symlinks via lstat)"
+   },
+   "orphan": {
+    "type": "boolean",
+    "description": "only broken/cyclic symlinks (link exists, target does not resolve)"
+   },
+   "follow": {
+    "type": "boolean",
+    "description": "follow symlinked directories during the walk (default false)"
+   },
+   "links": {
+    "type": "integer",
+    "minimum": 0,
+    "description": "exact hard-link count filter (st_nlink == N)"
    },
    "min_size": {
     "type": "integer",

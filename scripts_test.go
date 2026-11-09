@@ -1039,6 +1039,58 @@ func TestScriptsEachBuiltin(t *testing.T) {
 			t.Fatalf("multi-root find: %v", v)
 		}
 	})
+	run("file_find", func(t *testing.T) {
+		// type:link + orphan: symlink quebrado casa os dois predicados;
+		// link vivo casa type mas não orphan
+		scWrite(t, root, "fl/real.txt", "x\n")
+		if err := os.Symlink("real.txt", filepath.Join(root, "fl/live")); err != nil {
+			t.Skipf("sem symlink: %v", err)
+		}
+		if err := os.Symlink("gone.txt", filepath.Join(root, "fl/dead")); err != nil {
+			t.Skipf("sem symlink: %v", err)
+		}
+		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "fl", "type": "link"})
+		d := scDataOf(v)
+		if !scOK(v) || d["count"] != float64(2) {
+			t.Fatalf("type:link: %v", v)
+		}
+		v, _ = scCall(t, tb, "file_find", map[string]any{"path": "fl", "type": "link", "orphan": "true"})
+		d = scDataOf(v)
+		if !scOK(v) || d["count"] != float64(1) {
+			t.Fatalf("orphan: %v", v)
+		}
+	})
+	run("file_find", func(t *testing.T) {
+		// links=N: contagem de hardlinks (nlink) — dois nomes, um inode
+		scWrite(t, root, "fh/orig.txt", "x\n")
+		if err := os.Link(filepath.Join(root, "fh/orig.txt"), filepath.Join(root, "fh/twin.txt")); err != nil {
+			t.Skipf("sem hardlink: %v", err)
+		}
+		scWrite(t, root, "fh/solo.txt", "y\n")
+		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "fh", "links": "2"})
+		d := scDataOf(v)
+		if !scOK(v) || d["count"] != float64(2) {
+			t.Fatalf("links=2: %v", v)
+		}
+	})
+	run("file_find", func(t *testing.T) {
+		// follow=true atravessa symlink-dir; sem ele a dir-link é só
+		// candidata, não é percorrida
+		scWrite(t, root, "fd/realdir/in.txt", "x\n")
+		if err := os.Symlink("realdir", filepath.Join(root, "fd/ldir")); err != nil {
+			t.Skipf("sem symlink: %v", err)
+		}
+		v, _ := scCall(t, tb, "file_find", map[string]any{"path": "fd", "type": "file"})
+		d := scDataOf(v)
+		if !scOK(v) || d["count"] != float64(1) {
+			t.Fatalf("no-follow: %v", v)
+		}
+		v, _ = scCall(t, tb, "file_find", map[string]any{"path": "fd", "type": "file", "follow": "true"})
+		d = scDataOf(v)
+		if !scOK(v) || d["count"] != float64(2) {
+			t.Fatalf("follow: %v", v)
+		}
+	})
 	run("file_split", func(t *testing.T) {
 		scWrite(t, root, "fs/big.txt", "1\n2\n3\n4\n5\n")
 		v, _ := scCall(t, tb, "file_split", map[string]any{"file": "fs/big.txt", "lines": 2})
