@@ -3290,7 +3290,8 @@
       "ipaddr",
       "pubnet",
       "remote",
-      "host"
+      "host",
+      "count"
      ]
     }
    ],

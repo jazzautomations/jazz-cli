@@ -2866,4 +2866,18 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
 		}
 	}
+	// verbo-count à esquerda torna "erros" o objeto de contagem, não
+	// pedido de fix — o classificador não decide empate conceitual
+	for q, want := range map[string]string{
+		"conta os erros no app.log":    "text_count",
+		"quantos erros tem no app.log": "text_count",
+		"conta os erros":               "text_count",
+		"conserta os erros":            "fix",
+		"corrije o erro do build":      "fix",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
 }
