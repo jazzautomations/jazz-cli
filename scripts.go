@@ -316,10 +316,11 @@ func scSignature(schema map[string]any) string {
 	if len(alts) > 0 {
 		out = append(out, strings.Join(alts, "|"))
 	}
-	// at most 2 optional args by name, "+N" for the rest: the spec rides every
-	// request, and a wrong/unknown argument already returns the full schema
+	// at most 1 optional arg by name when there are more than 2, "+N" for the
+	// rest: the spec rides every request, and a wrong/unknown argument already
+	// returns the full schema
 	if len(opt) > 2 {
-		opt = append(opt[:2:2], fmt.Sprintf("+%d", len(opt)-2))
+		opt = append(opt[:1:1], fmt.Sprintf("+%d", len(opt)-1))
 	}
 	return strings.Join(append(out, opt...), ",")
 }
@@ -630,6 +631,17 @@ func (r *scRegistry) scExec(ctx context.Context, d *scDef, args map[string]any, 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = root
 	env := append(scrubEnv(os.Environ()), "JAZZ_ROOT="+root, "PYTHONDONTWRITEBYTECODE=1", "PYTHONIOENCODING=utf-8")
+	if d.Name == "env_get" {
+		// env_get reports whether a variable is set even when scrubEnv hid its
+		// value: it gets the names (never values) via JAZZ_ENV_NAMES.
+		var names []string
+		for _, kv := range os.Environ() {
+			k, _, _ := strings.Cut(kv, "=")
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		env = append(env, "JAZZ_ENV_NAMES="+strings.Join(names, ","))
+	}
 	if d.Run == "sh" {
 		for k, v := range args {
 			if !scNameRe.MatchString(k) {

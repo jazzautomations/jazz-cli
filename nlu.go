@@ -7132,6 +7132,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				}
 				// the words no rule explained, as typed
 				var parts []string
+				var held []int
 				clause := false
 				for _, i := range res {
 					if taken[i] {
@@ -7197,6 +7198,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if m.slotTokOK(kinds, &toks[i], w) {
 							parts = append(parts, toks[i].Raw)
 							taken[i] = true
+							held = append(held, i)
 							break
 						}
 						continue
@@ -7207,6 +7209,11 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						}
 						if toks[i].has("outtgt") || toks[i].has("nametgt") || toks[i].has("timeref") {
 							continue // destino de escrita / predicado de nome / referência temporal
+						}
+						// a palavra entre aspas é o valor inteiro: solta
+						// as acumuladas até aqui pros slots seguintes
+						for _, j := range held {
+							delete(taken, j)
 						}
 						parts = []string{toks[i].Raw}
 						taken[i] = true
@@ -7339,6 +7346,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					parts = append(parts, toks[i].Raw)
 					taken[i] = true
+					held = append(held, i)
 					if !kinds["text"] || len(parts) >= 4 {
 						break
 					}
