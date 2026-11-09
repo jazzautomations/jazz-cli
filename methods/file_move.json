@@ -129,7 +129,11 @@
       "older_date": "$slot.older_date",
       "newer_min": "$slot.newer",
       "older_min": "$slot.older",
-      "time_field": "$slot.tfield"
+      "time_field": "$slot.tfield",
+      "min_size": "$slot.min_size",
+      "max_size": "$slot.max_size",
+      "empty": "$slot.empty",
+      "max_depth": "$slot.max_depth"
      },
      "out": "cand"
     },
@@ -189,7 +193,11 @@
       "older_date": "$slot.older_date",
       "newer_min": "$slot.newer",
       "older_min": "$slot.older",
-      "time_field": "$slot.tfield"
+      "time_field": "$slot.tfield",
+      "min_size": "$slot.min_size",
+      "max_size": "$slot.max_size",
+      "empty": "$slot.empty",
+      "max_depth": "$slot.max_depth"
      },
      "out": "cand"
     },

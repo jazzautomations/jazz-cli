@@ -2423,6 +2423,30 @@
       "text"
      ],
      "required": false
+    },
+    "min_size": {
+     "from": "find:min_size",
+     "kinds": [
+      "text"
+     ]
+    },
+    "max_size": {
+     "from": "find:max_size",
+     "kinds": [
+      "text"
+     ]
+    },
+    "empty": {
+     "from": "find:empty",
+     "kinds": [
+      "text"
+     ]
+    },
+    "max_depth": {
+     "from": "find:max_depth",
+     "kinds": [
+      "text"
+     ]
     }
    }
   },

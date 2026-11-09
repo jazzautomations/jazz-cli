@@ -1439,3 +1439,38 @@ func TestNLUHiddenDotGuards(t *testing.T) {
 		t.Errorf("filter phrasing: %v", in.Slots)
 	}
 }
+
+func TestNLUSizeGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "empty X" é predicado (empty:true), nunca name "empty"
+	in := m.Parse("Find all empty directories under /tmp", w)
+	if in.Slots["empty"] != "true" || in.Slots["name"] == "empty" ||
+		in.Slots["dir"] != "/tmp" {
+		t.Errorf("empty dirs: %v", in.Slots)
+	}
+	// "greater than 1MB and move them" — o filtro de tamanho sobrevive
+	// ao move; sem ele o each moveria TUDO (silent-wrong catastrófico)
+	in = m.Parse("Find all files in the current directory tree whose size is greater than 1MB, and move them to the \"files\" folder", w)
+	if in.Name != "file_move" || in.Slots["min_size"] == "" ||
+		in.Slots["dest"] != "files" {
+		t.Errorf("move size filter: %s %v", in.Name, in.Slots)
+	}
+	// "search X folder for files larger than N" — 'for' é escopo, não
+	// grep; 'Movies' é nome real (typo-repair não pode virar 'moves');
+	// user's home + subpasta vira "~/Movies"
+	in = m.Parse("Search the Movies folder in the user's home directory for files larger than 1024 megabytes in size", w)
+	if in.Name != "file_find" || in.Slots["dir"] != "~/Movies" ||
+		in.Slots["min_size"] == "" || in.Slots["sort"] != "" {
+		t.Errorf("movies home: %s %v", in.Name, in.Slots)
+	}
+	// comparativo com 'than' é predicado de tamanho, não sort
+	in = m.Parse("display all the files in the home folder which are smaller than 500 bytes", w)
+	if in.Slots["sort"] == "size" || in.Slots["max_size"] == "" {
+		t.Errorf("smaller than: %v", in.Slots)
+	}
+	// superlativo PT sem comparação é sort=size
+	in = m.Parse("lista os maiores arquivos", w)
+	if in.Slots["sort"] != "size" {
+		t.Errorf("maiores: %v", in.Slots)
+	}
+}

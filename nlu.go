@@ -792,6 +792,39 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			t.Concs = kept
 		}
 	}
+	// "search the X folder FOR files larger than..." — o 'for' introduz
+	// o conjunto enumerável com predicado, não um padrão de conteúdo: o
+	// grepword residual vetava o file_find e caía no classifier
+	for i := range out {
+		t := &out[i]
+		switch t.Fold {
+		case "for", "por", "para":
+		default:
+			continue
+		}
+		if !t.has("grepword") {
+			continue
+		}
+		for j := i + 1; j < len(out) && j <= i+3; j++ {
+			u := &out[j]
+			if u.Filler {
+				continue
+			}
+			switch u.Fold {
+			case "files", "file", "arquivos", "arquivo", "documents",
+				"documentos", "images", "imagens", "dirs", "directories",
+				"diretorios", "diretórios", "folders", "pastas", "ones":
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "grepword" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+			}
+			break
+		}
+	}
 	// "the user's home directory" — 'user' é possessivo do escopo ~,
 	// não filtro de owner: o conceito user/env vetaria o file_find e
 	// rotearia pra perm_find ("ends in .tar-gz" com owner:h)
@@ -2452,6 +2485,11 @@ var nuFormatWords = map[string]bool{
 	"invisible": true, "oculto": true, "oculta": true,
 	"ocultos": true, "ocultas": true, "escondido": true,
 	"escondida": true, "escondidos": true, "escondidas": true,
+	// predicado de conjunto vazio — "empty directories" não tem name
+	// "empty" (o slot empty já cobre; um nome literal vem só via
+	// nametgt "named empty")
+	"empty": true, "vazio": true, "vazia": true,
+	"vazios": true, "vazias": true,
 }
 
 // nuAllFormatWords: alternância "normal/regular"/"files-or-dirs" — todo
@@ -4747,7 +4785,31 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				continue
 			}
 			switch t.Fold {
-			case "maior", "maiores", "largest", "biggest", "larger", "bigger", "heaviest", "pesado", "pesada", "pesados", "pesadas", "menor", "menores", "smallest":
+			case "larger", "bigger", "smaller":
+				// comparativo EN é predicado de TAMANHO ("larger than
+				// 1MB" → min_size), nunca ordenação — superlativo
+				// (largest) é que pede sort; sem 'than' fica ambíguo
+				continue
+			case "maior", "menor", "maiores", "menores":
+				// PT "os maiores arquivos" é superlativo; "maior que
+				// 1MB" é predicado de tamanho → não ordena
+				cmp := false
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					u := &toks[j]
+					if u.Filler {
+						continue
+					}
+					cmp = u.Fold == "que" || u.Fold == "de" ||
+						u.Fold == "do" || u.Fold == "than"
+					break
+				}
+				if cmp {
+					continue
+				}
+				taken[i] = true
+				return "size"
+			case "largest", "biggest", "heaviest", "smallest",
+				"pesado", "pesada", "pesados", "pesadas":
 				taken[i] = true
 				return "size"
 			case "newest", "latest", "oldest", "ultimo", "último", "ultima", "última",
@@ -5854,6 +5916,12 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"ones": true, "oculto": true, "oculta": true,
 			"ocultos": true, "ocultas": true, "escondido": true,
 			"escondida": true, "invisible": true,
+			// "on the system" é o filesystem inteiro, não uma pasta
+			// chamada system — o escopo fica sem dir (honesto)
+			"system": true, "sistema": true, "machine": true,
+			"maquina": true, "máquina": true, "computer": true,
+			"computador": true, "host": true, "server": true,
+			"servidor": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -6019,6 +6087,22 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					for k := j + 1; k < len(toks) && k <= j+3; k++ {
 						if toks[k].Fold == "home" || toks[k].Fold == "casa" {
 							taken[i], taken[j], taken[k] = true, true, true
+							// "the Movies folder in user's home" — o
+							// substantivo-cue carrega o nome da subpasta:
+							// escopo composto "~/Movies", nunca "~" pelado
+							for b := i - 1; b >= 0 && b >= i-2; b-- {
+								v := &toks[b]
+								if v.Filler || v.Slang || taken[b] || nuIsNumber(v.Fold) {
+									continue
+								}
+								if dirCues[v.Fold] || scopeFillers[v.Fold] ||
+									notDirWords[v.Fold] || v.has("nameattr") ||
+									nuPureExt(v.Fold) || strings.HasPrefix(v.Raw, "$") {
+									break
+								}
+								taken[b] = true
+								return "~/" + v.Raw
+							}
 							return "~"
 						}
 					}
