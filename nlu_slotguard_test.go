@@ -2107,11 +2107,40 @@ func TestNLUCorpusMineGuards(t *testing.T) {
 		"Go into the directory whose name is selected in the X window system, ie. double-clicked in a terminal window.",
 		"Creates temporary file in a TMPDIR folder with name like tmp.XXXXXXXXXX.",
 		`Mathematically sum each line in "infile"`,
-		"change the permission of all php files in current folder. Plus symbol at the end is used to give multiple files as input to the chmod command",
 	} {
 		in := m.Parse(text, w)
 		if nuPredict(in) != "none" {
 			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+
+	// perm_set sem payload (sem mode/owner/group/sym*) não executa
+	// chmod nenhum — o único método aplicável é o 'ask' que reporta
+	// needs_input. Cobertura de slot não salva mutação sem alvo.
+	lib, err := mhLibrary()
+	if err != nil {
+		t.Skip("methods: ", err)
+	}
+	for _, text := range []string{
+		"change the permission of all php files in current folder. Plus symbol at the end is used to give multiple files as input to the chmod command",
+		"change permissions recursively on build/",
+	} {
+		in := m.Parse(text, w)
+		if in.Name != "perm_set" {
+			t.Fatalf("payload-less chmod deve rotear perm_set: %s -> %s", text, in.Name)
+		}
+		facts := map[string]string{}
+		for k, v := range in.Slots {
+			facts["slot."+k] = v
+		}
+		var applicable []string
+		for _, mt := range lib["perm_set"] {
+			if mhApplicable(mt, facts) {
+				applicable = append(applicable, mt.Name)
+			}
+		}
+		if len(applicable) != 1 || applicable[0] != "perm_set.ask" {
+			t.Errorf("sem payload só 'ask' pode aplicar: %s -> %v", text, applicable)
 		}
 	}
 }
@@ -2256,5 +2285,79 @@ func TestNLUSysClusterGuards(t *testing.T) {
 		if nuPredict(in) != "none" {
 			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
 		}
+	}
+}
+
+// Pacote dep/sys/read: phrasing de gerenciador ("npm install X",
+// "o pacote X") alimenta dep, não o nome do gerenciador; variável
+// SCREAMING junto a cue de var alimenta env_get.name; consulta de
+// pacotes instalados não é instalação; glob solto / spec de formato
+// / histórico de shell / impersonação / var-name vão pro Dropped.
+func TestNLUDepSysGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, c := range []struct {
+		text   string
+		intent string
+		want   map[string]string
+	}{
+		{"pip install flask", "install_dep", map[string]string{"dep": "flask"}},
+		{"npm install requests", "install_dep", map[string]string{"dep": "requests"}},
+		{"instala o pacote requests", "install_dep", map[string]string{"dep": "requests"}},
+		{"Installs package 'mysql'", "install_dep", map[string]string{"dep": "mysql"}},
+		{"Updates 'openssl' package", "update_dep", map[string]string{"dep": "openssl"}},
+		{"get the PATH variable", "env_get", map[string]string{"name": "PATH"}},
+		{"qual o valor de GOPATH", "env_get", map[string]string{"name": "GOPATH"}},
+		{"npm ls", "pkg_installed", map[string]string{}},
+		{"quais pacotes estão instalados", "pkg_installed", map[string]string{}},
+		{"quais libs tenho instaladas", "pkg_installed", map[string]string{}},
+		{"rpm instalados", "pkg_installed", map[string]string{}},
+		{"dependências instaladas", "pkg_installed", map[string]string{}},
+		{"últimos commits", "git_log", map[string]string{}},
+		{"show history", "git_log", map[string]string{}},
+		{"histórico de commits", "git_log", map[string]string{}},
+		{"pega o campo port do config", "config_get", map[string]string{"target": "config"}},
+		{"mostra a chave database.host do config", "config_get", map[string]string{"target": "config"}},
+	} {
+		in := m.Parse(c.text, w)
+		if nuPredict(in) != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+
+	// recusas honestas
+	for _, text := range []string{
+		// histórico de shell ≠ git log
+		"Prints top-ten of most used utilities from history",
+		"most used commands from history",
+		// glob solto sem slot de padrão que o cubra
+		"List all *fink* files/directories in entire file system",
+		// spec de formato de data não é suportada
+		"get year-month-day hour:minute:second from date",
+		"convert epoch second timestamp to date",
+		// impersonação/switch-user não suportado
+		"switch to user username",
+		// nome de variável citado não é pacote
+		`Create empty files (or update timestamps if they exist) with names matching each word in variable "correctFilePathAndName"`,
+		// diagnóstico não é instalação
+		"how do i figure out what's wrong with python pip",
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+
+	// gerenciador sem pacote: dep é required, o Missing bloqueia a
+	// execução honestamente ("instalar o quê?") em vez de rodar vazio
+	if in := m.Parse("npm install", w); in.Name != "install_dep" ||
+		in.Slots["dep"] != "" || len(in.Missing) == 0 {
+		t.Errorf("npm install sem pacote devia dar miss=[dep]: %v miss=%v", in.Slots, in.Missing)
 	}
 }

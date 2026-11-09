@@ -403,7 +403,8 @@
      ],
      "required": true
     }
-   }
+   },
+   "goal_passthrough": true
   },
   {
    "desc": "conectar num host",
@@ -4003,7 +4004,8 @@
      "kinds": [
       "text"
      ],
-     "required": true
+     "required": true,
+     "from": "pkg:dep"
     }
    }
   },
@@ -5680,6 +5682,20 @@
       "update",
       "delete"
      ]
+    },
+    {
+     "all": [
+      "pkgs",
+      "list"
+     ],
+     "none": [
+      "install",
+      "update",
+      "delete",
+      "create",
+      "mutate"
+     ],
+     "w": 30
     }
    ],
    "slots": {}
@@ -7404,7 +7420,8 @@
      "kinds": [
       "text"
      ],
-     "required": false
+     "required": false,
+     "from": "pkg:dep"
     }
    }
   },

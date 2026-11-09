@@ -89,12 +89,13 @@ não existe. Nova classe: **operando nunca extraído** — residência em
 `unfed`/residual devia derrubar o selo quando uma string citada do
 pedido não alimentou nenhum slot.
 
-### T8 — operando citado sem slot (nb-1920)
+### T8 — operando citado sem slot (nb-1920) [fechado]
 Pedido com `"pattern X"` / `first` que nenhum slot consome → hoje
-verde com listagem não filtrada. Dois remendos possíveis: (a) slot
-`pattern`+`first` em `net_ifaces` com filtro real; (b) tripwire de
-"quoted operand não consumido" — genérico, cobre a classe. O (b) é o
-aprendizado estrutural; (a) é cobertura caso-a-caso.
+verde com listagem não filtrada. Fix no produto (d053f5a): (a) slot
+`name` em `net_ifaces` com filtro real no script; (b) tripwire
+genérico — qualquer `|`/operando citado que nenhum slot consumiu
+entra em `Dropped` → veredito ≤ unverified. Regex-alternation em
+slot literal também droopa ("venet0:0|eth0" é padrão, não nome).
 
 ### T9 — deadline ≠ succeeded no events stream [fechado]
 `nb-0714`/`nb-0746`: exit 124 com último evento `to:succeeded` —

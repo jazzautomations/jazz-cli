@@ -99,6 +99,10 @@ type nuIntentDef struct {
 	Slots     map[string]nuSlotDef `json:"slots"`
 	Examples  []string             `json:"examples"`
 	Negatives []string             `json:"negatives"`
+	// GoalPassthrough: o método consome $goal inteiro (ex.: config_get
+	// passa o pedido cru pro script casar a chave) — palavra residual
+	// livre já está coberta pelo goal, não é operando perdido
+	GoalPassthrough bool `json:"goal_passthrough,omitempty"`
 }
 
 type nuWorldDef struct {
@@ -440,6 +444,27 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if strings.ContainsAny(t.Raw, "*?[") {
 			t.Concs = append(t.Concs, "glob")
 			continue
+		}
+		// GOPATH/JAVA_HOME junto a cue de var ("valor de X",
+		// "variable X") é env-var — SCREAMING_CASE é a forma.
+		if len(t.Raw) >= 3 && t.Raw == strings.ToUpper(t.Raw) &&
+			strings.IndexFunc(t.Raw, unicode.IsLetter) >= 0 {
+			for _, dir := range []int{-1, 1} {
+				for j := i + dir; j >= 0 && j < len(out) &&
+					j != i+4*dir && j != i-4*dir; j += dir {
+					u := &out[j]
+					if u.Quoted {
+						break
+					}
+					if u.has("keynoun") || u.has("envvars") {
+						t.Concs = append(t.Concs, "envvars")
+						break
+					}
+					if !u.Filler {
+						break // palavra de conteúdo fecha a janela
+					}
+				}
+			}
 		}
 		// "g+w"/"o+x" soltos são sintaxe de permissão — conceito próprio
 		// pra vetar buscas de nome ("files missing o+w" ≠ name "o+w")
@@ -3337,6 +3362,10 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 					if nuOwnerCues[toks[j].Fold] {
 						imp, cueAt = true, i
 					}
+					switch toks[j].Fold {
+					case "to", "para", "pra", "pro", "into":
+						continue // "switch to user X" — direção transparente
+					}
 					if !toks[j].Filler {
 						break
 					}
@@ -3474,7 +3503,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			in.Slots["newer_date"] != "" || in.Slots["older_date"] != "" ||
 			in.Slots["tfield"] != ""
 		switch strings.ToLower(v) {
-		case "time", "date", "data", "hora", "modification",
+		case "time", "date", "hora", "modification",
 			"modificação":
 			delete(in.Slots, "dir")
 			if !temporal {
@@ -3598,6 +3627,20 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	// env_get lê variável, não SETA; nome de var que é comando ou
 	// meta-palavra é vazamento, não operando
 	if in.Name == "env_get" || in.Name == "env_status" {
+		// o nome da var é o token SCREAMING marcado envvars — o
+		// extrator genérico pula palavra-com-conceito, mas aqui o
+		// conceito É a evidência do operando
+		if in.Slots["name"] == "" {
+			for i, t := range toks {
+				if t.has("envvars") && len(t.Raw) >= 3 &&
+					t.Raw == strings.ToUpper(t.Raw) &&
+					strings.IndexFunc(t.Raw, unicode.IsLetter) >= 0 {
+					in.Slots["name"] = t.Raw
+					taken[i] = true
+					break
+				}
+			}
+		}
 		for i, t := range toks {
 			switch t.Fold {
 			case "set", "assign", "defina", "define", "export":
@@ -3616,6 +3659,27 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 		if v := in.Slots["name"]; v != "" {
+			// "get PATH"/"valor GOPATH"/"variable JAVA_HOME" — o
+			// extrator colou o vocábulo-cue no nome; sobra 1 palavra
+			// nomeável, ela é o operando. 2+ palavras = sentença.
+			fs := strings.Fields(v)
+			for len(fs) > 1 {
+				switch strings.ToLower(fs[0]) {
+				case "get", "gets", "fetch", "valor", "value",
+					"qual", "the", "o", "a", "de", "do", "da",
+					"variable", "variavel", "variável", "var",
+					"name", "nome", "key", "chave", "env", "envvar":
+					fs = fs[1:]
+				default:
+					goto trimDone
+				}
+			}
+		trimDone:
+			if len(fs) == 1 && fs[0] != v &&
+				nuNameShaped(fs[0]) {
+				in.Slots["name"] = fs[0]
+				v = fs[0]
+			}
 			meta := strings.ContainsAny(v, ";/") ||
 				strings.Contains(v, " ")
 			for _, f := range strings.Fields(strings.ToLower(v)) {
@@ -3921,6 +3985,198 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 	}
+	// dep com cláusula de diagnóstico colada — "python pip figure
+	// wrong"/"permission php"/"Homebrew's path": o pacote é uma
+	// palavra-nome, o resto é frase. Vocábulo de arquivo-op/
+	// diagnóstico no valor derruba o slot inteiro (instalar o
+	// pacote errado é mutação); vocábulo de gerenciador ("pip
+	// install flask") é phrasing — apara e fica com o nome.
+	if v := in.Slots["dep"]; v != "" {
+		bad := false
+		var keep []string
+		for _, wd := range strings.Fields(strings.ToLower(v)) {
+			switch wd {
+			case "pip", "pip3", "npm", "brew", "apt", "apt-get",
+				"yum", "dnf", "pacman", "gem", "cargo", "go",
+				"package", "packages", "pacote", "pacotes",
+				"install", "installer", "installed", "instalar",
+				"instalado", "instalada", "instale", "instala":
+				// phrasing do gerenciador — não é parte do nome
+			case "figure", "wrong", "importable", "permission",
+				"permissions", "files", "file", "path", "paths",
+				"out", "what", "whats", "what's", "why", "is",
+				"broke", "broken", "can't", "cant", "my", "system",
+				"make", "it", "update", "updating", "display",
+				"displays", "the", "a", "an", "and", "with", "for",
+				"word", "words", "name", "variable", "output",
+				"save", "directory", "current", "homebrew's",
+				"homebrew":
+				bad = true
+			default:
+				keep = append(keep, wd)
+			}
+		}
+		switch {
+		case bad || strings.ContainsAny(v, "'\""):
+			delete(in.Slots, "dep")
+			drop(v)
+		case len(keep) == 0:
+			// valor inteiro era phrasing de gerenciador ("npm")
+			delete(in.Slots, "dep")
+			drop(v)
+		case len(keep) < len(strings.Fields(v)):
+			in.Slots["dep"] = strings.Join(keep, " ")
+		}
+		// "names matching each word in variable X" — o citado é o
+		// NOME DA VAR, não pacote: dep:variable-name é fan-out de
+		// create, não install/update
+		if in.Slots["dep"] != "" {
+			for i, t := range toks {
+				switch t.Fold {
+				case "variable", "variavel", "variável", "var":
+					for j := i + 1; j < len(toks) && j <= i+3; j++ {
+						u := &toks[j]
+						if u.Filler {
+							continue
+						}
+						if u.Raw == in.Slots["dep"] ||
+							u.Fold == in.Slots["dep"] {
+							delete(in.Slots, "dep")
+							drop(t.Raw)
+							drop(u.Raw)
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	// pedido de DIAGNÓSTICO ("figure out what's wrong", "make it
+	// importable") não é instalação — o verbo-diagnóstico solto
+	// é o objetivo real, sem slot que o cubra
+	for i, t := range toks {
+		if taken[i] {
+			continue // 'figure' consumido como dep legítimo fica
+		}
+		switch t.Fold {
+		case "figure", "diagnose", "diagnosticar", "importable":
+			drop(t.Raw)
+		}
+	}
+	// "top-ten utilities from history"/"most used commands" —
+	// histórico de shell não é git log. Só os marcadores de
+	// ranking (utilities/top/most) discriminam — 'history' e
+	// 'commits' sozinhos são descritores legítimos do git.
+	if in.Name == "git_log" {
+		shellRank, hasCmd, hasHist, hasRank := false, false, false, false
+		for _, t := range toks {
+			switch t.Fold {
+			case "utilities", "utilitarios", "utilitários":
+				shellRank = true
+			case "commands", "comandos":
+				hasCmd = true
+			case "history", "histórico", "historico":
+				hasHist = true
+			case "top", "topten", "most", "mais", "used", "usados", "usadas":
+				hasRank = true
+			}
+		}
+		shellRank = shellRank || (hasCmd && (hasHist || hasRank))
+		if shellRank {
+			for i, t := range toks {
+				if taken[i] {
+					continue
+				}
+				switch t.Fold {
+				case "history", "histórico", "historico", "commands",
+					"comandos", "shell", "utilities", "utilitarios",
+					"utilitários", "top", "topten", "used", "usados",
+					"usadas":
+					drop(t.Raw)
+				}
+			}
+		}
+	}
+	// extração de campo/coluna (awk/cut) não é data nem busca —
+	// "second section of space-separated data" é operação não
+	// suportada, não um parâmetro. Tokens consumidos por slots
+	// (sort key/delim) ficam fora.
+	for i, t := range toks {
+		if taken[i] {
+			continue
+		}
+		switch t.Fold {
+		case "section", "sections", "column", "columns", "field",
+			"fields", "separated", "separado", "separada", "delimiter",
+			"delimitador":
+			drop(t.Raw)
+		}
+	}
+	// pattern/query com descriptor vago não é literal — "search for
+	// a word"/"search for a pattern" não diz QUAL padrão; executar
+	// com 'word'/'pattern' literal é o silent-wrong clássico.
+	// Aspado é literal explícito ("replace 'word'").
+	for _, k := range []string{"query", "pattern", "from"} {
+		v := in.Slots[k]
+		quoted := false
+		for _, t := range toks {
+			if t.Quoted && t.Raw == v {
+				quoted = true
+			}
+		}
+		if quoted {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "a word", "word", "a pattern", "pattern", "padrão",
+			"padrao", "palavra", "something", "anything", "a string",
+			"string", "a term", "term":
+			delete(in.Slots, k)
+			drop(v)
+		}
+	}
+	// glob nu não consumido — "*fink*" em intent sem slot de
+	// padrão (name/namepat/pat/targets/exclude) é operando que
+	// nenhum filtro aplica → T8: vai pro Dropped
+	globSlots := map[string]bool{
+		"name": true, "namepat": true, "pat": true, "targets": true,
+		"target": true, "exclude": true, "name_re": true, "srcs": true,
+		"file": true, "query": true,
+	}
+	consumesGlob := false
+	for k := range def.Slots {
+		if globSlots[k] && in.Slots[k] != "" {
+			consumesGlob = true
+		}
+	}
+	if !consumesGlob {
+		for i, t := range toks {
+			if taken[i] || t.Filler {
+				continue
+			}
+			if strings.ContainsAny(t.Raw, "*?") && len(t.Raw) > 1 {
+				drop(t.Raw)
+			}
+		}
+	}
+	// "year-month-day hour:minute:second" — spec de formato livre
+	// não é suportada (date_show emite formato fixo); o operando
+	// de formato vai pro Dropped
+	if in.Name == "date_show" {
+		for i, t := range toks {
+			if taken[i] || t.Filler {
+				continue
+			}
+			f := strings.ToLower(t.Fold)
+			if strings.Contains(f, "year") || strings.Contains(f, "month") ||
+				strings.Contains(f, "hour") && strings.Contains(f, ":") ||
+				strings.HasPrefix(f, "yyyy") || strings.HasPrefix(f, "yy") ||
+				strings.HasPrefix(f, "dd") || strings.HasPrefix(f, "mm") ||
+				strings.Contains(f, "epoch") || f == "timestamp" {
+				drop(t.Raw)
+			}
+		}
+	}
 	// "venet0:0|eth0" — alternação regex em slot de nome literal:
 	// o matcher é exato/substring, 'a|b' não casa iface nenhuma.
 	// dir usa '|' pra enum legit (asia|emea) — name/file não.
@@ -4052,7 +4308,8 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	// GUI. Vai pro Dropped em vez de procurar arquivo-sentença.
 	if nv := in.Slots["name"]; strings.Contains(nv, " ") {
 		descGlue := false
-		for _, f0 := range strings.Fields(strings.ToLower(nv)) {
+		fields := strings.Fields(strings.ToLower(nv))
+		for _, f0 := range fields {
 			switch f0 {
 			case "creates", "create", "creating", "temporary", "temp",
 				"window", "windows", "double-clicked", "clicked",
@@ -4064,34 +4321,23 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				descGlue = true
 			}
 		}
+		// "get PATH"/"fetch NAME" — verbo-fetch + operando único é
+		// phrasing do próprio pedido; apara o verbo e fica o nome
+		if descGlue && len(fields) == 2 {
+			switch fields[0] {
+			case "get", "gets", "fetch", "pega", "mostra", "show":
+				in.Slots["name"] = strings.Fields(nv)[1]
+				descGlue = false
+			}
+		}
 		if descGlue {
 			in.Dropped = append(in.Dropped, nv)
 			delete(in.Slots, "name")
 		}
 	}
-	// perm_set sem payload de mutação: "change the permission of all
-	// php files" (sem mode/owner/group/sym*) não carrega o QUE mudar —
-	// sem operando-alvo não há chmod honesto; o vocábulo da mutação
-	// vai pro Dropped em vez de executar nada a 0.97
-	if in.Name == "perm_set" {
-		payload := false
-		for _, k := range []string{"mode", "owner", "group", "symbolic",
-			"symexec", "symw", "symnw", "symread", "from_mode"} {
-			if in.Slots[k] != "" {
-				payload = true
-			}
-		}
-		if !payload {
-			for _, t := range toks {
-				switch t.Fold {
-				case "permission", "permissions", "permissao", "permissão",
-					"permissoes", "permissões", "perm", "perms",
-					"ownership", "propriedade", "mode", "modo":
-					in.Dropped = append(in.Dropped, t.Raw)
-				}
-			}
-		}
-	}
+	// perm_set sem payload (sem mode/owner/group/sym*) já roteia
+	// pro método 'perm_set.ask' — reporta needs_input honesto em
+	// vez de mutar. Não precisa de guard de slot aqui.
 	// verbo de aritmética é segunda operação não suportada — "sum
 	// each line in infile" não é file_find de arquivo chamado infile
 	if in.Name == "file_find" || in.Name == "list_files" {
@@ -5027,6 +5273,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 				v = nuExtractPat(toks)
 			case strings.HasPrefix(sd.From, "slice:"):
 				v = nuSliceArg(toks, sd.From[6:], taken)
+			case sd.From == "pkg:dep":
+				v = nuPkgDep(toks, taken)
 			case sd.From == "svc:name":
 				v = nuSvcName(toks, taken)
 			case sd.From == "net:name":
@@ -5418,8 +5666,8 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 	// 'last' ainda estava livre na hora). Mantém o escopo antigo: só
 	// quando há slot required/svc que cobraria palavra residual.
 	unfed = 0
-	countUnfed := missing != nil
-	if !countUnfed {
+	countUnfed := missing != nil && !def.GoalPassthrough
+	if !countUnfed && !def.GoalPassthrough {
 		for _, sd := range def.Slots {
 			kinds := map[string]bool{}
 			for _, k := range sd.Kinds {
@@ -7444,6 +7692,103 @@ func nuDiskPath(toks []nuTok, taken map[int]bool) string {
 			return t.Raw
 		}
 		best = i // name-shaped fallback, keep the last one
+	}
+	if best >= 0 {
+		taken[best] = true
+		return toks[best].Raw
+	}
+	return ""
+}
+
+// nuPkgDep picks the dependency/package operand: the name right after a
+// package/install cue ("pacote requests", "install flask"), skipping
+// package-manager phrasing ("npm install requests" → requests, não npm).
+// Fallbacks: quoted free token, then last name-ish free word.
+func nuPkgDep(toks []nuTok, taken map[int]bool) string {
+	mgrWord := func(s string) bool {
+		switch s {
+		case "pip", "pip3", "npm", "npx", "yarn", "brew", "gem",
+			"cargo", "go", "apt", "apt-get", "yum", "dnf", "pacman",
+			"zypper", "apk", "port", "install", "installer", "instal",
+			"instala", "instale", "instalado", "instalada", "installed",
+			"instalar", "update", "updates", "upgrade", "atualiza",
+			"atualize", "baixa", "baixar", "download", "get":
+			return true
+		}
+		return false
+	}
+	// 1) cue dep/install — o nome está na janela à frente (ou na aspa
+	// imediatamente antes, "updates 'openssl' package"). Filler que
+	// não é artigo/preposição É candidato: "requests" é filler no
+	// léxico e é o nome do pacote mais pedido do mundo.
+	depCand := func(j int) bool {
+		u := &toks[j]
+		if taken[j] {
+			return false
+		}
+		if u.has("dep") || mgrWord(u.Fold) {
+			return false
+		}
+		if strings.ContainsAny(u.Raw, ",;.:") {
+			return false
+		}
+		if u.Quoted || nuNameShaped(u.Raw) {
+			return true
+		}
+		// palavra nua sem conceito — nome de pacote comum ("requests")
+		return len(u.Concs) == 0 && len(u.Fold) > 1
+	}
+	for i, t := range toks {
+		if taken[i] {
+			continue
+		}
+		if !t.has("dep") && !mgrWord(t.Fold) {
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			u := &toks[j]
+			if u.Filler {
+				switch u.Fold {
+				case "o", "a", "os", "as", "the", "um", "uma",
+					"de", "do", "da", "para", "for", "to",
+					"no", "na", "em", "in", "of":
+					continue // artigo/prep — transparente
+				}
+				// filler real ("requests") é o nome — para aqui
+			}
+			if u.has("dep") || mgrWord(u.Fold) {
+				continue // phrasing do gerenciador/cue, não nome
+			}
+			if depCand(j) {
+				taken[j] = true
+				return u.Raw
+			}
+			break // palavra de conteúdo não-nomeável fecha a janela
+		}
+	}
+	// 2) aspa livre ('mysql')
+	for i, t := range toks {
+		if taken[i] || !t.Quoted || t.Filler {
+			continue
+		}
+		if mgrWord(t.Fold) || strings.ContainsAny(t.Raw, ",;") {
+			continue
+		}
+		taken[i] = true
+		return t.Raw
+	}
+	// 3) última palavra nomeável livre
+	best := -1
+	for i, t := range toks {
+		if taken[i] || t.Filler || t.Quoted {
+			continue
+		}
+		if mgrWord(t.Fold) || t.has("dep") {
+			continue
+		}
+		if nuNameShaped(t.Raw) || len(t.Concs) == 0 && len(t.Fold) > 1 {
+			best = i
+		}
 	}
 	if best >= 0 {
 		taken[best] = true
