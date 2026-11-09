@@ -5704,6 +5704,20 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		if len(v) == 1 && v != "." && v != "/" && v != "~" ||
 			dk == "dir" && len(v) > 2 && strings.ToUpper(v) == v &&
 				strings.HasSuffix(v, "DIR") && !strings.HasPrefix(v, "$") {
+			// nome de 1 char com cue explícito ("branch chamada x")
+			// é literal real — só vira descriptor solto sem cue
+			if dk == "name" {
+				named := false
+				for _, t := range toks {
+					if (t.Raw == v || t.Fold == v) && t.has("nametgt") {
+						named = true
+						break
+					}
+				}
+				if named {
+					continue
+				}
+			}
 			delete(in.Slots, dk)
 			in.Dropped = append(in.Dropped, v)
 		}
@@ -11492,7 +11506,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		for i, t := range toks {
-			cue := dirCues[t.Fold]
+			// 'de' com grepword é conector do PADRÃO ("ocorrências de
+			// erro" — erro é o contado), não cue de escopo de pasta
+			cue := dirCues[t.Fold] && !t.has("grepword")
 			if !cue && arcCtx && (t.Fold == "to" || t.Fold == "para") {
 				// "extract archive to ./x" — no contexto archive o
 				// destino É o diretório; fora dele, 'to' é manner

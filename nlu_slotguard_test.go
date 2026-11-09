@@ -2880,4 +2880,54 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
 		}
 	}
+	// "ocorrências de X" — o 'de' é conector do PADRÃO (grepword), não
+	// cue de pasta: X é o contado. 'de' sem grepword segue dir cue.
+	for q, pat := range map[string]string{
+		"conta as ocorrências de erro":   "erro",
+		"conta as ocorrências de TODO":   "TODO",
+		"conta ocorrências de undefined": "undefined",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != "text_count" || in.Slots["pattern"] != pat ||
+			in.Slots["dir"] != "" || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+	}
+	// 'de' real abre escopo — a guarda de grepword não pode matar
+	// o dir cue legítimo
+	in = m.Parse("arquivos de log na pasta de logs", w)
+	if in.Slots["dir"] != "logs" {
+		t.Errorf("dir cue real: slots %v", in.Slots)
+	}
+	// "branch chamada x" — nome de 1 char com cue (nametgt) é literal;
+	// sem cue ("cria a branch x", "na pasta X") segue descriptor
+	// solto e recusa honesto
+	in = m.Parse("cria uma branch nova chamada x", w)
+	if in.Name != "git_branch" || in.Slots["name"] != "x" ||
+		in.Confidence < 0.7 {
+		t.Errorf("branch 1-char: %s conf %.2f slots %v ev %v",
+			in.Name, in.Confidence, in.Slots, in.Evidence)
+	}
+	for q, want := range map[string]string{
+		"cria uma branch chamada feature-x": "feature-x",
+		"cria um arquivo chamado y":         "",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+		_ = want
+	}
+	for _, q := range []string{
+		"cria a branch x",
+		"encontra arquivos na pasta X",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 || len(in.Dropped) == 0 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f slots %v",
+				q, in.Name, in.Confidence, in.Slots)
+		}
+	}
 }
