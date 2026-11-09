@@ -8165,6 +8165,16 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			if u.has("content") || nuIsNumber(u.Fold) && len(parts) == 0 {
 				continue // "the string foo" — meta, não padrão
 			}
+			v4 := false
+			for _, c := range u.Concs {
+				if strings.HasPrefix(c, "v4_") {
+					v4 = true // "por favor testa regex F" — a frase-cardápio não é padrão
+					break
+				}
+			}
+			if v4 || nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+				continue // file-shaped é alvo do slot file/target, nunca padrão
+			}
 			parts = append(parts, u.Raw)
 			taken[j] = true
 		}
@@ -8247,6 +8257,12 @@ func nuDiffPart(toks []nuTok, wantB bool, taken map[int]bool) string {
 		}
 		for p := i - 1; p >= 0; p-- {
 			if toks[p].Filler {
+				switch toks[p].Fold {
+				case "vs", "versus", "e", "and", "com":
+					// separador do par à esquerda — o candidato é o
+					// artigo do LADO B ("a pasta b"), não um label
+					return false
+				}
 				continue
 			}
 			return dirWord(toks[p].Fold)

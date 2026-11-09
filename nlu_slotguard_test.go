@@ -2678,4 +2678,22 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	if in.Name != "regex_test" || in.Slots["pattern"] != "" || len(in.Dropped) > 0 {
 		t.Errorf("sem padrão: %s slots %v dropped %v", in.Name, in.Slots, in.Dropped)
 	}
+	// "por favor" abre o cue de padrão mas a frase-cardápio e o arquivo
+	// não são padrão — o cue cola nada e o pedido segue limpo
+	for _, q := range []string{
+		`por favor testa regex README.md`,
+		`por favor regex contra linhas README.md`,
+		`por favor busca literal README.md`,
+	} {
+		in = m.Parse(q, w)
+		if len(in.Dropped) > 0 || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// o artigo do lado B não é label do lado A: o lookback para
+	// no separador do par ("e", "vs", "com")
+	in = m.Parse("diferença entre a pasta a e a pasta b", w)
+	if in.Name != "dir_diff" || in.Slots["a"] != "a" || in.Slots["b"] != "b" || in.Confidence < 0.7 {
+		t.Errorf("dir_diff: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
 }
