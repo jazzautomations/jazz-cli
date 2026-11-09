@@ -2444,6 +2444,28 @@ var nuFormatWords = map[string]bool{
 	"subfolder": true, "subfolders": true, "subdirectory": true,
 	"subdirectories": true, "subdir": true, "subdirs": true,
 	"prints": true, "listing": true, "list": true,
+	// tipo de arquivo e phrasing de filtro — "normal/regular files"
+	// descreve o tipo (não o nome); "long file listing" é o formato;
+	// "including hidden ones" introduz o conjunto
+	"normal": true, "regular": true, "including": true,
+	"long": true, "hidden": true, "ones": true,
+	"invisible": true, "oculto": true, "oculta": true,
+	"ocultos": true, "ocultas": true, "escondido": true,
+	"escondida": true, "escondidos": true, "escondidas": true,
+}
+
+// nuAllFormatWords: alternância "normal/regular"/"files-or-dirs" — todo
+// pedaço é phrasing, então o token inteiro é phrasing (não vira name).
+func nuAllFormatWords(fold string) bool {
+	if !strings.Contains(fold, "/") {
+		return false
+	}
+	for _, p := range strings.Split(fold, "/") {
+		if p != "" && !nuFormatWords[p] && !nuArcTypeWords[p] {
+			return false
+		}
+	}
+	return true
 }
 
 // nuToolWords: nome de ferramenta/flag de comando e verbo de exibição —
@@ -2881,7 +2903,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						clause = true
 						continue
 					}
-					if nuFormatWords[toks[i].Fold] {
+					if nuFormatWords[toks[i].Fold] || nuAllFormatWords(toks[i].Fold) {
 						continue // coluna de saída/auxiliar, nunca nome
 					}
 					if nuPermBitToken(toks[i].Fold) {
@@ -4071,6 +4093,11 @@ func nuMvArg(toks []nuTok, what string, taken map[int]bool) string {
 			// "1MB"/"10k" é limite de tamanho, "30" é idade da janela —
 			// nenhum é nome de arquivo
 			if t.Fold != "" && !t.Quoted && (nuDigitSize(t.Fold) || nuIsNumber(t.Fold)) {
+				continue
+			}
+			// "$VAR" é escopo/ambiente, nunca alvo literal — "delete
+			// hidden files under $D" tem dir=$D, não target=$D
+			if strings.HasPrefix(t.Raw, "$") {
 				continue
 			}
 			// "the folder src" / "directory data": substantivo SINGULAR
@@ -5293,6 +5320,54 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				return pre + u.Raw + suf
 			}
 		}
+		// "hidden files"/"dot files" — o conjunto dos dotfiles; dentro de
+		// cláusula except o coletor de exclusão é quem consome
+		for i, t := range toks {
+			if taken[i] || nuInExceptClause(toks, i) {
+				continue
+			}
+			switch t.Fold {
+			case "hidden", "escondido", "escondida", "escondidos", "escondidas",
+				"oculto", "oculta", "ocultos", "ocultas", "invisible", "dot":
+				fileWord := func(u *nuTok) bool {
+					switch u.Fold {
+					case "file", "files", "arquivo", "arquivos", "dir", "dirs",
+						"directory", "directories", "diretorio", "diretório",
+						"diretorios", "diretórios", "pasta", "pastas",
+						"folder", "folders", "ones", "ficheros":
+						return true
+					}
+					return false
+				}
+				for j := i + 1; j < len(toks) && j <= i+2; j++ {
+					u := &toks[j]
+					if u.Filler || u.Slang {
+						continue
+					}
+					if fileWord(u) {
+						taken[i], taken[j] = true, true
+						return ".*"
+					}
+					break
+				}
+				// "arquivos ocultos"/"files hidden" — adjetivo depois
+				// do substantivo (PT e parte do EN)
+				for j := i - 1; j >= 0 && j >= i-2; j-- {
+					u := &toks[j]
+					if u.Filler || u.Slang {
+						continue
+					}
+					if fileWord(u) {
+						taken[i], taken[j] = true, true
+						return ".*"
+					}
+					break
+				}
+			case "dotfiles", "dot-files", "dotfile", "hiddenfiles":
+				taken[i] = true
+				return ".*"
+			}
+		}
 		// "*conf* files" — glob não-citado antes de substantivo de arquivo
 		// é o padrão do conjunto, mesmo sem cue ("matching").
 		for i, t := range toks {
@@ -5353,7 +5428,8 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				continue
 			}
 			u := &toks[i]
-			if u.Filler || u.Slang || taken[i] || u.Quoted || nuIsNumber(u.Fold) || qualif[u.Fold] {
+			if u.Filler || u.Slang || taken[i] || u.Quoted || nuIsNumber(u.Fold) ||
+				qualif[u.Fold] || nuAllFormatWords(u.Fold) {
 				continue
 			}
 			// "config" é keynoun léxico MAS em "config files" é nome do
@@ -5540,6 +5616,54 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			return ""
 		}
+		// "hidden files"/"dot files" — mass-delete só de dotfiles; sem
+		// esse filtro o delete rodaria o diretório INTEIRO (catastrófico)
+		for i, t := range toks {
+			if taken[i] || nuInExceptClause(toks, i) {
+				continue
+			}
+			switch t.Fold {
+			case "hidden", "escondido", "escondida", "escondidos", "escondidas",
+				"oculto", "oculta", "ocultos", "ocultas", "invisible", "dot":
+				fileWord := func(u *nuTok) bool {
+					switch u.Fold {
+					case "file", "files", "arquivo", "arquivos", "dir", "dirs",
+						"directory", "directories", "diretorio", "diretório",
+						"diretorios", "diretórios", "pasta", "pastas",
+						"folder", "folders", "ones", "ficheros":
+						return true
+					}
+					return false
+				}
+				for j := i + 1; j < len(toks) && j <= i+2; j++ {
+					u := &toks[j]
+					if u.Filler || u.Slang {
+						continue
+					}
+					if fileWord(u) {
+						taken[i], taken[j] = true, true
+						return ".*"
+					}
+					break
+				}
+				// "arquivos ocultos"/"files hidden" — adjetivo depois
+				// do substantivo (PT e parte do EN)
+				for j := i - 1; j >= 0 && j >= i-2; j-- {
+					u := &toks[j]
+					if u.Filler || u.Slang {
+						continue
+					}
+					if fileWord(u) {
+						taken[i], taken[j] = true, true
+						return ".*"
+					}
+					break
+				}
+			case "dotfiles", "dot-files", "dotfile", "hiddenfiles":
+				taken[i] = true
+				return ".*"
+			}
+		}
 		// sem cue de nome: um GLOB solto ainda é o filtro do delete —
 		// "Delete all 1US* files" tem "1us*" explícito e sem isso o
 		// mass-delete rodaria SEM nome (catastrófico)
@@ -5723,6 +5847,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"fourth": true, "fifth": true, "field": true,
 			"fields": true, "campo": true, "campos": true,
 			"primeiro": true, "segundo": true, "terceiro": true,
+			// phrasing de filtro/formato nunca é pasta: "including
+			// hidden ones" introduz conjunto, "long listing" é
+			// formato de saída
+			"including": true, "hidden": true, "long": true,
+			"ones": true, "oculto": true, "oculta": true,
+			"ocultos": true, "ocultas": true, "escondido": true,
+			"escondida": true, "invisible": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -5842,9 +5973,27 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue // a window, a verb or a tool/flag is never a dir — leave it for the time slots or unfed
 				}
 				// "$VAR sozinho" é ambíguo (arquivo ou pasta) — fica
-				// livre; "$VAR/sub/dir" com barra é path = diretório
+				// livre, A MENOS que o próprio nome diga "dir/folder/
+				// path/home" ("$some_directory" é escopo, não alvo);
+				// "$VAR/sub/dir" com barra é path = diretório
 				if strings.HasPrefix(u.Raw, "$") && !strings.Contains(u.Raw, "/") {
-					continue
+					low := strings.ToLower(u.Raw)
+					// marcador de palavra inteira: "$DIR" nu é var
+					// ambígua (unfed), "$some_directory"/"$BUILD_DIR"
+					// se declaram pasta
+					dirish := strings.Contains(low, "directory") ||
+						strings.Contains(low, "diretorio") ||
+						strings.Contains(low, "folder") ||
+						strings.Contains(low, "pasta") ||
+						strings.Contains(low, "home") ||
+						strings.Contains(low, "path") ||
+						strings.Contains(low, "_dir") ||
+						strings.Contains(low, "-dir") ||
+						strings.Contains(low, "dir_") ||
+						strings.Contains(low, "dir-")
+					if !dirish {
+						continue
+					}
 				}
 				if unitWords[u.Fold] {
 					taken[i], taken[j] = true, true
@@ -8087,6 +8236,11 @@ var nuExceptBridge = map[string]bool{
 	"os": true, "as": true, "in": true, "inside": true, "under": true,
 	"em": true, "no": true, "na": true, "from": true, "de": true,
 	"regular": true, "those": true, "that": true,
+	// quantificador dentro da exceção é ponte — "excluding all hidden
+	// files" tem 'hidden' no span; sem 'all' a cláusula fechava no cue
+	"all": true, "every": true, "each": true, "any": true,
+	"todos": true, "todas": true, "todo": true, "toda": true,
+	"cada": true, "qualquer": true, "quaisquer": true,
 }
 
 // nuExceptClass — substantivo-classe que ROTULA o operando sem ser um
@@ -8255,7 +8409,9 @@ func nuExceptOperands(toks []nuTok, taken map[int]bool) (cues, ops []int, last m
 // maiúscula; Fold é o fallback).
 func nuExcludeRaw(t *nuTok) string {
 	switch t.Fold {
-	case "hidden", "oculto", "oculta", "ocultos", "ocultas", "dotfiles":
+	case "hidden", "oculto", "oculta", "ocultos", "ocultas", "dotfiles",
+		"escondido", "escondida", "escondidos", "escondidas",
+		"invisible", "dot", "dot-files", "dotfile", "hiddenfiles":
 		return ".*"
 	}
 	if t.Raw != "" {

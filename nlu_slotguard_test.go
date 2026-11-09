@@ -1405,3 +1405,37 @@ func TestNLUArchiveGuards(t *testing.T) {
 		t.Errorf("tar-gz dir: %v", in.Slots)
 	}
 }
+
+func TestNLUHiddenDotGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "hidden files"/"arquivos ocultos" — o conjunto dos dotfiles vira
+	// glob ".*" no nome (PT põe o adjetivo depois do substantivo)
+	for _, s := range []string{"find hidden files", "lista arquivos ocultos"} {
+		in := m.Parse(s, w)
+		if in.Slots["name"] != ".*" && in.Slots["namepat"] != ".*" {
+			t.Errorf("%q: %s %v", s, in.Name, in.Slots)
+		}
+	}
+	// mass-delete de hidden exige o filtro ".*" + dir do escopo — sem o
+	// nome o each deletaria o diretório inteiro (catastrófico); o $VAR é
+	// scope, nunca target
+	in := m.Parse("Delete all hidden files under $some_directory", w)
+	if in.Name != "delete_file" || in.Slots["name"] != ".*" ||
+		in.Slots["dir"] != "$some_directory" || in.Slots["target"] != "" {
+		t.Errorf("delete hidden: %s %v", in.Name, in.Slots)
+	}
+	// "excluding all hidden files" — a exclusão é o glob ".*", nunca o
+	// name do conjunto (polaridade); 'all' é ponte dentro da cláusula
+	in = m.Parse("find all the normal/regular files in the folder \"pathfolder\" which are 2 levels deep, excluding all hidden files and directories", w)
+	if in.Slots["exclude"] != ".*" || in.Slots["name"] != "" ||
+		in.Slots["dir"] != "pathfolder" {
+		t.Errorf("excluding hidden: %v", in.Slots)
+	}
+	// phrasing de filtro/formato nunca vira dir/name: "including hidden
+	// ones"/"long listing"/"normal-regular" são descrição, não operandos
+	in = m.Parse("Filters only directories including hidden ones from long file listing of a current directory, and prints their names.", w)
+	if in.Slots["dir"] == "including" || in.Slots["name"] == "long" ||
+		in.Slots["name"] == "*normal/regular*" {
+		t.Errorf("filter phrasing: %v", in.Slots)
+	}
+}
