@@ -310,8 +310,10 @@ var epToolchains = []struct{ name, flag string }{
 func epProbe(sys epSys) *epProfile {
 	t0 := time.Now()
 	p := &epProfile{V: epSchema, OS: sys.GOOS, Arch: sys.GOARCH, CPUs: sys.NumCPU, Host: sys.Hostname}
-	if p.User = sys.Getenv("USER"); p.User == "" {
-		p.User = sys.Getenv("LOGNAME")
+	for _, k := range []string{"USER", "LOGNAME", "USERNAME"} {
+		if p.User = sys.Getenv(k); p.User != "" {
+			break // USER/LOGNAME são POSIX; USERNAME é a equivalente do Windows
+		}
 	}
 	p.Termux = sys.Getenv("TERMUX_VERSION") != "" || strings.HasSuffix(filepath.ToSlash(sys.Getenv("PREFIX")), "/com.termux/files/usr")
 	if sys.GOOS == "linux" {

@@ -28,8 +28,18 @@ def emit(ok=True, data=None, confidence=1.0, unparsed=None, warnings=None, error
     }
     if error:
         out["error"] = error
-    sys.stdout.write(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
-    sys.stdout.flush()
+    payload = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
+    # o harness roda `python3 -I` — o isolamento ignora PYTHONIOENCODING e no
+    # Windows o stdout fica na codepage do console (cp1252): qualquer char
+    # fora dela (→, ⭐, ✖) derrubava o script INTEIRO com UnicodeEncodeError.
+    # Bytes UTF-8 pulam a camada de texto — saída igual em qualquer codepage.
+    raw = getattr(sys.stdout, "buffer", None)
+    if raw is not None:
+        raw.write(payload.encode("utf-8"))
+        raw.flush()
+    else:
+        sys.stdout.write(payload)
+        sys.stdout.flush()
     sys.exit(0)
 
 
@@ -58,6 +68,16 @@ def rel(p):
         r = os.path.relpath(p, ROOT)
     except ValueError:
         return p
+    if r.startswith(".."):
+        # ROOT pode chegar com o nome curto 8.3 (o TMP do Windows aponta pra
+        # C:\Users\RUNNER~1) enquanto os paths passam por realpath — o
+        # relpath cru vira "..\..\runneradmin\..." e o fallback devolvia o
+        # caminho absoluto, quebrando o confinamento de todo consumidor de
+        # path=. Resolve os dois lados antes de desistir pro absoluto.
+        try:
+            r = os.path.relpath(os.path.realpath(p), os.path.realpath(ROOT))
+        except ValueError:
+            return p
     return p if r.startswith("..") else r
 
 

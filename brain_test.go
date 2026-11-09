@@ -651,8 +651,10 @@ func TestBrainChainEmptyProducerHonest(t *testing.T) {
 }
 
 // Aspas protegem: "rock and roll" não é conjunção — single intent.
+// (o arquivo existe sem as aspas no nome — '"' não é caractere válido de
+// nome de arquivo no Windows; o que o teste guarda é o SPLIT do pedido.)
 func TestBrainChainQuotedAndNoSplit(t *testing.T) {
-	root := brFixture(t, `"rock and roll.txt"`, "r\n")
+	root := brFixture(t, `rock and roll.txt`, "r\n")
 	env, _ := brTestEnv(t, root, nil, -1)
 	r := brRun(context.Background(), env, `busca arquivos chamados "rock and roll.txt"`)
 	if r.Intent.Name == "multi" {

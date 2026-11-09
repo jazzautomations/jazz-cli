@@ -53,6 +53,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1353,11 +1354,20 @@ func dsCapPlan(p pcPlan, root string) *mhMethod {
 	return m
 }
 
+// dsAbsAny: caminho absoluto pelas regras de QUALQUER plataforma. O distill
+// aprende comandos de transcript POSIX mesmo rodando no Windows — "/etc",
+// "/tmp/x" e `c:\x` não podem se passar por relativos em nenhum dos dois
+// (filepath.IsAbs("/etc") é false no Windows e `c:\x` é false no POSIX).
+func dsAbsAny(s string) bool {
+	return filepath.IsAbs(s) || strings.HasPrefix(s, "/") || strings.HasPrefix(s, `\`) ||
+		(len(s) > 1 && s[1] == ':')
+}
+
 // dsPathLit: alvo literal de file_op — caminho relativo simples, sem os
 // metacaracteres que indicariam expansão de shell ou fuga do projeto
 // (brSafePath confina de novo na execução; aqui é só higiene do aprendido).
 func dsPathLit(s string) bool {
-	if s == "" || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "~") || filepath.IsAbs(s) {
+	if s == "" || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "~") || dsAbsAny(s) {
 		return false
 	}
 	if strings.Contains(s, "..") || strings.ContainsAny(s, "$`*?(){}[]'\"\\") {
@@ -1425,7 +1435,7 @@ func dsLnArgs(t []string) (string, []string, bool) {
 	// alvo do link: literal relativo OU absoluto sem metacaracteres —
 	// confinado é o link, não o texto que ele carrega.
 	if !dsPathLit(args[0]) {
-		if !filepath.IsAbs(args[0]) || strings.ContainsAny(args[0], "$`*?(){}[]'\"\\") || strings.Contains(args[0], "..") {
+		if !dsAbsAny(args[0]) || strings.ContainsAny(args[0], "$`*?(){}[]'\"\\") || strings.Contains(args[0], "..") {
 			return "", nil, false
 		}
 	}
@@ -2510,9 +2520,12 @@ func dsSlotValOK(path bool, v string) string {
 		return ""
 	}
 	switch {
-	case v == "..", strings.HasPrefix(v, "../"), strings.Contains(v, "/../"), strings.HasSuffix(v, "/.."):
+	case v == "..", strings.HasPrefix(v, "../"), strings.Contains(v, "/../"), strings.HasSuffix(v, "/.."),
+		runtime.GOOS == "windows" && (strings.HasPrefix(v, `..\`) ||
+			strings.Contains(v, `\..\`) || strings.HasSuffix(v, `\..`)):
+		// o separador do Windows também sobe diretório: `a\..\b` escapa
 		return "caminho escapa o projeto (..)"
-	case filepath.IsAbs(v) || strings.HasPrefix(v, `\`) || (len(v) > 1 && v[1] == ':'):
+	case dsAbsAny(v):
 		return "caminho absoluto"
 	case v == "~" || strings.HasPrefix(v, "~/"):
 		return "caminho do HOME (~)"
