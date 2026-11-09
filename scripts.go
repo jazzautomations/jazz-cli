@@ -316,11 +316,10 @@ func scSignature(schema map[string]any) string {
 	if len(alts) > 0 {
 		out = append(out, strings.Join(alts, "|"))
 	}
-	// at most 1 optional arg by name when there are more than 2, "+N" for the
-	// rest: the spec rides every request, and a wrong/unknown argument already
-	// returns the full schema
+	// at most 2 optional args by name, "+N" for the rest: the spec rides every
+	// request, and a wrong/unknown argument already returns the full schema
 	if len(opt) > 2 {
-		opt = append(opt[:1:1], fmt.Sprintf("+%d", len(opt)-1))
+		opt = append(opt[:2:2], fmt.Sprintf("+%d", len(opt)-2))
 	}
 	return strings.Join(append(out, opt...), ",")
 }
