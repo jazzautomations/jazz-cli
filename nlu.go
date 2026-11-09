@@ -5728,6 +5728,166 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		delete(in.Slots, "exclude")
 		drop(ev)
 	}
+	// "without regards to case" — a cue `without` atrai `regards`
+	// pra enum de exclusão; é phrasing de case, nunca operando
+	if ev := in.Slots["exclude"]; strings.Contains(ev, "|") {
+		var kept []string
+		for _, p := range strings.Split(ev, "|") {
+			switch p {
+			case "regards", "regardless", "irrespective",
+				"consideration", "account", "despite",
+				"regard", "matter", "care":
+				continue
+			default:
+				kept = append(kept, p)
+			}
+		}
+		if len(kept) == 0 {
+			delete(in.Slots, "exclude")
+		} else {
+			in.Slots["exclude"] = strings.Join(kept, "|")
+		}
+	}
+	// regex em slot glob: `[.]`, `\.`, `\{n,m}`, `^`/`$`/`.*` não
+	// são glob — o padrão certo é name_re; sem ele o find casa o
+	// literal e devolve vazio disfarçado de sucesso
+	for _, gsk := range []string{"name", "namepat", "pat"} {
+		gv := in.Slots[gsk]
+		if gv == "" {
+			continue
+		}
+		// ".*" isolado fica: como glob ele casa dotfiles (é o que o
+		// mapa hidden produz); como regex casaria TUDO
+		regexy := gv != ".*" && (strings.Contains(gv, "\\.") ||
+			strings.Contains(gv, "[.]") ||
+			strings.Contains(gv, "\\{") ||
+			strings.Contains(gv, "\\(") ||
+			strings.Contains(gv, "\\|") ||
+			strings.HasPrefix(gv, "^") ||
+			strings.HasPrefix(gv, ".*") ||
+			strings.HasSuffix(gv, "$"))
+		if !regexy {
+			continue
+		}
+		// só file_find/delete_file têm name_re — nos demais o
+		// regex migrado seria ignorado e a op rodaria sem o
+		// filtro de nome
+		if in.Name == "file_find" || in.Name == "delete_file" {
+			if in.Slots["name_re"] == "" {
+				in.Slots["name_re"] = gv
+				delete(in.Slots, gsk)
+				continue
+			}
+		}
+		delete(in.Slots, gsk)
+		drop(gv)
+	}
+	// "in the home directory" — home+cue de pasta resolve "~" (o
+	// mesmo do user's home); sem ele o alvo nasce no cwd calado
+	if in.Slots["dir"] == "" {
+		for i, t := range toks {
+			if t.Fold != "home" && t.Fold != "casa" {
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := toks[j]
+				if u.Filler {
+					continue
+				}
+				switch u.Fold {
+				case "directory", "directories", "folder",
+					"folders", "dir", "dirs", "pasta",
+					"pastas", "diretorio", "diretório",
+					"diretorios", "diretórios":
+					in.Slots["dir"] = "~"
+				}
+				break
+			}
+			break
+		}
+	}
+	// "on host node"/"via ssh no servidor" — remoto não é suportado;
+	// ignorar o destino e executar LOCAL é falso-sucesso clássico.
+	// "rename host to server" não casa: `to` é prep de direção, e
+	// host/server sem prep de lugar são nomes legítimos. Intents do
+	// domínio host/serviço têm ssh/host/machine como vocábulo, não
+	// spec remoto — o guard não roda neles.
+	hostDomain := in.Name == "connect_host" || in.Name == "host_status" ||
+		in.Name == "list_hosts" || in.Name == "logged_in" ||
+		in.Name == "net_ifaces" || in.Name == "net_route" ||
+		in.Name == "net_status" || in.Name == "file_users" ||
+		strings.HasPrefix(in.Name, "service_")
+	remoteVocab := false
+	hostIdx := -1
+	if !hostDomain {
+		for i, t := range toks {
+			switch t.Fold {
+			case "remote", "remoto", "remota":
+				remoteVocab = true
+			case "ssh", "host", "hosts", "node", "nodes", "server",
+				"servers", "machine", "machines", "servidor",
+				"servidores", "maquina", "máquina":
+				demo := false
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					u := toks[j]
+					// demonstrativo/possessivo entre a prep e
+					// a palavra-host: "on this machine" é
+					// localhost, não spec remoto
+					switch u.Fold {
+					case "this", "these", "my", "your", "our",
+						"local", "localhost", "current",
+						"atual", "esse", "essa", "este",
+						"esta", "isso", "isto", "minha",
+						"meu", "nossa", "nosso", "que",
+						"qual", "quais":
+						demo = true
+						continue
+					}
+					switch u.Fold {
+					case "on", "at", "em", "no", "na", "via",
+						"ssh", "remote", "remoto":
+						if !demo {
+							remoteVocab = true
+							if hostIdx < 0 {
+								hostIdx = i
+							}
+						}
+					}
+					if u.Filler {
+						continue
+					}
+					break // primeira palavra-conteúdo decide
+				}
+			}
+		}
+	}
+	if remoteVocab {
+		for i, t := range toks {
+			switch t.Fold {
+			case "on", "at", "via", "host", "hosts",
+				"node", "nodes", "server", "servers",
+				"machine", "machines",
+				"ssh", "remote", "remoto", "remota",
+				"servidor", "servidores", "maquina",
+				"máquina":
+				if t.Raw != "" {
+					drop(t.Raw)
+				} else {
+					drop(t.Fold)
+				}
+			default:
+				// o nome do host depois do cue ("on host
+				// node") também é spec remoto
+				if i == hostIdx+1 || (i > hostIdx && i <= hostIdx+2 && toks[i-1].Filler) {
+					if hostIdx >= 0 && !t.Filler {
+						if t.Raw != "" {
+							drop(t.Raw)
+						}
+					}
+				}
+			}
+		}
+	}
 	// srcs é lista de paths separada por espaço — verbo/classe entre
 	// eles é phrasing do pedido, não fonte ("archive files that
 	// exist" não tem fonte chamada "exist")
@@ -5893,6 +6053,20 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 	}
+	// valor vivo num slot não é operando-rejeitado: a poda de um slot
+	// duplicado ("dir=x" quando from já tem "x") não pode derrubar a
+	// confiança do slot irmão que cobre o mesmo literal
+	liveVals := map[string]bool{}
+	for _, v := range in.Slots {
+		liveVals[v] = true
+	}
+	keptDrops := in.Dropped[:0]
+	for _, d := range in.Dropped {
+		if !liveVals[d] {
+			keptDrops = append(keptDrops, d)
+		}
+	}
+	in.Dropped = keptDrops
 	// operando semântico em Dropped = o pedido carrega restrição que
 	// nenhum slot cobriu — reportar sucesso seria fingir cobertura.
 	// (não dobra com unfed: drop costuma ser vocábulo de papel, fora
@@ -13302,13 +13476,39 @@ func nuMkArg(toks []nuTok, what string, taken map[int]bool) string {
 		}
 		var names []string
 		var used []int
+		locPrep := false
 		for j := i + 1; j < len(toks); j++ {
 			u := toks[j]
+			// prep de lugar/remoto encerra a enum — "mkdir a b in
+			// the home" / "on host node": o que segue é escopo ou
+			// host, nunca alvo. (são fillers — checamos antes do
+			// skip de filler)
+			switch u.Fold {
+			case "in", "on", "at", "under", "into", "inside",
+				"within", "to", "from", "em", "no", "na",
+				"para", "dentro", "host", "node", "server",
+				"machine", "ssh":
+				locPrep = true
+				continue
+			}
+			if locPrep {
+				break
+			}
 			if u.Filler {
 				continue
 			}
 			if nuEnumSeps[u.Fold] || u.Fold == "e" {
 				continue
+			}
+			// quantificador/descritor encerra — "each unique mime
+			// type" é classe de pasta, não nome enumerável
+			switch u.Fold {
+			case "each", "every", "cada", "unique", "respective",
+				"corresponding", "individual", "per":
+				locPrep = true
+			}
+			if locPrep {
+				break
 			}
 			if nuEnumStops[u.Fold] || u.has("permbit") {
 				break

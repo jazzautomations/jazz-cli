@@ -2531,3 +2531,54 @@ func TestNLUArchiveCreateGuards(t *testing.T) {
 		}
 	}
 }
+
+// TestNLUEnumRemoteGuards: enum de create/escopo/host — boundary de
+// locação, remoto-spec e phrasing de case nunca viram operando; casa
+// home resolve ~; regex migra pro slot regex.
+func TestNLUEnumRemoteGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, text := range []string{
+		// spec remoto / host — execução local seria falso sucesso
+		`Create a new directory "existing-dir/new-dir/" on host "node"`,
+		`Make directory and parents as needed for each unique mime type in the current directory`,
+		`copy a.txt to host server2 via ssh`,
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+	// "without regards to case" não vaza 'regards' pro exclude
+	in := m.Parse(`Find all the files that are not named "MyCProgram.c" in the current directory only and without regards to case.`, w)
+	if ex := in.Slots["exclude"]; ex != "MyCProgram.c" {
+		t.Errorf("regards leak: %v", in.Slots)
+	}
+	// "in the home directory" resolve ~ — o alvo não nasce no cwd
+	in = m.Parse("Create directory `junk' in the home directory", w)
+	if in.Slots["dir"] != "~" || in.Slots["target"] != "junk" {
+		t.Errorf("home dir: %v", in.Slots)
+	}
+	// regex em slot glob migra pra name_re (file_find o consome)
+	in = m.Parse(`Search for the regex '[0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]*' in all files under /etc`, w)
+	if in.Slots["name_re"] == "" || in.Slots["name"] != "" {
+		t.Errorf("regex->name_re: %v", in.Slots)
+	}
+	// interrogativo/demonstrativo + host-word é localhost, não remoto
+	for _, q := range []string{
+		"em que máquina estamos",
+		"who else is on this machine",
+	} {
+		if in := m.Parse(q, w); nuPredict(in) == "none" {
+			t.Errorf("local host-word refused: %s -> %v", q, in.Dropped)
+		}
+	}
+	// host/server como nomes de arquivo seguem operandos legítimos
+	if in := m.Parse("rename host to server in /tmp", w); nuPredict(in) != "rename" {
+		t.Errorf("host/server names: %v %v", in.Dropped, in.Slots)
+	}
+	// literal vivo noutro slot não entra no Dropped (from=x cobre)
+	in = m.Parse("substitui a primeira ocorrência de 'x' por 'y' no main.go", w)
+	if nuPredict(in) != "text_replace" {
+		t.Errorf("live literal dropped: %v %v", in.Dropped, in.Slots)
+	}
+}
