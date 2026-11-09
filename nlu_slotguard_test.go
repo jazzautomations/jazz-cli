@@ -2582,3 +2582,26 @@ func TestNLUEnumRemoteGuards(t *testing.T) {
 		t.Errorf("live literal dropped: %v %v", in.Dropped, in.Slots)
 	}
 }
+
+// TestNLUOwnerIdGuards: rótulo de tipo em owner/group apara pro id —
+// "UID=1000" vira owner:1000 (-user aceita número); rótulo grudado
+// falharia quieto no find do runtime.
+func TestNLUOwnerIdGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse("Find all files of the user with UID=1000", w)
+	if in.Slots["owner"] != "1000" {
+		t.Errorf("uid= label: %v", in.Slots)
+	}
+	for _, q := range []struct {
+		text, slot, want string
+	}{
+		{"find files owned by wnj", "owner", "wnj"},
+		{"find files not owned by group staff", "not_group", "staff"},
+		{"Change the owner of tmp_file_upload to nobody", "owner", "nobody"},
+	} {
+		in := m.Parse(q.text, w)
+		if in.Slots[q.slot] != q.want {
+			t.Errorf("%q: %v", q.text, in.Slots)
+		}
+	}
+}

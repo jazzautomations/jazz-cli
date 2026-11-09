@@ -5923,6 +5923,19 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			in.Slots["srcs"] = strings.Join(kept, " ")
 		}
 	}
+	// "UID=1000"/"user=wnj" como owner/group: o rótulo é o TIPO do
+	// operando, o valor é o id/nome — find -user aceita o número,
+	// o rótulo grudado falharia quieto no runtime
+	for _, osk := range []string{"owner", "group", "not_owner"} {
+		ov := in.Slots[osk]
+		for _, pfx := range []string{"uid=", "gid=", "user=",
+			"group=", "uid:", "gid:"} {
+			if strings.HasPrefix(strings.ToLower(ov), pfx) {
+				in.Slots[osk] = ov[len(pfx):]
+				break
+			}
+		}
+	}
 	// "specified by variable X" torna a fonte uma indireção que o
 	// runtime não resolve — archive da variável literal mutaria
 	// o alvo errado (ou o cwd inteiro quando '.' vaza junto)
