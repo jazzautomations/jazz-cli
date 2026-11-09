@@ -57,20 +57,23 @@ type grState struct {
 type grPattern struct {
 	label string
 	re    *lazyRe
+	// soft: agent-directed text is common in real docs/READMEs now — wrap it
+	// as untrusted data but do not arm the whole turn's confirmation gate.
+	soft bool
 }
 
 var grInjPatterns = []grPattern{
-	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|system|original|all other)\b[^.\n]{0,25}\b(instructions?|prompts?|rules|directions|guidelines|directives)\b`)},
-	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|desconsidere|esqueça|ignora)\b[^.\n]{0,40}\b(instruções|regras|orientações)\b[^.\n]{0,25}\b(anteriores|acima|do sistema|originais)\b`)},
-	{"redefine o papel do agente", lazyRx(`(?i)\byou are now\s+(a|an|DAN|no longer|free|acting|unrestricted|jailbroken|in developer mode)\b|\bfrom now on,?\s+you\s+(are|will|must|should)\b|\b(new|updated|real) (system )?instructions\s*:|\bsystem prompt override\b`)},
-	{"rótulo falso de papel (system/assistant)", lazyRx(`(?im)^[\s>#*]*(system|assistant|developer)\s*:\s*(you\b|ignore|from now|new instructions|important|the user|always|never|do not|don't|run\b|execute|forget)`)},
-	{"tokens de controle de chat", lazyRx(`<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>`)},
-	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(ai|llm|assistant|agent|claude|gpt|chatgpt|copilot|cursor|codex|gemini|language model|coding agent)s?\b[^\n]{0,100}\b(must|should|need to|have to|are required to|is required to|please)\b[^\n]{0,60}\b(run|execute|curl|wget|read|cat|send|post|upload|delete|rm|install|download|open|fetch|exfiltrate)\b`)},
-	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(note|message|instructions?) (to|for) (the |any )?(ai|llm|assistant|agent|model|language model)s?\b|\bif you are an? (ai|llm|language model|assistant|agent|bot)\b|\b(attention|important|hey)[,:!]?\s+(ai|llm|assistant|agent|claude|gpt)s?\b`)},
+	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|system|original|all other)\b[^.\n]{0,25}\b(instructions?|prompts?|rules|directions|guidelines|directives)\b`), false},
+	{"ignore as instruções anteriores", lazyRx(`(?i)\b(ignore|desconsidere|esqueça|ignora)\b[^.\n]{0,40}\b(instruções|regras|orientações)\b[^.\n]{0,25}\b(anteriores|acima|do sistema|originais)\b`), false},
+	{"redefine o papel do agente", lazyRx(`(?i)\byou are now\s+(a|an|DAN|no longer|free|acting|unrestricted|jailbroken|in developer mode)\b|\bfrom now on,?\s+you\s+(are|will|must|should)\b|\b(new|updated|real) (system )?instructions\s*:|\bsystem prompt override\b`), false},
+	{"rótulo falso de papel (system/assistant)", lazyRx(`(?im)^[\s>#*]*(system|assistant|developer)\s*:\s*(you\b|ignore|from now|new instructions|important|the user|always|never|do not|don't|run\b|execute|forget)`), false},
+	{"tokens de controle de chat", lazyRx(`<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>`), false},
+	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(ai|llm|assistant|agent|claude|gpt|chatgpt|copilot|cursor|codex|gemini|language model|coding agent)s?\b[^\n]{0,100}\b(must|should|need to|have to|are required to|is required to|please)\b[^\n]{0,60}\b(run|execute|curl|wget|read|cat|send|post|upload|delete|rm|install|download|open|fetch|exfiltrate)\b`), true},
+	{"instrução dirigida a um agente de IA", lazyRx(`(?i)\b(note|message|instructions?) (to|for) (the |any )?(ai|llm|assistant|agent|model|language model)s?\b|\bif you are an? (ai|llm|language model|assistant|agent|bot)\b|\b(attention|important|hey)[,:!]?\s+(ai|llm|assistant|agent|claude|gpt)s?\b`), true},
 	// code comments and docstrings that address the agent: "# AI agent: run …", "// Claude, execute …"
-	{"comentário de código dirigido ao agente", lazyRx(`(?im)(^|[#;*/"'\s])\s*(ai|llm|assistant|ai agent|coding agent|claude|gpt|chatgpt|copilot|cursor|codex)s?\s*[:,]\s*(please\s+)?(run|execute|curl|wget|send|post|upload|delete|rm|install|download|ignore|fetch|read|cat)\b`)},
-	{"pede para ler ou enviar segredos", lazyRx(`(?i)\b(read|cat|print|show|dump|send|upload|post|exfiltrate|include|copy|leak)\b[^\n]{0,60}(~/\.ssh|\.ssh/|id_rsa|id_ed25519|auth\.json|\.aws/credentials|/proc/self/environ|\.env\b|api[_ -]?keys?|access tokens?|secrets?|credentials|private keys?)[^\n]{0,80}\b(to|into|at)\b[^\n]{0,40}(https?://|curl|webhook|pastebin|ngrok|requestbin|discord|telegram)`)},
-	{"comando que envia segredos", lazyRx(`(?i)\b(curl|wget|nc)\b[^\n]{0,120}(-d|--data[-a-z]*|-F|--form|-T|--upload-file|--post-file)[^\n]{0,40}(@|\$\(|` + "`" + `)[^\n]{0,60}(\.ssh|auth\.json|\.env\b|environ|credentials|\$\{?[A-Z_]*(KEY|TOKEN|SECRET)|printenv|\benv\b)`)},
+	{"comentário de código dirigido ao agente", lazyRx(`(?im)(^|[#;*/"'\s])\s*(ai|llm|assistant|ai agent|coding agent|claude|gpt|chatgpt|copilot|cursor|codex)s?\s*[:,]\s*(please\s+)?(run|execute|curl|wget|send|post|upload|delete|rm|install|download|ignore|fetch|read|cat)\b`), true},
+	{"pede para ler ou enviar segredos", lazyRx(`(?i)\b(read|cat|print|show|dump|send|upload|post|exfiltrate|include|copy|leak)\b[^\n]{0,60}(~/\.ssh|\.ssh/|id_rsa|id_ed25519|auth\.json|\.aws/credentials|/proc/self/environ|\.env\b|api[_ -]?keys?|access tokens?|secrets?|credentials|private keys?)[^\n]{0,80}\b(to|into|at)\b[^\n]{0,40}(https?://|curl|webhook|pastebin|ngrok|requestbin|discord|telegram)`), false},
+	{"comando que envia segredos", lazyRx(`(?i)\b(curl|wget|nc)\b[^\n]{0,120}(-d|--data[-a-z]*|-F|--form|-T|--upload-file|--post-file)[^\n]{0,40}(@|\$\(|` + "`" + `)[^\n]{0,60}(\.ssh|auth\.json|\.env\b|environ|credentials|\$\{?[A-Z_]*(KEY|TOKEN|SECRET)|printenv|\benv\b)`), false},
 }
 
 var (
@@ -85,26 +88,35 @@ var (
 // to install") do not match: plain imperatives only count when they address
 // an AI, ask for secrets, or hide (comments, invisible text, base64).
 func injScan(s string) string {
+	l, _ := injScanSev(s)
+	return l
+}
+
+// injScanSev is injScan plus the confidence level: hard detections arm the
+// turn's confirmation gate (hidden channels, secret reads, jailbreak labels);
+// soft ones (agent-directed doc text) still wrap as untrusted data but do not
+// gate the turn — a README that talks to agents is normal now.
+func injScanSev(s string) (string, bool) {
 	if len(s) < 12 {
-		return ""
+		return "", false
 	}
 	if len(s) > 512<<10 {
 		s = s[:512<<10]
 	}
 	for _, p := range grInjPatterns {
 		if p.re.MatchString(s) {
-			return p.label
+			return p.label, !p.soft
 		}
 	}
 	if strings.Contains(s, "<!--") {
 		for _, m := range grHTMLComment.FindAllStringSubmatch(s, 64) {
 			if grCommentBad.MatchString(m[1]) {
-				return "comentário HTML escondido com instruções"
+				return "comentário HTML escondido com instruções", true
 			}
 		}
 	}
 	if l := grInvisible(s); l != "" {
-		return l
+		return l, true
 	}
 	n := 0
 	for _, m := range grB64Blob.FindAllString(s, 64) {
@@ -122,23 +134,23 @@ func injScan(s string) string {
 			continue
 		}
 		if grB64Bad.Match(b) {
-			return "texto em base64 com instruções"
+			return "texto em base64 com instruções", true
 		}
 	}
 	// other encodings an attacker uses to get past a plain scan (garak)
 	if grInjBad(grRot13(s)) {
-		return "instrução escondida em rot13"
+		return "instrução escondida em rot13", true
 	}
 	if dec := grURLDecode(s); dec != s && grInjBad(dec) {
-		return "instrução escondida em URL-encoding"
+		return "instrução escondida em URL-encoding", true
 	}
 	if dec := grHexDecode(s); dec != "" && grInjBad(dec) {
-		return "instrução escondida em hexadecimal"
+		return "instrução escondida em hexadecimal", true
 	}
 	if dec := grDeLeet(s); dec != s && grInjBad(dec) {
-		return "instrução escondida em leetspeak"
+		return "instrução escondida em leetspeak", true
 	}
-	return ""
+	return "", false
 }
 
 // grInjBad reports an instruction-like pattern in decoded text. It uses only
@@ -212,7 +224,9 @@ func grInvisible(s string) string {
 		switch {
 		case r >= 0xE0000 && r <= 0xE007F:
 			return "texto invisível (caracteres de tag Unicode)"
-		case r == 0x200B || r == 0x200C || r == 0x200D || r == 0x2060 || r == 0x2062 || r == 0x2063 || r == 0x2064 || r == 0xFEFF && i > 0:
+		case r == 0x200B || r == 0x200C || r == 0x2060 || r == 0x2062 || r == 0x2063 || r == 0x2064 || r == 0xFEFF && i > 0:
+			// 0x200D (ZWJ) é tipografia legítima — emoji e escritas índicas —
+			// não entra na contagem; smuggling usa 200B/2060/FEFF
 			zw++
 		case r >= 0x202A && r <= 0x202E || r >= 0x2066 && r <= 0x2069:
 			return "controle bidi escondendo texto"
@@ -255,7 +269,7 @@ func (a *Agent) grMarkResult(tool string, isMCP bool, out *ToolOutput) {
 	if out == nil || tool == "todo" {
 		return
 	}
-	hiddenLabel := a.grSanitizeResult(tool, isMCP, out) // sanitize.go: invisible text, hidden HTML
+	hiddenLabel, hiddenHard := a.grSanitizeResult(tool, isMCP, out) // sanitize.go: invisible text, hidden HTML
 	if a.injMode() == "off" {
 		return
 	}
@@ -267,9 +281,9 @@ func (a *Agent) grMarkResult(tool string, isMCP bool, out *ToolOutput) {
 	if out.Text == "" {
 		return
 	}
-	label := injScan(out.Text)
+	label, hard := injScanSev(out.Text)
 	if label == "" {
-		label = hiddenLabel
+		label, hard = hiddenLabel, hiddenHard
 	}
 	if label == "" {
 		return
@@ -284,11 +298,15 @@ func (a *Agent) grMarkResult(tool string, isMCP bool, out *ToolOutput) {
 	} else {
 		out.Text = grWrapUntrusted(label, out.Text)
 	}
-	if a.gr.injection == "" {
-		a.ui.Warn(fmt.Sprintf("possível prompt injection no resultado de %s (%s): ações que mudam algo vão pedir confirmação neste turno", tool, label))
+	if hard {
+		if a.gr.injection == "" {
+			a.ui.Warn(fmt.Sprintf("possível prompt injection no resultado de %s (%s): ações que mudam algo vão pedir confirmação neste turno", tool, label))
+		}
+		a.gr.injection = label
+	} else {
+		a.ui.Warn(fmt.Sprintf("conteúdo dirigido a agente em %s (%s) — tratado como dado, não como instrução", tool, label))
 	}
-	a.gr.injection = label
-	dbg("injection", map[string]any{"tool": tool, "label": label})
+	dbg("injection", map[string]any{"tool": tool, "label": label, "hard": hard})
 }
 
 // grWrapUntrusted marks content that looks like a prompt injection.
