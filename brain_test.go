@@ -216,6 +216,28 @@ func TestBrainBackchainPermitStillGates(t *testing.T) {
 	}
 }
 
+// Guarda (T5/backchain): um operando concreto ("v4_csv_to_json.txt") não é
+// descrição — o planner só pode esconder o slot descrito quando o valor é o
+// substantivo do filtro. Apagar o target real deixava o script sem `file`
+// ("pass file or text") — falso-negativo medido no eval offline.
+func TestBrainBackchainKeepsConcreteTarget(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "v4_csv_to_json.txt", "name,count\nana,2\nbruno,3\n",
+		"v4_json_schema_infer.txt", "{\"name\":\"ana\",\"count\":2}\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "converte csv para json v4_csv_to_json.txt")
+	if r.Status != tkSucceeded || !strings.Contains(r.Text, "2 CSV row(s)") {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, "infere esquema json v4_json_schema_infer.txt")
+	if r.Status != tkSucceeded || !strings.Contains(r.Text, "Inferred object schema") {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+}
+
 // An unknown name is a question with what is close, never an invented file.
 func TestBrainOpenFileNotFound(t *testing.T) {
 	root := brFixture(t)
