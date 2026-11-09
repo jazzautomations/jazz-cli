@@ -1237,3 +1237,171 @@ func TestNLUDirEnumGuards(t *testing.T) {
 		t.Errorf("and-ação: %v", in.Slots)
 	}
 }
+
+// ext/glob cluster 2: padrões de letra (first/last letter) viram glob
+// ancorado, meta-words de domínio não viram name, glob≠regex.
+func TestNLUExtGlobGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "first letter e or f and last one x" → [ef]*x — o 'e' nu é
+	// filler PT mas aqui é operando; o ultimo não vira sort:mtime.
+	in := m.Parse("find all files with the first letter e or f and last one x", w)
+	if in.Name != "file_find" || in.Slots["name"] != "[ef]*x" || in.Slots["sort"] != "" {
+		t.Errorf("first/last letter: %s %v", in.Name, in.Slots)
+	}
+	in = m.Parse("find all files with the first letter 'e' or 'f' and last one 'x'", w)
+	if in.Slots["name"] != "[ef]*x" {
+		t.Errorf("quoted letters: %v", in.Slots)
+	}
+	// meta-word de domínio não é nome literal
+	in = m.Parse("find files matching regex '^test.*\\.go$'", w)
+	if in.Slots["name_re"] == "" || in.Slots["name"] != "" {
+		t.Errorf("regex cue: %v", in.Slots)
+	}
+	in = m.Parse("find files with names matching the regular expression 'a+'", w)
+	if in.Slots["name_re"] != "a+" || in.Slots["name"] != "" {
+		t.Errorf("regular expression: %v", in.Slots)
+	}
+	// glob nunca é regex: '*.php~' e '*.rb' são ext/glob
+	in = m.Parse("find all files with extension '*.php~'", w)
+	if in.Slots["ext"] != "php~" || in.Slots["name_re"] != "" {
+		t.Errorf("php-tilde ext: %v", in.Slots)
+	}
+	// "spaces in names" → glob com espaço, não file_move
+	in = m.Parse("find all files that contain spaces in their names", w)
+	if in.Name != "file_find" || in.Slots["name"] != "* *" {
+		t.Errorf("spaces in names: %s %v", in.Name, in.Slots)
+	}
+	// "regular files" = type f, não regex
+	in = m.Parse("find all regular files in the folder pathfolder which are 2 levels deep", w)
+	if in.Slots["type"] != "file" || in.Slots["max_depth"] != "2" || in.Slots["name_re"] != "" {
+		t.Errorf("regular files: %v", in.Slots)
+	}
+	// lista de exts C/CPP/Header → c,cpp,h
+	in = m.Parse("display all the C, CPP, Header files in the kat folder", w)
+	if in.Slots["ext"] != "c,cpp,h" || in.Slots["dir"] != "kat" {
+		t.Errorf("c,cpp,h: %v", in.Slots)
+	}
+	// regressão: "named letter" ainda é nome literal; "last 3" ainda é limit
+	in = m.Parse("find files named letter", w)
+	if in.Slots["name"] != "letter" {
+		t.Errorf("named letter: %v", in.Slots)
+	}
+	in = m.Parse("list the last 3 files", w)
+	if in.Slots["limit"] != "3" || in.Slots["name"] != "" {
+		t.Errorf("last 3: %v", in.Slots)
+	}
+}
+
+// depth/dir+sort cluster: particípio de ordenação e escopo de
+// filesystem nunca são path; quoted operand vence sponge-compound.
+func TestNLUSortDirGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "sorted by X" é cláusula de sort — nunca dir:sorted/dir:number
+	in := m.Parse("find all files in current directory sorted by size", w)
+	if in.Slots["dir"] != "" || in.Slots["sort"] != "size" {
+		t.Errorf("sorted by size: %v", in.Slots)
+	}
+	in = m.Parse("find files under docs sorted by name", w)
+	if in.Slots["dir"] != "docs" || in.Slots["sort"] != "name" {
+		t.Errorf("sorted by name: %v", in.Slots)
+	}
+	in = m.Parse("Prints list of top-level subfolders in a current folder, sorted by number of contained files", w)
+	if in.Slots["dir"] == "sorted" || in.Slots["dir"] == "number" ||
+		in.Slots["name"] != "" {
+		t.Errorf("top-level subfolders: %v", in.Slots)
+	}
+	// "disk partition" é escopo de filesystem, não dir/name
+	in = m.Parse("find all the files which have the size 40 bytes in the current disk partition", w)
+	if in.Slots["dir"] == "disk" || in.Slots["name"] == "disk partition" ||
+		in.Slots["min_size"] != "40" {
+		t.Errorf("disk partition: %v", in.Slots)
+	}
+	// quoted operand vence sponge-compound de palavra-atributo
+	in = m.Parse("List all files with name \"someFile\" and their modification time under the current directory tree, sorted by name", w)
+	if in.Slots["name"] != "someFile" || len(in.Dropped) > 0 {
+		t.Errorf("someFile: %v dropped=%v", in.Slots, in.Dropped)
+	}
+	// cued path ainda extrai palavras que o sponge bloqueia
+	for _, word := range []string{"list", "time", "count", "level"} {
+		in = m.Parse("find files named "+word, w)
+		if in.Slots["name"] != word {
+			t.Errorf("named %s: %v", word, in.Slots)
+		}
+	}
+}
+
+// line/count cluster: aspa após prep de escopo é alvo (nunca padrão),
+// "of X" alimenta o file do slice, ordinal de campo não é path.
+func TestNLULineCountGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "count 'x' chars in 'filename'" — o padrão é x, o alvo é o file;
+	// operandos nunca trocam de papel
+	in := m.Parse("Count the number of \"x\" characters in \"filename\"", w)
+	if in.Slots["pattern"] != "x" || in.Slots["file"] != "filename" ||
+		in.Slots["namepat"] != "" {
+		t.Errorf("count chars: %v", in.Slots)
+	}
+	// "search 'foo' in 'bar.txt'" — 'bar' é escopo, não forquoted
+	in = m.Parse("search files for \"foo\" in \"bar.txt\"", w)
+	if in.Slots["pattern"] != "foo" || in.Slots["file"] != "bar.txt" {
+		t.Errorf("grep scope: %v", in.Slots)
+	}
+	// "of syslog" alimenta o file do slice — syslog é nome de log
+	in = m.Parse("tail the last 50 lines of syslog", w)
+	if in.Slots["file"] != "syslog" || in.Slots["tail"] != "50" {
+		t.Errorf("tail of: %v", in.Slots)
+	}
+	in = m.Parse("show lines 5 to 20 of data.txt", w)
+	if in.Slots["start"] != "5" || in.Slots["end"] != "20" || in.Slots["file"] != "data.txt" {
+		t.Errorf("slice range: %v", in.Slots)
+	}
+	// ordinal de campo não é path — "the first" no merge não é dir
+	in = m.Parse("Merge files 'text.txt' and 'codes.txt' by outputting any lines whose second field in the first matches the third field in the second", w)
+	if in.Slots["dir"] == "first" || in.Slots["dir"] == "second" {
+		t.Errorf("field ordinal: %v", in.Slots)
+	}
+	// path com $VAR e barra é dir, não file
+	in = m.Parse("search for the word \"slrn\" in all the files in the folder $HOME/html/andrews-corner", w)
+	if in.Slots["dir"] != "$HOME/html/andrews-corner" || in.Slots["file"] != "" {
+		t.Errorf("$HOME dir: %v", in.Slots)
+	}
+}
+
+func TestNLUArchiveGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "with 'bzip2'" é formato/ferramenta, nunca fonte nem out; a aspa de
+	// destino (outtgt) vence o cue de ferramenta
+	in := m.Parse("Compress the file 'file' with 'bzip2' and append all output to the file 'logfile' and stdout", w)
+	if in.Slots["out"] != "logfile" || in.Slots["srcs"] == "bzip2" ||
+		(in.Slots["srcs"] != "" && in.Slots["srcs"] != "file") {
+		t.Errorf("bzip2 roles: %v", in.Slots)
+	}
+	// pattern cue consome a cue-word — 'filepattern' é o valor do pat,
+	// nunca uma fonte
+	in = m.Parse("Update the archive '2009.tar' with the files from the data/ directory tree that match pattern 'filepattern'", w)
+	if in.Slots["pat"] != "filepattern" || in.Slots["out"] != "2009.tar" {
+		t.Errorf("arc pat: %v", in.Slots)
+	}
+	for _, bad := range []string{"filepattern", "pattern", "tree"} {
+		if in.Slots["srcs"] == bad {
+			t.Errorf("srcs roubou %q: %v", bad, in.Slots)
+		}
+	}
+	// "from X" introduz a fonte direto
+	in = m.Parse("create archive backup.tar.gz from src", w)
+	if in.Slots["out"] != "backup.tar.gz" || in.Slots["srcs"] != "src" {
+		t.Errorf("from src: %v", in.Slots)
+	}
+	// "user's home" é escopo ~ — nunca owner nem dir literal; ".tar-gz"
+	// composta é ext/nome, nunca dir
+	in = m.Parse("Search the current user's home directory for any file that ends in .tar-gz", w)
+	if in.Name != "file_find" || in.Slots["dir"] != "~" ||
+		in.Slots["owner"] != "" || in.Slots["dir"] == ".tar-gz" {
+		t.Errorf("user home tar-gz: %s %v", in.Name, in.Slots)
+	}
+	// "ends in tar-gz" sem ponto também vira filtro de nome/ext
+	in = m.Parse("find files that end in tar-gz", w)
+	if in.Slots["dir"] == "tar-gz" {
+		t.Errorf("tar-gz dir: %v", in.Slots)
+	}
+}

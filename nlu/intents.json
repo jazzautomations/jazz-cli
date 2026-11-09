@@ -1778,7 +1778,7 @@
       "rename",
       "epochnoun"
      ],
-     "w": 0
+     "w": 10
     },
     {
      "all": [
@@ -2184,6 +2184,12 @@
       "text"
      ]
     },
+    "namepat": {
+     "from": "find:namepat",
+     "kinds": [
+      "text"
+     ]
+    },
     "name": {
      "kinds": [
       "text",
@@ -2198,12 +2204,6 @@
     },
     "namelen": {
      "from": "find:namelen",
-     "kinds": [
-      "text"
-     ]
-    },
-    "namepat": {
-     "from": "find:namepat",
      "kinds": [
       "text"
      ]
@@ -2775,6 +2775,7 @@
       "lineselect",
       "context",
       "findattr",
+      "nameattr",
       "scope",
       "opinion",
       "filequoted",
@@ -3902,6 +3903,7 @@
      ]
     },
     "file": {
+     "from": "slice:file",
      "kinds": [
       "file"
      ],

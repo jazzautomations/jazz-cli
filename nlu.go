@@ -503,6 +503,49 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if t.Quoted && i > 0 && !strings.Contains(t.Raw, " ") {
 			for j := i - 1; j >= 0 && j >= i-3; j-- {
 				u := &out[j]
+				// aspa após prep de escopo ("in 'filename'") em contexto
+				// de conteúdo (grep/count/slice) é o ARQUIVO alvo — sem
+				// o contexto seria dir ("find files in 'docs'"). A prep
+				// É filler — checar antes do skip. Só preposição real:
+				// "letter e or f" tem 'or' conjunção, não escopo.
+				isScopePrep := false
+				switch u.Fold {
+				case "in", "inside", "under", "within", "into",
+					"em", "no", "na", "nos", "nas", "dentro",
+					"on", "onto", "at":
+					isScopePrep = true
+				}
+				if isScopePrep {
+					// "in 'a' and 'b'" — dois operandos de arquivo: o
+					// slot é único, marcar um calaria o outro (falso
+					// sucesso). Sem tag → dropped honesto.
+					ambiguous := false
+					for k := i + 1; k < len(out) && k <= i+4; k++ {
+						w := &out[k]
+						if w.Filler || w.Fold == "," {
+							continue
+						}
+						switch w.Fold {
+						case "and", "or", "e", "ou", "mas":
+							for l := k + 1; l < len(out) && l <= k+3; l++ {
+								if out[l].Quoted {
+									ambiguous = true
+								}
+							}
+						}
+						break
+					}
+					if !ambiguous {
+						for k := range out {
+							if out[k].has("content") || out[k].has("grepword") ||
+								out[k].has("count") || out[k].has("lineselect") {
+								t.Concs = append(t.Concs, "filequoted")
+								break
+							}
+						}
+					}
+					break
+				}
 				if u.Filler {
 					continue
 				}
@@ -529,6 +572,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		if t.Quoted && i > 0 {
 			nameTgt := false
 			for j := i + 1; j < len(out) && j <= i+5; j++ {
+				if out[j].Quoted {
+					continue // aspa citada é operando, nunca cue-palavra
+				}
 				switch out[j].Fold {
 				case "name", "names", "nome", "nomes", "filename", "filenames", "pathname", "pathnames":
 					nameTgt = true
@@ -543,6 +589,13 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 		// grep), não nome de arquivo: "search files for \"foo\""
 		if t.Quoted && i > 0 {
 			for j := i - 1; j >= 0; j-- {
+				// prep de escopo encerra o lookback: a aspa depois de
+				// "in"/"em" é o ALVO (arquivo/pasta), nunca o padrão —
+				// "count 'x' characters in 'filename'" tem 'filename'
+				// como file, não como forquoted
+				if nuReplScopeCue[out[j].Fold] {
+					break
+				}
 				// "for"/"por" são fillers também — checar ANTES do skip.
 				// meta-palavras de conteúdo são transparentes: "for the
 				// string \"x\"" marca do mesmo jeito que "for \"x\"";
@@ -678,8 +731,17 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	if nameDomain {
 		for i := range out {
 			t := &out[i]
-			if !t.has("grepword") || !t.has("have") {
-				continue // verbos de busca (grep/search) seguem valendo
+			// posse/contenção perde o veto grep; verbos de busca
+			// (search/grep/find) seguem valendo
+			switch t.Fold {
+			case "contain", "contains", "containing", "have", "has",
+				"tem", "contem", "contém", "contendo", "possui",
+				"possuem", "with", "com", "that":
+			default:
+				continue
+			}
+			if !t.has("grepword") {
+				continue
 			}
 			kept := t.Concs[:0]
 			for _, c := range t.Concs {
@@ -689,6 +751,73 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 				kept = append(kept, c)
 			}
 			t.Concs = kept
+		}
+	} else {
+		// SEM substantivo "name" na frase, "matching X" é grep de
+		// conteúdo, não predicado de nome — o nameattr espúrio veta a
+		// rota find e a file_find ao mesmo tempo (parse vazio). Cue de
+		// padrão adiante ("matching regex 'x'") mantém o nameattr.
+		for i := range out {
+			t := &out[i]
+			switch t.Fold {
+			case "match", "matching", "matches", "casa":
+			default:
+				continue
+			}
+			if !t.has("grepword") || !t.has("nameattr") {
+				continue
+			}
+			patCue := false
+			for j := i + 1; j < len(out) && j <= i+3; j++ {
+				u := &out[j]
+				if u.Filler {
+					continue
+				}
+				switch u.Fold {
+				case "regex", "regexp", "pattern", "patterns", "padrao",
+					"padrão", "expression", "expressions", "glob":
+					patCue = true
+				}
+				break
+			}
+			if patCue {
+				continue
+			}
+			kept := t.Concs[:0]
+			for _, c := range t.Concs {
+				if c != "nameattr" {
+					kept = append(kept, c)
+				}
+			}
+			t.Concs = kept
+		}
+	}
+	// "the user's home directory" — 'user' é possessivo do escopo ~,
+	// não filtro de owner: o conceito user/env vetaria o file_find e
+	// rotearia pra perm_find ("ends in .tar-gz" com owner:h)
+	for i, t := range out {
+		switch t.Fold {
+		case "user", "usuario", "usuário":
+		default:
+			continue
+		}
+		for j := i + 1; j < len(out) && j <= i+3; j++ {
+			u := &out[j]
+			if u.Filler || u.Fold == "'s" || u.Fold == "s" {
+				continue
+			}
+			if u.Fold == "home" || u.Fold == "casa" {
+				for _, tk := range []*nuTok{&out[i], u} {
+					kept := tk.Concs[:0]
+					for _, c := range tk.Concs {
+						if c != "user" && c != "env" {
+							kept = append(kept, c)
+						}
+					}
+					tk.Concs = kept
+				}
+			}
+			break
 		}
 	}
 	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
@@ -1555,7 +1684,13 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	for _, k := range []string{"namelen", "namepat"} {
 		if v := in.Slots[k]; v != "" {
 			if _, hasName := def.Slots["name"]; hasName {
-				if in.Slots["name"] == "" {
+				// meta-palavra de domínio ("letter", "name") cedida pelo
+				// sponge não bloqueia o padrão real que o namepat achou
+				cur := in.Slots["name"]
+				if cur == "" || cur == "letter" || cur == "letters" ||
+					cur == "name" || cur == "names" || cur == "filename" ||
+					cur == "basename" || cur == "caractere" ||
+					cur == "letra" || cur == "letras" {
 					in.Slots["name"] = v
 				}
 				delete(in.Slots, k)
@@ -1613,6 +1748,13 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			in.Slots["namepat"] = "*" + toks[i].Raw + "*"
 		}
 		break
+	}
+	// name == name_re: o mesmo literal alimentou os dois slots ("names
+	// matching 'a+'"). Como glob, "a+" casa só o literal 'a+' — junto com
+	// o regex restringiria demais. O regex é o predicado real.
+	if re := in.Slots["name_re"]; re != "" && in.Slots["name"] == re &&
+		!strings.ContainsAny(re, "*?[") {
+		delete(in.Slots, "name")
 	}
 	// invariante de exceção: token dentro de cláusula "except/without/…"
 	// só alimenta o slot exclude — qualquer outro slot que tenha
@@ -2116,7 +2258,8 @@ func nuPureExt(raw string) bool {
 		return false
 	}
 	for _, r := range raw[1:] {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+		// ".tar-gz"/".tar-bz2" — ext composta com hífen continua ext
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' {
 			return false
 		}
 	}
@@ -2284,6 +2427,23 @@ var nuFormatWords = map[string]bool{
 	"permissions": true, "owners": true,
 	"been": true, "being": true, "sido": true, "modified": true,
 	"modificado": true, "modificada": true,
+	// coluna de exibição / escopo de filesystem — "their modification
+	// time", "disk partition": phrasing, nunca nome de arquivo
+	"modification": true, "modificacao": true, "modificação": true,
+	"access": true, "acesso": true, "time": true, "tempo": true,
+	"disk": true, "disks": true, "disco": true,
+	"partition": true, "partitions": true, "particao": true,
+	"partição": true, "volume": true, "volumes": true,
+	"filesystem": true, "mount": true, "mounts": true,
+	// "top-level subfolders" / "sorted by number of contained files":
+	// profundidade e contagem são predicados, não basename
+	"top": true, "top-level": true, "toplevel": true,
+	"level": true, "levels": true, "nivel": true, "nível": true,
+	"number": true, "numero": true, "número": true, "count": true,
+	"contained": true, "contido": true, "contida": true,
+	"subfolder": true, "subfolders": true, "subdirectory": true,
+	"subdirectories": true, "subdir": true, "subdirs": true,
+	"prints": true, "listing": true, "list": true,
 }
 
 // nuToolWords: nome de ferramenta/flag de comando e verbo de exibição —
@@ -3121,19 +3281,33 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			"chamado": true, "chamada": true, "called": true, "to": true,
 			"->": true, "=>": true, "sob": true,
 		}
+		// pass 0: a aspa marcada outtgt ("to the file 'logfile'") é o
+		// destino explícito — ganha de qualquer cue ("with 'bzip2'"
+		// seria engolido como out sem ela).
+		for i, t := range toks {
+			if t.has("outtgt") && !taken[i] {
+				taken[i] = true
+				return t.Raw
+			}
+		}
 		// pass 1: token com cue — aceita archive-shaped ou nome simples
 		// ("Archive all files to copy_of_folder1": o destino pode não
-		// ter extensão — o cap resolve o formato).
+		// ter extensão — o cap resolve o formato). Substantivo-arquivo
+		// ("to the file X") é transparente até o nome.
 		for i, t := range toks {
 			if !outCues[t.Fold] || taken[i] {
 				continue
 			}
-			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+			for j := i + 1; j < len(toks) && j <= i+4; j++ {
 				u := &toks[j]
 				if u.Filler || u.Slang || taken[j] {
 					continue
 				}
-				if nuArchiveWord(u.Fold) || nuNameShaped(u.Raw) ||
+				switch u.Fold {
+				case "file", "files", "arquivo", "arquivos", "output":
+					continue
+				}
+				if nuArchiveWord(u.Fold) || nuNameShaped(u.Raw) || u.Quoted ||
 					(len(u.Concs) == 0 && !nuIsNumber(u.Fold) && u.Fold != "") {
 					taken[i], taken[j] = true, true
 					return u.Raw
@@ -3198,6 +3372,10 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			"arquivo": true, "arquivos": true, "file": true, "files": true,
 		}
 		var srcs []string
+		arcSrcStop := map[string]bool{
+			"to": true, "into": true, "para": true, "pra": true,
+			"pro": true, "em": true, "as": true, "como": true,
+		}
 		actionConcs := map[string]bool{
 			"mutate": true, "remote": true, "net": true, "run": true,
 			"delete": true, "kill": true, "exec": true, "install": true,
@@ -3221,8 +3399,10 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			return false
 		}
 		add := func(i int) {
-			if taken[i] {
-				return
+			if taken[i] || arcSrcStop[toks[i].Fold] ||
+				toks[i].has("archive") || nuArchiveWord(toks[i].Fold) {
+				return // preposição de destino e formato/ferramenta
+				// ("with bzip2") nunca são fonte
 			}
 			taken[i] = true
 			srcs = append(srcs, toks[i].Raw)
@@ -3255,7 +3435,11 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				if u.Filler || u.Slang || taken[j] || u.has("article") {
 					continue
 				}
-				if nuArchiveWord(u.Fold) || nuPureExt(u.Fold) || nuIsNumber(u.Fold) {
+				if arcSrcStop[u.Fold] {
+					break // preposição de destino encerra a fonte — "files to 'x'"
+				}
+				if nuArchiveWord(u.Fold) || u.has("archive") ||
+					nuPureExt(u.Fold) || nuIsNumber(u.Fold) {
 					break // o archive é do slot out; ".txt" é filtro de ext
 				}
 				if nuArcTypeWord(u.Fold) {
@@ -3282,14 +3466,56 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 				break
 			}
 		}
+		// "create archive X from src" — 'from' introduz a fonte direto;
+		// quoted depois de pattern-cue é do slot pat, não fonte
+		patCueWords := map[string]bool{
+			"matching": true, "match": true, "pattern": true,
+			"padrao": true, "padrão": true, "named": true, "called": true,
+			"like": true, "como": true,
+		}
+		for i, t := range toks {
+			if (t.Fold == "from" || t.Fold == "de") && !taken[i] {
+				for j := i + 1; j < len(toks) && j <= i+2; j++ {
+					u := &toks[j]
+					if u.Filler || u.Slang || taken[j] || u.has("article") {
+						continue
+					}
+					if nuArchiveWord(u.Fold) || nuIsNumber(u.Fold) ||
+						nuArcTypeWord(u.Fold) || actionWord(u) {
+						break
+					}
+					add(j)
+					break
+				}
+			}
+		}
 		// tokens com cara de nome/path que sobraram ("a.txt", "src/x")
 		for i, t := range toks {
 			if taken[i] || t.Filler || t.Slang || actionWord(&toks[i]) {
 				continue
 			}
+			if t.has("outtgt") {
+				continue // destino de escrita é do slot out
+			}
+			if t.Quoted {
+				// 'filepattern' depois de match/pattern é do slot pat
+				isPat := false
+				for j := i - 1; j >= 0 && j >= i-2; j-- {
+					u := &toks[j]
+					if u.Filler || u.Slang {
+						continue
+					}
+					isPat = patCueWords[u.Fold]
+					break
+				}
+				if isPat {
+					continue
+				}
+			}
 			if nuNameShaped(t.Raw) || nuFileShaped(t.Fold) ||
 				strings.Contains(t.Raw, "/") || (t.Quoted && t.Raw != "") {
-				if !nuArchiveName(t.Fold) && !nuPureExt(t.Fold) && !nuArcAllTypeWords(t.Raw) {
+				if !nuArchiveName(t.Fold) && !nuPureExt(t.Fold) &&
+					!nuArcAllTypeWords(t.Raw) && !t.has("archive") {
 					add(i)
 				}
 			}
@@ -3309,8 +3535,9 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 			for j := i + 1; j < len(toks) && j <= i+3; j++ {
 				u := &toks[j]
-				if u.Filler || u.Slang || taken[j] || u.has("article") {
-					continue
+				if u.Filler || u.Slang || taken[j] || u.has("article") ||
+					patCues[u.Fold] {
+					continue // "match pattern 'x'" — cue não é o valor
 				}
 				if nuArchiveWord(u.Fold) || nuIsNumber(u.Fold) {
 					break
@@ -3925,6 +4152,10 @@ var nuArcTypeWords = map[string]bool{
 	"folders": true, "folder": true, "subdirectories": true, "subdirs": true,
 	"arquivos": true, "arquivo": true, "pastas": true, "pasta": true,
 	"diretorios": true, "diretório": true, "diretorio": true,
+	// "data/ directory tree" — tree/hierarchy descrevem o passeio,
+	// não a fonte: srcs=data/, nunca srcs=tree
+	"tree": true, "arvore": true, "árvore": true,
+	"hierarchy": true, "hierarquia": true,
 }
 
 func nuArcTypeWord(f string) bool { return nuArcTypeWords[f] }
@@ -4485,6 +4716,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		return "file"
 	case "sort":
 		for i, t := range toks {
+			if taken[i] {
+				continue
+			}
 			switch t.Fold {
 			case "maior", "maiores", "largest", "biggest", "larger", "bigger", "heaviest", "pesado", "pesada", "pesados", "pesadas", "menor", "menores", "smallest":
 				taken[i] = true
@@ -4502,6 +4736,34 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 						return "mtime"
 					}
 				}
+			// "sorted/ordered by size|time|name" — particípio + by + campo.
+			// "by name" é a ordem default do find: consome a frase mas
+			// não emite slot (evidência fraca pra ordenação redundante).
+			case "sorted", "ordered", "arranged", "ordenado", "ordenada",
+				"ordenados", "ordenadas", "classificado", "classificada":
+				for j := i + 1; j < len(toks) && j <= i+3; j++ {
+					u := &toks[j]
+					if u.Filler || u.Fold == "by" || u.Fold == "por" ||
+						u.Fold == "de" || u.Fold == "em" {
+						continue
+					}
+					switch u.Fold {
+					case "size", "tamanho", "sizes":
+						taken[i], taken[j] = true, true
+						return "size"
+					case "time", "date", "mtime", "tempo", "data",
+						"modification", "age", "idade":
+						taken[i], taken[j] = true, true
+						return "mtime"
+					case "name", "nome", "names", "filename":
+						taken[i], taken[j] = true, true
+						return "name"
+					}
+					// campo não suportado ("number of files") fica livre
+					// → unfed honesto em vez de ordenação errada calada
+					return ""
+				}
+				taken[i] = true
 			}
 		}
 	case "newer", "older":
@@ -4600,6 +4862,24 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue
 				}
 			}
+			// "C, CPP, Header files" — convenção do corpus: header = *.h
+			if f == "header" || f == "headers" {
+				isFileCtx := false
+				for _, j := range []int{i + 1, i - 1} {
+					if j < 0 || j >= len(toks) {
+						continue
+					}
+					switch toks[j].Fold {
+					case "file", "files", "arquivo", "arquivos":
+						isFileCtx = true
+					}
+				}
+				if isFileCtx {
+					taken[i] = true
+					addExt("h")
+					continue
+				}
+			}
 			if nuExtWords[f] {
 				// "chgrp to h"/"muda para zip": a palavra-ext depois de
 				// to/para/into é DESTINO (usuário, formato-alvo), não
@@ -4694,11 +4974,23 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 		reMeta := func(s string) bool {
 			return strings.ContainsAny(s, "^$|+()\\")
 		}
+		// cue-words de domínio ("regex", "regular expression", "matching")
+		// são consumidos junto — senão o sponge os cola como name literal
+		eatReCues := func() {
+			for i, t := range toks {
+				switch t.Fold {
+				case "regex", "regexp", "regular", "expression", "expressions",
+					"expressao", "expressão", "match", "matching", "matches":
+					taken[i] = true
+				}
+			}
+		}
 		for i, t := range toks {
 			// quoted literal sem meta-regex é NOME ('your_pattern'),
 			// não expressão — só "regex 'abc'" explícito força name_re
 			if t.Quoted && t.Fold != "" && !globShaped(t.Fold) && (strongRe || reMeta(t.Fold)) {
 				taken[i] = true
+				eatReCues()
 				return t.Fold
 			}
 		}
@@ -4706,6 +4998,7 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			t := &toks[i]
 			if t.Fold != "" && !t.Filler && len(t.Concs) == 0 && !taken[i] && nuNameShaped(t.Raw) && !globShaped(t.Fold) && reMeta(t.Fold) {
 				taken[i] = true
+				eatReCues()
 				return t.Fold
 			}
 		}
@@ -4877,6 +5170,98 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				break
 			}
+		}
+		// "first letter e or f and last (letter|one) x" → glob ancorado:
+		// fnmatch casa classe [ef] e sufixo literal — "e*x" e "f*x".
+		firsts, lasts := "", ""
+		for i, t := range toks {
+			pos := ""
+			switch t.Fold {
+			case "first", "primeiro", "primeira", "inicial", "iniciais":
+				pos = "first"
+			case "last", "final", "ultimo", "último", "ultima", "última":
+				pos = "last"
+			case "letter", "letters", "letra", "letras", "caractere",
+				"one", "um", "uma":
+				// "letter"/"one" precisam do marcador de posição antes
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					p := &toks[j]
+					switch p.Fold {
+					case "first", "primeiro", "primeira", "inicial", "iniciais":
+						pos = "first"
+					case "last", "final", "ultimo", "último", "ultima", "última":
+						pos = "last"
+					}
+					if !p.Filler && !p.Slang {
+						break
+					}
+				}
+			}
+			if pos == "" {
+				continue
+			}
+			// anchor direto em pos-word ("last x files" = último N, não
+			// sufixo) exige cue de letra antes de letra nua; letra
+			// citada dispensa o cue. Anchor em "letter"/"one" já é cue.
+			cueSeen := toks[i].Fold == "letter" || toks[i].Fold == "letters" ||
+				toks[i].Fold == "letra" || toks[i].Fold == "letras" ||
+				toks[i].Fold == "caractere" || toks[i].Fold == "one" ||
+				toks[i].Fold == "um" || toks[i].Fold == "uma" ||
+				strings.Contains(toks[i].Raw, "one") ||
+				strings.Contains(toks[i].Raw, "letter")
+			var got []string
+			var idx []int
+			for j := i + 1; j < len(toks) && j <= i+6; j++ {
+				u := &toks[j]
+				// letra de 1 rune citada OU confirmada por cue de letra:
+				// candidata mesmo sendo filler ("first letter e or f" —
+				// o 'e' nu é filler PT mas aqui é operando real)
+				if len([]rune(u.Fold)) == 1 && len(u.Concs) == 0 && !taken[j] &&
+					(u.Quoted || cueSeen) {
+					got = append(got, u.Fold)
+					idx = append(idx, j)
+					continue
+				}
+				if u.Filler || u.Slang {
+					continue
+				}
+				switch u.Fold {
+				case "letter", "letters", "letra", "letras", "caractere",
+					"one", "um", "uma":
+					cueSeen = true
+					continue
+				case "or", "ou", "and", ",":
+					continue
+				}
+				break
+			}
+			if len(got) > 0 {
+				seg := got[0]
+				if len(got) > 1 {
+					seg = "[" + strings.Join(got, "") + "]"
+				}
+				for _, j := range idx {
+					taken[j] = true
+				}
+				taken[i] = true
+				if pos == "first" {
+					firsts = seg
+				} else {
+					lasts = seg
+				}
+			}
+		}
+		if firsts != "" || lasts != "" {
+			pat := firsts + "*"
+			pat += lasts
+			for i, t := range toks {
+				switch t.Fold {
+				case "first", "last", "primeiro", "primeira", "final",
+					"ultimo", "último", "ultima", "última", "inicial":
+					taken[i] = true
+				}
+			}
+			return pat
 		}
 		// "(names) begin/start/end with X" → glob com âncora: X* / *X.
 		// A cadeia de cues nameattr ("names begin with") não é o valor.
@@ -5317,6 +5702,27 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"há": true, "less": true, "fewer": true, "than": true,
 			"within": true, "last": true, "past": true, "older": true,
 			"newer": true, "recent": true, "recente": true,
+			// particípio de ordenação é cláusula de sort, não path:
+			// "in the current directory sorted by size" não tem dir
+			// "sorted"; "disk partition" é escopo de filesystem
+			"sorted": true, "ordering": true, "ordered": true,
+			"arranged": true, "sorting": true, "ordenado": true,
+			"ordenada": true, "classificado": true,
+			"disk": true, "disks": true, "disco": true,
+			// coluna de exibição pedida na frase ("and their
+			// modification time") descreve o LISTING, não um lugar
+			"modification": true, "modificacao": true, "modificação": true,
+			"access": true, "acesso": true,
+			// atributo de contagem depois de preposição é métrica, não
+			// path: "sorted by number of files" não tem dir "number"
+			"number": true, "numero": true, "número": true,
+			"count": true, "quantidade": true,
+			// ordinal de campo é posição, não path: "second field in
+			// the first (file)" não tem dir "first"
+			"first": true, "second": true, "third": true,
+			"fourth": true, "fifth": true, "field": true,
+			"fields": true, "campo": true, "campos": true,
+			"primeiro": true, "segundo": true, "terceiro": true,
 		}
 		// a conjunction/verb closes the scope phrase — words after "under X
 		// and keep Y" are the next clause, not part of the dir name
@@ -5355,12 +5761,57 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			if !dirCues[t.Fold] || taken[i] {
 				continue
 			}
+			if t.Fold == "in" || t.Fold == "em" {
+				// "ends in tar-gz"/"acaba em .zip" — o 'in' fecha a
+				// âncora de sufixo, não abre escopo de diretório
+				endAnchor := false
+				for j := i - 1; j >= 0 && j >= i-2; j-- {
+					switch toks[j].Fold {
+					case "end", "ends", "ending", "suffix", "suffixed",
+						"termina", "terminam", "acaba", "acabam":
+						endAnchor = true
+					case "files", "file", "arquivos", "arquivo":
+						continue
+					}
+					break
+				}
+				if endAnchor {
+					continue
+				}
+			}
 			if arcCtx && nounCues[t.Fold] {
 				continue
 			}
 			// "no owner"/"no group": EN negation, not the PT "em+o" preposition
 			if t.Fold == "no" && i+1 < len(toks) && nuNegatableNouns[toks[i+1].Fold] {
 				continue
+			}
+			// "the user's home directory" — o cue substantivo vem DEPOIS
+			// do par possessivo; olha pra trás e resolve "~" como o
+			// your/my home adiante
+			if nounCues[t.Fold] {
+				for j := i - 1; j >= 0 && j >= i-4; j-- {
+					u := &toks[j]
+					if u.Filler || u.Fold == "'s" || u.Fold == "s" {
+						continue
+					}
+					if u.Fold == "home" || u.Fold == "casa" {
+						for k := j; k <= i; k++ {
+							taken[k] = true
+						}
+						for k := j - 1; k >= 0 && k >= j-3; k-- {
+							switch toks[k].Fold {
+							case "user", "usuario", "usuário", "'s", "s",
+								"current", "atual", "owner", "dono":
+								taken[k] = true
+							default:
+								k = -1
+							}
+						}
+						return "~"
+					}
+					break
+				}
 			}
 			for j := i + 1; j < len(toks) && j <= i+3; j++ {
 				u := &toks[j]
@@ -5386,9 +5837,14 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if nuArchiveWord(u.Fold) {
 					continue // "into a tarball" — é o formato do out, não dir
 				}
-				if timeWords[u.Fold] || notDirWords[u.Fold] || strings.HasPrefix(u.Raw, "$") ||
+				if timeWords[u.Fold] || notDirWords[u.Fold] ||
 					nuToolWords[u.Fold] || strings.HasPrefix(u.Fold, "-") {
-					continue // a window, a verb, a shell var or a tool/flag is never a dir — leave it for the time slots or unfed
+					continue // a window, a verb or a tool/flag is never a dir — leave it for the time slots or unfed
+				}
+				// "$VAR sozinho" é ambíguo (arquivo ou pasta) — fica
+				// livre; "$VAR/sub/dir" com barra é path = diretório
+				if strings.HasPrefix(u.Raw, "$") && !strings.Contains(u.Raw, "/") {
+					continue
 				}
 				if unitWords[u.Fold] {
 					taken[i], taken[j] = true, true
@@ -7122,6 +7578,15 @@ func nuFindDepth(toks []nuTok, wantMin bool, taken map[int]bool) string {
 		if maxSeen >= 0 {
 			taken[maxSeen] = true
 		}
+		// "2 levels deep" — todos os cue-words da janela são phrasing;
+		// 'deep' solto virava name:deep
+		for j, u := range toks {
+			switch u.Fold {
+			case "level", "levels", "nível", "níveis", "nivel", "niveis",
+				"depth", "profundidade", "deep":
+				taken[j] = true
+			}
+		}
 		return t.Fold
 	}
 	return ""
@@ -7230,6 +7695,92 @@ func nuExtractPat(toks []nuTok) string {
 // "primeiras 20" → start=1,end=20, "linhas 5 a 20" → start=5,end=20,
 // "linha 42" → start=end=42.
 func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
+	// "tail the last 50 lines of syslog" — o arquivo vem depois do
+	// 'of'/'in'. Meta-substantivos ("context", "file") são transparentes.
+	if what == "file" {
+		fileWord := func(u *nuTok, j int) bool {
+			if u.Filler || u.Slang || taken[j] {
+				return false
+			}
+			switch u.Fold {
+			case "context", "contexto", "file", "files", "arquivo",
+				"arquivos", "text", "texto", "input":
+				return false
+			}
+			// substantivos de arquivo (syslog→logs) são nome válido;
+			// conceitos de outro domínio não nomeiam arquivo
+			for _, c := range u.Concs {
+				switch c {
+				case "logs", "file", "filenoun", "filequoted":
+				default:
+					return false
+				}
+			}
+			return !nuIsNumber(u.Fold)
+		}
+		ambiguousAhead := func(i int) bool {
+			for k := i + 1; k < len(toks) && k <= i+4; k++ {
+				w := &toks[k]
+				if w.Filler || w.Fold == "," {
+					continue
+				}
+				switch w.Fold {
+				case "and", "or", "e", "ou", "mas":
+					for l := k + 1; l < len(toks) && l <= k+3; l++ {
+						v := &toks[l]
+						if v.Quoted || nuFileShaped(v.Fold) ||
+							strings.ContainsAny(v.Raw, "./") {
+							return true
+						}
+					}
+				}
+				break
+			}
+			return false
+		}
+		for i, t := range toks {
+			switch t.Fold {
+			case "of", "de", "do", "da", "from", "in", "em", "no", "na":
+			default:
+				continue
+			}
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] {
+					continue
+				}
+				switch u.Fold {
+				case "context", "contexto", "file", "files", "arquivo",
+					"arquivos", "text", "texto", "input":
+					continue
+				}
+				if !fileWord(u, j) {
+					return ""
+				}
+				// "in 'a' and 'b'" — slot único não pode escolher um
+				if ambiguousAhead(j) {
+					return ""
+				}
+				taken[i], taken[j] = true, true
+				return u.Raw
+			}
+		}
+		// sem cue: token com cara de arquivo é o alvo ("line 5 of
+		// a.txt" já caiu no cue; "slice active_record.rb" precisa disto)
+		for i, t := range toks {
+			if taken[i] || t.Filler || t.Slang {
+				continue
+			}
+			if nuFileShaped(t.Fold) || strings.ContainsAny(t.Raw, "./") {
+				if ambiguousAhead(i) {
+					return ""
+				}
+				taken[i] = true
+				return t.Raw
+			}
+		}
+		return ""
+	}
 	// "line 111 with 2 lines of context": a janela é a linha ± o contexto.
 	if what == "start" || what == "end" {
 		if st, en, ok := nuSliceContext(toks, taken); ok {
