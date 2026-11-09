@@ -2930,4 +2930,23 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 				q, in.Name, in.Confidence, in.Slots)
 		}
 	}
+	// "traz" é pull como "puxa"; "compara com o remoto" é diff de git —
+	// remote é vocábulo de domínio, nunca operando de pasta
+	for q, want := range map[string]string{
+		"traz as mudanças":                    "git_pull",
+		"traz as mudanças do remoto":          "git_pull",
+		"compara com o remoto":                "git_diff",
+		"compara com a main":                  "dir_diff",
+		"quais arquivos foram editados ontem": "fs_recent",
+		"arquivos modificados hoje":           "fs_recent",
+		"commits de ontem":                    "git_log",
+		"quem editou o parser.go":             "git_blame",
+		"ajuda com o comando grep":            "help",
+		"ajuda com a ferramenta tar":          "help",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
 }

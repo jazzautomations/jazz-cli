@@ -1402,13 +1402,14 @@
      "none": [
       "branch",
       "commit",
-      "recover",
-      "rename",
-      "filenoun",
       "create",
       "delete",
       "dotenv",
-      "envfile"
+      "envfile",
+      "filenoun",
+      "recover",
+      "remote",
+      "rename"
      ],
      "w": 0
     }
@@ -4095,6 +4096,13 @@
       "@service",
       "mutate"
      ]
+    },
+    {
+     "all": [
+      "help",
+      "tonoun"
+     ],
+     "w": 15
     }
    ],
    "slots": {}

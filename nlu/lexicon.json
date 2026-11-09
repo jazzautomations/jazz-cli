@@ -2017,7 +2017,12 @@
    "fetch",
    "sincroniza",
    "sincronizar",
-   "sync"
+   "sync",
+   "traz",
+   "traga",
+   "trazer",
+   "trazendo",
+   "trouxe"
   ],
   "push": [
    "push",
@@ -2042,7 +2047,10 @@
    "newest",
    "mais novo",
    "mais nova",
-   "last-created"
+   "last-created",
+   "ontem",
+   "anteontem",
+   "yesterday"
   ],
   "recover": [
    "recover",
