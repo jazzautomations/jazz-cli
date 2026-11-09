@@ -44,24 +44,33 @@ type snReport struct {
 	Hidden     []string
 }
 
-// suspect returns an injection label when what was removed looks deliberate.
+// suspect returns an injection label when what was removed looks deliberate,
+// plus whether it arms the turn's confirmation gate. Hidden channels the
+// sanitizer could not fully neutralize (tag smuggling, bidi, hidden HTML
+// carrying instructions) are hard; a bare zero-width count is soft — the
+// characters are already stripped, and pasted web/PDF text trips low counts.
 func (r snReport) suspect() string {
+	l, _ := r.suspectSev()
+	return l
+}
+
+func (r snReport) suspectSev() (string, bool) {
 	switch {
 	case r.Tags != "":
-		return "texto invisível (caracteres de tag Unicode)"
+		return "texto invisível (caracteres de tag Unicode)", true
 	case r.Bidi > 0:
-		return "controle bidi escondendo texto"
-	case r.Invisible >= 4:
-		return "texto com caracteres invisíveis (zero-width)"
+		return "controle bidi escondendo texto", true
+	case r.Invisible >= 10:
+		return "texto com caracteres invisíveis (zero-width)", false
 	case r.Homoglyphs > 0:
-		return "letras parecidas (homóglifos) misturadas em palavras"
+		return "letras parecidas (homóglifos) misturadas em palavras", true
 	}
 	for _, h := range r.Hidden {
 		if injScan(h) != "" || grCommentBad.MatchString(h) {
-			return "texto HTML escondido com instruções"
+			return "texto HTML escondido com instruções", true
 		}
 	}
-	return ""
+	return "", false
 }
 
 // note is the line appended to the tool result ("" = nothing removed).
@@ -368,11 +377,12 @@ func snLooksHTML(s string) bool {
 // grSanitizeResult cleans a tool result before the model sees it. Hidden HTML
 // is removed from fetched pages and MCP results (and from everything in strict
 // mode); in file reads and command output it is only scanned. It returns the
-// injection label the removed content implies ("" = none).
-func (a *Agent) grSanitizeResult(tool string, isMCP bool, out *ToolOutput) string {
+// injection label the removed content implies ("" = none) and whether it
+// arms the turn's confirmation gate (see snReport.suspect).
+func (a *Agent) grSanitizeResult(tool string, isMCP bool, out *ToolOutput) (string, bool) {
 	mode := snMode(a.cfg)
 	if mode == "off" || out == nil || out.Text == "" || tool == "todo" {
-		return ""
+		return "", false
 	}
 	text, rep := sanitizeForModel(out.Text, mode)
 	if snLooksHTML(text) {
@@ -394,11 +404,11 @@ func (a *Agent) grSanitizeResult(tool string, isMCP bool, out *ToolOutput) strin
 		out.Text += "\n\n" + n
 		a.ui.Notice(tool + ": " + strings.TrimSuffix(strings.TrimPrefix(n, "[jazz: "), "]"))
 	}
-	label := rep.suspect()
+	label, hard := rep.suspectSev()
 	if label == "" && out.Suspect != "" {
-		label = out.Suspect
+		label, hard = out.Suspect, true
 	}
-	return label
+	return label, hard
 }
 
 // grSanitizeInput cleans text the user pasted (invisible characters only).

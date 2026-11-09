@@ -348,7 +348,7 @@ func segmentDanger(t []string) string {
 	}
 	switch w {
 	case "sudo", "doas", "pkexec":
-		return "sudo/privilégio (pede senha e trava sem terminal)"
+		return "sudo/privilégio — sem TTY a senha trava; peça aprovação, ou sudo -S com a senha via stdin, ou o usuário pode rodar com --yolo/mode yolo"
 	case "su":
 		return "troca de usuário (su)"
 	case "rm":
