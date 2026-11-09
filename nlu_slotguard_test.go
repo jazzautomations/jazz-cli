@@ -30,7 +30,6 @@ func TestNLUSlotGuards(t *testing.T) {
 		"find files modified in the last week":  "last",
 		"show files from in the past month":     "past",
 		"files modified in the previous 2 days": "previous",
-		"find files inside $DIR":                "$DIR",
 		"find files in the future releases":     "future",
 	} {
 		in := m.Parse(text, w)
@@ -2035,6 +2034,227 @@ func TestNLUPredicateCueGuards(t *testing.T) {
 			case "word", "string", "term", "name", "the", "a":
 				t.Errorf("cue-vocábulo dropado: %s -> dropped=%v", c.text, in.Dropped)
 			}
+		}
+	}
+}
+
+// Corpus mining (redo-v20): verbo/meta-vocábulo nunca é operando —
+// "set read permission for group" é g+r simbólico; "aluno1's files"
+// é src_owner possessivo; "by user X" não tem dir; unidade/meta
+// (KiB/Plus/input) nunca é pasta; descriptor computado ("system IP")
+// e verbo de aritmética recusam honestos.
+func TestNLUCorpusMineGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, c := range []struct {
+		text   string
+		intent string
+		want   map[string]string
+		absent []string
+	}{
+		{"Find all files/directories under $1 which have at least read permission for their owner and set read permission for group for these files/directories",
+			"perm_set", map[string]string{"mass": "1", "symread": "g+r"}, []string{"file", "owner"}},
+		{"Change the ownership of all aluno1's files in the current directory and below to aluno2",
+			"perm_set", map[string]string{"src_owner": "aluno1", "owner": "aluno2"}, []string{"file"}},
+		{"Search the system for files and directories owned by user `admin'",
+			"perm_find", map[string]string{"owner": "admin"}, []string{"dir"}},
+		{"arquivos do usuário matheus",
+			"perm_find", map[string]string{"owner": "matheus"}, []string{"dir"}},
+		{"search the word NEEDLE and substitute it with REPLACEMENT in all the php files of the current folder",
+			"text_replace", map[string]string{"from": "NEEDLE", "to": "REPLACEMENT", "ext": "php"}, []string{"file"}},
+		{"Search for $S in all regular files under $DIR directory tree",
+			"text_grep", map[string]string{"dir": "$DIR", "pattern": "$S"}, []string{"file"}},
+		{"Search the Movies folder in the user's home directory for files larger than 1024 megabytes in size",
+			"file_find", map[string]string{"dir": "~/Movies"}, []string{"name"}},
+		{"find  file which case-insensitive name is too in currect directory",
+			"file_find", map[string]string{"name": "too", "icase": "1"}, []string{"dir"}},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != c.intent || nuPredict(in) != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+		for _, k := range c.absent {
+			if in.Slots[k] != "" {
+				t.Errorf("slot extra: %s -> %s=%q (%v)", c.text, k, in.Slots[k], in.Slots)
+			}
+		}
+	}
+
+	// disk_usage é a rota certa pro df — 'disk' veta list_files e a
+	// unidade de exibição ("1 KiB blocks") nunca vira pasta
+	for _, text := range []string{
+		"Print file system disk space usage in 1 KiB blocks of the current directory's file system",
+	} {
+		in := m.Parse(text, w)
+		if in.Name != "disk_usage" {
+			t.Errorf("want disk_usage: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+		if in.Slots["path"] == "KiB" {
+			t.Errorf("unidade vazou pro path: %v", in.Slots)
+		}
+	}
+
+	// recusas honestas — o pedido não é executável, nunca um slot
+	// inventado a 0.9
+	for _, text := range []string{
+		`Replace "dummyvalue" with the system IP address in "filename"`,
+		"Go into the directory whose name is selected in the X window system, ie. double-clicked in a terminal window.",
+		"Creates temporary file in a TMPDIR folder with name like tmp.XXXXXXXXXX.",
+		`Mathematically sum each line in "infile"`,
+		"change the permission of all php files in current folder. Plus symbol at the end is used to give multiple files as input to the chmod command",
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+}
+
+// owner/group: a forma "user:group" e a enumeração "to user and
+// group X" alimentam OS DOIS slots — um slot só é cobertura parcial
+// (chown mudaria dono mas não grupo, ou vice-versa). text_replace
+// com URL/descrição em from/to não é literal — recusa honesta.
+func TestNLUOwnerGroupGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, c := range []struct {
+		text   string
+		intent string
+		want   map[string]string
+	}{
+		{"Change the user and group of all files and directories under /var/www to www-data:www-data",
+			"perm_set", map[string]string{"owner": "www-data", "group": "www-data"}},
+		{"change owner and group of the all files with group owner vboxusers into home directory to user and group kent",
+			"perm_set", map[string]string{"owner": "kent", "group": "kent", "src_group": "vboxusers"}},
+		{"recursively change owner and group of the directory and all files into it to user and group dev_user",
+			"perm_set", map[string]string{"owner": "dev_user", "group": "dev_user"}},
+		{"recursively change owner of the directory ~/.npm to the current user",
+			"perm_set", map[string]string{"dir": "~/.npm"}},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != c.intent || nuPredict(in) != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+	// "current user" resolve pro USER do ambiente, nunca literal
+	in := m.Parse("recursively change owner of the directory ~/.npm to the current user", w)
+	if in.Slots["owner"] == "" || in.Slots["owner"] == "current" || in.Slots["owner"] == "user" {
+		t.Errorf("current user: %v", in.Slots)
+	}
+
+	for _, text := range []string{
+		`Download "https://s3.amazonaws.com/sampletest/sample.tar.gz", unzip it, and untar it replacing filenames with "old" to "new"`,
+		`Print "This is a sentence." by replacing all consecutive space characters with a single newline character`,
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
+		}
+	}
+}
+
+// su/sudo: impersonação não é suportada — "login as user X" nunca é
+// status de serviço nem sessão; o nome-alvo vai pro Dropped e a
+// confiança cai abaixo do gate em vez de fingir a troca de conta.
+// removeword roteia delete_file com os filtros do file_find;
+// namelen comparativo, vocábulo de exibição em owner/group, name
+// com forma de caminho e "excluding <classe>" contraditório também
+// viram recusa honesta.
+func TestNLUSysClusterGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	// executáveis corretos
+	for _, c := range []struct {
+		text   string
+		intent string
+		want   map[string]string
+	}{
+		{"Removes all empty folders with modification time more that 10 minutes ago from $homeDirData folder.",
+			"delete_file", map[string]string{"dir": "$homeDirData", "empty": "true", "older": "10", "type": "dir"}},
+		{"display the directory name along with the modified time for all the files /var",
+			"file_find", map[string]string{"dir": "/var"}},
+		{"display all files in the current folder which do not belong to the user john",
+			"perm_find", map[string]string{"not_owner": "john", "type": "file"}},
+		{"Gets string with MAC address of eth0 network interface.",
+			"net_ifaces", map[string]string{"name": "eth0"}},
+		{"files named list", "file_find", map[string]string{"name": "list"}},
+		// whitespace aspado é literal; aspa de escopo vira file
+		{"Replace all ' ' with '-' from standard input",
+			"text_replace", map[string]string{"from": " ", "to": "-", "stdin": "1"}},
+		{`Replace "," with "\r\n" in "a,b"`,
+			"text_replace", map[string]string{"file": "a,b", "from": ",", "to": "\\r\\n"}},
+		{"Replace spaces in file names with underscores for all files in the current directory tree",
+			"text_replace", map[string]string{"from": "spaces", "to": "underscores", "namefile": "1"}},
+		// pasta nua após preposição de escopo; classe+prep = alvo
+		{"Print out the names of all directories in mydir recursively",
+			"list_files", map[string]string{"dir": "mydir", "type": "dir"}},
+		{"display all the directories in the folder master-",
+			"list_files", map[string]string{"dir": "master-", "type": "dir"}},
+		// "links that point to nothing" = links órfãos
+		{"Find links that point to nothing",
+			"file_find", map[string]string{"orphan": "true", "type": "link"}},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != c.intent || nuPredict(in) != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+	}
+
+	// recusas honestas
+	for _, text := range []string{
+		"login as user postgres",
+		"switch user to jenkins",
+		"run ksh shell as user apache",
+		"simulate a full login of user root",
+		"get the root user access",
+		"login as user root",
+		"Search the file system for regular files whose names are shorter than 25 characters",
+		"Display permissions, user, group, and full path for each file in the current directory tree as a list",
+		`display all the files ending with ".user" in /var/adm/logs/morelogs/ and excluding all regular files`,
+		`run command "cd /home/$USERNAME/$PROJECT ; svn update" as user named as value of the variable $USERNAME`,
+		`Set variable OS to the name of the operating system, ie. "Linux"`,
+		"Finds users with X session in system and puts the result in USERS variable.",
+		"display a long ilsting of all the files in the file system which are bigger than 1KB and which have not been modified in the last 30*24 hours",
+		`display all the files ending with ".user" or beginning with "admin" or ending with ".user.gz" in /var/adm/logs/morelogs/ and excluding all regular files`,
+		// verbo-comando nunca é basename; duração nunca é limit
+		"sleep for 5 seconds",
+		// faixa enumerada não é fan-out fixa do create
+		"make directories a, b, c, ..., z",
+		"make directories for each line in folder_list.txt",
+		// arquivo como container de nomes (comm/join) não é dir
+		"list the names that are present in file foo",
+		// predicados/escopo não viram operando de mutação
+		"search for text files in the current folder which have write access to others",
+		"Remove the last file extension from standard input",
+		"Remove all files with the .c extension in the current directory tree",
+		`Print file type of the executable file of command "file"`,
+		"Change group ownership to `foo' for files with GID=2000",
+		"change the ownership of all regular/normal files in the current directory after users confirmation",
+		"Find all PDF files in the current directory and its sub-directories and move them to ./pdfs",
+		"Remove all files from the current directory tree whose names contain whitespaces",
+		"replace a word in all the regular/normal files in the current folder",
+	} {
+		in := m.Parse(text, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %s -> %s %.2f %v", text, in.Name, in.Confidence, in.Slots)
 		}
 	}
 }

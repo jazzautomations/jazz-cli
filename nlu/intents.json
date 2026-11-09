@@ -1048,6 +1048,31 @@
       "service"
      ],
      "w": 15
+    },
+    {
+     "all": [
+      "removeword",
+      "files|filenoun"
+     ],
+     "none": [
+      "container",
+      "branch",
+      "recover",
+      "service",
+      "@service",
+      "mutate",
+      "listverb",
+      "find",
+      "count",
+      "permattr",
+      "extract",
+      "symnoun",
+      "open",
+      "archive",
+      "content",
+      "grepword",
+      "create"
+     ]
     }
    ],
    "slots": {
@@ -1783,7 +1808,11 @@
       "metaask",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword",
+      "online",
+      "perf",
+      "host"
      ],
      "w": 15
     },
@@ -1827,7 +1856,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 10
     },
@@ -1870,7 +1900,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 10
     },
@@ -1912,7 +1943,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 15
     },
@@ -1957,7 +1989,8 @@
       "forquoted",
       "@quoted",
       "permbit",
-      "rename"
+      "rename",
+      "removeword"
      ],
      "w": 5
     },
@@ -2004,7 +2037,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 5
     },
@@ -2026,7 +2060,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 15
     },
@@ -2076,7 +2111,8 @@
       "@quoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 4
     },
@@ -2114,7 +2150,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 20
     },
@@ -2152,7 +2189,8 @@
       "forquoted",
       "permbit",
       "rename",
-      "epochnoun"
+      "epochnoun",
+      "removeword"
      ],
      "w": 20
     },
@@ -2195,7 +2233,8 @@
       "forquoted",
       "@quoted",
       "permbit",
-      "rename"
+      "rename",
+      "removeword"
      ],
      "w": 12
     },
@@ -2217,7 +2256,8 @@
       "net",
       "remote",
       "grepword",
-      "forquoted"
+      "forquoted",
+      "removeword"
      ],
      "w": 15
     },
@@ -2239,7 +2279,8 @@
       "net",
       "remote",
       "grepword",
-      "forquoted"
+      "forquoted",
+      "removeword"
      ],
      "w": 10
     },
@@ -2263,7 +2304,8 @@
       "run",
       "install",
       "net",
-      "remote"
+      "remote",
+      "removeword"
      ],
      "w": 8,
      "desc": "aspa-operando de cl\u00e1usula de exclus\u00e3o (omitting directory 'x')"
@@ -4256,7 +4298,9 @@
       "sort",
       "find",
       "grepword",
-      "rename"
+      "rename",
+      "removeword",
+      "disk"
      ]
     },
     {
@@ -4288,7 +4332,9 @@
       "sort",
       "find",
       "grepword",
-      "rename"
+      "rename",
+      "removeword",
+      "disk"
      ]
     },
     {
@@ -4308,7 +4354,9 @@
       "permattr",
       "net",
       "remote",
-      "rename"
+      "rename",
+      "removeword",
+      "disk"
      ],
      "w": 25
     }
@@ -4318,7 +4366,8 @@
      "kinds": [
       "dir"
      ],
-     "required": false
+     "required": false,
+     "from": "find:dir_cued"
     },
     "ext": {
      "from": "find:ext",
@@ -4761,7 +4810,14 @@
      ]
     }
    ],
-   "slots": {}
+   "slots": {
+    "name": {
+     "from": "net:name",
+     "kinds": [
+      "text"
+     ]
+    }
+   }
   },
   {
    "desc": "tabela de rotas e gateway padr\u00e3o",
@@ -5076,7 +5132,8 @@
       "run",
       "enable",
       "makeword",
-      "setperm"
+      "setperm",
+      "removeword"
      ],
      "w": 10
     },
@@ -5093,7 +5150,8 @@
       "install",
       "enable",
       "blame",
-      "setperm"
+      "setperm",
+      "removeword"
      ],
      "w": 5
     },
@@ -5111,7 +5169,8 @@
       "enable",
       "blame",
       "status",
-      "setperm"
+      "setperm",
+      "removeword"
      ],
      "w": 4
     },
@@ -5128,7 +5187,8 @@
       "move",
       "install",
       "opinion",
-      "setperm"
+      "setperm",
+      "removeword"
      ],
      "w": 15
     }
@@ -5569,6 +5629,12 @@
      "from": "find:max_depth",
      "kinds": [
       "number"
+     ]
+    },
+    "symread": {
+     "from": "perm:symread",
+     "kinds": [
+      "text"
      ]
     }
    }

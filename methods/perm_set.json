@@ -4,7 +4,7 @@
    "name": "perm_set.ownsrc",
    "intent": "perm_set",
    "priority": 8,
-   "doc": "'chown files belonging to root to admin': perm_find escopa a fonte (owner), for_each chown, list_owner prova \u2014 nunca roda no conjunto inteiro",
+   "doc": "'chown files belonging to root to admin': perm_find escopa a fonte (owner), for_each chown, list_owner prova — nunca roda no conjunto inteiro",
    "needs": [
     "bin.python3"
    ],
@@ -68,7 +68,7 @@
    "name": "perm_set.grpsrc",
    "intent": "perm_set",
    "priority": 8,
-   "doc": "'chgrp files with group owner vboxusers to staff': perm_find escopa a fonte (group), for_each chgrp, list_owner prova \u2014 nunca roda no conjunto inteiro",
+   "doc": "'chgrp files with group owner vboxusers to staff': perm_find escopa a fonte (group), for_each chgrp, list_owner prova — nunca roda no conjunto inteiro",
    "needs": [
     "bin.python3"
    ],
@@ -132,7 +132,7 @@
    "name": "perm_set.chmodsrc",
    "intent": "perm_set",
    "priority": 8,
-   "doc": "'chmod 700 on files owned by root': perm_find escopa (owner/group), for_each chmod \u2014 a fonte nunca vira o conjunto inteiro",
+   "doc": "'chmod 700 on files owned by root': perm_find escopa (owner/group), for_each chmod — a fonte nunca vira o conjunto inteiro",
    "needs": [
     "bin.python3"
    ],
@@ -191,7 +191,7 @@
    "name": "perm_set.chmodgrpsrc",
    "intent": "perm_set",
    "priority": 8,
-   "doc": "'chmod 700 on files with group owner vboxusers': perm_find escopa (group), for_each chmod \u2014 a fonte nunca vira o conjunto inteiro",
+   "doc": "'chmod 700 on files with group owner vboxusers': perm_find escopa (group), for_each chmod — a fonte nunca vira o conjunto inteiro",
    "needs": [
     "bin.python3"
    ],
@@ -295,7 +295,7 @@
    "name": "perm_set.dir",
    "intent": "perm_set",
    "priority": 9,
-   "doc": "'muda a permiss\u00e3o da pasta build pra 755': perm_op no pr\u00f3prio dir (recursive se pedido)",
+   "doc": "'muda a permissão da pasta build pra 755': perm_op no próprio dir (recursive se pedido)",
    "pre": [
     {
      "fact": "slot.dir",
@@ -508,7 +508,7 @@
    "name": "perm_set.all",
    "intent": "perm_set",
    "priority": 6,
-   "doc": "'chmod 755 em todos os arquivos': mass sem escopo de nome \u2014 for_each no tipo file, list_mode prova",
+   "doc": "'chmod 755 em todos os arquivos': mass sem escopo de nome — for_each no tipo file, list_mode prova",
    "needs": [
     "bin.python3"
    ],
@@ -579,7 +579,7 @@
    "name": "perm_set.dirin",
    "intent": "perm_set",
    "priority": 6,
-   "doc": "'chmod nos arquivos dentro de src': mass dentro de dir real \u2014 file_find escopado + for_each",
+   "doc": "'chmod nos arquivos dentro de src': mass dentro de dir real — file_find escopado + for_each",
    "needs": [
     "bin.python3"
    ],
@@ -651,7 +651,7 @@
    "name": "perm_set.exec",
    "intent": "perm_set",
    "priority": 8,
-   "doc": "'torna deploy.sh execut\u00e1vel': perm_op chmod a+x, file_perm prova o bit x",
+   "doc": "'torna deploy.sh executável': perm_op chmod a+x, file_perm prova o bit x",
    "pre": [
     {
      "fact": "slot.file",
@@ -761,7 +761,7 @@
    "name": "perm_set.execall",
    "intent": "perm_set",
    "priority": 6,
-   "doc": "'make everything executable'/'all scripts': mass sem ext \u2014 for_each tipo file, list_perm prova",
+   "doc": "'make everything executable'/'all scripts': mass sem ext — for_each tipo file, list_perm prova",
    "needs": [
     "bin.python3"
    ],
@@ -917,7 +917,7 @@
    "name": "perm_set.sym",
    "intent": "perm_set",
    "priority": 5,
-   "doc": "'chmod u+x em f': simb\u00f3lico literal \u2014 file_exists prova o alvo intacto (o chmod em si falha no step se der errado)",
+   "doc": "'chmod u+x em f': simbólico literal — file_exists prova o alvo intacto (o chmod em si falha no step se der errado)",
    "pre": [
     {
      "fact": "slot.file",
@@ -1179,7 +1179,7 @@
    "name": "perm_set.grpall",
    "intent": "perm_set",
    "priority": 6,
-   "doc": "'change group of all files here': mass sem dir \u2014 file_find no root + for_each chgrp",
+   "doc": "'change group of all files here': mass sem dir — file_find no root + for_each chgrp",
    "needs": [
     "bin.python3"
    ],
@@ -1251,13 +1251,13 @@
    "name": "perm_set.ask",
    "intent": "perm_set",
    "priority": -1,
-   "doc": "\u00faltimo recurso: a op foi entendida mas falta dono/grupo/modo \u2014 pergunta em vez de 'nenhum m\u00e9todo'",
+   "doc": "último recurso: a op foi entendida mas falta dono/grupo/modo — pergunta em vez de 'nenhum método'",
    "pre": [],
    "steps": [
     {
      "cap": "report",
      "in": {
-      "text": "mudar pra qu\u00ea? falta o alvo da muta\u00e7\u00e3o: dono (owner), grupo (group) ou modo (755/u+x). Ex.: 'muda o dono de X pra h' ou 'chmod 755 em X'",
+      "text": "mudar pra quê? falta o alvo da mutação: dono (owner), grupo (group) ou modo (755/u+x). Ex.: 'muda o dono de X pra h' ou 'chmod 755 em X'",
       "status": "needs_input"
      }
     }
@@ -1265,6 +1265,184 @@
    "verify": [],
    "risk": "low",
    "cost_ms": 1
+  },
+  {
+   "name": "perm_set.read",
+   "intent": "perm_set",
+   "priority": 8,
+   "doc": "set read permission for group em f: chmod g+r, file_perm prova",
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symread",
+     "op": "set"
+    },
+    {
+     "fact": "slot.mode",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.owner",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "perm_op",
+     "in": {
+      "op": "chmod",
+      "path": "$slot.file",
+      "mode": "$slot.symread",
+      "recursive": "$slot.recursive"
+     },
+     "out": "p"
+    }
+   ],
+   "verify": [
+    {
+     "check": "file_perm",
+     "arg": "$p",
+     "arg2": "$slot.symread"
+    }
+   ],
+   "risk": "medium",
+   "cost_ms": 20
+  },
+  {
+   "name": "perm_set.readext",
+   "intent": "perm_set",
+   "priority": 7,
+   "doc": "read permission for class em *.ext: chmod via for_each",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symread",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "limit": "256",
+      "min_depth": "$slot.min_depth",
+      "max_depth": "$slot.max_depth"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.symread",
+      "max": "256",
+      "recursive": "$slot.recursive"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_perm",
+     "arg": "$cand",
+     "arg2": "x"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 200
+  },
+  {
+   "name": "perm_set.readall",
+   "intent": "perm_set",
+   "priority": 6,
+   "doc": "read permission for class em massa: chmod via for_each",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.ext",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.mass",
+     "op": "set"
+    },
+    {
+     "fact": "slot.symread",
+     "op": "set"
+    },
+    {
+     "fact": "slot.src_owner",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.src_group",
+     "op": "unset"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "type": "$slot.type",
+      "limit": "256",
+      "path": "$slot.dir",
+      "min_depth": "$slot.min_depth",
+      "max_depth": "$slot.max_depth"
+     },
+     "out": "cand"
+    },
+    {
+     "cap": "for_each",
+     "in": {
+      "from": "$cand",
+      "do": "perm_op",
+      "op": "chmod",
+      "mode": "$slot.symread",
+      "max": "256",
+      "recursive": "$slot.recursive"
+     }
+    }
+   ],
+   "verify": [
+    {
+     "check": "list_perm",
+     "arg": "$cand",
+     "arg2": "x"
+    }
+   ],
+   "risk": "high",
+   "cost_ms": 300
   }
  ]
 }
