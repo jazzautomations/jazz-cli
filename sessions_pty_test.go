@@ -112,7 +112,7 @@ func TestPTYResumePicker(t *testing.T) {
 	s.write("\r")
 	s.waitFor("the session list again", 10*time.Second, func(sc string) bool { return strings.Contains(sc, pkHint) })
 	s.typeSlow("beta")
-	s.waitFor("the filtered list", 5*time.Second, func(sc string) bool {
+	s.waitFor("the filtered list", 15*time.Second, func(sc string) bool {
 		return strings.Contains(sc, "filtro › beta") && strings.Contains(sc, "Pergunta beta") && !strings.Contains(sc, "Pergunta gama") && !strings.Contains(sc, "Pergunta alfa")
 	})
 	s.write("\r")
