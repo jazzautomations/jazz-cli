@@ -1491,6 +1491,69 @@ func nuIsNumber(s string) bool {
 	return true
 }
 
+// nuFilesystemAt: "filesystem" ou o par "file system" — o filesystem
+// inteiro (raiz), nunca uma pasta chamada "file"/"system"
+func nuFilesystemAt(toks []nuTok, i int) bool {
+	if toks[i].Fold == "filesystem" {
+		return true
+	}
+	if (toks[i].Fold == "file" || toks[i].Fold == "files") &&
+		i+1 < len(toks) &&
+		(toks[i+1].Fold == "system" || toks[i+1].Fold == "sistema" ||
+			toks[i+1].Fold == "systems") {
+		return true
+	}
+	return false
+}
+
+// nuNumWord: "one"/"two"/"um"/"três" → 1/2/3 — palavra-número nos
+// mesmos lugares onde um dígito vale ("one minute ago" ≈ "1 minute ago")
+func nuNumWord(s string) (int, bool) {
+	switch s {
+	case "one", "um", "uma":
+		return 1, true
+	case "two", "dois", "duas":
+		return 2, true
+	case "three", "três", "tres":
+		return 3, true
+	case "four", "quatro":
+		return 4, true
+	case "five", "cinco":
+		return 5, true
+	case "six", "seis":
+		return 6, true
+	case "seven", "sete":
+		return 7, true
+	case "eight", "oito":
+		return 8, true
+	case "nine", "nove":
+		return 9, true
+	case "ten", "dez":
+		return 10, true
+	case "eleven", "onze":
+		return 11, true
+	case "twelve", "doze":
+		return 12, true
+	case "thirteen", "treze":
+		return 13, true
+	case "fourteen", "catorze", "quatorze":
+		return 14, true
+	case "fifteen", "quinze":
+		return 15, true
+	case "sixteen", "dezesseis", "dezasseis":
+		return 16, true
+	case "seventeen", "dezessete", "dezassete":
+		return 17, true
+	case "eighteen", "dezoito":
+		return 18, true
+	case "nineteen", "dezenove", "dezanove":
+		return 19, true
+	case "twenty", "vinte":
+		return 20, true
+	}
+	return 0, false
+}
+
 // ---------- grammar ----------
 
 type nuMatch struct {
@@ -2082,6 +2145,93 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 					}
 					if !seen {
 						in.Dropped = append(in.Dropped, t.Raw)
+					}
+				}
+			}
+		}
+	}
+	// "count duplicate lines" — wordcount_stats conta TODAS as linhas;
+	// o qualificador dup/unique não é suportado por nenhum método. Vai
+	// pro Dropped em vez de contar errado em silêncio.
+	if in.Name == "wordcount_stats" || in.Name == "text_count" {
+		for _, t := range toks {
+			switch t.Fold {
+			case "duplicate", "duplicates", "dup", "dups", "repeated",
+				"unique", "uniques", "duplicada", "duplicadas",
+				"duplicado", "duplicados", "repetida", "repetidas",
+				"repetido", "repetidos":
+				in.Dropped = append(in.Dropped, t.Raw)
+			}
+		}
+	}
+	// "user $1 belongs to group $2" / "membro do grupo" — pertencimento
+	// de usuário a grupo NÃO é consulta de permissão de arquivo; o
+	// perm_find que casou responderia perms de arquivo no lugar de
+	// membership. Dropa o verbo de membership e o operando de grupo.
+	for i, t := range toks {
+		switch t.Fold {
+		case "belong", "belongs", "belonging", "member", "members",
+			"membro", "membros", "pertence", "pertencem", "pertencer":
+			for k := i + 1; k < len(toks) && k <= i+5; k++ {
+				u := &toks[k]
+				if u.Fold == "group" || u.Fold == "grupo" {
+					in.Dropped = append(in.Dropped, t.Raw, u.Raw)
+					if k+1 < len(toks) && strings.HasPrefix(toks[k+1].Raw, "$") {
+						in.Dropped = append(in.Dropped, toks[k+1].Raw)
+					}
+					break
+				}
+			}
+		}
+	}
+	// "loop over the results of a find" / "for each" — controle de
+	// fluxo não é intenção suportada; a query colada não é operando.
+	for _, t := range toks {
+		switch t.Fold {
+		case "loop", "iterate", "iterating", "foreach":
+			if q := in.Slots["query"]; q != "" {
+				in.Dropped = append(in.Dropped, q)
+				delete(in.Slots, "query")
+			}
+			in.Dropped = append(in.Dropped, t.Raw)
+		}
+	}
+	// "all but 5 newest ones" — keep-N-newest é semântica de exceção
+	// temporal que nenhum slot expressa; o superlativo vai pro Dropped
+	// em vez de virar limit+sort numa busca qualquer
+	for i, t := range toks {
+		switch t.Fold {
+		case "newest", "oldest", "latest":
+			for j := i - 1; j >= 0 && j >= i-4; j-- {
+				u := &toks[j]
+				if u.Filler || nuIsNumber(u.Fold) {
+					continue // "but 5 newest" — o número atravessa
+				}
+				if nuExceptCues[u.Fold] || u.Fold == "but" ||
+					u.Fold == "save" || u.Fold == "keep" ||
+					u.Fold == "keeping" || u.Fold == "exceto" ||
+					u.Fold == "menos" {
+					in.Dropped = append(in.Dropped, u.Raw, t.Raw)
+				}
+				break
+			}
+		}
+	}
+	// "sort strings by second field"/"by the end field" — sort -k por
+	// campo não é suportado por nenhum método de linha; o operando de
+	// campo vai pro Dropped em vez de fingir um slice.
+	if in.Name == "line_slice" || in.Name == "wordcount_stats" ||
+		in.Name == "text_count" {
+		for i, t := range toks {
+			switch t.Fold {
+			case "field", "fields", "campo", "campos", "column",
+				"columns", "coluna", "colunas":
+				in.Dropped = append(in.Dropped, t.Raw)
+				if i > 0 {
+					switch toks[i-1].Fold {
+					case "second", "third", "fourth", "fifth", "the",
+						"from", "segundo", "terceiro", "end", "last":
+						in.Dropped = append(in.Dropped, toks[i-1].Raw)
 					}
 				}
 			}
@@ -2685,6 +2835,20 @@ var nuFormatWords = map[string]bool{
 	// sujeito possessivo é escopo, não nome: "in user's home" não tem
 	// name "user home" — o dir_cued resolve "~"
 	"home": true, "casa": true,
+	// "whose inode has been modified" — metadado de filtro, nunca nome;
+	// "no later than" é cue temporal; "system" em "file system" é
+	// escopo-resolvido (nuFilesystemAt) mas seguro como phrasing solto
+	"inode": true, "inodes": true, "later": true, "system": true,
+	// superlativo/conjunção/campo de sort nunca é nome: "but 5 newest
+	// ones" é exceção temporal; "by second field" é cláusula sort -k
+	// (não suportada) — nenhum dos dois vira basename livre
+	"newest": true, "oldest": true, "but": true, "mas": true,
+	"ignoring": true, "ignore": true, "ignorando": true,
+	"field": true, "fields": true, "campo": true, "campos": true,
+	"column": true, "columns": true, "coluna": true, "colunas": true,
+	"second": true, "third": true, "fourth": true, "fifth": true,
+	"primeiro": true, "primeira": true, "segundo": true, "segunda": true,
+	"terceiro": true, "terceira": true,
 	// adjetivo de escopo vago é phrasing de local, nunca parte de um
 	// glob: "in the specified directory" não tem name "specified"
 	// (typo "specfied" chega sem reparo — o fold fica sujo)
@@ -3055,6 +3219,25 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 						if nuIsNumber(toks[i].Fold) || len(toks[i].Tags) > 0 {
 							continue // a number or an entity of another kind is not a free name
 						}
+						if _, isNW := nuNumWord(toks[i].Fold); isNW {
+							continue // palavra-número solta ("one minute ago") é janela, não nome
+						}
+						// verbo de ação nunca é basename livre —
+						// "Removes all files but ..." não tem nome
+						// "Removes" (o verbo roteia a intenção)
+						act := false
+						for _, c := range toks[i].Concs {
+							switch c {
+							case "removeword", "delete", "mutate", "move",
+								"copy", "rename", "create", "write",
+								"compress", "archiveverb", "extract",
+								"kill", "exec", "run", "install":
+								act = true
+							}
+						}
+						if act {
+							continue
+						}
 						// qualificador ANTES do cue de nome não é alvo:
 						// "a rust file" — rust precede 'file', é o tipo.
 						// E palavra DEPOIS de oração descreve, não nomeia:
@@ -3109,6 +3292,21 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 					}
 					if kinds["number"] && !kinds["text"] && !nuIsNumber(toks[i].Fold) {
 						continue // a number slot takes digits only, never a leftover name
+					}
+					// verbo de ação nunca cola como nome livre —
+					// "Removes all files but ..." não tem name "Removes"
+					actWord := false
+					for _, c := range toks[i].Concs {
+						switch c {
+						case "removeword", "delete", "mutate", "move",
+							"copy", "rename", "create", "write",
+							"compress", "archiveverb", "extract",
+							"kill", "exec", "run", "install":
+							actWord = true
+						}
+					}
+					if actWord {
+						continue
 					}
 					switch toks[i].Fold {
 					// marcador de oração fecha o nome — "make a rust file
@@ -5206,7 +5404,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 			}
 			switch t.Fold {
-			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas":
+			case "pasta", "pastas", "dir", "dirs", "diretorio", "diretório", "diretorios", "diretórios", "directory", "directories", "folder", "folders", "subpasta", "subpastas",
+				"subfolder", "subfolders", "subdirectory", "subdirectories",
+				"subdir", "subdirs":
 				// "in the current directory" — a dir-word depois de
 				// preposição de escopo é LOCALIZAÇÃO, não tipo pedido
 				scope := false
@@ -5247,7 +5447,26 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					dir = true
 				}
 			case "arquivo", "arquivos", "file", "files":
-				file = true
+				// "contained files"/"containing files" — o substantivo-
+				// file é a métrica do sort ("number of contained
+				// files"), não o objeto da busca
+				metric := false
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					u := &toks[j]
+					if u.Filler {
+						continue
+					}
+					switch u.Fold {
+					case "contained", "containing", "contain", "contido",
+						"contida", "contidos", "neles", "nelas", "inside",
+						"within", "dentro":
+						metric = true
+					}
+					break
+				}
+				if !metric {
+					file = true
+				}
 			case "mkdir":
 				// verbo-literal: "mkdir data" pede um diretório, sem
 				// depender de substantivo — o scope-check não se aplica
@@ -5412,7 +5631,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 						taken[i], taken[j] = true, true
 						return "size"
 					case "time", "date", "mtime", "tempo", "data",
-						"modification", "age", "idade":
+						"modification", "age", "idade",
+						"oldest", "newest", "latest", "recent",
+						"modified", "created", "accessed":
 						taken[i], taken[j] = true, true
 						return "mtime"
 					case "name", "nome", "names", "filename":
@@ -6414,6 +6635,20 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"sort": true, "uniq": true, "wc": true, "cat": true,
 			// "in this case" é idiomático, não uma pasta "case"
 			"case": true, "cases": true,
+			// cue temporal/comparativo nunca é path — "no later than",
+			// "modified later than" não tem dir "later"
+			"later": true, "sooner": true, "earlier": true,
+			"antes": true, "depois": true,
+			// superlativo temporal é cláusula de sort/janela — "but 5
+			// newest ones" não tem dir "newest"; "a files list" é o
+			// CONJUNTO achado, não uma pasta "list"
+			"newest": true, "oldest": true,
+			"list": true, "lista": true,
+			"but": true, "mas": true, "ignoring": true, "ignore": true,
+			"ignorando": true,
+			// metadado de arquivo é atributo de filtro — "whose inode"
+			// não nomeia pasta
+			"inode": true, "inodes": true,
 			// "using regular expressions" — método, não escopo: o
 			// gerúndio não nomeia diretório
 			"using": true, "use": true, "usando": true, "utilizando": true,
@@ -6607,6 +6842,13 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if clauseBoundaries[u.Fold] {
 					break
 				}
+				// "in the entire file system" — o tokenizer cola "file
+				// system" como slang; o par é a raiz inteira, não uma
+				// pasta — resolve "/" antes do skip de slang
+				if u.Slang && nuFilesystemAt(toks, j) {
+					taken[i], taken[j] = true, true
+					return "/"
+				}
 				if u.Filler || u.Slang || taken[j] || nuIsNumber(u.Fold) || u.has("nameattr") || dirCues[u.Fold] {
 					continue
 				}
@@ -6629,6 +6871,12 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 				if timeWords[u.Fold] || notDirWords[u.Fold] ||
 					nuToolWords[u.Fold] || strings.HasPrefix(u.Fold, "-") {
 					continue // a window, a verb or a tool/flag is never a dir — leave it for the time slots or unfed
+				}
+				// palavra-número é quantidade de janela, nunca pasta:
+				// "no later than one minute" não tem dir "one" (o
+				// dígito "2020" segue valendo como nome de pasta)
+				if _, isNW := nuNumWord(u.Fold); isNW {
+					continue
 				}
 				// "$VAR sozinho" é ambíguo (arquivo ou pasta) — fica
 				// livre, A MENOS que o próprio nome diga "dir/folder/
@@ -6665,7 +6913,7 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 						if v.Filler || v.Slang {
 							continue
 						}
-						if v.Fold == "filesystem" || v.Fold == "system" ||
+						if nuFilesystemAt(toks, k) || v.Fold == "system" ||
 							v.Fold == "sistema" {
 							taken[i], taken[j], taken[k] = true, true, true
 							return "/"
@@ -6675,9 +6923,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					taken[i], taken[j] = true, true
 					break // "no projeto"/"directory tree" falam DESTE escopo — consome a frase, não de um dir
 				}
-				if u.Fold == "filesystem" {
+				if nuFilesystemAt(toks, j) {
 					taken[i], taken[j] = true, true
-					return "/" // "in the filesystem" — a raiz toda
+					return "/" // "in the filesystem"/"file system" — a raiz toda
 				}
 				// qualquer candidato antes de "filesystem" é phrasing —
 				// "in the entrie filesystem" (typo ou não) tem dir=/,
@@ -6687,7 +6935,7 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 					if v.Filler || v.Slang {
 						continue
 					}
-					if v.Fold == "filesystem" {
+					if nuFilesystemAt(toks, k) {
 						taken[i], taken[j], taken[k] = true, true, true
 						return "/"
 					}
@@ -6901,12 +7149,19 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		return lo
 	}
 	olderSeen, newerSeen := false, false
-	for _, u := range toks {
+	for i, u := range toks {
 		switch u.Fold {
 		case "older", "antigos", "antigo", "antiga", "velhos", "velho", "velha", "before", "antes", "more", "mais":
 			olderSeen = true
 		case "ultimos", "últimos", "ultimas", "últimas", "last", "past", "within", "newer", "less", "menos", "recent", "recente", "recentes":
 			newerSeen = true
+		case "later":
+			// "modified no later than one minute ago" ≈ "modified less
+			// than one minute ago" — recência (-mmin -N), não idade.
+			// 'later' sem 'than' não é cue de janela ("for later").
+			if i+1 < len(toks) && toks[i+1].Fold == "than" {
+				newerSeen = true
+			}
 		}
 	}
 	// negação de janela: "not modified in the last 24h" e "except those
@@ -7036,7 +7291,25 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		return ""
 	}
 	for i, t := range toks {
-		if !nuIsNumber(t.Fold) || i+1 >= len(toks) {
+		if i+1 >= len(toks) {
+			continue
+		}
+		prod := -1
+		if f := t.Fold; strings.Count(f, "*") >= 1 {
+			// "365*24 hours" — produto escrito na frase; avalia antes
+			// de desistir do caminho numérico
+			parts := strings.Split(f, "*")
+			prod = 1
+			for _, p := range parts {
+				v, err := strconv.Atoi(p)
+				if err != nil {
+					prod = -1
+					break
+				}
+				prod *= v
+			}
+		}
+		if _, isNumWord := nuNumWord(t.Fold); !nuIsNumber(t.Fold) && !isNumWord && prod < 0 {
 			continue
 		}
 		mult := 0
@@ -7060,6 +7333,13 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 			continue
 		}
 		n, err := strconv.Atoi(t.Fold)
+		if prod >= 0 {
+			n, err = prod, nil
+		} else if err != nil {
+			if v, ok := nuNumWord(t.Fold); ok {
+				n, err = v, nil
+			}
+		}
 		if err == nil {
 			taken[i], taken[i+1] = true, true
 			// a phrasing da janela é consumida junto — "modified less
@@ -7075,6 +7355,7 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 					"criada", "less", "more", "ago", "ha", "há", "within",
 					"last", "past", "older", "newer", "recent", "recente",
 					"than", "do", "que", "in", "em", "at", "least", "most",
+					"later", "no",
 					"were", "was", "are", "been", "is", "that", "which",
 					"those", "these", "them", "the", "of", "a", "an", "s",
 					"have", "has", "not", "touched", "over", "for":

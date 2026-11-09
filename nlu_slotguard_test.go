@@ -1600,3 +1600,94 @@ func TestNLUSymlinkGuards(t *testing.T) {
 		t.Errorf("same name: %s %.2f %v", in.Name, in.Confidence, in.Slots)
 	}
 }
+
+func TestNLUExecGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "count duplicate lines" — wordcount_stats não tem dup; contar
+	// TODAS as linhas seria sucesso falso. O qualificador vai pro
+	// Dropped e derruba a confiança (recusa honesta).
+	in := m.Parse(`Print a count of duplicate lines in "filename"`, w)
+	if nuPredict(in) != "none" || len(in.Dropped) == 0 {
+		t.Errorf("duplicate: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+	// "no later than one minute ago" ≈ -mmin -1 — palavra-número e
+	// o comparativo 'later than' alimentam o slot newer; "file
+	// system" (par colado pelo tokenizer) é a raiz
+	in = m.Parse(`Print a list of all the files in entire file system whose inode has been modified no later than one minute ago`, w)
+	if in.Name != "file_find" || in.Slots["dir"] != "/" ||
+		in.Slots["newer"] != "1" || in.Slots["name"] != "" {
+		t.Errorf("no later than: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "user $1 belongs to group $2" — membership de usuário não é
+	// consulta de permissão de arquivo: recusa, nunca perm_find
+	in = m.Parse(`Returns 0 if user $1 belongs to group $2`, w)
+	if nuPredict(in) == "perm_find" || len(in.Dropped) == 0 {
+		t.Errorf("membership: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+	in = m.Parse(`check whether user bob is a member of group wheel`, w)
+	if nuPredict(in) == "perm_find" || len(in.Dropped) == 0 {
+		t.Errorf("member of: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+	// "loop over find results" — controle de fluxo não suportado; a
+	// query colada não é operando de busca
+	in = m.Parse(`loop over the results of a find command`, w)
+	if nuPredict(in) == "find" || len(in.Dropped) == 0 {
+		t.Errorf("loop: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+	// "for each ... print an mv command" — geração de comandos não é
+	// um move: fica sem dest e cai abaixo do corte, nunca executa
+	in = m.Parse(`Find all directories and for each of them, print an mv command to move it to /new/location`, w)
+	if nuPredict(in) == "file_move" {
+		t.Errorf("for-each mv: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// package-ownership ("which package owns X") não é permissão de
+	// arquivo — o nome do pacote cai no Dropped
+	in = m.Parse(`Print package information the command "ldconfig" belongs to in rpm`, w)
+	if nuPredict(in) == "perm_find" || len(in.Dropped) == 0 {
+		t.Errorf("package: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+}
+
+func TestNLUSortFirstGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "top-level subfolders" — o objeto pedido é dir; "files" em
+	// "contained files" é a métrica do sort, não o tipo
+	in := m.Parse(`Prints list of top-level subfolders in a current folder, sorted by number of contained files`, w)
+	if in.Name != "file_find" || in.Slots["type"] != "dir" {
+		t.Errorf("subfolders: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "all but 5 newest ones" — keep-N-newest não é limit+sort numa
+	// busca qualquer: o superlativo cai no Dropped (recusa honesta)
+	in = m.Parse(`Removes all files from current folder but 5 newest ones, ignoring folders in a files list`, w)
+	if nuPredict(in) != "none" || len(in.Dropped) == 0 ||
+		in.Slots["name"] == "Removes" {
+		t.Errorf("keep newest: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+	// "sorted by oldest modified to newest" — superlativo é campo
+	// mtime; o nome citado sobrevive como predicado
+	in = m.Parse(`List all files with name "someFile" and their modification time under the current directory sorted by oldest modified to newest`, w)
+	if in.Name != "file_find" || in.Slots["name"] != "someFile" ||
+		in.Slots["sort"] != "mtime" {
+		t.Errorf("oldest sort: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "365*24 hours" — o produto escrito na frase avalia pra janela;
+	// a negação "not modified" flipa pra older
+	in = m.Parse(`display all the files in the home folder which have not been modified in the last 365*24 hours`, w)
+	if in.Name != "file_find" || in.Slots["dir"] != "~" ||
+		in.Slots["older"] != "525600" || in.Slots["name"] != "" {
+		t.Errorf("365*24: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "sort strings by second field" — sort -k não é line_slice;
+	// o campo cai no Dropped
+	in = m.Parse(`Sort strings of 'test.txt' file by second from the end field`, w)
+	if nuPredict(in) == "line_slice" || len(in.Dropped) == 0 {
+		t.Errorf("sort -k: %s %.2f %v dropped=%v",
+			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+}
