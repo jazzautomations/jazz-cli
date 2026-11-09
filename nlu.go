@@ -403,6 +403,17 @@ func nuTokenize(text string) []nuTok {
 	return out
 }
 
+// nuTodoMarker: uppercase code marker words — the task vocabulary of
+// todo_scan. Only the raw uppercase form counts: lowercase "todo(s)" is
+// PT "all/every" and stays ambiguous.
+func nuTodoMarker(raw string) bool {
+	switch raw {
+	case "TODO", "TODOs", "FIXME", "FIXMEs", "HACK", "HACKs", "XXX":
+		return true
+	}
+	return false
+}
+
 // normalize: slang phrases → canonical words, concept phrases, word
 // concepts, fillers.
 func (m *nuModel) normalize(toks []nuTok) []nuTok {
@@ -735,7 +746,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					}
 					if isName {
 						t.Concs = append(t.Concs, "nametgt")
-					} else {
+					} else if !nuTodoMarker(t.Raw) {
+						// marcador maiúsculo depois de "por" é a tarefa
+						// do todo_scan ("procura por TODO"), não padrão
 						t.Concs = append(t.Concs, "forquoted")
 					}
 					break
@@ -783,7 +796,8 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					// nunca o padrão citado)
 					if verb && scope && !nuFileCueWords[t.Fold] &&
 						!t.has("files") && !t.has("filenoun") &&
-						!t.has("dirnoun") && !t.has("dir") && !nuIsNumber(t.Fold) {
+						!t.has("dirnoun") && !t.has("dir") &&
+						!nuIsNumber(t.Fold) && !nuTodoMarker(t.Raw) {
 						t.Concs = append(t.Concs, "forquoted")
 					}
 				}
@@ -1196,10 +1210,34 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	// minúsculo segue ambíguo com "all" em PT e fica em `list`
 	for i := range out {
 		t := &out[i]
-		switch t.Raw {
-		case "TODO", "TODOs", "FIXME", "FIXMEs", "HACK", "HACKs", "XXX":
-			if !t.has("todo") {
-				t.Concs = append(t.Concs, "todo")
+		if nuTodoMarker(t.Raw) && !t.has("todo") {
+			t.Concs = append(t.Concs, "todo")
+		}
+	}
+	// "tira um snapshot (dos arquivos)": 'tira'/'take' carregam
+	// removeword léxico, mas com `snapshot` logo à direita são o verbo
+	// da fotografia — sem a supressão delete_file casa removeword+files
+	// e um pedido de inventário vira exclusão ("tira os arquivos de
+	// snapshot" mantém o verbo: a primeira palavra útil é 'arquivos')
+	for i := range out {
+		t := &out[i]
+		if !t.has("removeword") {
+			continue
+		}
+		for j := i + 1; j < len(out) && j <= i+3; j++ {
+			u := &out[j]
+			if !u.Quoted && u.has("snapshot") {
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "removeword" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+				break
+			}
+			if !u.Filler {
+				break
 			}
 		}
 	}
@@ -2020,7 +2058,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				}
 				var alTaken map[int]bool
 				in.Slots, in.Missing, in.Hint, _, alTaken = m.fill(&m.data.Intents[di], toks, hits, used, w)
-				in.Dropped = nuDroppedOps(toks, alTaken, in.Slots)
+				in.Dropped = nuDroppedOps(toks, alTaken, in.Slots, used)
 			}
 			return in
 		}
@@ -2440,7 +2478,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			drop(nuExcludeRaw(&toks[i]))
 		}
 	}
-	for _, r := range nuDroppedOps(toks, taken, in.Slots) {
+	for _, r := range nuDroppedOps(toks, taken, in.Slots, used) {
 		drop(r)
 	}
 	// "with group owner X" / "belonging to root": X é predicado de ORIGEM;
@@ -8149,6 +8187,16 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			u.has("count") || nuCountNouns[u.Fold] ||
 			nuArchiveWord(u.Fold) || nuPureExt(u.Fold) ||
 			nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			continue
+		}
+		v4 := false
+		for _, c := range u.Concs {
+			if strings.HasPrefix(c, "v4_") {
+				v4 = true // vocábulo-cardápio ("testa regex") é phrasing, nunca padrão
+				break
+			}
+		}
+		if v4 {
 			continue
 		}
 		switch u.Fold {
@@ -14354,12 +14402,25 @@ func nuMkScopeDir(toks []nuTok, hits []nuHit, taken map[int]bool) string {
 // sobrevive ao fill solta (taken=false) e seu Raw não aparece em
 // valor algum — ignorá-la muda o pedido. O cérebro lê essa lista e
 // derruba pra unverified em vez de selar sucesso incompleto (T8).
-func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string) []string {
+func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string, used map[string]bool) []string {
 	var out []string
 	for i := range toks {
 		t := &toks[i]
 		if !t.Quoted || taken[i] || t.Raw == "" {
 			continue // só aspa é operando; cue não-citado ("containing") é palavra-ponte
+		}
+		vocab := false
+		for _, c := range t.Concs {
+			if used[c] {
+				// a aspa É o vocábulo da própria intent ("procura por
+				// 'TODO'" — o marcador alimenta a regra do todo_scan,
+				// não é restrição solta)
+				vocab = true
+				break
+			}
+		}
+		if vocab {
+			continue
 		}
 		consumed := false
 		for _, sv := range slots {

@@ -2624,3 +2624,58 @@ func TestNLUUndoNameGuards(t *testing.T) {
 		}
 	}
 }
+
+// Under-refusal (T5): o pedido doable não pode parar no penhasco de
+// confiança nem rotear errado —
+//  * a aspa do "testa regex F 'pat'" é o pattern (era operando solto
+//    → conf 0.22); sem ela, vocábulo-cardápio ("testa regex") não cola
+//    como padrão falso (dropped fantasma → conf 0.44);
+//  * "busca literal" tem regra determinística (era só classificador →
+//    0.55);
+//  * marcador maiúsculo depois de "por" é a tarefa do todo_scan —
+//    "procura por TODO e FIXME" virava text_grep com file=FIXME;
+//  * "tira um snapshot" é fotografia (file_snapshot), não remoção —
+//    'tira' só perde o removeword quando `snapshot` é a 1ª palavra útil
+//    à direita ("tira os arquivos de snapshot" continua delete_file).
+func TestNLUUnderRefusalGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse(`testa regex v4_regex_test.txt "ana"`, w)
+	if in.Name != "regex_test" || in.Confidence < 0.7 ||
+		in.Slots["target"] != "v4_regex_test.txt" || in.Slots["pattern"] != "ana" {
+		t.Errorf("regex_test: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	in = m.Parse(`busca literal v4_text_grep.txt "ana"`, w)
+	if in.Name != "text_grep" || in.Confidence < 0.7 ||
+		in.Slots["file"] != "v4_text_grep.txt" || in.Slots["pattern"] != "ana" {
+		t.Errorf("text_grep: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	for _, q := range []string{`procura por TODO e FIXME`, `procura por "TODO"`, `search files for "TODO"`} {
+		in = m.Parse(q, w)
+		if in.Name != "todo_scan" || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	in = m.Parse("tira um snapshot dos arquivos", w)
+	if in.Name != "file_snapshot" || in.Confidence < 0.7 {
+		t.Errorf("snapshot: %s conf %.2f ev %v", in.Name, in.Confidence, in.Evidence)
+	}
+	// negativos: o padrão citado segue padrão; 'tira X de snapshot'
+	// continua remoção; grep literal de marcador explícito sobrevive
+	in = m.Parse(`procura por "abc"`, w)
+	if in.Name != "text_grep" || in.Slots["pattern"] != "abc" {
+		t.Errorf("forquoted comum: %s %v", in.Name, in.Slots)
+	}
+	in = m.Parse("tira os arquivos de snapshot", w)
+	if in.Name != "delete_file" {
+		t.Errorf("tira arquivos: %s ev %v", in.Name, in.Evidence)
+	}
+	in = m.Parse(`grep "TODO" in parser.go`, w)
+	if in.Name != "text_grep" || in.Slots["pattern"] != "TODO" {
+		t.Errorf("grep literal de marcador: %s %v", in.Name, in.Slots)
+	}
+	// sem aspa, o pedido não tem padrão — e nada inventa um
+	in = m.Parse("testa regex README.md", w)
+	if in.Name != "regex_test" || in.Slots["pattern"] != "" || len(in.Dropped) > 0 {
+		t.Errorf("sem padrão: %s slots %v dropped %v", in.Name, in.Slots, in.Dropped)
+	}
+}

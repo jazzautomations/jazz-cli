@@ -5845,6 +5845,14 @@
     }
    ],
    "slots": {
+    "pattern": {
+     "from": "grep:pat",
+     "kinds": [
+      "text",
+      "symbol"
+     ],
+     "required": false
+    },
     "target": {
      "kinds": [
       "file"
@@ -6821,6 +6829,19 @@
     "cria README.md"
    ],
    "rules": [
+    {
+     "all": [
+      "v4_text_grep"
+     ],
+     "none": [
+      "replace",
+      "delete",
+      "create",
+      "install",
+      "move"
+     ],
+     "w": 20
+    },
     {
      "all": [
       "grepword"

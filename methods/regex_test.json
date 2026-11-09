@@ -13,6 +13,7 @@
           "cap": "script:regex_test",
           "in": {
             "file": "$slot.target",
+            "pattern": "$slot.pattern",
             "query": "$goal"
           },
           "out": "res"

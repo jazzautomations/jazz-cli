@@ -238,6 +238,55 @@ func TestBrainBackchainKeepsConcreteTarget(t *testing.T) {
 	}
 }
 
+// Guarda (T5/conf-cliff): intent certa identificada abaixo do gate era
+// recusa de pedido doable. "testa regex F 'pat'" tinha a aspa sem slot
+// (dropped → conf 0.22); "busca literal" não tinha regra v4_* (só
+// classificador → 0.55). A aspa vira pattern e a frase-cardápio dispara
+// a regra determinística — o script prova com a saída esperada.
+func TestBrainV4PatternSlotAndRule(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "v4_regex_test.txt", "ana\nbruno\n",
+		"v4_text_grep.txt", "ana\nbruno\nana\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, `testa regex v4_regex_test.txt "ana"`)
+	if r.Intent.Name != "regex_test" || r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "1 matching line(s)") {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, `busca literal v4_text_grep.txt "ana"`)
+	if r.Intent.Name != "text_grep" || r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "2 literal match(es)") {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+}
+
+// Guarda (T5/routing): marcador de código depois de "por" é a tarefa do
+// todo_scan, não o padrão de um grep literal — "FIXME" virava slot file
+// e o pedido morria em "not a regular file". "Tira um snapshot" é a
+// fotografia dos arquivos (file_snapshot), não delete_file — 'tira'
+// só perde o removeword com `snapshot` como 1ª palavra útil à direita.
+func TestBrainMarkersAndSnapshotRoute(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "lexer.go",
+		"package x\n\n// TODO: handle empty input\nfunc Tokenize(s string) []string { return nil }\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "procura por TODO e FIXME")
+	if r.Intent.Name != "todo_scan" || r.Status != tkSucceeded {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, "tira um snapshot dos arquivos")
+	if r.Intent.Name != "file_snapshot" || r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "root_sha256") {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+}
+
 // An unknown name is a question with what is close, never an invented file.
 func TestBrainOpenFileNotFound(t *testing.T) {
 	root := brFixture(t)
