@@ -145,6 +145,8 @@ type nuModel struct {
 	vocab    map[string]bool       // lexicon words >= 4 letters (typo repair)
 	byName   map[string]int
 	nbOnce   sync.Once
+	ppmOnce  sync.Once
+	ppm      *nuPPM
 	nb       *nuNB
 	loadErr  error
 	cueConcs map[string]bool
@@ -9249,6 +9251,10 @@ func (m *nuModel) nuTrain(skip func(intent, ex int) bool) *nuNB {
 // classify returns the best intent (restricted to among, nil = all) and its
 // posterior probability.
 func (m *nuModel) classify(canon string, among []int) (int, float64) {
+	if nuClassifierPPM() { // compression classifier, opt-in (nlu_ppm.go)
+		m.ppmOnce.Do(func() { m.ppm = m.nuTrainPPM() })
+		return m.ppm.predict(canon, among)
+	}
 	m.nbOnce.Do(func() { m.nb = m.nuTrain(nil) })
 	return m.nb.predict(canon, among)
 }
