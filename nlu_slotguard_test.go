@@ -2624,3 +2624,40 @@ func TestNLUUndoNameGuards(t *testing.T) {
 		}
 	}
 }
+
+// hierarchy, somewhere...) nunca é operando. Batch copy/move com
+// descritores executa; dest vago/ausente, multi-dest e constraints
+// "except if" recusam honesto.
+func TestNLUModePhrasing(t *testing.T) {
+	m, w := nuTestWorld(t)
+	type ok struct {
+		q    string
+		slot string
+		want string
+	}
+	for _, c := range []ok{
+		{"Copies all files like '*.txt' under the current directory to the './tmp/' directory.", "dest", "./tmp/"},
+		{"Copy all files in \"/mail\" to \"/home/username\" preserving the directory hierarchy and modification times", "dest", "/home/username"},
+		{"Copy a large sparse file \"sparse-1\" to \"sparse-1-copy\"", "dest", "sparse-1-copy"},
+		{"Copies 'src' to 'dest' preserving overwriting the existing files.", "dest", "dest"},
+		{"Copy the current directory tree to \"newdirpathname\" preserving directory hierarchy", "dest", "newdirpathname"},
+	} {
+		in := m.Parse(c.q, w)
+		if !in.Understood() || in.Slots[c.slot] != c.want {
+			t.Errorf("%q: %v %.2f drop=%v", c.q, in.Slots, in.Confidence, in.Dropped)
+		}
+	}
+	for _, q := range []string{
+		"Find files that have been modified within the last month and copy them somewhere",
+		"copy all the mp3 files from current folder to another folder",
+		"Make a copy of file1 in dir1, dir2, and dir3.",
+		"Copy file 'src' to 'dest', except if 'dest' already exists.",
+		"Recursively copy \"dir_b\" to \"dir_a\" and delete any new files in \"dir_a\"",
+		"Create symlinks to all /home/folder1/*.txt files with the same name in current directory",
+	} {
+		in := m.Parse(q, w)
+		if nuPredict(in) != "none" {
+			t.Errorf("should refuse: %q -> %s %v %.2f", q, in.Name, in.Slots, in.Confidence)
+		}
+	}
+}

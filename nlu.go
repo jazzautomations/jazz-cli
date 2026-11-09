@@ -5958,6 +5958,65 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 	}
+	// phrasing de lugar/modo vazando como operando de path/padrão —
+	// "to another folder"/"to console"/"srcdir using" não nomeiam
+	// destino: é pedido de destino indefinido (Missing→ask) ou
+	// resíduo de modo, nunca uma pasta chamada "another".
+	// Constraint/negação ("except if", "doesn't") dropa — é
+	// restrição descoberta que nenhum slot expressa. Escopo
+	// file_move/rename — pat/all/files em outros intents são
+	// operandos válidos
+	if in.Name == "file_move" || in.Name == "rename" {
+		for _, lsk := range []string{"srcdir", "dest", "target", "pat",
+			"exclude", "link", "file"} {
+			lv := in.Slots[lsk]
+			if lv == "" {
+				continue
+			}
+			lvQuoted := false
+			for _, t := range toks {
+				if t.Quoted && (t.Raw == lv || t.Fold == lv) {
+					lvQuoted = true
+				}
+			}
+			if lvQuoted {
+				continue
+			}
+			switch strings.ToLower(lv) {
+			case "home", "casa":
+				if lsk == "srcdir" || lsk == "dest" {
+					in.Slots[lsk] = "~"
+				}
+				continue
+			case "if", "doesn", "dont", "does", "not", "no",
+				"except", "unless", "but", "variable", "variavel",
+				"variável", "defined", "yes", "upper", "uppercase",
+				"lowercase", "each", "every", "all", "one":
+				delete(in.Slots, lsk)
+				drop(lv)
+			case "using", "another", "somewhere", "anywhere",
+				"elsewhere", "console", "stdout", "stderr",
+				"files", "copied", "case-insensitive", "begin",
+				"default", "temporary", "tmp", "temp", "new",
+				"output", "info", "message", "progress",
+				"verbose":
+				delete(in.Slots, lsk)
+			}
+			// required podado vira Missing — o método cai no ask
+			// ("qual o destino?") em vez de executar incompleto
+			if in.Slots[lsk] == "" && def.Slots[lsk].Required {
+				seenMiss := false
+				for _, ms := range in.Missing {
+					if ms == lsk {
+						seenMiss = true
+					}
+				}
+				if !seenMiss {
+					in.Missing = append(in.Missing, lsk)
+				}
+			}
+		}
+	}
 	// "UID=1000"/"user=wnj" como owner/group: o rótulo é o TIPO do
 	// operando, o valor é o id/nome — find -user aceita o número,
 	// o rótulo grudado falharia quieto no runtime
@@ -14184,6 +14243,35 @@ func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
 					continue
 				}
 				break
+			}
+			// "print 2 lines of x" — número ANTES de lines é a janela
+			// de cabeça (1..N → end). Não vale quando o número já é de
+			// um cue first/last/tail (esses slots tratam dele).
+			if what == "end" && len(nums) == 0 {
+				for j := i - 1; j >= 0 && j >= i-3; j-- {
+					u := &toks[j]
+					if u.Filler {
+						continue
+					}
+					if !nuIsNumber(u.Fold) {
+						break
+					}
+					owner := false
+					for k := j - 1; k >= 0 && k >= j-3; k-- {
+						switch toks[k].Fold {
+						case "ultimas", "últimas", "ultimos", "últimos",
+							"last", "tail", "finais", "final",
+							"primeiras", "primeiros", "first", "head",
+							"iniciais":
+							owner = true
+						}
+					}
+					if owner {
+						break
+					}
+					taken[j] = true
+					return u.Fold
+				}
 			}
 		}
 	}
