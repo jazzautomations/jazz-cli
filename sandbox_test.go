@@ -339,9 +339,12 @@ func TestSbGitPointerDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := sbGitPointerDirs(root)
-	wantMain := filepath.Join(main, ".git")
-	if len(got) != 2 || got[0] != gitdir || got[1] != wantMain {
-		t.Fatalf("worktree => %v, quero [%s %s]", got, gitdir, wantMain)
+	// a função devolve caminhos CANONICIZADOS (sbReal resolve symlink e, no
+	// Windows, o nome curto 8.3 do TMPDIR vira o nome longo) — a comparação
+	// tem que passar pelo mesmo filtro.
+	wantGitdir, wantMain := sbReal(gitdir), sbReal(filepath.Join(main, ".git"))
+	if len(got) != 2 || got[0] != wantGitdir || got[1] != wantMain {
+		t.Fatalf("worktree => %v, quero [%s %s]", got, wantGitdir, wantMain)
 	}
 
 	// crafted pointer at ~/.ssh must be refused (not git metadata)

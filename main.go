@@ -965,19 +965,27 @@ func pfDeadline(d time.Duration, onTimeout func()) (timedOut func() bool, stop f
 	var hit atomic.Bool
 	var hard *time.Timer
 	var mu sync.Mutex
+	stopped := false
 	t := time.AfterFunc(d, func() {
 		hit.Store(true)
 		onTimeout()
 		mu.Lock()
-		hard = time.AfterFunc(pfHardExitGrace, func() {
-			fmt.Fprintln(os.Stderr, "jazz:", pfTimeoutMsg(d), "(encerrado à força)")
-			pfQuit(StopTimeout.ExitCode())
-		})
+		// o gate fecha a janela entre o hit e o arm do hard-exit: um stop()
+		// que corra enquanto o onTimeout ainda executa veria hard==nil e o
+		// timer escapava — disparava pfQuit 15s depois, matando o processo
+		// num caminho já encerrado (no teste: FAIL sem nenhum teste falho).
+		if !stopped {
+			hard = time.AfterFunc(pfHardExitGrace, func() {
+				fmt.Fprintln(os.Stderr, "jazz:", pfTimeoutMsg(d), "(encerrado à força)")
+				pfQuit(StopTimeout.ExitCode())
+			})
+		}
 		mu.Unlock()
 	})
 	return hit.Load, func() {
 		t.Stop()
 		mu.Lock()
+		stopped = true
 		if hard != nil {
 			hard.Stop()
 		}

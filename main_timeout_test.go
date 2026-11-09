@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -37,5 +39,35 @@ func TestPfDeadlineOff(t *testing.T) {
 	<-fired
 	if !hit() {
 		t.Fatal("deadline not reported")
+	}
+}
+
+// Guard da race do hard-exit: stop() rodando no miolo do onTimeout (antes
+// do callback armar `hard`) deixava o timer escapar — pfQuit(124) caía
+// pfHardExitGrace DEPOIS, matando o processo já encerrado. No binário de
+// teste isso é "FAIL sem nenhum teste falho" (observado no job windows).
+// O filho força o interleave com canais; o pai só confere o exit code.
+func TestPfDeadlineStopDuringOnTimeout(t *testing.T) {
+	const flag = "JAZZ_TEST_DEADLINE_CHILD"
+	if os.Getenv(flag) == "1" {
+		old := pfHardExitGrace
+		pfHardExitGrace = 60 * time.Millisecond
+		defer func() { pfHardExitGrace = old }()
+		fired := make(chan struct{})
+		letgo := make(chan struct{})
+		_, stop := pfDeadline(time.Millisecond, func() {
+			close(fired)
+			<-letgo // segura o callback antes de armar o hard-exit
+		})
+		<-fired
+		stop() // corre enquanto onTimeout ainda executa — o caso da fuga
+		close(letgo)
+		time.Sleep(5 * pfHardExitGrace)
+		return // sem o gate `stopped`: pfQuit(124) mata o filho aqui
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestPfDeadlineStopDuringOnTimeout$", "-test.count=1")
+	cmd.Env = append(os.Environ(), flag+"=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("filho saiu %v — hard-exit vazou do stop(): %s", err, out)
 	}
 }

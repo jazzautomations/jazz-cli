@@ -12600,11 +12600,15 @@ window:
 
 // nuCurrentUser: o nome da conta que está rodando — "usuário atual" é
 // semântico, não literal; vazio quando o ambiente não diz (falha honesta).
+// USER/LOGNAME são POSIX; no Windows a equivalente é USERNAME (sem ela o
+// self-reference "current user"/"me"/"usuário atual" nunca resolvia).
 func nuCurrentUser() string {
-	if u := os.Getenv("USER"); u != "" {
-		return u
+	for _, k := range []string{"USER", "LOGNAME", "USERNAME"} {
+		if u := os.Getenv(k); u != "" {
+			return u
+		}
 	}
-	return os.Getenv("LOGNAME")
+	return ""
 }
 
 var nuOwnerCues = map[string]bool{

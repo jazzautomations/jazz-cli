@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1175,6 +1176,13 @@ func TestBrArchiveOp(t *testing.T) {
 }
 
 func TestBrPermOp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// semântica genuinamente POSIX: chmod de bits rwx não existe no
+		// Windows (os.Chmod só lê o bit de escrita → 0755 vira 0666 e a
+		// verificação file_mode nunca confere). Não é falso-sucesso a
+		// proteger — é o modelo de permissão que não existe lá.
+		t.Skip("chmod/chown rwx é semântica POSIX — Windows só tem o bit read-only")
+	}
 	root := t.TempDir()
 	env, _ := brTestEnv(t, root, map[string]brFakeOut{}, -1)
 	mk := func() *brCtx {
