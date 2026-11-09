@@ -1056,7 +1056,7 @@ func TestNLUIcaseGuards(t *testing.T) {
 			}},
 		{`Search for files/directories with the case insensitive pattern anaconda.* in var/log directory`, "file_find",
 			func(s map[string]string) bool {
-				return s["name"] == "anaconda.*" && s["dir"] == "var/log" && s["icase"] == "1"
+				return s["name_re"] == "anaconda.*" && s["dir"] == "var/log" && s["icase"] == "1"
 			}},
 		{`Replace all occurrences of foo (case insensitive) with bar in all *.css files`, "text_replace",
 			func(s map[string]string) bool {
@@ -1689,5 +1689,98 @@ func TestNLUSortFirstGuards(t *testing.T) {
 	if nuPredict(in) == "line_slice" || len(in.Dropped) == 0 {
 		t.Errorf("sort -k: %s %.2f %v dropped=%v",
 			nuPredict(in), in.Confidence, in.Slots, in.Dropped)
+	}
+}
+
+func TestNLUContentGrepGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// "search for X in all files" — palavra nua de conteúdo entre
+	// "for" e o escopo é pattern, nunca nome de arquivo
+	in := m.Parse(`Search for aaa in all files under current directory and count the number of matches`, w)
+	if in.Slots["name"] == "aaa" || in.Slots["pattern"] != "aaa" {
+		t.Errorf("unquoted pattern: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "${var}" — o } de fechamento é parte da var, não pontuação
+	in = m.Parse(`Find all files under ${searchpath} that match the regex 'x' in their contents`, w)
+	if in.Slots["dir"] == "${searchpath" {
+		t.Errorf("brace var: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "in their contents" — a palavra de domínio colada como name é
+	// dropada: nome-regex em file_find seria a busca errada
+	in = m.Parse(`Find all files under ${searchpath} that match the regex '"${s1}".*"${s2}"' in their contents`, w)
+	if len(in.Dropped) == 0 {
+		t.Errorf("contents: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "under 'dir'" — preposição de escopo exclusiva: a aspa é o
+	// diretório de busca, nunca o arquivo único
+	in = m.Parse(`Recursively finds strings with "text" in files under 'directory-path'`, w)
+	if in.Slots["dir"] != "directory-path" || in.Slots["file"] != "" {
+		t.Errorf("under dir: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "$DIR"/"'/path/'" no slot de arquivo único migram pra dir —
+	// a var se declara pasta e o / final é forma de diretório
+	in = m.Parse(`Search for $S in all regular files under $DIR directory tree`, w)
+	if in.Slots["dir"] != "$DIR" || in.Slots["file"] != "" {
+		t.Errorf("$DIR scope: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	in = m.Parse(`Finds recursively all files in '/path/' that contain 'p'`, w)
+	if in.Slots["file"] == "/path/" {
+		t.Errorf("slash dir: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "anaconda.*" é regex (.* = qualquer-coisa), não glob — migra
+	// pro name_re; "[ef]" charclass segue glob no name
+	in = m.Parse(`Search for files/directories with the case insensitive pattern anaconda.* in var/log directory`, w)
+	if in.Slots["name_re"] != "anaconda.*" || in.Slots["name"] == "anaconda.*" {
+		t.Errorf("regex name: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "atleast" colado é quantificador de profundidade, nunca nome
+	in = m.Parse(`find all the text files in the folder /home/calvin which are atleast below 2 levels`, w)
+	if in.Slots["name"] == "atleast" || in.Slots["max_depth"] != "2" {
+		t.Errorf("atleast: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+}
+
+// Guards do cluster recent/time: direção correta ("last N"→newer,
+// "ago"→older), superlativo de campo não é janela, palavras-número e
+// produtos ("365*24") são quantidade — nunca nome.
+func TestNLURecentTimeGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse(`find files that were modified in the last fortnight`, w)
+	if in.Slots["newer"] != "20160" {
+		t.Errorf("fortnight: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "not modified in the last 365*24 hours" — produto avalia e a
+	// negação da janela inverte a direção (older, não newer)
+	in = m.Parse(`display all the files in the home folder which have not been modified in the last 365*24 hours`, w)
+	if in.Slots["older"] != "525600" || in.Slots["dir"] != "~" || in.Slots["name"] != "" {
+		t.Errorf("prod window: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "last accessed more than 7 days" — 'last' antes de campo é
+	// superlativo (atime), não janela recente
+	in = m.Parse(`Find any files that were last accessed more than 7 days and are larger than 100MB`, w)
+	if in.Slots["tfield"] != "atime" || in.Slots["older"] != "10080" || in.Slots["newer"] != "" {
+		t.Errorf("last accessed: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// palavra-número e 'ago' simples: direção older
+	in = m.Parse(`find files in /u/bill directory which were accessed about 2 to 6 minutes ago`, w)
+	if in.Slots["tfield"] != "atime" || in.Slots["dir"] != "/u/bill" {
+		t.Errorf("accessed ago: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "less than 60 minutes ago" — 'ago' não inverte a direção
+	// já marcada pelo 'less than'
+	in = m.Parse(`Find all files under /home/foo/public_html/ that were modified less than 60 minutes ago`, w)
+	if in.Slots["newer"] != "60" || in.Slots["older"] != "" {
+		t.Errorf("less-ago: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "no later than one minute ago" — palavra-número, direção newer,
+	// 'file system' two-word → raiz
+	in = m.Parse(`find in the entire file system inode modified no later than one minute ago`, w)
+	if in.Slots["newer"] != "1" || in.Slots["dir"] != "/" || in.Slots["name"] != "" {
+		t.Errorf("no-later: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "exactly 10*24 hours ago" — faixa exata [N,N+unit): older=N
+	in = m.Parse(`search for all mp3 files in the folder /home/you which have been accessed exactly 10*24 hours ago`, w)
+	if in.Slots["older"] != "14400" || in.Slots["ext"] != "mp3" || in.Slots["name"] != "" {
+		t.Errorf("exact ago: %s %.2f %v", in.Name, in.Confidence, in.Slots)
 	}
 }

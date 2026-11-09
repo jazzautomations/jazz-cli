@@ -363,6 +363,12 @@ func nuTokenize(text string) []nuTok {
 			j++
 		}
 		w := nuTrimPunct(string(rs[i:j]))
+		// "${var}" — o } de fechamento faz parte da var shell, não é
+		// pontuação a podar: reanexa quando o token abriu ${
+		if strings.HasPrefix(w, "${") && !strings.HasSuffix(w, "}") &&
+			strings.HasSuffix(string(rs[i:j]), "}") {
+			w += "}"
+		}
 		i = j
 		if w == "" {
 			continue
@@ -517,6 +523,18 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					"on", "onto", "at":
 					isScopePrep = true
 				}
+				// "under 'X'"/"inside 'X'" — preposição de escopo
+				// exclusiva: um arquivo não fica "under" outro arquivo;
+				// a aspa é o DIRETÓRIO mesmo com contexto de conteúdo
+				scopeOnly := false
+				switch u.Fold {
+				case "under", "underneath", "beneath", "inside",
+					"within", "abaixo", "dentro", "embaixo":
+					scopeOnly = true
+				}
+				if scopeOnly {
+					continue
+				}
 				if isScopePrep {
 					// "in 'a' and 'b'" — dois operandos de arquivo: o
 					// slot é único, marcar um calaria o outro (falso
@@ -659,6 +677,46 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					continue
 				}
 				break // a primeira palavra útil não era cue
+			}
+		}
+		// "search for aaa in all files" — palavra NUA entre "for" e a
+		// prep de escopo é o padrão de conteúdo, não um nome: exige
+		// verbo de busca à esquerda e escopo à direita pra não marcar
+		// qualquer "for X" ("look for files in docs" → files é classe)
+		if !t.Quoted && len(t.Concs) == 0 && i > 0 {
+			for j := i - 1; j >= 0 && j >= i-3; j-- {
+				u := &out[j]
+				if u.Fold == "for" || u.Fold == "por" {
+					verb := false
+					for k := j - 1; k >= 0 && k >= j-3; k-- {
+						if out[k].has("find") || out[k].has("grepword") ||
+							out[k].has("content") {
+							verb = true
+							break
+						}
+						if !out[k].Filler {
+							break
+						}
+					}
+					scope := false
+					for k := i + 1; k < len(out) && k <= i+4; k++ {
+						if nuReplScopeCue[out[k].Fold] {
+							scope = true
+							break
+						}
+						if !out[k].Filler && !nuAllFormatWords(out[k].Fold) {
+							break
+						}
+					}
+					if verb && scope && !t.has("files") && !t.has("filenoun") &&
+						!t.has("dirnoun") && !t.has("dir") && !nuIsNumber(t.Fold) {
+						t.Concs = append(t.Concs, "forquoted")
+					}
+				}
+				if u.Filler {
+					continue
+				}
+				break
 			}
 		}
 		if t.Quoted || len(t.Concs) > 0 {
@@ -2217,6 +2275,58 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			}
 		}
 	}
+	// "anaconda.*" é regex, não glob: o glob do script leria ".*" como
+	// literal+um-char — valores com sintaxe regex migram pra name_re.
+	// ".*" isolado fica: como glob ele casa dotfiles (o mapa hidden o
+	// produz); como regex casaria TUDO — silent-wrong. Charclass
+	// "[ef]" também segue glob legítimo no name.
+	if v := in.Slots["name"]; v != "" && v != ".*" && in.Slots["name_re"] == "" {
+		if strings.Contains(v, ".*") || strings.HasPrefix(v, "^") ||
+			strings.HasSuffix(v, "$") || strings.ContainsAny(v, "|()+\\") {
+			in.Slots["name_re"] = v
+			delete(in.Slots, "name")
+		}
+	}
+	// "in their contents"/"in contents" — a palavra de domínio marca
+	// a busca como de CONTEÚDO; colada como name num intent que não é
+	// de conteúdo vira Dropped (o file_find responderia nome-regex)
+	if in.Name != "text_grep" && in.Name != "text_count" &&
+		in.Name != "wordcount_stats" && in.Name != "line_slice" {
+		for _, t := range toks {
+			switch t.Fold {
+			case "contents", "content", "conteúdo", "conteudo", "conteudos":
+				in.Dropped = append(in.Dropped, t.Raw)
+			}
+		}
+	}
+	// valor com forma de PASTA no slot de arquivo único — "/path/" não
+	// é arquivo; "$DIR" se declara pasta no próprio nome. Quando a
+	// intent tem dir, migra (o escopo é o pedido); senão dropa.
+	for _, fk := range []string{"file", "target"} {
+		v := in.Slots[fk]
+		if v == "" {
+			continue
+		}
+		dirish := strings.HasSuffix(v, "/")
+		if !dirish && strings.HasPrefix(v, "$") {
+			low := strings.ToLower(v)
+			dirish = strings.Contains(low, "dir") ||
+				strings.Contains(low, "diretorio") ||
+				strings.Contains(low, "folder") ||
+				strings.Contains(low, "pasta") ||
+				strings.Contains(low, "home") ||
+				strings.Contains(low, "path")
+		}
+		if !dirish {
+			continue
+		}
+		if _, hasDir := def.Slots["dir"]; hasDir && in.Slots["dir"] == "" {
+			in.Slots["dir"] = v
+		} else {
+			in.Dropped = append(in.Dropped, v)
+		}
+		delete(in.Slots, fk)
+	}
 	// "sort strings by second field"/"by the end field" — sort -k por
 	// campo não é suportado por nenhum método de linha; o operando de
 	// campo vai pro Dropped em vez de fingir um slice.
@@ -2711,6 +2821,32 @@ var timeWords = map[string]bool{
 	"month": true, "months": true, "year": true, "years": true,
 	"day": true, "days": true, "hour": true, "hours": true,
 	"minute": true, "minutes": true, "second": true, "seconds": true,
+	"fortnight": true, "fortnights": true,
+	"quinzena": true, "quinzenas": true,
+	"minuto": true, "minutos": true, "hora": true, "horas": true,
+	"dia": true, "dias": true, "semana": true, "semanas": true,
+	"mes": true, "mês": true, "meses": true, "ano": true, "anos": true,
+}
+
+// nuNumTok: o token é quantidade — dígito ("365"), palavra-número
+// ("one"/"vinte") ou produto escrito ("365*24"). Número com letra
+// colada ("10k") não entra.
+func nuNumTok(fold string) bool {
+	if nuIsNumber(fold) {
+		return true
+	}
+	if _, ok := nuNumWord(fold); ok {
+		return true
+	}
+	if strings.Count(fold, "*") >= 1 {
+		for _, p := range strings.Split(fold, "*") {
+			if !nuIsNumber(p) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // nuCaseFlags: modificadores de comparação ("any-cased 'error'") —
@@ -2792,6 +2928,9 @@ var nuFormatWords = map[string]bool{
 	"permissions": true, "owners": true,
 	"been": true, "being": true, "sido": true, "modified": true,
 	"modificado": true, "modificada": true,
+	// auxiliar verbal solto é phrasing de janela/cláusula — "that
+	// were modified less than..." não tem name "were"
+	"were": true, "was": true, "are": true, "is": true,
 	// coluna de exibição / escopo de filesystem — "their modification
 	// time", "disk partition": phrasing, nunca nome de arquivo
 	"modification": true, "modificacao": true, "modificação": true,
@@ -2849,6 +2988,9 @@ var nuFormatWords = map[string]bool{
 	"second": true, "third": true, "fourth": true, "fifth": true,
 	"primeiro": true, "primeira": true, "segundo": true, "segunda": true,
 	"terceiro": true, "terceira": true,
+	// "atleast"/"least"/"below N levels" — quantificador de
+	// profundidade colado ou solto, nunca basename
+	"atleast": true, "least": true, "below": true, "abaixo": true,
 	// adjetivo de escopo vago é phrasing de local, nunca parte de um
 	// glob: "in the specified directory" não tem name "specified"
 	// (typo "specfied" chega sem reparo — o fold fica sujo)
@@ -7148,20 +7290,55 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		}
 		return lo
 	}
-	olderSeen, newerSeen := false, false
+	olderSeen, newerSeen, agoSeen, laterThanSeen := false, false, false, false
 	for i, u := range toks {
 		switch u.Fold {
 		case "older", "antigos", "antigo", "antiga", "velhos", "velho", "velha", "before", "antes", "more", "mais":
 			olderSeen = true
-		case "ultimos", "últimos", "ultimas", "últimas", "last", "past", "within", "newer", "less", "menos", "recent", "recente", "recentes":
+		case "ultimos", "últimos", "ultimas", "últimas", "past", "within", "newer", "less", "menos", "recent", "recente", "recentes":
 			newerSeen = true
+		case "last":
+			// "last 7 days"/"last 24 hours" — 'last' com quantidade é
+			// janela recente; "last accessed"/"last touched" é o
+			// superlativo de campo (atime), não direção
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler {
+					continue
+				}
+				if nuNumTok(u.Fold) || timeWords[u.Fold] {
+					newerSeen = true
+				}
+				break
+			}
 		case "later":
 			// "modified no later than one minute ago" ≈ "modified less
 			// than one minute ago" — recência (-mmin -N), não idade.
 			// 'later' sem 'than' não é cue de janela ("for later").
 			if i+1 < len(toks) && toks[i+1].Fold == "than" {
-				newerSeen = true
+				laterThanSeen = true
 			}
+		case "ago", "há", "ha":
+			agoSeen = true
+		}
+	}
+	// "ago" = idade → older, EXCETO quando um comparativo já marcou a
+	// direção: "less than 60 minutes ago" é newer (o ago é marcador
+	// de tempo, não direção); "no later than X ago" idem.
+	if agoSeen && !newerSeen && !laterThanSeen {
+		olderSeen = true
+	}
+	if laterThanSeen {
+		newerSeen = true
+	}
+	// "exactly 10*24 hours ago" — instante, não piso: a idade fica na
+	// faixa [N, N+unidade). older recebe o piso, newer o teto.
+	exact := false
+	for _, u := range toks {
+		switch u.Fold {
+		case "exactly", "exact", "exatamente", "exata", "exato",
+			"precisely", "precisamente":
+			exact = true
 		}
 	}
 	// negação de janela: "not modified in the last 24h" e "except those
@@ -7294,6 +7471,9 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 		if i+1 >= len(toks) {
 			continue
 		}
+		if !nuNumTok(t.Fold) {
+			continue
+		}
 		prod := -1
 		if f := t.Fold; strings.Count(f, "*") >= 1 {
 			// "365*24 hours" — produto escrito na frase; avalia antes
@@ -7308,9 +7488,6 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 				}
 				prod *= v
 			}
-		}
-		if _, isNumWord := nuNumWord(t.Fold); !nuIsNumber(t.Fold) && !isNumWord && prod < 0 {
-			continue
 		}
 		mult := 0
 		switch toks[i+1].Fold {
@@ -7355,12 +7532,19 @@ func nuFindWindow(toks []nuTok, newer bool, taken map[int]bool) string {
 					"criada", "less", "more", "ago", "ha", "há", "within",
 					"last", "past", "older", "newer", "recent", "recente",
 					"than", "do", "que", "in", "em", "at", "least", "most",
-					"later", "no",
+					"later", "no", "exactly", "exact", "exatamente",
+					"exata", "exato", "precisely", "precisamente",
 					"were", "was", "are", "been", "is", "that", "which",
 					"those", "these", "them", "the", "of", "a", "an", "s",
 					"have", "has", "not", "touched", "over", "for":
 					taken[k] = true
 				}
+			}
+			if exact {
+				if newer {
+					return strconv.Itoa((n + 1) * mult)
+				}
+				return strconv.Itoa(n * mult)
 			}
 			return strconv.Itoa(n * mult)
 		}
