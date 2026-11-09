@@ -1,0 +1,3 @@
+o pessoal de infra pediu: no `pingui`, a Porta passa a 9095 e o MostrarLog desliga (false).
+Mexe so no config.go, nada de main.go. Compila (go build -o pingui .); ./pingui tem que
+imprimir 'servidor na porta 9095' e nada de linha de log.

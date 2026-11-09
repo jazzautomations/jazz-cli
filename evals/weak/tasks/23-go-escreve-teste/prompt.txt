@@ -1,0 +1,3 @@
+nao tem teste nenhum no projeto, e o `par` e usado em producao. Escreve um teste de
+verdade para `par` num arquivo novo `par_test.go`, cobrindo numero par, impar e o zero.
+Depois: `go test ./...` tem que passar.

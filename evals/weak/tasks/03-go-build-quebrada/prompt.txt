@@ -1,0 +1,2 @@
+aqui o build quebrou e ninguem sabe quando: `go build ./...` nao passa.
+Conserta e deixa `go test ./...` verde tambem. Sem mexer nos testes.

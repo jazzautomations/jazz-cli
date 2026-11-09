@@ -1,0 +1,5 @@
+a tesouraria achou errado nos relatorios: os precos estao em CENTAVOS e a funcao Moeda
+imprime sem centavos. Hoje: Moeda(1500) == "R$ 1500". O formato oficial e com virgula:
+Moeda(1500) == "R$ 15,00"; Moeda(805) == "R$ 8,05"; Moeda(5) == "R$ 0,05".
+Ela e usada em varios arquivos; arrume em UM lugar so (moeda.go), sem mexer nas
+chamadas nem nos testes. `go test ./...` verde e o objetivo.

@@ -1,0 +1,3 @@
+o teste de cupom.py ta falhando:
+  python3 -m unittest -v
+olha o erro e arruma o codigo em cupom.py (o teste e o correto; nao mexa nele).

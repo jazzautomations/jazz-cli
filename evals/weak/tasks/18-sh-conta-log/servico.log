@@ -1,0 +1,7 @@
+09:00:01 [OK] subiu
+09:00:04 [ERRO] fila cheia
+09:01:00 [OK] ciclo normal
+09:02:30 [ERRO] credencial rejeitada
+09:03:00 [OK] ciclo normal
+09:04:10 [ERRO] timeout no 2
+09:05:00 [OK] no 2 de volta

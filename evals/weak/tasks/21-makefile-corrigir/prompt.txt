@@ -1,0 +1,3 @@
+`make test` quebra porque o Makefile ainda usa python2, que nao existe mais nesta
+maquina. Conserta o Makefile pra usar python3, sem mudar mais nada. Objetivo:
+`make test` passar.

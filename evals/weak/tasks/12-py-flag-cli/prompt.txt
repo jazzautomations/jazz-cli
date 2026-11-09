@@ -1,0 +1,7 @@
+no `safra.py`, adiciona uma flag `--maiusculas` que imprime a linha final em CAIXA ALTA.
+O resto continua igual, do jeito que esta hoje (sem a flag):
+  python3 safra.py a b c             => a,b,c
+  python3 safra.py --sep + a b       => a+b
+Com a flag nova:
+  python3 safra.py --maiusculas a b c         => A,B,C
+  python3 safra.py --sep + --maiusculas a b   => A+B

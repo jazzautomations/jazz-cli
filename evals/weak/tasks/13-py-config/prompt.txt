@@ -1,0 +1,3 @@
+o teste de carga esta estourando o timeout porque settings.json tem 30s e passa a ser
+preciso 180s. E so mexer no settings.json (nada de codigo). No fim roda `python3 app.py`:
+tem que imprimir 180.

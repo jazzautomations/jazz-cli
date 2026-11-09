@@ -1,0 +1,13 @@
+#!/bin/bash
+set -u
+# Tarefa 15-py-deprecada-uso: monta o projeto descartavel no diretorio $1.
+src="$(cd "$(dirname "$0")" && pwd)"
+d="${1:?uso: setup.sh DEST}"
+mkdir -p "$d"
+files=(
+	"banco.py"
+	"cli.py"
+	"service.py"
+	"test_banco.py"
+)
+for f in "${files[@]}"; do mkdir -p "$(dirname "$d/$f")"; cp -R "$src/$f" "$d/$f"; done

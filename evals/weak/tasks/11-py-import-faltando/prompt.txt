@@ -1,0 +1,2 @@
+python3 -m unittest quebra na hora de rodar test_nota — parece que nota.py usa uma
+biblioteca que nao foi importada. Conserta aí, por favor; objetivo e testes verdes.

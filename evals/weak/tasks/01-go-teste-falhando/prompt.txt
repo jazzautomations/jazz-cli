@@ -1,0 +1,4 @@
+o teste unitario do pacote ta falhando aqui:
+  go test ./...
+pelo meu raciocinio o codigo vale, mas enfim. Arruma o que precisar no codigo,
+por favor. Nao mexe no teste, ele descreve o comportamento certo.

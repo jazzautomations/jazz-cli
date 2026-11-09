@@ -1,0 +1,2 @@
+tem uma funcao so com assinatura e comentario em palavras.go (RevPalavras).
+Implementa seguindo exatamente o docstring; `go test ./...` e o seu norteador.

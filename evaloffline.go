@@ -457,6 +457,15 @@ func eoFixture(base, id, kind string) (string, error) {
 			"v4_diff_apply_check.txt":  "--- a/ana.txt\n+++ b/ana.txt\n@@ -1 +1 @@\n-ana\n+bruno\n",
 			"ana.txt":                  "ana\n",
 
+			"v5_file_find.txt":    "alvo\n",
+			"v5_text_extract.txt": "ana@x.com bruno 10.0.0.1\n",
+			"v5_line_slice.txt":   "l1\nl2\nl3\nl4\nl5\n",
+			"v5_text_count.txt":   "ana\nbruno\nana\n",
+			"v5_dup_a.txt":        "mesmo conteudo\n",
+			"v5_dup_b.txt":        "mesmo conteudo\n",
+			"a/s.txt":             "x\n",
+			"b/s.txt":             "y\n",
+
 			"go.mod":       "module evalfix\n\ngo 1.21\n",
 			"parser.go":    "package evalfix\n\n// ParseArgs splits the arguments.\nfunc ParseArgs(a []string) []string { return a }\n",
 			"lexer.go":     "package evalfix\n\n// TODO: handle empty input\nfunc Tokenize(s string) []string { return []string{s} }\n",

@@ -1,0 +1,4 @@
+preciso de um relatorinho rapido: filtra as linhas de erro do `servico.log` (as linhas
+com [ERRO]) e grava essas linhas em `erros.log`. E escreve em `total.txt` uma linha
+  erros=<n>
+com a quantidade de erros.

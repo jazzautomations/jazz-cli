@@ -1,0 +1,6 @@
+esse app.log esta gigante e preciso de um numero: quantas linhas de erro (ERROR) tem nele.
+Analisa o arquivo e escreve em `total.txt` uma linha no formato:
+
+  ERROS=7
+
+(no lugar do 7, a contagem real). Pode resolver como quiser; o total.txt e o que importa.

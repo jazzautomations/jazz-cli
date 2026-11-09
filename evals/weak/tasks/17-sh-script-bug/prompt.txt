@@ -1,0 +1,3 @@
+o `backup.sh` quebra quando uma pasta tem espaco no nome (o caso de "docs tutoriais").
+Conserta o script; o resto tem que continuar igual: copia os *.txt para backup/ e
+imprime uma linha "copiado: <arquivo>" por arquivo. Roda `./backup.sh` pra testar.

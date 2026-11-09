@@ -1,0 +1,4 @@
+precisa renomear o metodo sal_liquido para salario_liquido (padronizacao de nome).
+O teste ja usa o nome novo (por isso falha com AttributeError). Renomeia em todos os
+arquivos; nao pode sobrar `sal_liquido` em nenhum lugar. Confere com
+  python3 -m unittest test_folha -v
