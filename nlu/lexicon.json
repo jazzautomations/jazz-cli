@@ -114,7 +114,9 @@
    "buildar",
    "building",
    "compilacao",
-   "make"
+   "make",
+   "binario",
+   "binário"
   ],
   "callers": [
    "calls",
@@ -814,7 +816,12 @@
    "unpacks",
    "unpacking",
    "unpacked",
-   "unzipped"
+   "unzipped",
+   "extrair",
+   "extrai-lo",
+   "extrai-la",
+   "extraí-lo",
+   "extraí-la"
   ],
   "extractkind": [
    "emails",
@@ -1160,7 +1167,12 @@
    "checksum do arquivo",
    "soma de verificacao",
    "checksums.txt",
-   "integridade do arquivo"
+   "integridade do arquivo",
+   "checksum",
+   "checksums",
+   "sha",
+   "sha1sum",
+   "sha512sum"
   ],
   "have": [
    "tenho",
@@ -1977,7 +1989,14 @@
    "dangling",
    "órfãs",
    "orfas",
-   "orphaned"
+   "orphaned",
+   "limpa",
+   "limpar",
+   "limpe",
+   "clean",
+   "cleans",
+   "clean up",
+   "cleanup"
   ],
   "pubnet": [
    "ip externo",
@@ -2196,7 +2215,9 @@
    "tu",
    "you",
    "yourself",
-   "voce mesmo"
+   "voce mesmo",
+   "your",
+   "yours"
   ],
   "service": [
    "servico",
@@ -2219,7 +2240,13 @@
    "httpd",
    "apache",
    "mysqld",
-   "mariadb"
+   "mariadb",
+   "ssh",
+   "tailscaled",
+   "dockerd",
+   "containerd",
+   "kubelet",
+   "coredns"
   ],
   "session": [
    "logada",
@@ -2234,7 +2261,12 @@
    "sessions",
    "sessoes",
    "sessão",
-   "sessões"
+   "sessões",
+   "connected",
+   "conectado",
+   "conectada",
+   "conectados",
+   "conectadas"
   ],
   "snapshot": [
    "snapshot",
@@ -2372,7 +2404,16 @@
    "modificada",
    "modificados",
    "modificadas",
-   "modified"
+   "modified",
+   "checa",
+   "checar",
+   "cheque",
+   "check",
+   "checks",
+   "checking",
+   "verifica",
+   "verificar",
+   "verifique"
   ],
   "stdin": [
    "stdin",
@@ -2610,7 +2651,10 @@
    "pesada",
    "lento",
    "lenta",
-   "travando"
+   "travando",
+   "how long",
+   "how long has",
+   "been up"
   ],
   "usage": [
    "usa",
@@ -3256,7 +3300,6 @@
   "docker compose up": "container start",
   "docker ps": "container list",
   "docker-compose up": "container start",
-  "em que branch": "branch status",
   "entra na": "connect",
   "entra no": "connect",
   "espaco em disco": "disk",
@@ -3395,7 +3438,6 @@
   "puxa as mudancas": "pull",
   "puxa do remoto": "pull",
   "pytest": "test",
-  "qual branch": "branch status",
   "qual processo usa": "who process",
   "quebrou": "error",
   "quem chama": "usage who",
@@ -3464,7 +3506,17 @@
   "younger than": "newer",
   "your opinion": "opinion",
   "your take": "opinion",
-  "zoado": "error"
+  "zoado": "error",
+  "se apresenta": "explain yourself",
+  "se apresente": "explain yourself",
+  "apresenta-se": "explain yourself",
+  "apresente-se": "explain yourself",
+  "introduce yourself": "explain yourself",
+  "valeu": "obrigado",
+  "vlw": "obrigado",
+  "valeuzão": "obrigado",
+  "brigado": "obrigado",
+  "brigada": "obrigado"
  },
  "version": 1
 }

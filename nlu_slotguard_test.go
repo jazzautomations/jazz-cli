@@ -2696,4 +2696,92 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	if in.Name != "dir_diff" || in.Slots["a"] != "a" || in.Slots["b"] != "b" || in.Confidence < 0.7 {
 		t.Errorf("dir_diff: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
 	}
+	// "remoto" em intent git é o git-remote (vocábulo de domínio),
+	// não spec de execução remota — o passe não pode dropar
+	for q, want := range map[string]string{
+		"envia pro remoto":                    "git_push",
+		"manda pro github":                    "git_push",
+		"estou atrás do remoto?":              "git_branch_status",
+		"quantos commits estou ahead do origin": "git_branch_status",
+		"baixa do remoto":                     "git_pull",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// uso adjetivo ou host qualificado continua spec remoto —
+	// executar LOCAL quando pediram outra máquina é falso-sucesso
+	for _, q := range []string{
+		"git status da máquina remota",
+		"git pull do servidor remoto",
+		"instala jq na máquina web-01",
+		"git commit no servidor web-01",
+		"roda os testes no servidor",
+	} {
+		in = m.Parse(q, w)
+		if len(in.Dropped) == 0 {
+			t.Errorf("%q: %s conf %.2f sem drop — spec remoto perdido", q, in.Name, in.Confidence)
+		}
+	}
+	// "na máquina" nu = esta aqui; possessivo também aponta pra cá
+	for q, want := range map[string]string{
+		"bota o jq na máquina": "install_dep",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// vocábulo-contexto: "quais erros no log" lista erros (não conta);
+	// "todos" é massa, não verbo; "checa"/"how long" alimentam a regra
+	for q, want := range map[string]string{
+		"quais erros apareceram no log do sistema": "log_errors_recent",
+		"comprime todos os .txt em textos.zip":     "archive_create",
+		"checa se o labbox tá online":              "host_status",
+		"how long has it been up":                  "uptime_load",
+		// "do" nu é genitivo, não comparativo — jazz não é referência
+		// temporal ("do que" segue comparando)
+		"tem versão nova do jazz? atualiza": "update_jazz",
+		// vocábulos de domínio que o roteiro genérico engolia
+		"em que branch eu tô":                    "git_branch",
+		"arquivos modificados na última hora":    "fs_recent",
+		"quais arquivos mudam juntos":            "git_cochange",
+		"quais timers do systemd existem":        "cron_list",
+		"limpa o docker":                         "container_prune",
+		"gera o binário":                         "build",
+		"verifica o checksum do download":        "hash_verify",
+		"gera os checksums do projeto":           "file_snapshot",
+		"mostra o codigo do lexer.go":            "open_file",
+		"your version":                           "self_info",
+		"se apresenta":                           "self_info",
+		"who is connected":                       "logged_in",
+		"quem tá conectado no servidor":          "logged_in",
+		"o ssh está ativo?":                      "service_status",
+		"o tailscaled tá rodando?":               "service_status",
+		"o zip é seguro de extrair?":             "archive_list",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// os vetos de domínio seguem decidindo: stop≠prune, arquivo≠docker,
+	// snapshot de apagar é delete, extrair explícito é extract
+	for q, want := range map[string]string{
+		"status das branches":  "git_branch_status",
+		"cria branch foo":      "git_branch",
+		"apaga o container":    "container_stop",
+		"limpa a pasta":        "delete_file",
+		"apaga o snapshot":     "delete_file",
+		"extrai o zip":         "archive_extract",
+		"lista o conteúdo do zip": "archive_list",
+		"ssh no servidor":      "connect_host",
+		"valeu":                "none",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
 }

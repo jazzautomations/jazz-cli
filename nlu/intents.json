@@ -36,7 +36,6 @@
       "install",
       "remote",
       "connect",
-      "list",
       "listverb",
       "count",
       "v4_wordcount_stats",
@@ -346,6 +345,23 @@
       "fix",
       "files"
      ]
+    },
+    {
+     "all": [
+      "build",
+      "create|makeword"
+     ],
+     "none": [
+      "error",
+      "execperm",
+      "filenoun",
+      "fix",
+      "files",
+      "find",
+      "test",
+      "version"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -520,8 +536,13 @@
      ],
      "none": [
       "recover",
-      "mutate"
-     ]
+      "mutate",
+      "files",
+      "filenoun",
+      "branch",
+      "git"
+     ],
+     "w": 15
     },
     {
      "all": [
@@ -838,6 +859,18 @@
       "delete",
       "install"
      ]
+    },
+    {
+     "all": [
+      "cron",
+      "list|listverb"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "install"
+     ],
+     "w": 5
     }
    ],
    "slots": {}
@@ -2732,6 +2765,17 @@
       "create",
       "undo"
      ]
+    },
+    {
+     "all": [
+      "snapshot",
+      "create|makeword"
+     ],
+     "none": [
+      "delete",
+      "undo"
+     ],
+     "w": 5
     }
    ],
    "slots": {}
@@ -3259,8 +3303,14 @@
       "commit",
       "recover",
       "logs",
-      "scope"
-     ]
+      "scope",
+      "find",
+      "newest",
+      "stale",
+      "nameattr",
+      "filequoted"
+     ],
+     "w": 20
     },
     {
      "all": [
@@ -3412,6 +3462,15 @@
       "branch",
       "status"
      ]
+    },
+    {
+     "all": [
+      "merge",
+      "remote"
+     ],
+     "none": [
+      "delete"
+     ]
     }
    ],
    "slots": {}
@@ -3477,7 +3536,8 @@
     {
      "all": [
       "cochange"
-     ]
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -3664,6 +3724,21 @@
       "update",
       "remote"
      ]
+    },
+    {
+     "all": [
+      "download",
+      "remote"
+     ],
+     "none": [
+      "connect",
+      "install",
+      "delete",
+      "mutate",
+      "copy",
+      "move",
+      "extract"
+     ]
     }
    ],
    "slots": {}
@@ -3697,6 +3772,26 @@
       "start",
       "remote"
      ]
+    },
+    {
+     "all": [
+      "remote",
+      "intocue"
+     ],
+     "none": [
+      "connect",
+      "net",
+      "pull",
+      "download",
+      "copy",
+      "move",
+      "install",
+      "delete",
+      "mutate",
+      "update",
+      "extract"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -3849,6 +3944,17 @@
       "create",
       "delete"
      ]
+    },
+    {
+     "all": [
+      "hashfile",
+      "status"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ],
+     "w": 8
     }
    ],
    "slots": {
@@ -4595,6 +4701,22 @@
       "mutate",
       "create"
      ]
+    },
+    {
+     "all": [
+      "error",
+      "logs|env",
+      "list|listverb"
+     ],
+     "none": [
+      "test",
+      "build",
+      "fix",
+      "delete",
+      "mutate",
+      "create"
+     ],
+     "w": 10
     }
    ],
    "slots": {}
@@ -4624,7 +4746,6 @@
      ],
      "none": [
       "port",
-      "service",
       "container",
       "blame",
       "kill",
@@ -4632,9 +4753,9 @@
       "user",
       "run",
       "remote",
-      "connect",
       "keynoun"
-     ]
+     ],
+     "w": 10
     },
     {
      "all": [
@@ -5076,6 +5197,39 @@
       "perf",
       "eachitem"
      ]
+    },
+    {
+     "all": [
+      "open",
+      "@file"
+     ],
+     "none": [
+      "summary",
+      "diff",
+      "blame",
+      "history",
+      "git",
+      "logs",
+      "net",
+      "host",
+      "service",
+      "@host",
+      "status",
+      "remote",
+      "files",
+      "list",
+      "listverb",
+      "lineselect",
+      "keynoun",
+      "config",
+      "recent",
+      "timeref",
+      "epochnoun",
+      "datenoun",
+      "nameattr",
+      "medianoun"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -6121,6 +6275,16 @@
      "none": [
       "opinion"
      ]
+    },
+    {
+     "all": [
+      "self",
+      "version"
+     ],
+     "none": [
+      "opinion"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -6336,6 +6500,28 @@
       "remote",
       "host",
       "install"
+     ]
+    },
+    {
+     "all": [
+      "service",
+      "running"
+     ],
+     "none": [
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "container",
+      "ipaddr",
+      "net",
+      "pubnet",
+      "install",
+      "mutate",
+      "error",
+      "sysnoun",
+      "host",
+      "@host"
      ]
     }
    ],

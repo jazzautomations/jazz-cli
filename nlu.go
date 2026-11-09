@@ -496,7 +496,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			for j := i + 1; j < len(out) && j <= i+4; j++ {
 				u := &out[j]
 				switch u.Fold {
-				case "than", "que", "do":
+				case "than", "que":
+					// "do" fora — comparativo pede "do QUE"; "do" nu
+					// é genitivo ("versão nova do jazz" não compara)
 					thanSeen = true
 					continue
 				}
@@ -1239,6 +1241,35 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			if !u.Filler {
 				break
 			}
+		}
+	}
+	// "o zip é seguro de extrair?"/"is it safe to extract": adjetivo
+	// de risco imediatamente antes do verbo torna o 'extrair'
+	// hipotético — o pedido é inspecionar o pacote, não extraí-lo;
+	// sem a supressão archive_extract casa e a pergunta vira ação
+	for i := range out {
+		t := &out[i]
+		if !t.has("extract") {
+			continue
+		}
+		for j := i - 1; j >= 0 && j >= i-4; j-- {
+			u := &out[j]
+			if u.Filler {
+				continue
+			}
+			switch u.Fold {
+			case "seguro", "segura", "safe", "perigoso", "perigosa",
+				"dangerous", "arriscado", "arriscada", "risky":
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "extract" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+				t.Filler = true // verbo hipotético não é palavra solta
+			}
+			break
 		}
 	}
 	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
@@ -5855,16 +5886,25 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		in.Name == "net_ifaces" || in.Name == "net_route" ||
 		in.Name == "net_status" || in.Name == "file_users" ||
 		strings.HasPrefix(in.Name, "service_")
+	// intents git operam sobre o remote por definição — "pro remoto"/
+	// "do origin" é vocábulo do domínio, não spec de execução remota.
+	// Uso adjetivo ("máquina remota", "remote host") continua spec.
+	gitDomain := strings.HasPrefix(in.Name, "git_")
 	remoteVocab := false
 	hostIdx := -1
 	if !hostDomain {
 		for i, t := range toks {
 			switch t.Fold {
 			case "remote", "remoto", "remota":
+				if gitDomain && !nuRemoteAdj(toks, i) {
+					continue
+				}
 				remoteVocab = true
 			case "ssh", "host", "hosts", "node", "nodes", "server",
 				"servers", "machine", "machines", "servidor",
 				"servidores", "maquina", "máquina":
+				machineWord := t.Fold == "machine" || t.Fold == "machines" ||
+					t.Fold == "maquina" || t.Fold == "máquina"
 				demo := false
 				for j := i - 1; j >= 0 && j >= i-3; j-- {
 					u := toks[j]
@@ -5884,7 +5924,10 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 					switch u.Fold {
 					case "on", "at", "em", "no", "na", "via",
 						"ssh", "remote", "remoto":
-						if !demo {
+						// "na máquina" nu = esta aqui;
+						// nome/qualificador depois ("máquina
+						// web-01", "máquina remota") é spec
+						if !demo && (!machineWord || nuHostQualified(toks, i)) {
 							remoteVocab = true
 							if hostIdx < 0 {
 								hostIdx = i
@@ -8293,6 +8336,70 @@ func nuDiffPart(toks []nuTok, wantB bool, taken map[int]bool) string {
 		}
 	}
 	return ""
+}
+
+// nuHostNoun: substantivo-host — a classe que "remote/remoto" qualifica
+// quando usado como adjetivo.
+func nuHostNoun(fold string) bool {
+	switch fold {
+	case "host", "hosts", "node", "nodes", "server", "servers",
+		"machine", "machines", "servidor", "servidores",
+		"maquina", "máquina", "computador", "computer", "pc",
+		"vps", "peer", "peers", "box", "boxes":
+		return true
+	}
+	return false
+}
+
+// nuRemoteAdj: "remote/remoto" colado num substantivo-host é adjetivo
+// ("máquina remota", "remote host") — spec de execução remota mesmo
+// dentro de intent git, onde o substantivo nu ("pro remoto") é o
+// git-remote de sempre.
+func nuRemoteAdj(toks []nuTok, i int) bool {
+	for _, d := range []int{-1, 1} {
+		j := i + d
+		for j >= 0 && j < len(toks) && toks[j].Filler {
+			j += d
+		}
+		if j >= 0 && j < len(toks) && nuHostNoun(toks[j].Fold) {
+			return true
+		}
+	}
+	return false
+}
+
+// nuHostQualified: a palavra-host é seguida de nome/qualificador —
+// "máquina web-01", "máquina remota", "máquina do cliente". "Na
+// máquina" nu (fim do pedido, verbo/conjunção depois) é esta aqui.
+// Possessivo direto ("máquina minha") também aponta pra cá.
+func nuHostQualified(toks []nuTok, i int) bool {
+	genitive := false
+	for j := i + 1; j < len(toks) && j <= i+3; j++ {
+		u := toks[j]
+		if u.Filler {
+			switch u.Fold {
+			case "de", "do", "da", "dos", "das", "of":
+				genitive = true
+				continue
+			}
+			if !genitive {
+				return false // "a máquina e sai" — conjunção, não nome
+			}
+			continue
+		}
+		switch u.Fold {
+		case "my", "mine", "your", "yours", "our", "ours",
+			"meu", "minha", "meus", "minhas",
+			"nosso", "nossa", "nossos", "nossas",
+			"seu", "sua", "seus", "suas":
+			if genitive {
+				continue // "máquina do meu pai" — o dono vem depois
+			}
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // nuWcWhat: qual grandeza contar — a resposta errada é somar "lines"
