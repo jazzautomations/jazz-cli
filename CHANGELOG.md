@@ -1,6 +1,24 @@
 # Changelog
 
-## Não lançado
+## 0.13.0 — 2026-11-09
+
+### NLU: falso-sucesso drenado no corpus de 1051 pedidos
+
+- Medido no corpus redo1051 (reexecução de 1051 pedidos reais — NL2Bash, Terminal-Bench,
+  devops pt/en — rotulados pelo Jev): a fila de clusters BUG_doable foi drenada por tema —
+  hidden/dotfiles, tamanho, exec, sort/first, janelas temporais e direção, predicados find2
+  (orphan/empty/writable), sys/mutation, dep/sys/read, falso-match de sentença/comando/jobspec.
+  Falso-sucesso medido: ~zero; a única classe residual viva é catalogada (operando citado que
+  nunca alimenta slot derruba o selo — gap `net_ifaces` dissecado em
+  docs/research/jev-build-time-tickets.md).
+- A regra que segura tudo: `succeeded` exige verify+evidência cobrindo TODOS os operandos.
+  Operando não-extraído, ambíguo ou fora do suporte → dropped/unverified, nunca chute.
+  "Delete all hidden files under $X" ganha o filtro `.*` (nunca apaga o diretório inteiro);
+  cláusulas `except` alimentam só `exclude`; sub-passo sem rastro derruba o rollup.
+- Guardas permanentes por cluster em `nlu_slotguard_test.go`; expectativas de routing
+  tolerante reescritas sob a doutrina de honestidade (destino vago em `move` = recusa).
+- Pendente conhecido (não é regressão): under-refusal — o parser ainda recusa pedido
+  fazível em ~450 casos doable. É a frente seguinte (T5), cobertura, não guarda.
 
 ### Cérebro offline: erra 82% menos em pedido real; cardápio v5 (68 scripts)
 
@@ -30,7 +48,7 @@
   "não entendi": o jazz diz que precisa de um modelo, por quê, o que faz offline e como ligar um modelo.
   Continua passando pro modelo quando há um.
 
-### 0.14 asset-forge: correção do dono vira exemplo da gramática, só se melhorar fora da amostra
+### Asset-forge: correção do dono vira exemplo da gramática, só se melhorar fora da amostra
 
 - O cérebro offline agora escreve no ledger (`signals.jsonl`, no data dir, nunca sai da máquina; segredos
   redigidos, uma linha, 300 caracteres): `unknown_intent` (não entendeu), `miss` (entendeu abaixo do limiar
