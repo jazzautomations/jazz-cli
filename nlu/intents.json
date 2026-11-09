@@ -3103,7 +3103,6 @@
       "delete",
       "mutate",
       "run",
-      "have",
       "content",
       "permbit",
       "rename"
@@ -3133,7 +3132,6 @@
     {
      "all": [
       "find",
-      "filenoun",
       "have"
      ],
      "none": [
@@ -3156,6 +3154,64 @@
       "rename"
      ],
      "w": 5
+    },
+    {
+     "all": [
+      "find",
+      "forquoted"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "nameattr",
+      "scope",
+      "opinion",
+      "delete",
+      "mutate",
+      "run",
+      "have",
+      "permbit",
+      "rename",
+      "filenoun",
+      "files",
+      "grepword"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
+      "find",
+      "@symbol"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "nameattr",
+      "scope",
+      "opinion",
+      "delete",
+      "mutate",
+      "run",
+      "have",
+      "content",
+      "permbit",
+      "rename",
+      "filenoun",
+      "files",
+      "replace",
+      "count"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -5960,7 +6016,8 @@
       "duplicate",
       "user",
       "sysnoun",
-      "tag"
+      "tag",
+      "nametgt"
      ]
     }
    ],

@@ -7110,7 +7110,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			case strings.HasPrefix(sd.From, "diffpair:"):
 				v = nuDiffPart(toks, sd.From[9:] == "b", taken)
 			case strings.HasPrefix(sd.From, "grep:"):
-				v = nuGrepArg(toks, sd.From[5:], taken)
+				v = nuGrepArg(toks, sd.From[5:], taken, def.Name)
 			case sd.From == "wc:what":
 				v = nuWcWhat(toks)
 			case strings.HasPrefix(sd.From, "sort:"):
@@ -8122,10 +8122,13 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 // "for/por/containing/contêm" até o cue de escopo ("in FILE", "no log").
 // Palavras-meta ("the string foo", "the word bar") são conceito content,
 // não parte do padrão.
-func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
+func nuGrepArg(toks []nuTok, what string, taken map[int]bool, intent string) string {
 	if what != "pat" {
 		return ""
 	}
+	// pro find o padrão É o texto do pedido — "fmt.Println" é símbolo
+	// qualificado, não operando de arquivo como em text_grep
+	fileSkip := intent != "find"
 	// aspas primeiro: o conteúdo citado é o padrão — com duas citações,
 	// a marcada forquoted (depois de "for") é o padrão, a outra é alvo:
 	// 'search files "f.c" for the string "can'"' → pattern=can, file=f.c
@@ -8215,7 +8218,7 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 					break
 				}
 			}
-			if v4 || nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			if v4 || fileSkip && nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
 				continue // file-shaped é alvo do slot file/target, nunca padrão
 			}
 			parts = append(parts, u.Raw)
@@ -8239,7 +8242,7 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			u.has("nameattr") || u.has("files") ||
 			u.has("count") || nuCountNouns[u.Fold] ||
 			nuArchiveWord(u.Fold) || nuPureExt(u.Fold) ||
-			nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			fileSkip && nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
 			continue
 		}
 		v4 := false

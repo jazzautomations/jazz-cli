@@ -2417,8 +2417,14 @@ func TestNLUArchiveCreateGuards(t *testing.T) {
 			map[string]string{"query": "ParseArgs"}},
 		{"find files sorted by date", "find",
 			map[string]string{"query": "sorted date"}},
-		{"encontra a string 'connection refused'", "text_grep",
-			map[string]string{"pattern": "connection refused"}},
+		{"encontra a string 'connection refused'", "find",
+			map[string]string{"query": "connection refused"}},
+		{"grep the string 'timeout' in parser.go", "text_grep",
+			map[string]string{"file": "parser.go", "pattern": "timeout"}},
+		{"grep NewServer", "find",
+			map[string]string{"query": "NewServer"}},
+		{"acha onde tem fmt.Println", "find",
+			map[string]string{"query": "fmt.Println"}},
 		// faixa de tamanho posicional — "between X and Y"
 		{"Find all .gif files in the /var/www directory tree that are between 5 kB and 10 kB in size",
 			"file_find", map[string]string{"ext": "gif",
@@ -2662,7 +2668,7 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	// negativos: o padrão citado segue padrão; 'tira X de snapshot'
 	// continua remoção; grep literal de marcador explícito sobrevive
 	in = m.Parse(`procura por "abc"`, w)
-	if in.Name != "text_grep" || in.Slots["pattern"] != "abc" {
+	if in.Name != "find" || in.Slots["query"] != "abc" {
 		t.Errorf("forquoted comum: %s %v", in.Name, in.Slots)
 	}
 	in = m.Parse("tira os arquivos de snapshot", w)
