@@ -349,6 +349,7 @@ func (a *Agent) qInject(where string) bool {
 	}
 	a.append(Message{Role: "user", Content: qSteerMessage(items)}) // session entry before the next request
 	for _, it := range items {
+		a.nlScanConsent(it.Text) // consentimento explícito na fila também vale (consent.go)
 		q.emit("queue.consume", map[string]any{"id": it.ID, "mode": it.Mode.String(), "at": where, "src": it.Src, "text": qPreview(it.Text)})
 		a.ui.Notice("↳ entregue agora: " + oneLine(it.Text, 100))
 	}
