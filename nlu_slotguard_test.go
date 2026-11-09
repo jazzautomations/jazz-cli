@@ -2852,4 +2852,18 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
 		}
 	}
+	// "o que o X faz" com o operando no meio é explain — o verbo-do
+	// final vira explain, não makeword; "faz o build" segue build
+	for q, want := range map[string]string{
+		"o que o handleLogin faz?":     "explain",
+		"o que a função ParseArgs faz": "explain",
+		"what does NewServer do":       "explain",
+		"faz um commit":                "git_commit",
+		"faz o build":                  "build",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
 }

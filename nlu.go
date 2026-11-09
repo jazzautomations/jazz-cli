@@ -1386,6 +1386,41 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			break mark
 		}
 	}
+	// "o que o X faz?" — o verbo-do no FIM é a pergunta de explicação
+	// ("what does X do"), não makeword: com 'que'/'what' de pergunta
+	// antes e operando útil no meio, o verbo vira explain. A forma
+	// colada ("o que faz o X") o slang já cobre.
+	last := -1
+	for i := len(out) - 1; i >= 0; i-- {
+		if !out[i].Filler && !out[i].Slang {
+			last = i
+			break
+		}
+	}
+	if last >= 0 {
+		t := &out[last]
+		switch t.Fold {
+		case "faz", "fazer", "fazem", "do", "does":
+			qu, mid := false, false
+			for j := last - 1; j >= 0; j-- {
+				u := &out[j]
+				if u.Fold == "que" || u.Fold == "what" {
+					qu = true
+				} else if !u.Filler && !u.Slang {
+					mid = true
+				}
+			}
+			if qu && mid {
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "makeword" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = append(kept, "explain")
+			}
+		}
+	}
 	return out
 }
 
