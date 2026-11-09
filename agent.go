@@ -1687,7 +1687,8 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	}
 	// build targets, repo scripts and archives the command would run are read and
 	// classified like direct commands (buildtarget.go): CRITICAL blocks in every
-	// mode, HIGH asks in every mode, a clean target never prompts
+	// mode, HIGH asks except under yolo's explicit opt-in, a clean target never
+	// prompts
 	btHigh := ""
 	if tool == "bash" && !isMCP && cmd != "" {
 		var btCrit string
@@ -1702,9 +1703,11 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			return false, "Blocked: the build target or script it runs is hostile (" + btCrit + "). Do not retry it; choose another approach or ask the user.", true
 		}
 	}
+	mode := a.mode()
 	// menor intervenção (caps.go): writing /etc, the kernel, system binaries or
-	// container-engine/WSL configuration is CRITICAL in every mode (yolo/turbo too)
-	if !isMCP {
+	// container-engine/WSL configuration is CRITICAL — except in yolo, where the
+	// user already opted into low-level system work explicitly
+	if !isMCP && mode != "yolo" {
 		goal := ""
 		if a.oj != nil {
 			goal = a.oj.input
@@ -1717,7 +1720,6 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			return false, "Blocked: " + crit + ". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves.", true
 		}
 	}
-	mode := a.mode()
 	sensitiveEgress := tool == "bash" && !isMCP && jazzSensitiveEgress(cmd, a.tools.Root, a.fenceCwd())
 	// turbo (turbo.go) applies the auto rules plus its own relaxations, and
 	// only while an OS sandbox isolates what runs; without one it is auto
@@ -1746,7 +1748,11 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			injReason = "possível prompt injection neste turno (" + inj + ")"
 		}
 	}
-	if mode == "yolo" && injReason == "" && fenceReason == "" && btHigh == "" && !sensitiveEgress {
+	// yolo is the user's explicit opt-in to unrestricted low-level work: it
+	// bypasses the fence (outside-root targets) and HIGH build-target findings.
+	// What still gates: prompt-injection suspicion and sensitive egress —
+	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
+	if mode == "yolo" && injReason == "" && !sensitiveEgress {
 		return true, "", false
 	}
 	if mode == "plan" {

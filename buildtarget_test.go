@@ -246,8 +246,8 @@ func TestBuildTargetSecretLocalWriteAsksNotHostile(t *testing.T) {
 	}
 }
 
-// permit: CRITICAL blocks in every mode (yolo, turbo included), HIGH asks,
-// a clean target never prompts.
+// permit: CRITICAL blocks in every mode (yolo, turbo included), HIGH asks in
+// every mode except yolo (explicit opt-in), a clean target never prompts.
 func TestBuildTargetPermitModes(t *testing.T) {
 	for _, mode := range []string{"yolo", "auto", "turbo", "ask"} {
 		t.Run(mode, func(t *testing.T) {
@@ -263,12 +263,22 @@ func TestBuildTargetPermitModes(t *testing.T) {
 			}
 			h.ui.approvals = nil
 			ok, _, _ = h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(bashArgs("make ship"))}, "make ship", false, acHookVerdict{})
-			if ok || len(h.ui.approvals) != 1 {
+			if mode == "yolo" {
+				if !ok {
+					t.Fatalf("yolo: HIGH target refused — yolo is the user's opt-in")
+				}
+			} else if ok || len(h.ui.approvals) != 1 {
 				t.Fatalf("HIGH target: ok=%v asked=%d, want asked once (answer Deny)", ok, len(h.ui.approvals))
 			}
 			h.ui.approvals = nil
-			// a local read of ~/.ssh (audit script) asks once; it never blocks without a prompt
+			// a local read of ~/.ssh (audit script) asks once outside yolo; it never blocks without a prompt
 			ok, _, _ = h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(bashArgs("make audit"))}, "make audit", false, acHookVerdict{})
+			if mode == "yolo" {
+				if !ok {
+					t.Fatalf("yolo: local secret read refused — yolo is the user's opt-in")
+				}
+				return
+			}
 			if ok || len(h.ui.approvals) != 1 {
 				t.Fatalf("local secret read target: ok=%v asked=%d, want asked once (answer Deny)", ok, len(h.ui.approvals))
 			}

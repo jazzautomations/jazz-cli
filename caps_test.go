@@ -78,17 +78,24 @@ func TestCapsDisproportionateForContainerTask(t *testing.T) {
 	}
 }
 
-// CRITICAL in every mode: yolo and turbo cannot auto-approve it.
+// CRITICAL gates every mode that did not opt in: turbo and auto cannot
+// auto-approve it. yolo is the user's explicit low-level opt-in and runs it.
 func TestCapsCriticalBlocksInYoloAndTurbo(t *testing.T) {
 	for _, mode := range []string{"yolo", "turbo", "auto"} {
 		h := newHarness(t, nil, func(c *Config) { c.Mode = mode })
 		h.ui.answer = Allow
 		ok, why, _ := h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo tee /etc/containers/registries.conf"})}, "", false, acHookVerdict{})
-		if ok {
-			t.Fatalf("%s: a write to /etc/containers ran", mode)
-		}
-		if !strings.Contains(why, "menor intervenção") && !strings.Contains(why, "CRÍTICO") {
-			t.Errorf("%s: reason %q", mode, why)
+		if mode == "yolo" {
+			if !ok {
+				t.Fatalf("yolo: low-level system write refused (%q) — yolo is the user's opt-in", why)
+			}
+		} else {
+			if ok {
+				t.Fatalf("%s: a write to /etc/containers ran", mode)
+			}
+			if !strings.Contains(why, "menor intervenção") && !strings.Contains(why, "CRÍTICO") {
+				t.Errorf("%s: reason %q", mode, why)
+			}
 		}
 		ok, _, _ = h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "cat /etc/os-release"})}, "", false, acHookVerdict{})
 		if !ok {
