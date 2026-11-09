@@ -637,9 +637,9 @@ func TestNLUFileMove(t *testing.T) {
 		"move all files to backup":                            "file_move",
 		// "another folder" é destino VAGO — o extrator não inventa
 		// path; dest required fica missing e o parse recusa honesto
-		"move them to another folder":                         "none",
-		"renomeia a.txt para b.txt":                           "rename",
-		"find files and delete them":                          "none",
+		"move them to another folder": "none",
+		"renomeia a.txt para b.txt":   "rename",
+		"find files and delete them":  "none",
 	}
 	for text, want := range cases {
 		if in := m.Parse(text, w); nuPredict(in) != want {

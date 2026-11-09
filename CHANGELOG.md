@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1 — 2026-11-09
+
+(0.13.0 existiu como tag mas não publicou release: o CI pegou `syscall.Stat_t`
+compilando pra Windows — agora `sysstat_unix.go`/`sysstat_windows.go` por build
+tag, com recusa honesta onde uid/gid não existe.)
+
 ## 0.13.0 — 2026-11-09
 
 ### NLU: falso-sucesso drenado no corpus de 1051 pedidos

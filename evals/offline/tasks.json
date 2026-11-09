@@ -147,7 +147,7 @@
    "doc": "self-knowledge: versão/binário/modo do próprio jazz sem modelo",
    "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz", "0.13"], "questions": 0}},
   {"id": "self-version", "cat": "self", "fixture": "go", "prompt": "qual a versão do jazz",
-   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.13.0"], "questions": 0}},
+   "expect": {"status": "succeeded", "intent": "self_info", "contains": ["0.13.1"], "questions": 0}},
   {"id": "self-about", "cat": "self", "fixture": "go", "prompt": "o que é o jazz",
    "expect": {"status": "succeeded", "intent": "self_info", "contains": ["jazz"], "questions": 0}},
   {"id": "machine-what", "cat": "env", "fixture": "go", "prompt": "que máquina é essa",

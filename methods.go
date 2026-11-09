@@ -39,7 +39,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -3524,20 +3523,20 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			if err != nil {
 				return false, false, "não consegui stat " + fRel
 			}
-			st, ok := fi.Sys().(*syscall.Stat_t)
+			uid, gid, ok := sysStatUG(fi)
 			if !ok {
 				return false, true, "stat_t indisponível nesta plataforma"
 			}
 			var gotName string
 			var id uint32
 			if c.Check == "file_owner" {
-				id = st.Uid
-				if u, err := user.LookupId(strconv.Itoa(int(st.Uid))); err == nil {
+				id = uid
+				if u, err := user.LookupId(strconv.Itoa(int(uid))); err == nil {
 					gotName = u.Username
 				}
 			} else {
-				id = st.Gid
-				if g, err := user.LookupGroupId(strconv.Itoa(int(st.Gid))); err == nil {
+				id = gid
+				if g, err := user.LookupGroupId(strconv.Itoa(int(gid))); err == nil {
 					gotName = g.Name
 				}
 			}
@@ -3690,20 +3689,20 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 					mism++
 					continue
 				}
-				st, ok := fi.Sys().(*syscall.Stat_t)
+				uid, gid, ok := sysStatUG(fi)
 				if !ok {
 					return false, true, "stat_t indisponível nesta plataforma"
 				}
 				var gotName string
 				var id uint32
 				if c.Check == "list_owner" {
-					id = st.Uid
-					if u, err := user.LookupId(strconv.Itoa(int(st.Uid))); err == nil {
+					id = uid
+					if u, err := user.LookupId(strconv.Itoa(int(uid))); err == nil {
 						gotName = u.Username
 					}
 				} else {
-					id = st.Gid
-					if g, err := user.LookupGroupId(strconv.Itoa(int(st.Gid))); err == nil {
+					id = gid
+					if g, err := user.LookupGroupId(strconv.Itoa(int(gid))); err == nil {
 						gotName = g.Name
 					}
 				}
