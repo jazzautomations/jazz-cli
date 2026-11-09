@@ -148,6 +148,24 @@
    "older_date": {
     "type": "string",
     "description": "modified before this date (YYYY-MM-DD, ~ suffix = through that day)"
+   },
+   "uid": {
+    "type": "integer",
+    "minimum": 0,
+    "description": "exact numeric owner uid filter (st_uid == N)"
+   },
+   "gid": {
+    "type": "integer",
+    "minimum": 0,
+    "description": "exact numeric group id filter (st_gid == N)"
+   },
+   "not_empty": {
+    "type": "boolean",
+    "description": "only non-empty files or directories"
+   },
+   "not_orphan": {
+    "type": "boolean",
+    "description": "only symlinks whose target exists"
    }
   }
  },

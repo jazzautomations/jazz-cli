@@ -29,6 +29,17 @@ def as_bool(v, default):
     return str(v).strip().lower() not in ("0", "false", "no", "off", "")
 
 
+def as_int(name, default, lo, hi):
+    v = arg(name)
+    if v is None:
+        return default
+    try:
+        n = int(str(v).strip())
+    except (TypeError, ValueError):
+        fail("%s must be an integer" % name)
+    return max(lo, min(hi, n))
+
+
 mode_s = arg("mode")
 exact = None
 if mode_s is not None:
@@ -72,7 +83,59 @@ no_group = as_bool(ARGS.get("no_group"), False)
 orphan = as_bool(ARGS.get("orphan"), False)
 not_exec = as_bool(ARGS.get("not_executable"), False)
 not_ww = as_bool(ARGS.get("not_world_writable"), False)
+want_w = as_bool(ARGS.get("writable"), False)
+want_nw = as_bool(ARGS.get("not_writable"), False)
 not_mode = as_bool(ARGS.get("not_mode"), False)
+
+# janela de tempo — "modified more than 30 days ago" é predicado
+# do mesmo conjunto que o filtro de dono, não cláusula separada
+now = time.time()
+newer_min = arg("newer_min")
+older_min = arg("older_min")
+newer_ts = older_ts = None
+if newer_min is not None:
+    newer_ts = now - as_int("newer_min", 0, 0, 10 * 365 * 24 * 60) * 60
+if older_min is not None:
+    older_ts = now - as_int("older_min", 0, 0, 10 * 365 * 24 * 60) * 60
+
+
+def parse_date(s, side):
+    s = str(s).strip()
+    inclusive = s.endswith("~")
+    s = s.rstrip("~")
+    m = re.fullmatch(r"(cur|next|\d{4})-(\d{2})-(\d{2})", s)
+    if not m:
+        fail("%s must be a date like 2014-08-25" % side)
+    y, mo, dy = m.group(1), int(m.group(2)), int(m.group(3))
+    ty = time.localtime(now)
+    if y == "cur":
+        y = ty.tm_year
+        if (mo, dy) > (ty.tm_mon, ty.tm_mday) and side == "newer_date":
+            y -= 1
+    elif y == "next":
+        y = ty.tm_year + 1
+    else:
+        y = int(y)
+    if not (1 <= mo <= 12 and 1 <= dy <= 31):
+        fail("%s out of range" % side)
+    ts = time.mktime((y, mo, dy, 0, 0, 0, 0, 0, -1))
+    if inclusive:
+        ts += 86400
+    return ts
+
+
+if arg("newer_date") is not None:
+    newer_ts = parse_date(arg("newer_date"), "newer_date")
+if arg("older_date") is not None:
+    older_ts = parse_date(arg("older_date"), "older_date")
+if newer_ts and older_ts and newer_ts >= older_ts:
+    fail("newer bound must be a wider window than older bound")
+TFIELD = {"mtime": "st_mtime", "atime": "st_atime", "ctime": "st_ctime"}
+tfield = str(arg("time_field", "mtime")).lower()
+if tfield not in TFIELD:
+    fail("time_field must be mtime, atime or ctime")
+TSKEY = TFIELD[tfield]
+
 name = arg("name")
 if name is None:
     name = arg("namepat")  # glob de nome — mesma dieta fnmatch do 'name'
@@ -102,7 +165,8 @@ if (exact is None and bits is None and not_bits is None
         and not (want_ww or want_suid or want_sgid or want_exec
         or want_exec_all or want_uread or want_aread
         or owner or not_owner or group or not_group or no_owner or no_group
-        or orphan or not_exec or not_ww)):
+        or orphan or not_exec or not_ww or want_w or want_nw
+        or newer_ts or older_ts)):
     fail("pass a filter: mode/not_mode, bits/not_bits, world_writable, suid, sgid, "
          "executable/not_executable, everyone_exec, "
          "user_readable/world_readable, owner/not_owner, group/not_group, "
@@ -205,6 +269,10 @@ def match(st):
         return False
     if not_exec and (m & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
         return False
+    if want_w and not os.access(p, os.W_OK):
+        return False
+    if want_nw and os.access(p, os.W_OK):
+        return False
     if not_ww and (m & stat.S_IWOTH):
         return False
     if exact is not None and not_mode and stat.S_IMODE(m) == exact:
@@ -222,6 +290,10 @@ def match(st):
     if no_group and gname(st.st_gid) is not None:
         return False
     if orphan and uname(st.st_uid) is not None and gname(st.st_gid) is not None:
+        return False
+    if newer_ts and getattr(st, TSKEY) < newer_ts:
+        return False
+    if older_ts and getattr(st, TSKEY) > older_ts:
         return False
     return True
 

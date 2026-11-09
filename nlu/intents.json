@@ -1,12 +1,12 @@
 {
- "comment": "Gramática semântica do interpretador offline (nlu.go). Cada intenção tem regras (conceitos de nlu/lexicon.json; 'a|b' = qualquer um; '@kind' = entidade do mundo achada no texto), slots tipados e exemplos. Os exemplos treinam o classificador de apoio e são o teste de aceitação (>= 95%). 'world' é o mundo fixo usado pelo teste.",
+ "comment": "Gram\u00e1tica sem\u00e2ntica do interpretador offline (nlu.go). Cada inten\u00e7\u00e3o tem regras (conceitos de nlu/lexicon.json; 'a|b' = qualquer um; '@kind' = entidade do mundo achada no texto), slots tipados e exemplos. Os exemplos treinam o classificador de apoio e s\u00e3o o teste de aceita\u00e7\u00e3o (>= 95%). 'world' \u00e9 o mundo fixo usado pelo teste.",
  "intents": [
   {
-   "desc": "comprimir/empacotar arquivos ou pastas em tar/tar.gz/tgz/zip — 'comprime a pasta logs em logs.tar.gz'",
+   "desc": "comprimir/empacotar arquivos ou pastas em tar/tar.gz/tgz/zip \u2014 'comprime a pasta logs em logs.tar.gz'",
    "examples": [
     "comprime a pasta logs em logs.tar.gz",
     "compress the logs folder into a tarball",
-    "compacta o diretório src para src.zip",
+    "compacta o diret\u00f3rio src para src.zip",
     "zip the build output into dist.zip",
     "cria um tar da pasta docs chamado docs.tar",
     "archive current directory into dirstructure.tar",
@@ -19,7 +19,7 @@
    "negatives": [
     "extrai o arquivo zip",
     "o que tem dentro do tar.gz",
-    "lista o conteúdo do zip",
+    "lista o conte\u00fado do zip",
     "descompacta pack.tar.gz",
     "apaga os archives velhos",
     "find all .gz archives in /path"
@@ -142,12 +142,12 @@
    }
   },
   {
-   "desc": "extrair/descompactar tar/tar.gz/tgz/zip num diretório — 'extrai pack.tar.gz em dest'",
+   "desc": "extrair/descompactar tar/tar.gz/tgz/zip num diret\u00f3rio \u2014 'extrai pack.tar.gz em dest'",
    "examples": [
     "extrai pack.tar.gz em dest",
     "descompacta o arquivo zip na pasta out",
     "extract site.zip into www",
-    "untar backup.tgz no diretório restaurado",
+    "untar backup.tgz no diret\u00f3rio restaurado",
     "unzip the archive to ./unpacked",
     "extrai o tar aqui",
     "unpack data.tar into folder data"
@@ -156,7 +156,7 @@
    "negatives": [
     "comprime a pasta logs",
     "o que tem dentro do zip",
-    "lista o conteúdo do tar",
+    "lista o conte\u00fado do tar",
     "extrai os ips do log",
     "extract all emails from mbox.txt"
    ],
@@ -245,15 +245,15 @@
    }
   },
   {
-   "desc": "conteúdo de zip/tar sem extrair",
+   "desc": "conte\u00fado de zip/tar sem extrair",
    "examples": [
     "o que tem dentro do zip",
-    "lista o conteúdo do tar.gz",
+    "lista o conte\u00fado do tar.gz",
     "mostra o que tem no arquivo compactado",
     "list the zip contents",
     "what is inside the tarball",
-    "conteúdo do .whl",
-    "o zip é seguro de extrair?",
+    "conte\u00fado do .whl",
+    "o zip \u00e9 seguro de extrair?",
     "tem arquivo perigoso no tar?",
     "lista o jar",
     "entradas do zip"
@@ -315,15 +315,15 @@
     "compila o projeto",
     "roda o build",
     "faz o build",
-    "builda aí",
+    "builda a\u00ed",
     "build",
     "go build",
     "npm run build",
     "cargo build",
     "compile the project",
-    "gera o binário",
+    "gera o bin\u00e1rio",
     "dale no build",
-    "faz a compilação",
+    "faz a compila\u00e7\u00e3o",
     "build it"
    ],
    "name": "build",
@@ -349,7 +349,7 @@
    "slots": {}
   },
   {
-   "desc": "ler uma chave de um arquivo de configuração",
+   "desc": "ler uma chave de um arquivo de configura\u00e7\u00e3o",
    "examples": [
     "qual o valor de port no config.yaml",
     "mostra a chave database.host do config",
@@ -359,7 +359,7 @@
     "what is the value of port in config.yaml",
     "read key database.host from config.yaml",
     "qual o valor de name no package.json",
-    "mostra o parametro host da configuração",
+    "mostra o parametro host da configura\u00e7\u00e3o",
     "qual o setting de port no config.yaml",
     "chave version do config.yaml",
     "campo host do config"
@@ -453,15 +453,15 @@
    }
   },
   {
-   "desc": "listar contêineres",
+   "desc": "listar cont\u00eaineres",
    "examples": [
-    "quais containers estão rodando",
+    "quais containers est\u00e3o rodando",
     "docker ps",
     "lista os containers",
     "list containers",
     "podman ps",
     "containers rodando",
-    "quais contêineres tem",
+    "quais cont\u00eaineres tem",
     "mostra os containers ativos",
     "what containers are running"
    ],
@@ -492,10 +492,10 @@
    "slots": {}
   },
   {
-   "desc": "limpar recursos docker/podman não usados (imagens, volumes, system prune)",
+   "desc": "limpar recursos docker/podman n\u00e3o usados (imagens, volumes, system prune)",
    "examples": [
-    "limpa imagens docker não usadas",
-    "limpa as imagens que não tão em uso",
+    "limpa imagens docker n\u00e3o usadas",
+    "limpa as imagens que n\u00e3o t\u00e3o em uso",
     "docker image prune",
     "limpa imagens dangling",
     "remove unused docker images",
@@ -532,7 +532,7 @@
    "slots": {}
   },
   {
-   "desc": "parar contêiner",
+   "desc": "parar cont\u00eainer",
    "examples": [
     "para o container web",
     "stop the db container",
@@ -580,7 +580,7 @@
    }
   },
   {
-   "desc": "subir contêiner",
+   "desc": "subir cont\u00eainer",
    "examples": [
     "sobe o container web",
     "docker compose up",
@@ -596,7 +596,7 @@
    ],
    "name": "container_up",
    "negatives": [
-    "quais containers estão rodando"
+    "quais containers est\u00e3o rodando"
    ],
    "rules": [
     {
@@ -742,7 +742,7 @@
    }
   },
   {
-   "desc": "criar link simbólico/hard",
+   "desc": "criar link simb\u00f3lico/hard",
    "examples": [
     "create a symbolic link named mylink to target.txt",
     "cria um link simbolico chamado atalho apontando para /etc/hosts",
@@ -811,14 +811,14 @@
    "desc": "cron e timers agendados",
    "examples": [
     "lista o cron",
-    "o que tá agendado no cron",
+    "o que t\u00e1 agendado no cron",
     "crontab",
     "quais timers do systemd existem",
     "tarefas agendadas",
     "show crontab",
     "list scheduled jobs",
     "tem algo agendado?",
-    "agendamentos da máquina",
+    "agendamentos da m\u00e1quina",
     "quais crons rodam"
    ],
    "name": "cron_list",
@@ -921,7 +921,7 @@
   },
   {
    "name": "date_show",
-   "desc": "mostrar/calcular uma data (hoje, ontem, amanhã, epoch)",
+   "desc": "mostrar/calcular uma data (hoje, ontem, amanh\u00e3, epoch)",
    "examples": [
     "print yesterday's date",
     "print the current date",
@@ -931,7 +931,7 @@
     "display today's date",
     "print the date 3 days ago",
     "mostra a data de hoje",
-    "que data é amanhã",
+    "que data \u00e9 amanh\u00e3",
     "converte epoch 1267619929 pra data"
    ],
    "rules": [
@@ -1197,25 +1197,25 @@
    }
   },
   {
-   "desc": "grafo de imports/dependências internas",
+   "desc": "grafo de imports/depend\u00eancias internas",
    "examples": [
     "grafo de imports do projeto",
     "tem ciclo de import?",
-    "grafo de dependências",
+    "grafo de depend\u00eancias",
     "quem importa o parser",
     "dependency graph",
     "import graph",
-    "ciclos de dependência",
-    "quais módulos são mais importados",
-    "mostra o grafo de dependências",
+    "ciclos de depend\u00eancia",
+    "quais m\u00f3dulos s\u00e3o mais importados",
+    "mostra o grafo de depend\u00eancias",
     "are there import cycles",
-    "árvore de dependências internas",
+    "\u00e1rvore de depend\u00eancias internas",
     "quem importa quem no projeto"
    ],
    "name": "dep_graph",
    "negatives": [
-    "instala a dependência requests",
-    "atualiza as dependências"
+    "instala a depend\u00eancia requests",
+    "atualiza as depend\u00eancias"
    ],
    "rules": [
     {
@@ -1237,25 +1237,25 @@
    "slots": {}
   },
   {
-   "desc": "manifesto × lockfile, sem rede",
+   "desc": "manifesto \u00d7 lockfile, sem rede",
    "examples": [
-    "dependências desatualizadas",
+    "depend\u00eancias desatualizadas",
     "o lock bate com o package.json?",
-    "quais dependências estão fora do lock",
-    "dependências pinadas e frouxas",
+    "quais depend\u00eancias est\u00e3o fora do lock",
+    "depend\u00eancias pinadas e frouxas",
     "check outdated dependencies",
     "is the lockfile in sync",
-    "dependências sem lock",
-    "versões das dependências estão travadas?",
+    "depend\u00eancias sem lock",
+    "vers\u00f5es das depend\u00eancias est\u00e3o travadas?",
     "deps desatualizadas",
     "lockfile desatualizado",
-    "quais pacotes estão frouxos",
+    "quais pacotes est\u00e3o frouxos",
     "o requirements bate com o lock?"
    ],
    "name": "dep_outdated",
    "negatives": [
-    "atualiza as dependências",
-    "instala as dependências"
+    "atualiza as depend\u00eancias",
+    "instala as depend\u00eancias"
    ],
    "rules": [
     {
@@ -1317,18 +1317,18 @@
    }
   },
   {
-   "desc": "diferença de conteúdo entre dois diretórios",
+   "desc": "diferen\u00e7a de conte\u00fado entre dois diret\u00f3rios",
    "examples": [
-    "diferença entre a pasta a e a pasta b",
+    "diferen\u00e7a entre a pasta a e a pasta b",
     "diff between dir1 and dir2",
-    "compara os diretórios",
+    "compara os diret\u00f3rios",
     "compare dir a vs dir b"
    ],
    "name": "dir_diff",
    "negatives": [
     "o que mudou nos arquivos",
     "diff do arquivo",
-    "diferença entre branches"
+    "diferen\u00e7a entre branches"
    ],
    "rules": [
     {
@@ -1355,28 +1355,30 @@
      "kinds": [
       "dir"
      ],
-     "required": true
+     "required": true,
+     "from": "diffpair:a"
     },
     "b": {
      "kinds": [
       "dir"
      ],
-     "required": true
+     "required": true,
+     "from": "diffpair:b"
     }
    }
   },
   {
-   "desc": "espaço em disco",
+   "desc": "espa\u00e7o em disco",
    "examples": [
-    "espaço em disco",
-    "quanto espaço livre eu tenho",
+    "espa\u00e7o em disco",
+    "quanto espa\u00e7o livre eu tenho",
     "df -h",
     "disk space",
-    "o disco tá cheio?",
+    "o disco t\u00e1 cheio?",
     "uso do disco",
     "how much disk is free",
     "quanto sobra no hd",
-    "espaço livre"
+    "espa\u00e7o livre"
    ],
    "name": "disk_usage",
    "negatives": [],
@@ -1403,32 +1405,32 @@
    }
   },
   {
-   "desc": ".env × .env.example (só nomes)",
+   "desc": ".env \u00d7 .env.example (s\u00f3 nomes)",
    "examples": [
     "confere o .env com o .env.example",
-    "o .env tá completo?",
-    "falta alguma variável no .env?",
+    "o .env t\u00e1 completo?",
+    "falta alguma vari\u00e1vel no .env?",
     "compara o .env com o exemplo",
-    "quais variáveis de ambiente estão faltando no .env",
+    "quais vari\u00e1veis de ambiente est\u00e3o faltando no .env",
     "check .env against .env.example",
     "is my .env missing something",
     "o .env bate com o .env.example?",
-    "variáveis faltando no .env",
-    "confere as variáveis do .env",
+    "vari\u00e1veis faltando no .env",
+    "confere as vari\u00e1veis do .env",
     "dotenv check",
-    "o env está completo",
+    "o env est\u00e1 completo",
     "confere o .env",
     "o .env e o .env.example batem?",
     "o que falta no .env",
-    "faltam variáveis no .env?",
+    "faltam vari\u00e1veis no .env?",
     "compara .env e .env.example",
     "checa o .env contra o example",
-    "variáveis que faltam no .env",
-    "o .env está faltando alguma coisa?"
+    "vari\u00e1veis que faltam no .env",
+    "o .env est\u00e1 faltando alguma coisa?"
    ],
    "name": "dotenv_check",
    "negatives": [
-    "que sistema é esse",
+    "que sistema \u00e9 esse",
     "mostra o ambiente"
    ],
    "rules": [
@@ -1456,19 +1458,19 @@
    "slots": {}
   },
   {
-   "desc": "código duplicado",
+   "desc": "c\u00f3digo duplicado",
    "examples": [
-    "tem código duplicado?",
-    "procura código duplicado",
+    "tem c\u00f3digo duplicado?",
+    "procura c\u00f3digo duplicado",
     "blocos duplicados no projeto",
     "duplicate code",
     "find duplicated code",
-    "código repetido no projeto",
-    "copia e cola no código",
-    "onde tem código repetido",
-    "duplicação de código na pasta src",
-    "clones de código",
-    "quanto código duplicado tem",
+    "c\u00f3digo repetido no projeto",
+    "copia e cola no c\u00f3digo",
+    "onde tem c\u00f3digo repetido",
+    "duplica\u00e7\u00e3o de c\u00f3digo na pasta src",
+    "clones de c\u00f3digo",
+    "quanto c\u00f3digo duplicado tem",
     "detecta copy paste"
    ],
    "name": "dup_code",
@@ -1492,18 +1494,18 @@
    "slots": {}
   },
   {
-   "desc": "valor de variáveis de ambiente",
+   "desc": "valor de vari\u00e1veis de ambiente",
    "examples": [
-    "mostra as variáveis de ambiente",
+    "mostra as vari\u00e1veis de ambiente",
     "get the PATH variable",
-    "valor da variável HOME",
+    "valor da vari\u00e1vel HOME",
     "show environment variables",
     "qual o valor de GOPATH"
    ],
    "name": "env_get",
    "negatives": [
     "status do sistema",
-    "cria uma variável",
+    "cria uma vari\u00e1vel",
     "mostra o .env"
    ],
    "rules": [
@@ -1549,34 +1551,34 @@
    "desc": "perfil do ambiente",
    "examples": [
     "status do ambiente",
-    "como está o ambiente",
+    "como est\u00e1 o ambiente",
     "info do sistema",
     "mostra o ambiente",
     "environment info",
     "qual meu sistema",
-    "que máquina é essa",
-    "status da máquina",
+    "que m\u00e1quina \u00e9 essa",
+    "status da m\u00e1quina",
     "perfil do ambiente",
     "show me the environment",
     "jazz env",
-    "como tá o sistema",
-    "o que tem nessa máquina",
+    "como t\u00e1 o sistema",
+    "o que tem nessa m\u00e1quina",
     "system info",
-    "quantos núcleos tem essa máquina",
+    "quantos n\u00facleos tem essa m\u00e1quina",
     "qual o processador",
     "que cpu tem",
     "qual a arquitetura",
-    "que hardware é esse",
+    "que hardware \u00e9 esse",
     "quantos cores",
     "whoami",
     "quem sou eu aqui",
-    "que usuário sou eu",
-    "em que máquina estamos",
-    "que dispositivo é esse"
+    "que usu\u00e1rio sou eu",
+    "em que m\u00e1quina estamos",
+    "que dispositivo \u00e9 esse"
    ],
    "name": "env_status",
    "negatives": [
-    "quais máquinas eu tenho"
+    "quais m\u00e1quinas eu tenho"
    ],
    "rules": [
     {
@@ -1659,10 +1661,10 @@
    "slots": {}
   },
   {
-   "desc": "explicar arquivo ou símbolo",
+   "desc": "explicar arquivo ou s\u00edmbolo",
    "examples": [
     "explica o parser.go",
-    "o que faz a função ParseArgs",
+    "o que faz a fun\u00e7\u00e3o ParseArgs",
     "explica o handleLogin",
     "pra que serve o lexer.go",
     "como funciona o Tokenize",
@@ -1699,17 +1701,17 @@
    }
   },
   {
-   "desc": "arquivos duplicados por conteúdo num diretório",
+   "desc": "arquivos duplicados por conte\u00fado num diret\u00f3rio",
    "examples": [
     "arquivos duplicados na pasta",
     "find duplicate files",
-    "duplicatas no diretório downloads",
+    "duplicatas no diret\u00f3rio downloads",
     "which files are duplicated"
    ],
    "name": "file_dupes",
    "negatives": [
-    "código duplicado",
-    "funções repetidas",
+    "c\u00f3digo duplicado",
+    "fun\u00e7\u00f5es repetidas",
     "copia o arquivo"
    ],
    "rules": [
@@ -1738,7 +1740,7 @@
    }
   },
   {
-   "desc": "busca arquivos/pastas por nome, extensão, tipo, tamanho, data ou vazio",
+   "desc": "busca arquivos/pastas por nome, extens\u00e3o, tipo, tamanho, data ou vazio",
    "examples": [
     "procura arquivos vazios na pasta",
     "find empty files",
@@ -1754,7 +1756,7 @@
     "quem editou este arquivo",
     "extrai os emails do log",
     "quantas linhas tem o arquivo",
-    "mostra o conteúdo do arquivo"
+    "mostra o conte\u00fado do arquivo"
    ],
    "rules": [
     {
@@ -1920,6 +1922,7 @@
       "files"
      ],
      "none": [
+      "duplicate",
       "permattr",
       "execperm",
       "delete",
@@ -2239,6 +2242,31 @@
       "forquoted"
      ],
      "w": 10
+    },
+    {
+     "all": [
+      "files|filenoun|find",
+      "exctgt"
+     ],
+     "none": [
+      "grepword",
+      "forquoted",
+      "content",
+      "delete",
+      "create",
+      "mutate",
+      "move",
+      "permbit",
+      "rename",
+      "permattr",
+      "count",
+      "run",
+      "install",
+      "net",
+      "remote"
+     ],
+     "w": 8,
+     "desc": "aspa-operando de cl\u00e1usula de exclus\u00e3o (omitting directory 'x')"
     }
    ],
    "slots": {
@@ -2424,6 +2452,30 @@
      "kinds": [
       "text"
      ]
+    },
+    "uid": {
+     "from": "find:uid",
+     "kinds": [
+      "text"
+     ]
+    },
+    "gid": {
+     "from": "find:gid",
+     "kinds": [
+      "text"
+     ]
+    },
+    "not_empty": {
+     "from": "find:not_empty",
+     "kinds": [
+      "text"
+     ]
+    },
+    "not_orphan": {
+     "from": "find:not_orphan",
+     "kinds": [
+      "text"
+     ]
     }
    }
   },
@@ -2449,7 +2501,7 @@
     "renomeia a.txt para b.txt",
     "apaga todos os .log",
     "find files and delete them",
-    "muda a permissão do arquivo"
+    "muda a permiss\u00e3o do arquivo"
    ],
    "rules": [
     {
@@ -2605,7 +2657,7 @@
    }
   },
   {
-   "desc": "snapshot/hash dos arquivos (oráculo)",
+   "desc": "snapshot/hash dos arquivos (or\u00e1culo)",
    "examples": [
     "tira um snapshot dos arquivos",
     "snapshot do projeto",
@@ -2638,13 +2690,13 @@
    "slots": {}
   },
   {
-   "desc": "divide um arquivo de texto em pedaços de N linhas (split -l)",
+   "desc": "divide um arquivo de texto em peda\u00e7os de N linhas (split -l)",
    "examples": [
     "split file data.csv into pieces per 100 lines",
     "split server.js into chunks of 50 lines",
     "split the log every 500 lines",
     "dividir arquivo data.csv em partes de 100 linhas",
-    "divide o app.log em pedaços de 200 linhas",
+    "divide o app.log em peda\u00e7os de 200 linhas",
     "divide o arquivo texto a cada 1000 linhas"
    ],
    "name": "file_split",
@@ -2802,17 +2854,17 @@
    }
   },
   {
-   "desc": "processos que estão com um arquivo/diretório aberto",
+   "desc": "processos que est\u00e3o com um arquivo/diret\u00f3rio aberto",
    "examples": [
-    "quem está usando o arquivo db.sqlite",
+    "quem est\u00e1 usando o arquivo db.sqlite",
     "who has app.log open",
-    "que processo segura o diretório",
+    "que processo segura o diret\u00f3rio",
     "what is using the file",
     "quem abriu o arquivo"
    ],
    "name": "file_users",
    "negatives": [
-    "quem usa a função ParseArgs",
+    "quem usa a fun\u00e7\u00e3o ParseArgs",
     "who calls main",
     "porta 8080 em uso"
    ],
@@ -2919,13 +2971,13 @@
    }
   },
   {
-   "desc": "achar símbolo ou texto no código",
+   "desc": "achar s\u00edmbolo ou texto no c\u00f3digo",
    "examples": [
     "procura parseArgs",
-    "onde está a função ParseArgs",
+    "onde est\u00e1 a fun\u00e7\u00e3o ParseArgs",
     "acha o handleLogin",
     "onde fica o NewServer",
-    "cadê o Tokenize",
+    "cad\u00ea o Tokenize",
     "find ParseArgs",
     "where is handleLogin defined",
     "grep NewServer",
@@ -2938,7 +2990,7 @@
    ],
    "name": "find",
    "negatives": [
-    "onde estão os logs do nginx"
+    "onde est\u00e3o os logs do nginx"
    ],
    "rules": [
     {
@@ -2986,6 +3038,33 @@
       "rename"
      ],
      "w": 10
+    },
+    {
+     "all": [
+      "find",
+      "filenoun",
+      "have"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "nameattr",
+      "scope",
+      "opinion",
+      "filequoted",
+      "delete",
+      "mutate",
+      "run",
+      "content",
+      "permbit",
+      "rename"
+     ],
+     "w": 5
     }
    ],
    "slots": {
@@ -3018,20 +3097,20 @@
     "deu pau no build",
     "corrige esse bug",
     "o build quebrou",
-    "resolve o erro de compilação",
+    "resolve o erro de compila\u00e7\u00e3o",
     "concerta o lexer",
-    "tá dando erro no main.go",
+    "t\u00e1 dando erro no main.go",
     "fix the build",
-    "não compila",
+    "n\u00e3o compila",
     "ajeita o teste que falhou",
     "arruma os testes quebrados",
     "da um jeito nesse erro",
     "deu ruim nos testes",
-    "conserta isso aí"
+    "conserta isso a\u00ed"
    ],
    "name": "fix",
    "negatives": [
-    "roda os testes que estão falhando"
+    "roda os testes que est\u00e3o falhando"
    ],
    "rules": [
     {
@@ -3076,18 +3155,18 @@
    }
   },
   {
-   "desc": "checar/aplicar formatação",
+   "desc": "checar/aplicar formata\u00e7\u00e3o",
    "examples": [
-    "formata o código",
-    "checa a formatação",
+    "formata o c\u00f3digo",
+    "checa a formata\u00e7\u00e3o",
     "roda o gofmt",
     "format the code",
     "fmt",
     "roda o prettier",
-    "arruma a formatação",
+    "arruma a formata\u00e7\u00e3o",
     "formatar",
-    "verifica a formatação do projeto",
-    "indenta o código"
+    "verifica a formata\u00e7\u00e3o do projeto",
+    "indenta o c\u00f3digo"
    ],
    "name": "format",
    "negatives": [],
@@ -3107,14 +3186,14 @@
    "desc": "arquivos modificados recentemente",
    "examples": [
     "quais arquivos mudaram recentemente",
-    "arquivos modificados na última hora",
+    "arquivos modificados na \u00faltima hora",
     "o que foi alterado agora pouco",
     "arquivos recentes",
     "files changed recently",
     "recently modified files",
     "quais arquivos foram modificados hoje",
-    "arquivos alterados há pouco",
-    "o que mudou nos arquivos na última hora",
+    "arquivos alterados h\u00e1 pouco",
+    "o que mudou nos arquivos na \u00faltima hora",
     "lista os arquivos modificados recentemente"
    ],
    "name": "fs_recent",
@@ -3164,14 +3243,14 @@
     "git blame parser.go",
     "quem alterou o README.md",
     "hotspots do parser.go",
-    "quem foi o último que mexeu no lexer.go",
-    "quem é o autor do main.go",
+    "quem foi o \u00faltimo que mexeu no lexer.go",
+    "quem \u00e9 o autor do main.go",
     "linhas mais quentes do parser.go"
    ],
    "name": "git_blame",
    "negatives": [
-    "quem está usando a porta 3000",
-    "quem está escutando na 8080"
+    "quem est\u00e1 usando a porta 3000",
+    "quem est\u00e1 escutando na 8080"
    ],
    "rules": [
     {
@@ -3199,7 +3278,7 @@
   {
    "desc": "listar/criar branch, ver a atual",
    "examples": [
-    "em que branch eu tô",
+    "em que branch eu t\u00f4",
     "qual branch",
     "lista as branches",
     "cria uma branch nova chamada feature-x",
@@ -3245,20 +3324,20 @@
   {
    "desc": "branches sem merge, velhas, ahead/behind",
    "examples": [
-    "quais branches estão sem merge",
+    "quais branches est\u00e3o sem merge",
     "tem branch velha parada?",
     "branches sem merge",
     "branches antigas",
     "quantos commits estou ahead do origin",
-    "estou atrás do remoto?",
+    "estou atr\u00e1s do remoto?",
     "status das branches",
     "which branches are unmerged",
     "stale branches",
     "branches abandonadas",
     "lista as branches com status",
-    "branches órfãs",
-    "a branch está atrás do upstream?",
-    "quais branches já foram mergeadas"
+    "branches \u00f3rf\u00e3s",
+    "a branch est\u00e1 atr\u00e1s do upstream?",
+    "quais branches j\u00e1 foram mergeadas"
    ],
    "name": "git_branch_status",
    "negatives": [
@@ -3332,7 +3411,7 @@
    "examples": [
     "que arquivos mudam juntos com parser.go",
     "quais arquivos mudam juntos",
-    "arquivos acoplados no histórico",
+    "arquivos acoplados no hist\u00f3rico",
     "o que muda junto com o lexer.go",
     "co-change do projeto",
     "which files change together",
@@ -3372,19 +3451,19 @@
     "commita tudo",
     "commita com a mensagem 'corrige parser'",
     "git commit",
-    "faz commit das mudanças",
+    "faz commit das mudan\u00e7as",
     "bora commitar",
     "commit with message \"fix lexer\"",
-    "comita isso aí",
-    "commitar as alterações",
+    "comita isso a\u00ed",
+    "commitar as altera\u00e7\u00f5es",
     "salva um commit",
     "commit everything",
     "commita: ajusta o readme"
    ],
    "name": "git_commit",
    "negatives": [
-    "últimos commits",
-    "desfaz o último commit"
+    "\u00faltimos commits",
+    "desfaz o \u00faltimo commit"
    ],
    "rules": [
     {
@@ -3444,12 +3523,12 @@
     "what changed",
     "o que foi alterado",
     "quais arquivos mudaram",
-    "mostra as mudanças",
+    "mostra as mudan\u00e7as",
     "o que mudou no parser.go",
-    "diferenças desde o último commit",
+    "diferen\u00e7as desde o \u00faltimo commit",
     "show me the changes",
     "o que eu alterei",
-    "lista as alterações"
+    "lista as altera\u00e7\u00f5es"
    ],
    "name": "git_diff",
    "negatives": [],
@@ -3477,16 +3556,16 @@
    }
   },
   {
-   "desc": "histórico de commits",
+   "desc": "hist\u00f3rico de commits",
    "examples": [
-    "últimos commits",
+    "\u00faltimos commits",
     "git log",
-    "histórico de commits",
+    "hist\u00f3rico de commits",
     "mostra os commits",
     "recent commits",
     "last commits",
-    "histórico do git",
-    "quais foram os últimos commits",
+    "hist\u00f3rico do git",
+    "quais foram os \u00faltimos commits",
     "show history",
     "lista os commits",
     "historico"
@@ -3509,9 +3588,9 @@
    "examples": [
     "git pull",
     "pull",
-    "puxa as mudanças",
+    "puxa as mudan\u00e7as",
     "atualiza o repo",
-    "baixa as mudanças",
+    "baixa as mudan\u00e7as",
     "puxa do remoto",
     "pull from origin",
     "sincroniza com o github",
@@ -3555,7 +3634,7 @@
     "faz o push",
     "pushar a branch",
     "manda pro remoto",
-    "sobe as mudanças pro github",
+    "sobe as mudan\u00e7as pro github",
     "push it"
    ],
    "name": "git_push",
@@ -3576,12 +3655,12 @@
    "slots": {}
   },
   {
-   "desc": "guardar mudanças",
+   "desc": "guardar mudan\u00e7as",
    "examples": [
     "git stash",
     "stash",
-    "guarda as mudanças",
-    "esconde as alterações",
+    "guarda as mudan\u00e7as",
+    "esconde as altera\u00e7\u00f5es",
     "stash my changes",
     "faz um stash",
     "guarda isso no stash",
@@ -3606,15 +3685,15 @@
     "status do git",
     "status do repo",
     "mostra o git status",
-    "como está o repositório",
+    "como est\u00e1 o reposit\u00f3rio",
     "git st",
     "qual o status do git",
-    "status do repositório",
+    "status do reposit\u00f3rio",
     "what's the git status",
     "show git status",
-    "me dá o status",
+    "me d\u00e1 o status",
     "estado do git",
-    "situação do repo",
+    "situa\u00e7\u00e3o do repo",
     "como ta o git",
     "como ta o repo"
    ],
@@ -3739,7 +3818,7 @@
    "examples": [
     "ajuda",
     "help",
-    "o que você sabe fazer",
+    "o que voc\u00ea sabe fazer",
     "o que da pra fazer",
     "what can you do",
     "comandos",
@@ -3765,20 +3844,20 @@
    "slots": {}
   },
   {
-   "desc": "host está online?",
+   "desc": "host est\u00e1 online?",
    "examples": [
-    "o labbox está online?",
-    "o vps tá respondendo?",
+    "o labbox est\u00e1 online?",
+    "o vps t\u00e1 respondendo?",
     "pinga o labbox",
     "ping vps",
     "status do labbox",
     "is labbox online",
-    "o media01 tá vivo?",
-    "a fono tá online?",
-    "o labbox tá de pé?",
+    "o media01 t\u00e1 vivo?",
+    "a fono t\u00e1 online?",
+    "o labbox t\u00e1 de p\u00e9?",
     "o macbook responde?",
-    "o servidor vps está no ar?",
-    "checa se o labbox tá online"
+    "o servidor vps est\u00e1 no ar?",
+    "checa se o labbox t\u00e1 online"
    ],
    "name": "host_status",
    "negatives": [
@@ -3841,25 +3920,25 @@
    }
   },
   {
-   "desc": "instalar dependência ou ferramenta",
+   "desc": "instalar depend\u00eancia ou ferramenta",
    "examples": [
     "instala o requests",
     "instala o lodash",
     "install express",
     "instala a lib pytest",
-    "adiciona a dependência cobra",
+    "adiciona a depend\u00eancia cobra",
     "instala o tailscale",
     "npm install axios",
     "pip install flask",
     "instala o pacote left-pad",
     "instalar o ripgrep",
     "go get github.com/spf13/cobra",
-    "bota o jq na máquina",
+    "bota o jq na m\u00e1quina",
     "install the requests package"
    ],
    "name": "install_dep",
    "negatives": [
-    "o docker está instalado?"
+    "o docker est\u00e1 instalado?"
    ],
    "rules": [
     {
@@ -3934,7 +4013,7 @@
     "kill 1234",
     "mata o pid 4321",
     "kill the node process",
-    "mata quem está na porta 3000",
+    "mata quem est\u00e1 na porta 3000",
     "finaliza o processo python3",
     "mata o servidor de dev",
     "pkill node",
@@ -3960,19 +4039,19 @@
    }
   },
   {
-   "desc": "funções longas como dado",
+   "desc": "fun\u00e7\u00f5es longas como dado",
    "examples": [
-    "funções grandes do projeto",
-    "quais funções são longas demais",
-    "lista as funções longas",
-    "maiores funções do código",
+    "fun\u00e7\u00f5es grandes do projeto",
+    "quais fun\u00e7\u00f5es s\u00e3o longas demais",
+    "lista as fun\u00e7\u00f5es longas",
+    "maiores fun\u00e7\u00f5es do c\u00f3digo",
     "long functions",
     "biggest functions in the project",
-    "funções com muitas linhas",
-    "funções gigantes",
-    "quais funções passam de 60 linhas",
-    "complexidade das funções",
-    "funções enormes na pasta src",
+    "fun\u00e7\u00f5es com muitas linhas",
+    "fun\u00e7\u00f5es gigantes",
+    "quais fun\u00e7\u00f5es passam de 60 linhas",
+    "complexidade das fun\u00e7\u00f5es",
+    "fun\u00e7\u00f5es enormes na pasta src",
     "longest functions"
    ],
    "name": "large_funcs",
@@ -3987,18 +4066,18 @@
    "slots": {}
   },
   {
-   "desc": "licenças do projeto e cabeçalhos SPDX",
+   "desc": "licen\u00e7as do projeto e cabe\u00e7alhos SPDX",
    "examples": [
-    "qual a licença do projeto",
-    "licença do projeto",
-    "licenças das dependências",
-    "tem cabeçalho SPDX nos arquivos?",
+    "qual a licen\u00e7a do projeto",
+    "licen\u00e7a do projeto",
+    "licen\u00e7as das depend\u00eancias",
+    "tem cabe\u00e7alho SPDX nos arquivos?",
     "what license is this project",
     "license scan",
-    "qual licença esse código usa",
-    "conflito de licença",
-    "verifica as licenças",
-    "licença do package.json bate com o LICENSE?",
+    "qual licen\u00e7a esse c\u00f3digo usa",
+    "conflito de licen\u00e7a",
+    "verifica as licen\u00e7as",
+    "licen\u00e7a do package.json bate com o LICENSE?",
     "copyright do projeto",
     "spdx headers"
    ],
@@ -4020,9 +4099,9 @@
    "slots": {}
   },
   {
-   "desc": "fatia de linhas: primeiras/últimas N ou intervalo de um arquivo",
+   "desc": "fatia de linhas: primeiras/\u00faltimas N ou intervalo de um arquivo",
    "examples": [
-    "últimas 10 linhas do app.log",
+    "\u00faltimas 10 linhas do app.log",
     "primeiras 20 linhas do arquivo",
     "lines 5 to 20 of main.go",
     "tail 15 lines of syslog",
@@ -4118,7 +4197,7 @@
     "run the linter",
     "passa o lint",
     "roda o eslint",
-    "linta o código",
+    "linta o c\u00f3digo",
     "run lint",
     "checa o lint"
    ],
@@ -4286,17 +4365,17 @@
   {
    "desc": "listar hosts SSH/Tailscale",
    "examples": [
-    "quais máquinas eu tenho",
+    "quais m\u00e1quinas eu tenho",
     "lista os hosts",
     "quais hosts ssh eu tenho",
     "list hosts",
     "peers do tailscale",
-    "quais máquinas estão no tailscale",
+    "quais m\u00e1quinas est\u00e3o no tailscale",
     "mostra meus servidores",
-    "lista as máquinas",
+    "lista as m\u00e1quinas",
     "hosts",
     "list tailscale peers",
-    "minhas máquinas remotas"
+    "minhas m\u00e1quinas remotas"
    ],
    "name": "list_hosts",
    "negatives": [],
@@ -4328,25 +4407,25 @@
    "desc": "portas abertas",
    "examples": [
     "portas abertas",
-    "quais portas estão abertas",
+    "quais portas est\u00e3o abertas",
     "mostra as portas",
-    "o que está escutando",
+    "o que est\u00e1 escutando",
     "list open ports",
     "portas em uso",
     "listening ports",
     "lista as portas",
-    "que portas tão abertas",
+    "que portas t\u00e3o abertas",
     "show ports",
-    "quantas portas tcp estão escutando nessa máquina",
-    "quantas portas estão escutando",
+    "quantas portas tcp est\u00e3o escutando nessa m\u00e1quina",
+    "quantas portas est\u00e3o escutando",
     "portas tcp abertas",
-    "o que está escutando nessa máquina",
+    "o que est\u00e1 escutando nessa m\u00e1quina",
     "portas tcp em uso",
-    "que portas estão escutando"
+    "que portas est\u00e3o escutando"
    ],
    "name": "list_ports",
    "negatives": [
-    "quem está usando a porta 3000"
+    "quem est\u00e1 usando a porta 3000"
    ],
    "rules": [
     {
@@ -4383,13 +4462,13 @@
   {
    "desc": "listar processos",
    "examples": [
-    "quais processos estão rodando",
+    "quais processos est\u00e3o rodando",
     "lista os processos",
     "ps aux",
     "list processes",
     "mostra os processos",
     "processos ativos",
-    "o que tá rodando na máquina",
+    "o que t\u00e1 rodando na m\u00e1quina",
     "top processes"
    ],
    "name": "list_processes",
@@ -4412,14 +4491,14 @@
    "examples": [
     "erros recentes no log",
     "tem erro no journal?",
-    "erros do sistema na última hora",
+    "erros do sistema na \u00faltima hora",
     "mostra os erros do syslog",
     "system errors in the logs",
     "recent errors in journalctl",
     "o log tem erro?",
     "quais erros apareceram no log do sistema",
     "erros no journal hoje",
-    "log de erros da máquina"
+    "log de erros da m\u00e1quina"
    ],
    "name": "log_errors_recent",
    "negatives": [
@@ -4466,20 +4545,20 @@
    "slots": {}
   },
   {
-   "desc": "usuários com sessão aberta na máquina",
+   "desc": "usu\u00e1rios com sess\u00e3o aberta na m\u00e1quina",
    "examples": [
-    "quem está logado",
+    "quem est\u00e1 logado",
     "who is logged in",
-    "quem tá logado na máquina",
-    "lista as sessões ativas",
+    "quem t\u00e1 logado na m\u00e1quina",
+    "lista as sess\u00f5es ativas",
     "show active sessions",
-    "quais usuários estão logados",
+    "quais usu\u00e1rios est\u00e3o logados",
     "who is connected",
-    "mostra os usuários logados",
+    "mostra os usu\u00e1rios logados",
     "active user sessions",
-    "últimos logins",
+    "\u00faltimos logins",
     "who else is on this machine",
-    "tem alguém logado?"
+    "tem algu\u00e9m logado?"
    ],
    "name": "logged_in",
    "rules": [
@@ -4595,16 +4674,16 @@
    }
   },
   {
-   "desc": "memória/RAM",
+   "desc": "mem\u00f3ria/RAM",
    "examples": [
-    "quanta memória livre",
+    "quanta mem\u00f3ria livre",
     "uso de ram",
     "free -m",
     "memory usage",
     "quanta ram tem",
-    "a memória tá cheia?",
+    "a mem\u00f3ria t\u00e1 cheia?",
     "how much ram is free",
-    "uso de memória",
+    "uso de mem\u00f3ria",
     "tem swap?"
    ],
    "name": "mem_usage",
@@ -4623,14 +4702,14 @@
    "examples": [
     "quais interfaces de rede tenho",
     "qual meu ip",
-    "mostra os ips da máquina",
+    "mostra os ips da m\u00e1quina",
     "interfaces de rede",
     "list network interfaces",
     "what is my ip address",
     "ip da placa de rede",
     "qual o ip local",
     "show interfaces",
-    "endereços ip da máquina"
+    "endere\u00e7os ip da m\u00e1quina"
    ],
    "name": "net_ifaces",
    "negatives": [
@@ -4685,17 +4764,17 @@
    "slots": {}
   },
   {
-   "desc": "tabela de rotas e gateway padrão",
+   "desc": "tabela de rotas e gateway padr\u00e3o",
    "examples": [
     "mostra a tabela de rotas",
     "show the routing table",
-    "qual o gateway padrão",
+    "qual o gateway padr\u00e3o",
     "default route",
     "rotas do sistema"
    ],
    "name": "net_route",
    "negatives": [
-    "ip da máquina",
+    "ip da m\u00e1quina",
     "mostra as interfaces",
     "status da rede"
    ],
@@ -4726,20 +4805,20 @@
     "tem internet?",
     "estou online?",
     "to offline?",
-    "a rede tá funcionando?",
+    "a rede t\u00e1 funcionando?",
     "am i online",
     "status da rede",
-    "tô sem internet?",
+    "t\u00f4 sem internet?",
     "network status",
     "a internet caiu?",
-    "checa a conexão"
+    "checa a conex\u00e3o"
    ],
    "name": "net_status",
    "negatives": [
-    "o labbox está online?",
-    "responde só: ok",
+    "o labbox est\u00e1 online?",
+    "responde s\u00f3: ok",
     "me responde isso",
-    "responde aí"
+    "responde a\u00ed"
    ],
    "rules": [
     {
@@ -4765,7 +4844,7 @@
    "slots": {}
   },
   {
-   "desc": "fora do domínio (vai pro modelo ou vira pergunta)",
+   "desc": "fora do dom\u00ednio (vai pro modelo ou vira pergunta)",
    "examples": [
     "oi",
     "tudo bem?",
@@ -4774,23 +4853,23 @@
     "bom dia",
     "kkkk",
     "me conta uma piada",
-    "qual a capital da frança",
+    "qual a capital da fran\u00e7a",
     "escreve um poema sobre o mar",
     "thanks",
     "hello",
     "good morning",
     "boa noite",
-    "que dia é hoje",
+    "que dia \u00e9 hoje",
     "legal",
     "show de bola",
     "massa",
     "entendi",
-    "beleza então",
-    "refatora o módulo de pagamento para usar injeção de dependência",
-    "implementa autenticação jwt na api",
+    "beleza ent\u00e3o",
+    "refatora o m\u00f3dulo de pagamento para usar inje\u00e7\u00e3o de depend\u00eancia",
+    "implementa autentica\u00e7\u00e3o jwt na api",
     "me sugere um nome pro projeto",
-    "traduz isso pro inglês",
-    "faz um site de portfólio com react"
+    "traduz isso pro ingl\u00eas",
+    "faz um site de portf\u00f3lio com react"
    ],
    "name": "none",
    "negatives": [],
@@ -4814,7 +4893,7 @@
     "mostra o teste do lexer",
     "le o docs/guia.md",
     "da uma olhada no app.py",
-    "abre aí o conn.go",
+    "abre a\u00ed o conn.go",
     "exibe o package.json",
     "abre o makefile",
     "quero ver o parser_test.go",
@@ -4949,20 +5028,20 @@
    }
   },
   {
-   "desc": "busca arquivos por permissão, dono, suid/sgid ou executável",
+   "desc": "busca arquivos por permiss\u00e3o, dono, suid/sgid ou execut\u00e1vel",
    "examples": [
-    "arquivos com permissão 777",
+    "arquivos com permiss\u00e3o 777",
     "world-writable files",
     "find suid binaries",
-    "arquivos executáveis",
+    "arquivos execut\u00e1veis",
     "files owned by root",
-    "arquivos do usuário matheus",
+    "arquivos do usu\u00e1rio matheus",
     "writable directories"
    ],
    "name": "perm_find",
    "negatives": [
-    "torna o script executável",
-    "muda a permissão do arquivo",
+    "torna o script execut\u00e1vel",
+    "muda a permiss\u00e3o do arquivo",
     "chmod no script"
    ],
    "rules": [
@@ -4978,7 +5057,8 @@
       "install",
       "extract",
       "enable",
-      "removeword"
+      "removeword",
+      "setperm"
      ],
      "w": 10
     },
@@ -4995,7 +5075,8 @@
       "install",
       "run",
       "enable",
-      "makeword"
+      "makeword",
+      "setperm"
      ],
      "w": 10
     },
@@ -5011,7 +5092,8 @@
       "service",
       "install",
       "enable",
-      "blame"
+      "blame",
+      "setperm"
      ],
      "w": 5
     },
@@ -5020,7 +5102,7 @@
       "user",
       "files|filenoun|permattr"
      ],
-     "desc": "owner/group com nome que colide com serviço (apache, www-data)",
+     "desc": "owner/group com nome que colide com servi\u00e7o (apache, www-data)",
      "none": [
       "delete",
       "create",
@@ -5028,7 +5110,8 @@
       "install",
       "enable",
       "blame",
-      "status"
+      "status",
+      "setperm"
      ],
      "w": 4
     },
@@ -5044,7 +5127,8 @@
       "mutate",
       "move",
       "install",
-      "opinion"
+      "opinion",
+      "setperm"
      ],
      "w": 15
     }
@@ -5193,28 +5277,70 @@
      "kinds": [
       "text"
      ]
+    },
+    "newer": {
+     "from": "find:newer",
+     "kinds": [
+      "number"
+     ]
+    },
+    "older": {
+     "from": "find:older",
+     "kinds": [
+      "number"
+     ]
+    },
+    "newer_date": {
+     "from": "find:newer_date",
+     "kinds": [
+      "text"
+     ]
+    },
+    "older_date": {
+     "from": "find:older_date",
+     "kinds": [
+      "text"
+     ]
+    },
+    "tfield": {
+     "from": "find:tfield",
+     "kinds": [
+      "text"
+     ]
+    },
+    "writable": {
+     "from": "perm:writable",
+     "kinds": [
+      "text"
+     ]
+    },
+    "not_writable": {
+     "from": "perm:not_writable",
+     "kinds": [
+      "text"
+     ]
     }
    }
   },
   {
-   "desc": "mudar permissão/dono/grupo de arquivo ou dir — chmod/chown confinado com prova de bits reais",
+   "desc": "mudar permiss\u00e3o/dono/grupo de arquivo ou dir \u2014 chmod/chown confinado com prova de bits reais",
    "examples": [
     "change the permission of run.sh to 755",
-    "muda a permissão da pasta para 777",
+    "muda a permiss\u00e3o da pasta para 777",
     "chmod 644 on all .txt files",
     "change the owner of all files in dir to antoniod",
     "make deploy.sh executable",
     "change group of data/ to staff",
     "change permissions recursively on build/",
-    "torna o script executável",
+    "torna o script execut\u00e1vel",
     "remove write permission from config.ini"
    ],
    "name": "perm_set",
    "negatives": [
     "find files with permission 777",
     "lista arquivos sem dono",
-    "quais arquivos são executáveis",
-    "apaga os arquivos sem permissão"
+    "quais arquivos s\u00e3o execut\u00e1veis",
+    "apaga os arquivos sem permiss\u00e3o"
    ],
    "rules": [
     {
@@ -5223,7 +5349,6 @@
       "setperm"
      ],
      "none": [
-      "find",
       "listverb",
       "delete",
       "install",
@@ -5427,13 +5552,31 @@
      "kinds": [
       "text"
      ]
+    },
+    "type": {
+     "from": "find:type",
+     "kinds": [
+      "text"
+     ]
+    },
+    "min_depth": {
+     "from": "find:min_depth",
+     "kinds": [
+      "number"
+     ]
+    },
+    "max_depth": {
+     "from": "find:max_depth",
+     "kinds": [
+      "number"
+     ]
     }
    }
   },
   {
    "desc": "pacotes instalados (dpkg/rpm/pip/npm/go)",
    "examples": [
-    "quais pacotes estão instalados",
+    "quais pacotes est\u00e3o instalados",
     "pacotes instalados",
     "lista os pacotes do dpkg",
     "pip list",
@@ -5443,7 +5586,7 @@
     "bibliotecas instaladas",
     "tenho a lib requests instalada?",
     "rpm instalados",
-    "dependências instaladas"
+    "depend\u00eancias instaladas"
    ],
    "name": "pkg_installed",
    "negatives": [
@@ -5478,11 +5621,11 @@
   {
    "desc": "quem usa uma porta",
    "examples": [
-    "quem está usando a porta 3000",
-    "o que está rodando na porta 8080",
-    "quem tá na 5432",
+    "quem est\u00e1 usando a porta 3000",
+    "o que est\u00e1 rodando na porta 8080",
+    "quem t\u00e1 na 5432",
     "what is using port 3000",
-    "a porta 22 está ocupada?",
+    "a porta 22 est\u00e1 ocupada?",
     "qual processo usa a porta 8080",
     "who is using port 5432",
     "quem ocupa a porta 3000",
@@ -5525,17 +5668,17 @@
    "desc": "resumo do projeto",
    "examples": [
     "resumo do projeto",
-    "visão geral do projeto",
-    "me dá um resumo",
+    "vis\u00e3o geral do projeto",
+    "me d\u00e1 um resumo",
     "overview",
     "summarize the project",
     "do que se trata esse repo",
     "explica o projeto",
-    "sumário do código",
+    "sum\u00e1rio do c\u00f3digo",
     "resume o projeto",
     "project overview",
     "me fala sobre esse projeto",
-    "explica o repositório",
+    "explica o reposit\u00f3rio",
     "explain this repo"
    ],
    "name": "project_summary",
@@ -5633,7 +5776,7 @@
     "muda o nome do main.go pra app.go",
     "troca o nome de handleLogin para onLogin",
     "renomear config.yaml para settings.yaml",
-    "renomeia a função Tokenize pra Lex",
+    "renomeia a fun\u00e7\u00e3o Tokenize pra Lex",
     "rename NewServer to MakeServer"
    ],
    "name": "rename",
@@ -5713,7 +5856,7 @@
     "run the tests",
     "run tests",
     "testa o parser",
-    "roda aí os testes",
+    "roda a\u00ed os testes",
     "dale nos testes",
     "mete marcha nos testes",
     "bora rodar os testes",
@@ -5724,7 +5867,7 @@
     "roda os testes do lexer",
     "executa a suite",
     "testa tudo",
-    "roda os testes que estão falhando",
+    "roda os testes que est\u00e3o falhando",
     "roda o parser_test.go",
     "rerun the failing tests",
     "roda os testes de novo",
@@ -5785,24 +5928,24 @@
    }
   },
   {
-   "desc": "sobre o próprio jazz: quem é, versão, onde mora, o que sabe",
+   "desc": "sobre o pr\u00f3prio jazz: quem \u00e9, vers\u00e3o, onde mora, o que sabe",
    "examples": [
-    "quem é você",
-    "quem é vc",
-    "o que é você",
-    "o que é o jazz",
-    "você é o que",
-    "você faz o que",
-    "me fala sobre você",
+    "quem \u00e9 voc\u00ea",
+    "quem \u00e9 vc",
+    "o que \u00e9 voc\u00ea",
+    "o que \u00e9 o jazz",
+    "voc\u00ea \u00e9 o que",
+    "voc\u00ea faz o que",
+    "me fala sobre voc\u00ea",
     "fala sobre o jazz",
-    "sobre você",
+    "sobre voc\u00ea",
     "sobre o jazz",
-    "qual a versão do jazz",
-    "versão do jazz",
-    "versão do jazz-cli",
+    "qual a vers\u00e3o do jazz",
+    "vers\u00e3o do jazz",
+    "vers\u00e3o do jazz-cli",
     "jazz version",
-    "que versão você é",
-    "onde você tá instalado",
+    "que vers\u00e3o voc\u00ea \u00e9",
+    "onde voc\u00ea t\u00e1 instalado",
     "who are you",
     "what are you",
     "about you",
@@ -5810,17 +5953,17 @@
     "what is jazz",
     "your version",
     "se apresenta",
-    "diz quem é você",
-    "você é o jazz?"
+    "diz quem \u00e9 voc\u00ea",
+    "voc\u00ea \u00e9 o jazz?"
    ],
    "name": "self_info",
    "negatives": [
     "atualiza o jazz",
     "tenho o jazz instalado?",
-    "o jazz está instalado?",
+    "o jazz est\u00e1 instalado?",
     "abre o jazz.go",
     "cria o arquivo jazz.txt",
-    "versão do go",
+    "vers\u00e3o do go",
     "status do jazz"
    ],
    "rules": [
@@ -5889,7 +6032,7 @@
    "slots": {}
   },
   {
-   "desc": "logs de serviço/contêiner/arquivo",
+   "desc": "logs de servi\u00e7o/cont\u00eainer/arquivo",
    "examples": [
     "mostra os logs do nginx",
     "logs do postgresql",
@@ -5897,7 +6040,7 @@
     "show nginx logs",
     "journalctl do cron",
     "logs",
-    "ver os logs do serviço ssh",
+    "ver os logs do servi\u00e7o ssh",
     "o que tem nos logs do db",
     "me mostra o log do redis",
     "tail nos logs do nginx",
@@ -5936,15 +6079,15 @@
    }
   },
   {
-   "desc": "reiniciar serviço",
+   "desc": "reiniciar servi\u00e7o",
    "examples": [
     "reinicia o nginx",
     "restart nginx",
     "reinicia o postgresql",
-    "dá um restart no cron",
+    "d\u00e1 um restart no cron",
     "reload nginx",
     "restart the ssh service",
-    "reinicia o serviço tailscaled",
+    "reinicia o servi\u00e7o tailscaled",
     "restarta o nginx"
    ],
    "name": "service_restart",
@@ -5970,16 +6113,16 @@
    }
   },
   {
-   "desc": "subir/iniciar serviço",
+   "desc": "subir/iniciar servi\u00e7o",
    "examples": [
     "sobe o nginx",
     "inicia o postgresql",
     "start nginx",
-    "liga o serviço cron",
+    "liga o servi\u00e7o cron",
     "levanta o nginx",
     "sobe o servidor",
     "start the postgresql service",
-    "inicia o serviço ssh",
+    "inicia o servi\u00e7o ssh",
     "bota o nginx no ar",
     "starta o cron",
     "sobe o ngnix"
@@ -6025,21 +6168,21 @@
    }
   },
   {
-   "desc": "status de um serviço",
+   "desc": "status de um servi\u00e7o",
    "examples": [
     "status do nginx",
-    "o nginx está rodando?",
-    "o postgresql tá ativo?",
-    "status do serviço cron",
+    "o nginx est\u00e1 rodando?",
+    "o postgresql t\u00e1 ativo?",
+    "status do servi\u00e7o cron",
     "is nginx running",
-    "quais serviços estão rodando",
-    "lista os serviços",
-    "o ssh está ativo?",
+    "quais servi\u00e7os est\u00e3o rodando",
+    "lista os servi\u00e7os",
+    "o ssh est\u00e1 ativo?",
     "service status nginx",
-    "o tailscaled tá rodando?",
-    "o cron tá funcionando?",
+    "o tailscaled t\u00e1 rodando?",
+    "o cron t\u00e1 funcionando?",
     "status do ngnix",
-    "serviços ativos"
+    "servi\u00e7os ativos"
    ],
    "name": "service_status",
    "negatives": [
@@ -6114,15 +6257,15 @@
    }
   },
   {
-   "desc": "parar serviço",
+   "desc": "parar servi\u00e7o",
    "examples": [
     "para o nginx",
     "stop nginx",
     "desliga o postgresql",
-    "para o serviço cron",
+    "para o servi\u00e7o cron",
     "derruba o nginx",
     "stop the postgresql service",
-    "desliga o serviço ssh",
+    "desliga o servi\u00e7o ssh",
     "encerra o nginx"
    ],
    "name": "service_stop",
@@ -6147,7 +6290,7 @@
    }
   },
   {
-   "desc": "ordena linhas de um arquivo (print ou gravação)",
+   "desc": "ordena linhas de um arquivo (print ou grava\u00e7\u00e3o)",
    "examples": [
     "ordena o app.log",
     "sort the file data.txt",
@@ -6245,28 +6388,28 @@
    }
   },
   {
-   "desc": "onde um símbolo é usado (chamadas/referências)",
+   "desc": "onde um s\u00edmbolo \u00e9 usado (chamadas/refer\u00eancias)",
    "examples": [
     "procura onde usa o Tokenize",
     "quem chama o ParseArgs",
     "busca referencias de NewServer",
     "quem usa o ParseArgs",
-    "onde o Tokenize é usado",
-    "referências de NewServer",
+    "onde o Tokenize \u00e9 usado",
+    "refer\u00eancias de NewServer",
     "where is Tokenize used",
     "who calls ParseArgs",
     "usages of handleLogin",
     "quem referencia o Tokenize",
     "callers of ParseArgs",
-    "onde o ParseArgs é chamado",
+    "onde o ParseArgs \u00e9 chamado",
     "lista as chamadas de handleLogin",
     "quem chama handleLogin",
     "uses of NewServer"
    ],
    "name": "symbol_refs",
    "negatives": [
-    "quem está usando a porta 3000",
-    "onde está a função ParseArgs",
+    "quem est\u00e1 usando a porta 3000",
+    "onde est\u00e1 a fun\u00e7\u00e3o ParseArgs",
     "quem usa 8080",
     "quem usa a 8080"
    ],
@@ -6387,12 +6530,12 @@
    }
   },
   {
-   "desc": "conta ocorrências de um padrão literal ou regex em arquivo/texto",
+   "desc": "conta ocorr\u00eancias de um padr\u00e3o literal ou regex em arquivo/texto",
    "examples": [
     "quantas vezes aparece 'erro' no log",
     "how often does 'timeout' appear in app.log",
     "count occurrences of TODO in main.go",
-    "número de vezes que 'falha' aparece no syslog"
+    "n\u00famero de vezes que 'falha' aparece no syslog"
    ],
    "name": "text_count",
    "negatives": [
@@ -6524,19 +6667,19 @@
    }
   },
   {
-   "desc": "extrai padrões (ips, emails, urls, datas, números, hex, uuid) de arquivo/texto",
+   "desc": "extrai padr\u00f5es (ips, emails, urls, datas, n\u00fameros, hex, uuid) de arquivo/texto",
    "examples": [
     "extrai os ips do log",
     "extract all emails from mbox.txt",
     "extrai as urls do arquivo",
     "pull out the dates from report.txt",
-    "extrai os números do texto"
+    "extrai os n\u00fameros do texto"
    ],
    "name": "text_extract",
    "negatives": [
     "extrai o arquivo zip",
     "descompacta o tar.gz",
-    "mostra o conteúdo"
+    "mostra o conte\u00fado"
    ],
    "rules": [
     {
@@ -6734,7 +6877,7 @@
    }
   },
   {
-   "desc": "substituir texto dentro de arquivo(s) — 'troca A por B em arq', 'replace all X with Y in *.txt'",
+   "desc": "substituir texto dentro de arquivo(s) \u2014 'troca A por B em arq', 'replace all X with Y in *.txt'",
    "examples": [
     "troca 'foo' por 'bar' em config.txt",
     "replace 'localhost' with '127.0.0.1' in app.conf",
@@ -6742,7 +6885,7 @@
     "replace all instances of 'old_name' with 'new_name' in index.html",
     "troca 'erro' por 'aviso' em todos os .log",
     "replace 'a' with 'b' in every .txt file",
-    "substitui a primeira ocorrência de 'x' por 'y' no main.go",
+    "substitui a primeira ocorr\u00eancia de 'x' por 'y' no main.go",
     "replace the first occurrence of 'foo' with 'bar' in each .txt file"
    ],
    "name": "text_replace",
@@ -6847,10 +6990,10 @@
    }
   },
   {
-   "desc": "marcadores TODO/FIXME no código",
+   "desc": "marcadores TODO/FIXME no c\u00f3digo",
    "examples": [
     "lista os TODO do projeto",
-    "quantos TODO tem no código",
+    "quantos TODO tem no c\u00f3digo",
     "mostra os FIXME",
     "tem algum TODO pendente?",
     "lista os fixme",
@@ -6859,12 +7002,12 @@
     "show the TODOs",
     "list FIXME markers",
     "quantos FIXME e HACK tem",
-    "TODO e FIXME do código",
+    "TODO e FIXME do c\u00f3digo",
     "onde tem TODO no projeto",
     "me mostra os todos do codigo",
-    "lista as pendências marcadas no código",
+    "lista as pend\u00eancias marcadas no c\u00f3digo",
     "quais TODO existem no projeto",
-    "busca TODO no código",
+    "busca TODO no c\u00f3digo",
     "search for TODO",
     "procura por TODO e FIXME"
    ],
@@ -6889,23 +7032,23 @@
    "slots": {}
   },
   {
-   "desc": "versão/presença de uma ferramenta",
+   "desc": "vers\u00e3o/presen\u00e7a de uma ferramenta",
    "examples": [
-    "qual a versão do node",
-    "versão do go",
+    "qual a vers\u00e3o do node",
+    "vers\u00e3o do go",
     "tenho docker?",
-    "o docker está instalado?",
+    "o docker est\u00e1 instalado?",
     "python3 --version",
     "which version of node",
     "tem o talscle instalado?",
-    "qual versão do python",
-    "o git está instalado?",
+    "qual vers\u00e3o do python",
+    "o git est\u00e1 instalado?",
     "tenho o podman?",
-    "versão do make",
+    "vers\u00e3o do make",
     "is docker installed",
     "tem ffmpeg?",
-    "qual a versão do rg",
-    "o jq tá instalado?",
+    "qual a vers\u00e3o do rg",
+    "o jq t\u00e1 instalado?",
     "do i have cargo",
     "tenho o kubectl instalado?",
     "existe o terraform aqui?"
@@ -7000,23 +7143,23 @@
     "status do tailscale",
     "tailscale status",
     "tailscale ta rodando?",
-    "tailscale tá no ar?",
-    "docker ta de pé?",
-    "o docker está rodando?",
+    "tailscale t\u00e1 no ar?",
+    "docker ta de p\u00e9?",
+    "o docker est\u00e1 rodando?",
     "como ta o podman",
-    "como está o docker",
+    "como est\u00e1 o docker",
     "status do docker",
     "status do podman",
     "podman status",
     "is docker running",
     "docker status",
     "how is tailscale",
-    "o tailscale tá ativo?",
+    "o tailscale t\u00e1 ativo?",
     "status do talscle",
     "tailscle ta rodando",
     "status do tailscal",
     "how's podman",
-    "docker tá funcionando?",
+    "docker t\u00e1 funcionando?",
     "status do rg"
    ],
    "name": "tool_status",
@@ -7126,20 +7269,20 @@
    }
   },
   {
-   "desc": "desfazer a última mudança",
+   "desc": "desfazer a \u00faltima mudan\u00e7a",
    "examples": [
     "desfaz",
     "desfaz isso",
     "undo",
-    "desfaz a última mudança",
+    "desfaz a \u00faltima mudan\u00e7a",
     "reverte",
     "volta como estava",
     "ctrl z",
-    "reverte o último commit",
+    "reverte o \u00faltimo commit",
     "desfazer",
     "rollback",
     "undo the last change",
-    "desfaz o que você fez",
+    "desfaz o que voc\u00ea fez",
     "reverta o arquivo parser.go"
    ],
    "name": "undo",
@@ -7154,9 +7297,9 @@
    "slots": {}
   },
   {
-   "desc": "atualizar dependências",
+   "desc": "atualizar depend\u00eancias",
    "examples": [
-    "atualiza as dependências",
+    "atualiza as depend\u00eancias",
     "update the dependencies",
     "atualiza o pacote lodash",
     "upgrade requests",
@@ -7165,7 +7308,7 @@
     "npm update",
     "update deps",
     "atualizar pacotes",
-    "atualiza as dependências do projeto"
+    "atualiza as depend\u00eancias do projeto"
    ],
    "name": "update_dep",
    "negatives": [
@@ -7200,15 +7343,15 @@
    }
   },
   {
-   "desc": "atualizar o próprio jazz",
+   "desc": "atualizar o pr\u00f3prio jazz",
    "examples": [
     "atualiza o jazz",
     "update jazz",
     "jazz update",
     "atualizar o jazz-cli",
-    "tem versão nova do jazz? atualiza",
+    "tem vers\u00e3o nova do jazz? atualiza",
     "upgrade jazz",
-    "atualiza o jazz pra última versão",
+    "atualiza o jazz pra \u00faltima vers\u00e3o",
     "update jazz-cli"
    ],
    "name": "update_jazz",
@@ -7224,20 +7367,20 @@
    "slots": {}
   },
   {
-   "desc": "uptime e carga da máquina",
+   "desc": "uptime e carga da m\u00e1quina",
    "examples": [
     "uptime",
-    "há quanto tempo a máquina tá ligada",
-    "qual a carga da máquina",
+    "h\u00e1 quanto tempo a m\u00e1quina t\u00e1 ligada",
+    "qual a carga da m\u00e1quina",
     "load average",
-    "a máquina tá sobrecarregada?",
-    "o pc tá pesado?",
+    "a m\u00e1quina t\u00e1 sobrecarregada?",
+    "o pc t\u00e1 pesado?",
     "carga da cpu agora",
     "show uptime",
     "system load",
     "how long has it been up",
-    "tempo ligado da máquina",
-    "a máquina tá lenta?"
+    "tempo ligado da m\u00e1quina",
+    "a m\u00e1quina t\u00e1 lenta?"
    ],
    "name": "uptime_load",
    "negatives": [],

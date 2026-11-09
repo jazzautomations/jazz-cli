@@ -1784,3 +1784,257 @@ func TestNLURecentTimeGuards(t *testing.T) {
 		t.Errorf("exact ago: %s %.2f %v", in.Name, in.Confidence, in.Slots)
 	}
 }
+
+// TestNLUFind2Guards — silent-wrongs do cluster find2 do corpus:
+// operandos especiais (uid numérico, fstype, delimitador de saída,
+// flags), escopo/destino com 'under', exceções com verbos de locação
+// e aspa citada, vars dir-shaped e non-recursive.
+func TestNLUFind2Guards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// uid numérico é predicado próprio (find -uid), não nome de owner
+	in := m.Parse(`find all files in the /var/tmp directory tree with uid=1000`, w)
+	if in.Name != "file_find" || in.Slots["uid"] != "1000" || in.Slots["dir"] != "/var/tmp" {
+		t.Errorf("uid: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "read-write access for others" — bit composto → máscara rw
+	in = m.Parse(`find all files under /myfiles with read-write access for others`, w)
+	if in.Name != "perm_find" || in.Slots["bits"] == "" || in.Slots["name"] != "" {
+		t.Errorf("rw-others: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "do not belong to any user" — órfão sem dono
+	in = m.Parse(`find all files in the file system which do not belong to any user`, w)
+	if in.Name != "perm_find" || in.Slots["orphan"] == "" || in.Slots["dir"] != "/" {
+		t.Errorf("any-user orphan: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "not currently stored in ./pdf" — 'stored' é ponte; a exclusão
+	// é o path depois de 'in'
+	in = m.Parse(`find all pdf files in the current directory that are not currently stored in the ./pdf`, w)
+	if in.Name != "file_find" || in.Slots["exclude"] != "./pdf" {
+		t.Errorf("stored-in exclude: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// 'under' antes do verbo move é ESCOPO; depois pode ser destino
+	in = m.Parse(`find all *.csv files under /foot/bar/ and move them to some_dir`, w)
+	if in.Name != "file_move" || in.Slots["srcdir"] != "/foot/bar/" || in.Slots["dest"] != "some_dir" {
+		t.Errorf("under-scope: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// aspa citada dentro de cláusula de exceção é o operando excluído
+	in = m.Parse(`search the current directory tree for regular files omitting directory 'omit-directory'`, w)
+	if in.Name != "file_find" || in.Slots["exclude"] != "omit-directory" {
+		t.Errorf("exctgt: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "$dir directory (non-recursive)" — var auto-descritiva + depth 1
+	in = m.Parse(`find all files in $dir directory (non-recursive) and count them`, w)
+	if in.Slots["dir"] != "$dir" || in.Slots["max_depth"] != "1" {
+		t.Errorf("dir-var nonrec: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// glob real vence cola de phrasing; delimitador de saída não é
+	// suportado → o glob fica e a cláusula cai pro Dropped
+	in = m.Parse(`find all *company* (case-insensitive) files/directories under /basedir with null character as the delimiter`, w)
+	if in.Slots["name"] != "*company*" && in.Slots["namepat"] != "*company*" {
+		t.Errorf("company glob: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	if in.Slots["name"] == "null character delimiter" {
+		t.Errorf("delimiter virou name: %v", in.Slots)
+	}
+	// "look for directory 'cookbook'" — a aspa é o nome da pasta
+	in = m.Parse(`look for directory 'cookbook'`, w)
+	if in.Name != "file_find" || in.Slots["name"] != "cookbook" || in.Slots["type"] != "dir" {
+		t.Errorf("cookbook: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// valor com cara de flag ('-tcp') não é nome de arquivo
+	in = m.Parse(`output two lines of "-tcp"`, w)
+	if in.Slots["name"] == "-tcp" {
+		t.Errorf("flag-name: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// restrição de fstype ("only in jfs and ext2") não é suportada —
+	// não pode vazar como owner nem filtrar silenciosamente
+	in = m.Parse(`find all files in the file system which do not belong to any user and search only in jfs and ext2 filesystems`, w)
+	if in.Slots["not_owner"] == "jfs" || in.Slots["not_owner"] == "search" {
+		t.Errorf("fstype-owner: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// 'under' depois do verbo continua sendo destino
+	in = m.Parse(`move all regular files under current directory to ./newdir`, w)
+	if in.Name != "file_move" || in.Slots["dest"] != "./newdir" {
+		t.Errorf("under-dest: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+}
+
+// Batch2 do find2: exec-por-item, contagem-interrogativa, target de
+// escopo no create e predicado temporal no perm_find.
+func TestNLUFind2Batch2Guards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	// fan-out por arquivo é segunda operação — o find não executa
+	in := m.Parse(`Find all *.txt files/directories under current directory and execute process for each of them`, w)
+	if nuPredict(in) != "none" || len(in.Dropped) == 0 {
+		t.Errorf("exec-fanout: %s %.2f %v dropped=%v", in.Name, in.Confidence, in.Slots, in.Dropped)
+	}
+	// "find every X" sozinho NÃO é fan-out — 'every' sem verbo de
+	// execução continua quantificador de escopo
+	in = m.Parse(`find every log file over 10MB`, w)
+	if in.Name != "file_find" || in.Slots["ext"] != "log" || in.Slots["min_size"] == "" {
+		t.Errorf("every-scope: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// pergunta de contagem sobre conjunto — o find lista, não conta
+	in = m.Parse(`how many python files are in this repo`, w)
+	if nuPredict(in) != "none" || len(in.Dropped) == 0 {
+		t.Errorf("how-many: %s %.2f %v dropped=%v", in.Name, in.Confidence, in.Slots, in.Dropped)
+	}
+	// path depois de cue de escopo não é o objeto criado
+	in = m.Parse(`Create thumbnails from the first page of each PDF files under /path/to/dir`, w)
+	if in.Slots["target"] == "/path/to/dir" || nuPredict(in) == "create" {
+		t.Errorf("scope-target: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// perm_find ganhou predicado temporal — dono negado + janela
+	in = m.Parse(`display all the files in the file system which do not belong to the user "wnj" and which are modified more than 30 days ago`, w)
+	if in.Name != "perm_find" || in.Slots["not_owner"] != "wnj" ||
+		in.Slots["older"] != "43200" || len(in.Dropped) > 0 {
+		t.Errorf("perm-time: %s %.2f %v dropped=%v", in.Name, in.Confidence, in.Slots, in.Dropped)
+	}
+	// superlativo segue sem suporte no perm_find (sem sort+limit)
+	in = m.Parse(`find files owned by root modified newest`, w)
+	if in.Name == "perm_find" && len(in.Dropped) == 0 {
+		t.Errorf("perm-superlative: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "convert epoch to date" é conversão SUPORTADA pelo date_show
+	in = m.Parse(`convert epoch second 1267619929 to date`, w)
+	if in.Name != "date_show" || len(in.Dropped) > 0 {
+		t.Errorf("epoch-convert: %s %.2f %v dropped=%v", in.Name, in.Confidence, in.Slots, in.Dropped)
+	}
+	// named-cue reivindica palavra com conceito ("named count")
+	in = m.Parse(`find files named count`, w)
+	if in.Slots["name"] != "count" {
+		t.Errorf("named-count: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+	// 'letter' literal depois de named não vira glob
+	in = m.Parse(`find files named letter`, w)
+	if in.Slots["name"] != "letter" {
+		t.Errorf("named-letter: %s %.2f %v", in.Name, in.Confidence, in.Slots)
+	}
+}
+
+// Mutation-routing de permissões (find2 mining): "set their permission"
+// é perm_set com cobertura total (mass+mode+depth+recursive+type);
+// "permission set for everybody" é particípio — FILTRO (perm_find),
+// nunca mutação. E dir-word sob verbo de mutação é o ALVO (type:dir),
+// não localização.
+func TestNLUPermMutationGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, c := range []struct {
+		text string
+		want map[string]string
+	}{
+		{"Find all directories under maximum 1 level down the current directory and set their permission to 700 recursively",
+			map[string]string{"mass": "1", "mode": "700", "max_depth": "1", "recursive": "true", "type": "dir"}},
+		{"Find all files/directories under minimum 2 level down the current directory and set their permission to 7",
+			map[string]string{"mass": "1", "mode": "7", "min_depth": "2"}},
+		{"Find all files under current directory and change their permission to 600",
+			map[string]string{"mass": "1", "mode": "600"}},
+		{"set the permission of report.txt to 644",
+			map[string]string{"file": "report.txt", "mode": "644"}},
+		{"chmod 755 in all directories under /srv",
+			map[string]string{"dir": "/srv", "mass": "1", "mode": "755", "type": "dir"}},
+		{"chmod 755 on all directories",
+			map[string]string{"mass": "1", "mode": "755", "type": "dir"}},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != "perm_set" || nuPredict(in) != "perm_set" {
+			t.Errorf("perm_set miss: %s -> %s %.2f %v", c.text, in.Name, in.Confidence, in.Slots)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("perm_set slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+		if in.Slots["file"] == "maximum" || in.Slots["file"] == "set" ||
+			in.Slots["file"] == "execute" || in.Slots["file"] == "read" {
+			t.Errorf("perm_set file-lixo: %s -> %v", c.text, in.Slots)
+		}
+	}
+
+	// particípio "set for X" é FILTRO de busca, nunca chmod
+	for _, c := range []struct {
+		text string
+		slot string
+	}{
+		{"Search the current directory tree for directories with the execute permission set for everybody", "exall"},
+		{"Search the current directory recursively for regular files with the read permission set for everybody", "aread"},
+		{"display all the files which have read permission to the user", "uread"},
+		{"Search the current directory tree for directories lacking execute permissions for user, group, or others", "nx"},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != "perm_find" || in.Slots[c.slot] == "" {
+			t.Errorf("perm_find particípio: %s -> %s %.2f %v", c.text, in.Name, in.Confidence, in.Slots)
+		}
+		if in.Name == "perm_set" || in.Slots["file"] != "" {
+			t.Errorf("busca virou mutação: %s -> %s %v", c.text, in.Name, in.Slots)
+		}
+	}
+}
+
+// Predicados find2 (mining): cue-vocábulo ("the word 'x'") é papel
+// sintático — nunca operando nem drop; "named loop" é basename, não
+// controle de fluxo; "writable" sem escopo-mundo não vira ww;
+// "not broken" link = not_orphan; "not empty" dir = not_empty.
+func TestNLUPredicateCueGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+
+	for _, c := range []struct {
+		text   string
+		intent string
+		want   map[string]string
+		absent []string
+	}{
+		{"search for files containing the word 'fuse' in their name in the current directory",
+			"file_find", map[string]string{"name": "fuse"}, nil},
+		{"find all the files starting with the word 'data'",
+			"file_find", map[string]string{"name": "data*"}, nil},
+		{"find files named loop",
+			"file_find", map[string]string{"name": "loop"}, nil},
+		{"find files named count",
+			"file_find", map[string]string{"name": "count"}, nil},
+		{"find all writable files",
+			"perm_find", map[string]string{"writable": "true"}, []string{"ww", "bits"}},
+		{"find all world-writable files",
+			"perm_find", map[string]string{"ww": "true"}, nil},
+		{"find files writable by the group",
+			"perm_find", map[string]string{"bits": "020"}, []string{"writable", "ww"}},
+		{"find files writable by everybody",
+			"perm_find", map[string]string{"bits": "222"}, []string{"writable"}},
+		{"find all files in the /path/to/dir directory which are not read-only",
+			"perm_find", map[string]string{"writable": "true"}, []string{"ww"}},
+		{"find all files which are read-only",
+			"perm_find", map[string]string{"not_writable": "true"}, nil},
+		{"find all symbolic links in the current directory which are not broken",
+			"file_find", map[string]string{"type": "link", "not_orphan": "true"}, nil},
+		{"Find the directories in the current directory that are not empty",
+			"file_find", map[string]string{"type": "dir", "not_empty": "true"}, []string{"empty", "exclude"}},
+		{"find all files in the directory 'docs' which do not have write permission for group",
+			"perm_find", map[string]string{"dir": "docs", "not_bits": "020"}, nil},
+	} {
+		in := m.Parse(c.text, w)
+		if in.Name != c.intent {
+			t.Errorf("intent: %s -> %s %.2f %v (want %s)", c.text, in.Name, in.Confidence, in.Slots, c.intent)
+			continue
+		}
+		for k, v := range c.want {
+			if in.Slots[k] != v {
+				t.Errorf("slot: %s -> %s=%q want %q (%v)", c.text, k, in.Slots[k], v, in.Slots)
+			}
+		}
+		for _, k := range c.absent {
+			if in.Slots[k] != "" {
+				t.Errorf("slot extra: %s -> %s=%q (%v)", c.text, k, in.Slots[k], in.Slots)
+			}
+		}
+		for _, d := range in.Dropped {
+			// cue-vocábulos puros ("word", "string") nunca são drop —
+			// é papel sintático já coberto pelo padrão extraído
+			switch d {
+			case "word", "string", "term", "name", "the", "a":
+				t.Errorf("cue-vocábulo dropado: %s -> dropped=%v", c.text, in.Dropped)
+			}
+		}
+	}
+}

@@ -1845,6 +1845,9 @@
    "legiveis",
    "legíveis",
    "readable",
+   "read-write",
+   "read/write",
+   "read+write",
    "ownership",
    "propriedade",
    "group",
@@ -2758,7 +2761,8 @@
    "documentary",
    "documentario",
    "documentário"
-  ]
+  ],
+  "exctgt": []
  },
  "fillers": [
   "-print",

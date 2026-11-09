@@ -84,8 +84,12 @@ if kind not in ("any", "file", "dir", "link"):
 follow_links = as_bool(ARGS.get("follow"), False)
 # symlink quebrado/cíclico: o lstat vê o link, o stat do alvo falha
 orphan_only = as_bool(ARGS.get("orphan"), False)
+not_orphan = as_bool(ARGS.get("not_orphan"), False)
 # contagem de hardlinks: "exactly 2 links" → st_nlink == N
 links_eq = as_int("links", -1, -1, 1 << 30)
+# dono por id numérico: "with uid=1000" → st_uid == N (find -uid)
+uid_eq = as_int("uid", -1, -1, 1 << 30)
+gid_eq = as_int("gid", -1, -1, 1 << 30)
 min_size = as_int("min_size", 0, 0, 1 << 40)
 max_size = as_int("max_size", 1 << 40, 0, 1 << 40)
 if min_size > max_size:
@@ -143,6 +147,7 @@ TSKEY = TFIELD[tfield]
 newer_file = arg("newer_file")
 older_file = arg("older_file")
 empty_only = as_bool(ARGS.get("empty"), False)
+not_empty = as_bool(ARGS.get("not_empty"), False)
 include_hidden = as_bool(ARGS.get("include_hidden"), False)
 sort_by = str(arg("sort", "name")).lower()
 if sort_by not in ("name", "size", "mtime"):
@@ -215,7 +220,8 @@ if older_file is not None:
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
         or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"
         or line_filter or newer_file or older_file or orphan_only or
-        links_eq >= 0):
+        not_orphan or
+        links_eq >= 0 or uid_eq >= 0 or gid_eq >= 0):
     # "find all files under X" is a literal request — unbounded in intent,
     # still bounded by limit/MAX_SCAN like every other query
     name = "*"
@@ -259,7 +265,13 @@ def match(p, base, st):
     # quebrado/cíclico: existe o lstat do link, falha o stat do alvo
     if orphan_only and not (is_link and not os.path.exists(p)):
         return False
+    if not_orphan and not (is_link and os.path.exists(p)):
+        return False
     if links_eq >= 0 and st.st_nlink != links_eq:
+        return False
+    if uid_eq >= 0 and st.st_uid != uid_eq:
+        return False
+    if gid_eq >= 0 and st.st_gid != gid_eq:
         return False
     if name and not fnmatch.fnmatch(base.lower(), name_l):
         return False
@@ -284,6 +296,16 @@ def match(p, base, st):
     if older_ts and (getattr(st, TSKEY) >= older_ts if older_strict
                      else getattr(st, TSKEY) > older_ts):
         return False
+    if not_empty:
+        if is_file:
+            if st.st_size == 0:
+                return False
+        else:
+            try:
+                if not os.listdir(p):
+                    return False
+            except OSError:
+                return False
     if empty_only:
         if is_file:
             if st.st_size != 0:

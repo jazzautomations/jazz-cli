@@ -45,7 +45,9 @@
       "older_date": "$slot.older_date",
       "follow": "$slot.follow",
       "links": "$slot.links",
-      "orphan": "$slot.orphan"
+      "orphan": "$slot.orphan",
+      "uid": "$slot.uid",
+      "gid": "$slot.gid"
      },
      "out": "res"
     },
@@ -110,7 +112,9 @@
       "older_date": "$slot.older_date",
       "follow": "$slot.follow",
       "links": "$slot.links",
-      "orphan": "$slot.orphan"
+      "orphan": "$slot.orphan",
+      "uid": "$slot.uid",
+      "gid": "$slot.gid"
      },
      "out": "res"
     }

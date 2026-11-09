@@ -116,6 +116,41 @@
    "namepat": {
     "type": "string",
     "description": "glob on the base name"
+   },
+   "newer_min": {
+    "description": "only entries modified within the last N minutes",
+    "minimum": 0,
+    "type": "integer"
+   },
+   "older_min": {
+    "description": "only entries last modified more than N minutes ago",
+    "minimum": 0,
+    "type": "integer"
+   },
+   "newer_date": {
+    "description": "only entries modified on/after date (YYYY-MM-DD or cur-MM-DD)",
+    "type": "string"
+   },
+   "older_date": {
+    "description": "only entries modified before date (YYYY-MM-DD or cur-MM-DD)",
+    "type": "string"
+   },
+   "time_field": {
+    "description": "which timestamp the window applies to: mtime, atime or ctime",
+    "enum": [
+     "mtime",
+     "atime",
+     "ctime"
+    ],
+    "type": "string"
+   },
+   "writable": {
+    "description": "writable for the current user (os.access W_OK)",
+    "type": "boolean"
+   },
+   "not_writable": {
+    "description": "not writable for the current user",
+    "type": "boolean"
    }
   },
   "type": "object"
