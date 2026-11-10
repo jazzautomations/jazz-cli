@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -251,8 +252,10 @@ func TestBrainV4PatternSlotAndRule(t *testing.T) {
 		"v4_text_grep.txt", "ana\nbruno\nana\n")
 	env, _ := brTestEnv(t, root, nil, -1)
 	r := brRun(context.Background(), env, `testa regex v4_regex_test.txt "ana"`)
-	if r.Intent.Name != "regex_test" || r.Status != tkSucceeded ||
-		!strings.Contains(r.Text, "1 matching line(s)") {
+	// no Windows o script regex_test recusa honesto ("regex timeout unavailable
+	// on this platform"): lá o que se confere é só a leitura do pedido
+	if r.Intent.Name != "regex_test" || runtime.GOOS != "windows" && (r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "1 matching line(s)")) {
 		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
 	}
 	env, _ = brTestEnv(t, root, nil, -1)

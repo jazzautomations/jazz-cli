@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -29,17 +28,17 @@ import (
 
 // brQuestionRe: a frase começa com palavra interrogativa. Um "?" no fim não
 // basta ("commita isso pra mim?" é pedido educado, não pergunta).
-var brQuestionRe = regexp.MustCompile(`(?i)^\s*(?:e\s+|ent[aã]o\s+|mas\s+|a[ií]\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
+var brQuestionRe = lazyRx(`(?i)^\s*(?:e\s+|ent[aã]o\s+|mas\s+|a[ií]\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
 
 func brIsQuestion(text string) bool { return brQuestionRe.MatchString(text) }
 
 // brWriteVerbRe: verbo de escrita no imperativo/infinitivo (pt e en). Formas
 // de particípio ("criadas", "changed") ficam de fora de propósito: "lista as
 // branches criadas hoje" é leitura.
-var brWriteVerbRe = regexp.MustCompile(`(?i)(?:^|[\s,;:])(cria|crie|criar|create|make|guarda|guarde|guardar|salva|salve|salvar|save|esconde|esconder|aplica|aplicar|apply|pop|adiciona|adicionar|add|muda|mudar|troca|trocar|switch|altera|alterar|change|apaga|apagar|deleta|deletar|delete|remove|remover|renomeia|renomear|rename|restaura|restaurar|restore|descarta|descartar|drop|discard)\b`)
+var brWriteVerbRe = lazyRx(`(?i)(?:^|[\s,;:])(cria|crie|criar|create|make|guarda|guarde|guardar|salva|salve|salvar|save|esconde|esconder|aplica|aplicar|apply|pop|adiciona|adicionar|add|muda|mudar|troca|trocar|switch|altera|alterar|change|apaga|apagar|deleta|deletar|delete|remove|remover|renomeia|renomear|rename|restaura|restaurar|restore|descarta|descartar|drop|discard)\b`)
 
 // brListWordRe: o pedido diz explicitamente que quer ver, não fazer.
-var brListWordRe = regexp.MustCompile(`(?i)\b(lista|listar|liste|list|mostra|mostrar|mostre|show|ver|veja|quais|qual|tem|what|which)\b`)
+var brListWordRe = lazyRx(`(?i)\b(lista|listar|liste|list|mostra|mostrar|mostre|show|ver|veja|quais|qual|tem|what|which)\b`)
 
 // brBareWrite são intenções cujo nome já é o verbo de escrita: "git stash" ou
 // "stash" sozinho quer dizer guardar, e o único método offline só lista.
