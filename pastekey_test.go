@@ -10,11 +10,11 @@ func TestPasteKeyClean(t *testing.T) {
 		"\x1b[200~chaveABC-123_def\x1b[201~": "chaveABC-123_def",
 		"[200~chaveABC-123_def[201~":         "chaveABC-123_def", // ESC já descartado pelo leitor
 		"chaveABC-123_def201~":               "chaveABC-123_def", // só o rabo, como foi achado salvo
-		"  tok.abc_def-123\r\n":            "tok.abc_def-123",
-		"\"tokabc\"":                          "tokabc",
+		"  tok.abc_def-123\r\n":              "tok.abc_def-123",
+		"\"tokabc\"":                         "tokabc",
 		"tok-um-dois-xyz":                    "tok-um-dois-xyz",
-		"outra-AbC_1-2":                       "outra-AbC_1-2",
-		"":                                    "",
+		"outra-AbC_1-2":                      "outra-AbC_1-2",
+		"":                                   "",
 	} {
 		if got := pkCleanKey(in); got != want {
 			t.Errorf("pkCleanKey(%q) = %q, quer %q", in, got, want)
