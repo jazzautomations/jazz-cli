@@ -343,11 +343,19 @@ func segmentDanger(t []string) string {
 	if r := h2SegmentDanger(w, args); r != "" { // hardening2.go
 		return r
 	}
+	if r := nkLockout(t[0], args); r != "" { // netlockout.go: takes this machine off the network
+		return r
+	}
 	if strings.HasPrefix(w, "mkfs") {
 		return "formata disco"
 	}
 	switch w {
 	case "sudo", "doas", "pkexec":
+		if in := nkSudoInner(args); len(in) > 0 {
+			if r := nkLockout(in[0], in[1:]); r != "" { // the real risk is what runs as root (netlockout.go)
+				return r
+			}
+		}
 		return "sudo/privilégio — sem TTY a senha trava; peça aprovação, ou sudo -S com a senha via stdin, ou o usuário pode rodar com --yolo/mode yolo"
 	case "su":
 		return "troca de usuário (su)"
