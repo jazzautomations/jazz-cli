@@ -413,6 +413,9 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 		a.obAfterStep(steps)                               // traced checkpoint of pending writes (obs.go)
 		a.obTurnEnd(stop, steps, toolsRun, time.Since(t0)) // obs.go
 		a.ui.TurnEnd(TurnStats{Dur: time.Since(t0), Tools: toolsRun, Usage: a.turnUsage, Model: turnModel, Ctx: a.estTokens(), Win: a.window(), Cost: a.turnUsage.Cost, Stop: string(stop), Steps: steps, Redacted: a.rdTurnCount()})
+		if note := a.hgJobsNote(); note != "" { // background jobs still up (guard_honest.go)
+			a.ui.Warn(note)
+		}
 		if time.Since(t0) > 20*time.Second {
 			a.ui.Bell()
 		}

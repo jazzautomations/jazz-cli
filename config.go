@@ -153,7 +153,7 @@ type Config struct {
 	Budget        string   `json:"budget,omitempty"`         // lean (default) | normal | off (budget.go)
 	Quality       string   `json:"quality,omitempty"`        // standard (default) | strict | off (quality.go)
 	Guards        string   `json:"guards,omitempty"`         // on (default) | off: honest-completion guards (guard_honest.go)
-	GuardsOff     []string `json:"guards_off,omitempty"`     // turn off single guards: tests, hardcode, done, eval
+	GuardsOff     []string `json:"guards_off,omitempty"`     // turn off single guards: tests, hardcode, done, eval, jobs
 	NetWait       string   `json:"net_wait,omitempty"`       // on (default) | off: wait out network outages (netwait.go)
 	FallbackOrder string   `json:"fallback_order,omitempty"` // score (default) | config: fallback order (scores.go)
 	// Omni judge (judge.go): model per task type, roles, verifier, hedging,

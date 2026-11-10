@@ -631,3 +631,17 @@ func (t *Toolbox) RunningJobs() int {
 	}
 	return n
 }
+
+// LiveJobs lists the background jobs still running, in start order.
+func (t *Toolbox) LiveJobs() []*Job {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var out []*Job
+	for _, j := range t.jobs {
+		if _, running := j.status(); running {
+			out = append(out, j)
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Start.Before(out[b].Start) })
+	return out
+}
