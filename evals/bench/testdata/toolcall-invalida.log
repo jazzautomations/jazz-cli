@@ -1,0 +1,5 @@
+· sessão 261110-085643-4836 · kilo/cohere/north-mini-code:free
+· tentando gpt-oss-120b
+jazz: falha de rede: Failed to parse tool call arguments as JSON
+jazz: execução incompleta (error) — trabalho salvo: checkpoint 844134686364 · nota sessions/y.handoff.md
+jazz: retome com: jazz -p -r 261110-085643-4836   (ou jazz -p --resume-last-in work/04)
