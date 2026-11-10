@@ -1187,17 +1187,52 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		label = "pensando"
 	}
 	var lastErr error
+	var lastRef string                        // ref that produced lastErr
+	var wantErr error                         // the requested model's own error (attribution)
+	failSeen := map[string]bool{}             // refs already in failRefs
+	var failRefs []string                     // fallback refs that also failed (the "reservas")
+	toolTries := map[string]int{}             // rejected-tool-call errors per ref
+	noteFail := func(ref string, err error) { // remembers who failed, and the user's model first
+		if ref == model {
+			wantErr = err
+			return
+		}
+		if !failSeen[ref] {
+			failSeen[ref] = true
+			failRefs = append(failRefs, ref)
+		}
+	}
+	// fixKind wraps a rejected-tool-call error with the ref, the invented name
+	// and the try count, so the final message can blame the model's output
+	// instead of the network. Other errors pass through unchanged.
+	fixKind := func(ref string, err error) error {
+		if pvClassify(err) == "toolcall" {
+			return &acToolCallError{Ref: ref, Name: pvToolCallName(err), Tries: toolTries[ref], Err: err}
+		}
+		return err
+	}
+	// wrapFail cites the requested model's error first and summarizes that the
+	// reserves also failed; it is a no-op when the error is the model's own.
+	wrapFail := func(ref string, err error) error {
+		out := fixKind(ref, err)
+		if wantErr == nil || (wantErr == err && len(failRefs) == 0) {
+			return out
+		}
+		return &acFailError{Ref: model, Err: fixKind(model, wantErr), Backs: failRefs}
+	}
 	var lastPartial *ChatResponse // output of a stream that failed, kept if nothing better comes (cutoff.go)
 	why := ""                     // why the previous candidate was left (shown with the next one)
 	for ci, ref := range cands {
 		if ok, wait := lim.Allow(ref); !ok && ci+1 < len(cands) {
-			lastErr = fmt.Errorf("%s: limite de uso (libera em %s)", ref, wait.Round(time.Second))
+			lastErr, lastRef = fmt.Errorf("%s: limite de uso (libera em %s)", ref, wait.Round(time.Second)), ref
+			noteFail(ref, lastErr)
 			continue
 		}
 		pname, mid := SplitModel(ref)
 		prov, err := a.cfg.NewProvider(pname)
 		if err != nil {
-			lastErr = err
+			lastErr, lastRef = err, ref
+			noteFail(ref, err)
 			if ci == 0 {
 				a.ui.Warn(err.Error())
 			}
@@ -1231,9 +1266,14 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		}
 		why = ""
 		triedText, netWaits := false, 0
+		toolRetried := false // the one rejected-tool-call retry this ref gets
+		var repairNote string
 	attempts:
 		for attempt := 0; attempt < 6; attempt++ {
 			req := a.buildRequest(ref, mid, o)
+			if repairNote != "" { // rejected tool call: retry once with the exact names
+				req.Messages = append(append([]Message(nil), req.Messages...), Message{Role: "user", Content: repairNote})
+			}
 			a.ui.Thinking(label)
 			var gotText bool
 			var streamed strings.Builder // text already shown (acToolCutErr)
@@ -1301,12 +1341,44 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 				}
 				return cr, ref, nil
 			}
-			lastErr = err
+			lastErr, lastRef = err, ref
+			noteFail(ref, err)
 			lim.Report(ref, err)
 			var ae *APIError
 			if errors.As(err, &ae) {
 				if isOverflow(err) {
 					return nil, ref, err
+				}
+				if pvClassify(err) == "toolcall" {
+					// The provider rejected the model's own generation (a tool
+					// that does not exist or arguments that are not JSON):
+					// charge the model, not the network. One retry per ref with
+					// a reminder of the valid names; then the next candidate —
+					// or, for the last one, text-mode tools.
+					toolTries[ref]++
+					switch {
+					case gotText:
+						return acPartialOnly(resp), ref, wrapFail(ref, err)
+					case !toolRetried && len(req.Tools) > 0:
+						toolRetried = true
+						repairNote = acToolCallReminder(pvToolCallName(err), req.Tools)
+						a.ui.Notice(uiShortModel(ref) + " gerou chamada de ferramenta inválida — reenviando com a lista exata")
+						dbg("toolcall", map[string]any{"ref": ref, "err": oneLine(err.Error(), 200)})
+						continue
+					case ci+1 < len(cands):
+						why = uiShortModel(ref) + " gerou chamada de ferramenta inválida"
+						if n := pvToolCallName(err); n != "" {
+							why = fmt.Sprintf("%s chamou %q, que não existe", uiShortModel(ref), n)
+						}
+						break attempts
+					case !triedText && len(req.Tools) > 0:
+						triedText = true
+						a.markText(ref)
+						a.ui.Notice(ref + " repetiu a chamada inválida — usando tools em modo texto")
+						continue
+					default:
+						break attempts
+					}
 				}
 				if !triedText && !req.TextTools && len(req.Tools) > 0 && acToolsUnsupported(ae) {
 					triedText = true
@@ -1334,13 +1406,13 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 						a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
 						break attempts
 					}
-					return acPartialOnly(resp), ref, err
+					return acPartialOnly(resp), ref, wrapFail(ref, err)
 				}
 			} else if !errors.Is(err, errStreamIdle) {
-				return acPartialOnly(resp), ref, err
+				return acPartialOnly(resp), ref, wrapFail(ref, err)
 			}
 			if gotText { // partial answer already on screen; don't silently retry
-				return acPartialOnly(resp), ref, err
+				return acPartialOnly(resp), ref, wrapFail(ref, err)
 			}
 			// Interactive: no network at all ends the turn now, and the app
 			// switches to offline mode (netfast.go, offline.go).
@@ -1391,7 +1463,7 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 	if lastErr == nil {
 		lastErr = errors.New("nenhum modelo disponível — configure uma chave (/key) ou faça login (/login)")
 	}
-	return lastPartial, model, lastErr
+	return lastPartial, model, wrapFail(lastRef, lastErr)
 }
 
 // acPartialOnly keeps a reply that failed mid-stream (text and cut tool calls
@@ -1416,6 +1488,52 @@ func acToolCutErr(err error) bool {
 	}
 	s := strings.ToLower(err.Error())
 	return strings.Contains(s, "max_tokens") && (strings.Contains(s, "cutoff") || strings.Contains(s, "cut off") || strings.Contains(s, "truncat")) && strings.Contains(s, "tool")
+}
+
+// acToolCallError wraps a "toolcall" rejection: the provider refused the model's
+// own generated tool call. It carries the ref, the invented name and how many
+// times that model was rejected in this request, so the final message can blame
+// the model — never "falha de rede".
+type acToolCallError struct {
+	Ref   string // provider/model that generated the bad call
+	Name  string // tool it attempted ("" = the error names none, e.g. bad JSON)
+	Tries int    // rejections on that ref in this request
+	Err   error  // the provider's error
+}
+
+func (e *acToolCallError) Error() string { return e.Err.Error() }
+func (e *acToolCallError) Unwrap() error { return e.Err }
+
+// acFailError is an exhausted fallback chain: the requested model's error
+// (Err) first, then the refs that also failed after it (Backs). friendlyErr
+// expands it into the final message.
+type acFailError struct {
+	Ref   string // the model the user asked for (or the default)
+	Err   error  // that model's error
+	Backs []string
+}
+
+func (e *acFailError) Error() string {
+	if len(e.Backs) == 0 {
+		return e.Err.Error()
+	}
+	return fmt.Sprintf("%s: %s (reservas também falharam: %s)", e.Ref, e.Err.Error(), strings.Join(e.Backs, ", "))
+}
+func (e *acFailError) Unwrap() error { return e.Err }
+
+// acToolCallReminder is the system-reminder appended once to the retried
+// request after a "toolcall" rejection: it says the previous response was
+// refused, what the model tried, and lists the exact valid tool names.
+func acToolCallReminder(name string, tools []ToolSpec) string {
+	names := make([]string, 0, len(tools))
+	for _, t := range tools {
+		names = append(names, t.Name)
+	}
+	tried := "an invalid tool call"
+	if name != "" {
+		tried = fmt.Sprintf("a call to %q, which does not exist", name)
+	}
+	return fmt.Sprintf("<system-reminder>The provider rejected your previous response: it contained %s. Use only these tool names: %s. Answer again — either valid tool calls or plain text.</system-reminder>", tried, strings.Join(names, ", "))
 }
 
 // ---------- tool execution and permissions ----------

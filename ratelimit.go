@@ -643,10 +643,33 @@ var (
 	pvLimitNRE  = lazyRx(`(?i)limit:?\s*(\d+),?\s*requested:?\s*(\d+)`)
 	pvGoneRE    = lazyRx(`(?i)model.{0,80}(not found|does not exist|decommission|not available|no longer|is not supported|invalid model)|no endpoints found(?: for| matching)`)
 	pvNoToolsRE = lazyRx(`(?i)(tool|function.?call)[^.]{0,80}(not supported|unsupported|does not support|not available)|does not support (tools|function)|no endpoints found that support tool use`)
+	// pvToolCallRE marks provider rejections of the model's own generated tool
+	// call (invented name, undecodable arguments): Groq's tool_use_failed and
+	// equivalent errors from OpenAI-compatible servers, often delivered as a
+	// status-0 SSE error event. Not the transport's fault and not the
+	// endpoint's: the model generated something invalid.
+	pvToolCallRE = lazyRx(`(?i)tool[ _-]?calls?[ _-]?validation failed|attempted to call tool|not in request[. _]?tools|failed to parse tool[ _-]?call|tool_use_failed|invalid tool[ _-]?calls?`)
+	// pvToolCallNameRE pulls the invented name out of the common phrasings
+	// ("attempted to call tool 'x'", "called tool \"x\"").
+	pvToolCallNameRE = lazyRx(`(?i)(?:attempted to call|called?|invoke[sd]?|use[sd]?) (?:the )?tool ['"` + "`" + `]?([\w.:/-]+)['"` + "`" + `]?`)
 )
 
+// pvToolCallName extracts the tool name a provider says the model attempted
+// ("" when the error does not name one, e.g. "Failed to parse tool call
+// arguments as JSON").
+func pvToolCallName(err error) string {
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return ""
+	}
+	if m := pvToolCallNameRE.FindStringSubmatch(ae.Body); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // pvClassify names the error kind: rate, daily, toobig, credit, auth, freetier,
-// gone, notools, overflow, transient, cancel or other.
+// gone, notools, toolcall, overflow, transient, cancel or other.
 func pvClassify(err error) string {
 	if err == nil {
 		return ""
@@ -678,6 +701,10 @@ func pvClassify(err error) string {
 		return "auth"
 	case (ae.Status == 400 || ae.Status == 404 || ae.Status == 422) && pvNoToolsRE.MatchString(b):
 		return "notools"
+	case pvToolCallRE.MatchString(b):
+		// the provider rejected the model's generated tool call — often a
+		// status-0 SSE error event, so this must come before "transient"
+		return "toolcall"
 	case pvIsOverflow(ae):
 		return "overflow"
 	case ae.Status == 404 || (ae.Status == 400 && pvGoneRE.MatchString(b)):
@@ -825,6 +852,11 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		if c != nil {
 			c.MarkTextTools(ref)
 		}
+		note(rl.bucketLocked(ref))
+		return false
+	case "toolcall":
+		// the model's generation was rejected (invented tool, bad args):
+		// a model fault, not the ref's health — no strikes, no cooldown
 		note(rl.bucketLocked(ref))
 		return false
 	case "overflow":
@@ -1039,10 +1071,11 @@ func ResetRateLimits(prov string) {
 // RetryDelay is how long to wait before retry number attempt (0-based) after err.
 // It honours APIError.RetryAfter (capped at 60s); otherwise 2s, 6s, 15s with ±20% jitter.
 // It returns 0 when retrying the same model is pointless (move to the next candidate):
-// daily quota, request too big for the model (413), auth, gone, no tool support.
+// daily quota, request too big for the model (413), auth, gone, no tool support,
+// a rejected tool call (the caller's reminder retry handles that case first).
 func RetryDelay(err error, attempt int) time.Duration {
 	switch pvClassify(err) {
-	case "daily", "toobig", "auth", "freetier", "gone", "notools", "credit", "overflow":
+	case "daily", "toobig", "auth", "freetier", "gone", "notools", "credit", "overflow", "toolcall":
 		return 0
 	}
 	var ae *APIError
