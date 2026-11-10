@@ -2373,6 +2373,7 @@ func storeKey(cfg *Config, provider, key string) (warns []string, err error) {
 	if pc == nil {
 		return nil, fmt.Errorf("provedor desconhecido: %s", provider)
 	}
+	key = pkCleanKey(key) // every entry path: jazz key, /key, onboarding (pastekey.go)
 	if w := KeyFormatWarning(cfg, provider, key); w != "" {
 		warns = append(warns, w)
 	}
@@ -2454,7 +2455,7 @@ func cmdKey(cfg *Config, provider string, app *App) {
 		b, _ := io.ReadAll(io.LimitReader(os.Stdin, 64<<10))
 		key = string(b)
 	}
-	key = strings.TrimSpace(key)
+	key = pkCleanKey(key)
 	if key == "" {
 		if app != nil {
 			app.ui.Notice("nenhuma chave digitada")

@@ -678,6 +678,13 @@ func pvReadAuthLocked() (map[string]*Cred, error) {
 	if m == nil {
 		m = map[string]*Cred{}
 	}
+	// a key saved with the bracketed-paste marker glued to it (pastekey.go) is
+	// used clean; the file itself is rewritten clean on the next save
+	for _, c := range m {
+		if c != nil && c.Key != "" && pkLooksPasted(c.Key) {
+			c.Key = pkCleanKey(c.Key)
+		}
+	}
 	authLoadErr, authWarned = "", "" // file is healthy again: drop the stale warning
 	return m, nil
 }
