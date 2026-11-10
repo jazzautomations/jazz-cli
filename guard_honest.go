@@ -23,12 +23,17 @@ package main
 //     with no test runner, the changed code) ran after the last edit.
 //  6. checker tamper: evaluation checkers and prompts (CHECK, PROMPT, SETUP,
 //     .hidden/ next to them) are never read or changed.
+//  7. jobs left running: a final answer may not leave a background job this
+//     turn started still running without a word about it: one reminder lists
+//     the live jobs (id, pid, command) for the model to kill or justify, then
+//     the turn may end — the end-of-turn status notes what stayed up.
 //
 // All are on by default. `guards: off` in config.json, --guards off or
 // JAZZ_GUARDS=off turn them all off; JAZZ_TEST_GUARD, JAZZ_HARDCODE_CHECK,
-// JAZZ_DONE_GATE and JAZZ_EVAL_GUARD (=off), or config "guards_off":
-// ["tests","hardcode","done","eval"], turn off one. Messages to the model are
-// in English (tool results), messages to the user in Portuguese.
+// JAZZ_DONE_GATE, JAZZ_EVAL_GUARD and JAZZ_JOB_GUARD (=off), or config
+// "guards_off": ["tests","hardcode","done","eval","jobs"], turn off one.
+// Messages to the model are in English (tool results), messages to the user
+// in Portuguese.
 
 import (
 	"context"
@@ -93,6 +98,10 @@ type hgState struct {
 	nudgedDone  bool
 	edits       map[string]int // single edits per file (batch tip)
 	tipped      map[string]bool
+
+	keepJobs    bool            // the request asks to leave background jobs running
+	jobsAtStart map[string]bool // live job ids when the turn began (older jobs are not this turn's to nag)
+	nudgedJobs  bool            // the background-jobs reminder already fired this turn
 }
 
 type hgHard struct {
@@ -101,9 +110,9 @@ type hgHard struct {
 
 // ---------- settings ----------
 
-var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD"}
+var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD", "jobs": "JAZZ_JOB_GUARD"}
 
-// hgOn: whether guard name (tests | hardcode | done | eval) is on.
+// hgOn: whether guard name (tests | hardcode | done | eval | jobs) is on.
 func (a *Agent) hgOn(name string) bool {
 	for _, v := range []string{a.loop.opts.Guards, os.Getenv("JAZZ_GUARDS"), a.cfg.Guards} {
 		if strings.TrimSpace(v) != "" {
@@ -231,6 +240,22 @@ func hgExtractTarget(s string) string {
 		return m[2]
 	}
 	return ""
+}
+
+// hgKeepJobsRE: the request asks to leave something running (a server, a
+// watcher): "deixa rodando", "keep it running", "in the background and leave".
+var hgKeepJobsRE = lazyRx(`(?i)\b(deix\w*|mant[éeê\w]*|fic\w*)\b(\s+\w+){0,3}\s+(rodando|no\s+ar|de\s+p[ée]|em\s+segundo\s+plano|em\s+background)|\b(keep|leave)\b(\s+\w+){0,3}\s+(it|this|that|them|the\s+\w{1,24})\s+(running|run|alive)\b|\blet\s+(it|them|this|that)\s+run\b|\b(keep|leave|let)\b(\s+\w+){0,4}\s+(in|into)\s+the\s+background\b|\b(segundo\s+plano|background)\b(\s+\w+){0,4}\s+(deix\w*|mant[éeê\w]*|keep|leave|let)\b`)
+
+// hgKeepRunning: the request wants the thing left running (a "don't leave it
+// running" asks for the opposite and does not count).
+func hgKeepRunning(s string) bool {
+	for _, m := range hgKeepJobsRE.FindAllStringIndex(s, -1) {
+		if hgNegBeforeRE.MatchString(s[max(0, m[0]-24):m[0]]) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // ---------- protected paths ----------
@@ -673,13 +698,17 @@ func (a *Agent) hgBeginTurn(input string) {
 		return
 	}
 	s := strings.TrimSpace(acStripReminders(input))
-	st := &hgState{root: a.tools.Root, snap: map[string]*hgSnap{}, testDirs: map[string]bool{}, pre: map[string]*string{}, edits: map[string]int{}, tipped: map[string]bool{}}
+	st := &hgState{root: a.tools.Root, snap: map[string]*hgSnap{}, testDirs: map[string]bool{}, pre: map[string]*string{}, edits: map[string]int{}, tipped: map[string]bool{}, jobsAtStart: map[string]bool{}}
 	st.policy, st.ciOK = hgTestPolicy(s)
 	if r, err := filepath.EvalSymlinks(st.root); err == nil {
 		st.rootReal = r
 	}
 	st.removeIDs = hgRemovalIDs(s)
 	st.extract = hgExtractTarget(s)
+	st.keepJobs = hgKeepRunning(s)
+	for _, j := range a.tools.LiveJobs() {
+		st.jobsAtStart[j.ID] = true
+	}
 	if a.hgOn("tests") || a.hgOn("hardcode") {
 		st.snapshot()
 	}
@@ -1385,5 +1414,53 @@ func (a *Agent) hgDoneGate(ctx context.Context) (again bool, why StopReason) {
 			return true, ""
 		}
 	}
+	// Background jobs this turn started may not be left running silently: one
+	// reminder naming them, then the model's decision stands (a request may
+	// legitimately want a server up — the turn-end status notes what stayed).
+	if a.hgOn("jobs") && !st.keepJobs && !st.nudgedJobs {
+		if live := a.hgTurnJobs(st); len(live) > 0 {
+			st.nudgedJobs = true
+			a.ui.Notice(fmt.Sprintf("guarda de conclusão: %d %s de fundo ainda rodando — devolvendo ao modelo", len(live), uiPl(len(live), "job", "jobs")))
+			var b strings.Builder
+			b.WriteString("<system-reminder>You are about to finish, but these background jobs started this turn are still running:\n")
+			for _, j := range live {
+				fmt.Fprintf(&b, "- %s (pid %d): %s\n", j.ID, j.PID, oneLine(j.Cmd, 80))
+			}
+			b.WriteString("Stop each one with the bash tool (job:<id>, action:\"kill\") before your final answer. If one is meant to keep running (the request asks for it), say so explicitly in the final answer and why.</system-reminder>")
+			a.append(Message{Role: "user", Content: b.String()})
+			return true, ""
+		}
+	}
 	return false, ""
+}
+
+// hgTurnJobs: background jobs started this turn that are still running.
+func (a *Agent) hgTurnJobs(st *hgState) []*Job {
+	var out []*Job
+	for _, j := range a.tools.LiveJobs() {
+		if !st.jobsAtStart[j.ID] {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// hgJobsNote is the end-of-turn status line about background jobs left
+// running ("" = none), so the user sees them without reading the prose.
+func (a *Agent) hgJobsNote() string {
+	if a.sub || a.tools == nil {
+		return ""
+	}
+	live := a.tools.LiveJobs()
+	if len(live) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, j := range live {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%s (pid %d · %s)", j.ID, j.PID, oneLine(j.Cmd, 40))
+	}
+	return fmt.Sprintf("%d %s de fundo ainda rodando: %s", len(live), uiPl(len(live), "job", "jobs"), b.String())
 }
