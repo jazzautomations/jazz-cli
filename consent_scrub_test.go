@@ -121,3 +121,24 @@ func TestEditorHistoryScrubsCredential(t *testing.T) {
 		t.Errorf("histórico com senha: %q", e.history)
 	}
 }
+
+// O ledger de sinais recebe o pedido por mais de um caminho (o texto do
+// chamador e o r.Req do resultado): os dois saem sem a senha. O teste de ponta
+// a ponta acima não vê isso porque os sinais ficam mudos no binário de teste;
+// o vazamento apareceu no teste com o binário real (2026-11-10).
+func TestSignalsNeverCarryCredential(t *testing.T) {
+	const pw = "Zq7wLm42pT"
+	in := "senha do root: " + pw + " agora diga ok"
+	r := brResult{Req: in, Miss: true, MissWhy: "not_understood", Intent: Intent{Name: "none"}}
+	sigs := brSignals("texto do chamador", r)
+	sigs = append(sigs, sigOf("unknown_intent", in, Intent{Name: "none"}, map[string]string{"evidence": in}))
+	if len(sigs) < 2 {
+		t.Fatalf("esperava sinais, veio %d", len(sigs))
+	}
+	for _, s := range sigs {
+		b, _ := json.Marshal(s)
+		if strings.Contains(string(b), pw) {
+			t.Errorf("sinal %s carrega a senha: %s", s.Kind, b)
+		}
+	}
+}

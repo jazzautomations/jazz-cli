@@ -69,6 +69,24 @@ Mesmos 89 pedidos em d02982d: 3 melhoram ("quais arquivos mudaram hoje", "procur
 "list all go files" deixa de recusar mas ignora o "go"), 1 piora ("quem mexeu por último no store.go" passa
 a falhar). Nenhum dos sete falsos selos muda. Ela também falha 8 casos das guardas `should refuse`.
 
+## A mesma sonda na 0.13.3
+
+| veredito | main (f89cd26) | 0.13.3 |
+|---|---|---|
+| fez o que foi pedido | 51 | 55 |
+| recusou ou falhou num pedido fazível | 17 | 16 |
+| fez outra coisa, ou respondeu errado, sem avisar | 15 | 11 |
+| recusou certo | 6 | 7 |
+| selo `feito e verificado` sem cumprir o pedido | 7 | 2 |
+
+O que mudou: a pergunta sobre o último commit não commita mais (recusa); stash e criar branch recusam em
+vez de rodar a leitura; "escreve um teste" diz que precisa de modelo; "roda os testes do parser" sai como
+não verificado; nome de arquivo sem caminho resolve ("quantas linhas tem o duration.go", "…pedidos.csv");
+"procura por TODO e FIXME" e "quais arquivos mudaram hoje" passam a funcionar (parser T5).
+
+Os dois selos falsos que restam: "formata o código" (só confere) e "explica o que o main.go faz" (saída
+vazia). Recusar não é resolver: quatro dos pedidos que antes mentiam agora recusam um pedido que é fazível.
+
 ## O que isto diz sobre os números publicados
 
 "Falso sucesso 0" vale para a suíte de 122 tarefas e para o corpus de 1051 pedidos. Não vale para pedido
