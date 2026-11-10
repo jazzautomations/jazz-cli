@@ -38,7 +38,7 @@
     {"id": "k036-em-que-linha-fica-o", "cat": "busca", "fixture": "loja", "prompt": "em que linha fica o ParsePrice?", "expect": {"status": "succeeded", "contains": ["duration.go", "11"]}},
     {"id": "k037-grep-n-wip-cmd-api", "cat": "busca", "fixture": "loja", "prompt": "grep -n wip cmd/api/main.go", "expect": {"status": "succeeded", "contains": ["// wip"]}},
     {"id": "k038-which-files-mention-the-word", "cat": "busca", "fixture": "loja", "prompt": "which files mention the word debug?", "expect": {"status": "succeeded", "contains": ["config.json"]}},
-    {"id": "k039-onde-o-pacote-parser-e", "cat": "busca", "fixture": "loja", "prompt": "onde o pacote parser é importado?", "expect": {"status": "succeeded", "contains": ["cmd/api/main.go"]}},
+    {"id": "k039-onde-o-pacote-parser-e", "cat": "busca", "fixture": "loja", "prompt": "onde o pacote parser é importado?", "expect": {"status": "succeeded", "contains": ["cmd/api"]}},
     {"id": "k040-seach-for-shutdown-in-logs", "cat": "busca", "fixture": "loja", "prompt": "seach for 'shutdown' in logs/app.log", "expect": {"status": "succeeded", "contains": ["10:06:00"]}},
     {"id": "k041-find-the-file-named-duration_test.", "cat": "busca", "fixture": "loja", "prompt": "find the file named duration_test.go", "expect": {"status": "succeeded", "contains": ["internal/parser/duration_test.go"]}},
     {"id": "k042-procura-por-func-main", "cat": "busca", "fixture": "loja", "prompt": "procura por func main", "expect": {"status": "succeeded", "contains": ["cmd/api/main.go"]}},

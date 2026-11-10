@@ -55,7 +55,7 @@
      "arg": "$fx"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 300
   }
  ]

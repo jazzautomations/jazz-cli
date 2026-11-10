@@ -731,3 +731,44 @@ func brPartialMulti(parts []string, whole Intent, w *nuWorld) string {
 	}
 	return fmt.Sprintf("o pedido tem %d partes e eu só entendi bem uma delas (%s). fazer metade e dizer que fiz seria errado: não fiz nada. peça uma parte de cada vez: %s", len(parts), whole.Name, "\""+strings.Join(parts, "\" · \"")+"\"")
 }
+
+// brGitDiffFile shows the uncommitted diff of ONE file (the request named
+// it; the general diff answered with the whole repository's summary).
+func brGitDiffFile(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	rel, ok := brProjectFile(cx.env.Root, cx.str(in, "path"))
+	if !ok {
+		return brStep{obs: obs, why: "não achei o arquivo " + cx.str(in, "path") + " no projeto"}
+	}
+	cmd := "git diff HEAD -- " + brShQ(rel)
+	out, exit, o := cx.runCmdAs(cmd, time.Minute, true)
+	if o.Exit < 0 || o.Denied {
+		return brStep{obs: o, why: o.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(out, 6000), "\n")
+	if shown == "" {
+		shown = rel + " não tem mudança em relação ao último commit"
+	}
+	cx.say("$ %s\n%s", cmd, shown)
+	if exit != 0 {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: o, why: cmd + " falhou"}
+	}
+	cx.task.AddEvidence("cmd", "git diff de "+rel)
+	return brStep{val: brCmdRes{cmd, 0, out}, obs: o, ok: true}
+}
+
+var brPassLineRe = lazyRx(`(?m)^\s*--- PASS: (\S+)|^(\S+::\S+) PASSED`)
+
+// brPassedTests names the tests a verbose run reports as passed ("roda só os
+// testes que têm Price no nome": the answer should say WHICH test ran).
+func brPassedTests(out string) []string {
+	var names []string
+	for _, m := range brPassLineRe.FindAllStringSubmatch(out, 40) {
+		if m[1] != "" {
+			names = append(names, m[1])
+		} else if m[2] != "" {
+			names = append(names, m[2])
+		}
+	}
+	return names
+}

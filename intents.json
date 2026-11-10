@@ -188,6 +188,14 @@
       ]
     },
     {
+      "name": "last_commit_files",
+      "cmd": "{{git}} show --stat --format='%h %an %ad %s' --date=short HEAD",
+      "patterns": [
+        "(?:quais|que) arquivos (?:mudaram|foram alterados|foram modificados|entraram|foram mexidos) (?:no|n[oa] meu) (?:ultimo|ultmo) commit|arquivos do ultimo commit|o que (?:mudou|entrou|foi alterado) no ultimo commit",
+        "(?:which|what) files (?:changed|were changed|were modified|were touched) in the (?:last|latest|most recent) commit|(?:show|show me) what the (?:last|latest) commit changed|what did the (?:last|latest) commit change|files (?:in|of) the last commit"
+      ]
+    },
+    {
       "name": "log",
       "cmd": "{{git}} log --oneline -n 15",
       "patterns": [
@@ -252,7 +260,10 @@
       "name": "search_code",
       "cmd": "{{search}} -- {{sym}} . | head -n 80",
       "patterns": [
-        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$./-]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)"
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$./-]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)",
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for))?(?: (?:a|o|the))? (?:palavra|texto|termo|string|word|text) (?P<sym>[\\w$./-]+)(?: (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)(?: todo| inteiro)?)?",
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for))? (?P<sym>[\\w$./-]+) (?:no|em|in the|in) (?:projeto|repo|repositorio|codigo|project|codebase) (?:todo|inteiro|whole|entire)",
+        "(?:search|grep) the (?:whole |entire )?(?:project|repo|codebase|code) for (?P<sym>[\\w$./-]+)"
       ],
       "slots": {
         "sym": "^[\\w$./-]{3,79}$"

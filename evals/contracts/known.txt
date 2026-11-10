@@ -1,11 +1,5 @@
 # Violações de contrato conhecidas (methods_contract_test.go). Só pode encolher.
 # Cada linha é uma dívida: ou conserta o asset, ou explica aqui por que é exceção.
-escrita-com-risco-baixo create.dir
-escrita-com-risco-baixo create.dir_mode
-escrita-com-risco-baixo create.each_dir
-escrita-com-risco-baixo file_find.save
-escrita-com-risco-baixo link_create.hard
-escrita-com-risco-baixo link_create.symlink
 escrita-com-risco-baixo sort_op.print
 sem-verificador _fill.by_find
 sem-verificador connect_host.resolve
@@ -13,7 +7,6 @@ sem-verificador port_owner.no_python
 slot-sem-consumidor file_find.namelen
 slot-sem-consumidor file_find.not_empty
 slot-sem-consumidor file_find.not_orphan
-slot-sem-consumidor git_diff.target
 slot-sem-consumidor list_files.newer_file
 slot-sem-consumidor list_files.older_file
 slot-sem-consumidor perm_find.not_writable

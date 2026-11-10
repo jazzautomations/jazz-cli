@@ -70,7 +70,7 @@
      "arg": "$slot.out"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 1500
   },
   {

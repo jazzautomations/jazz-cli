@@ -164,6 +164,8 @@ func nuPhraseBuild() []*nuPhraseDef {
 				`(?:quais|que) arquivos \.?(?P<ext>` + nuPhraseExt + `)(?: tem| existem| ha| que tem)?` + nuPhInProj,
 				`(?:quais|que) (?:sao )?os arquivos \.?(?P<ext>` + nuPhraseExt + `)` + nuPhInProj,
 				`(?:which|what) \.?(?P<ext>` + nuPhraseExt + `) files (?:are there|exist|do we have|are)` + nuPhInProj,
+				`(?:tem|ha|existe|existem)(?: algum| alguns| algums)? arquivos? \.?(?P<ext>` + nuPhraseExt + `)` + nuPhInProj + `(?: por aqui| aqui| ai)?`,
+				`(?:is there|are there)(?: any| a)? \.?(?P<ext>` + nuPhraseExt + `) files?` + nuPhInProj + `(?: here| around)?`,
 			}},
 		{id: "maior-arquivo", intent: "file_find", fixed: map[string]string{"sort": "size", "type": "file"},
 			pats: []string{
@@ -269,6 +271,8 @@ func nuPhraseBuild() []*nuPhraseDef {
 				`(?:quais|que|lista|liste|list|mostra|mostre|show|show me)(?: sao)?(?: as| os| the)? ?(?:variaveis|chaves|keys|vars|variables|nomes)(?: que)?(?: tem| existem| estao| are| ha)?(?: definidas| defined| set)? (?:no|na|em|do|in|of|from) (?:the )?(?P<envfile>\.env[\w.]*)`,
 				`(?:what(?:'s| is)|o que (?:tem|ha)) (?:in|no|na|em) (?:the )?(?P<envfile>\.env[\w.]*)`,
 				`(?:which|what) (?:variables|keys|vars) does (?:the )?(?P<envfile>\.env[\w.]*) (?:expect|need|define|have|contain|list|declare|use)`,
+				`(?:mostra|mostre|lista|liste|show|list|me mostra)(?: so| apenas| only| just)?(?: as| os| the)? (?:chaves|variaveis|nomes|keys|vars|variables|names) (?:do|da|de|of|in|from) (?:the )?(?P<envfile>\.env[\w.]*)(?: (?:sem|without|but not|mas sem|e nao|not)(?: os| the| mostrar os)? (?:valores|values|segredos|secrets))?`,
+				`(?:show|mostra|abre|open|cat) (?:the |o )?(?P<envfile>\.env[\w.]*) (?:but |mas |e )?(?:hide|hiding|sem|without|escondendo|esconde|oculta|ocultando|mask|masking)(?: the| os)? (?:secrets|valores|values|segredos|credenciais|credentials)`,
 				`(?:quais|que) (?:variaveis|chaves) (?:o |a )?(?P<envfile>\.env[\w.]*) (?:espera|precisa|define|tem|declara|usa)`,
 			}},
 		{id: "variavel-no-env", intent: "env_get", groups: map[string]string{"name": "name"},

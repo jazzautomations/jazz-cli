@@ -106,7 +106,7 @@
      "arg2": "$slot.mode"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 60
   },
   {
@@ -149,7 +149,7 @@
      "arg": "$slot.target"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 50
   },
   {

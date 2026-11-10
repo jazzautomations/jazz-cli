@@ -1,5 +1,6 @@
 {"methods": [
- {"name": "git_diff.rich", "intent": "git_diff", "priority": 11,
+  {"name": "git_diff.file", "intent": "git_diff", "priority": 20, "doc": "o pedido nomeia um arquivo: git diff HEAD só dele (só leitura)", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.target", "op": "set"}], "steps": [{"cap": "git_diff_file", "in": {"path": "$slot.target"}, "out": "d"}], "verify": [{"check": "exit_zero", "arg": "$d"}], "risk": "low", "cost_ms": 300},
+{"name": "git_diff.rich", "intent": "git_diff", "priority": 11,
   "doc": "diff_quality: checklist do diff (tamanho, funções longas, markers) por cima do diff bruto",
   "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
   "steps": [

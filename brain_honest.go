@@ -227,6 +227,22 @@ var (
 	brTodoWordRe = lazyRx(`(?i)\b(?:projeto|repo|repositorio|repositório|codigo|código|dia|mundo|tempo|arquivo|log|sistema) todo\b|\btodo (?:o|a|os|as|mundo|dia)\b`)
 )
 
+var (
+	brCommitNounRe = lazyRx(`\b(?:ultimo|último|last|latest|primeiro|first|penultimo|penúltimo|previous|anterior) commit\b|\bno commit\b|\bin the (?:last |latest )?commit\b|\bcommit (?:anterior|passado|mais recente)\b`)
+	brSummaryAskRe = lazyRx(`\b(resumo|resume|resuma|sumario|sumário|summary|summari[sz]e|overview|visao geral|visão geral|sobre o que|que projeto|what is this|what's this|describe|descreve|descreva|detecta|detect|stack|tecnologias|linguagens?|languages?|como (?:roda|builda|testa)|how (?:do i|to) (?:run|build|test))\b`)
+	brSearchLeadRe = lazyRx(`^\s*(?:(?:por favor|please|pode|bora|me)[, ]+)*(?:busca|busque|buscar|procura|procure|procurar|acha|ache|achar|encontra|encontre|find|search|grep|seach|serach|procrua|procurra)\b`)
+	brEnvFileRe    = lazyRx(`(?:^|[\s/"'])\.env[\w.]*\b`)
+)
+
+func brNotSearchIntent(n string) bool {
+	switch n {
+	case "env_status", "project_summary", "net_status", "uptime_load", "mem_usage", "disk_usage", "list_ports", "self_info", "tool_info",
+		"tool_status", "host_status", "net_ifaces", "date_show", "help", "list_hosts", "net_route", "logged_in", "pkg_installed":
+		return true
+	}
+	return false
+}
+
 // brSemanticGuard catches readings that picked one word of the request and
 // answered something else (second held-out set, 13 false successes).
 func brSemanticGuard(text string, in Intent) (why, kind string) {
@@ -248,6 +264,20 @@ func brSemanticGuard(text string, in Intent) (why, kind string) {
 		if in.Slots["type"] != "dir" && (brCreateStopWord(strings.ToLower(t)) || !strings.Contains(t, ".") && brFileTokRe.MatchString(strings.ReplaceAll(text, t, ""))) {
 			return fmt.Sprintf("eu criaria um arquivo chamado %q, e isso não parece ser o nome que você pediu. não criei nada. diga o nome exato (ex.: \"cria a pasta build/artefatos\", \"cria o arquivo notas.md\")", t), "wrong_reading"
 		}
+	}
+	low := strings.ToLower(text)
+	switch {
+	case in.Name == "git_diff" && brCommitNounRe.MatchString(low):
+		// "quais arquivos mudaram no último commit" is about a commit; git_diff
+		// answers with the uncommitted changes
+		return "o pedido é sobre um commit, e a leitura que eu tenho (git_diff) mostra o que ainda NÃO foi commitado: seria responder outra pergunta. não fiz nada. peça \"último commit\" (mostra os arquivos dele) ou \"mostra o git log\"", "wrong_reading"
+	case in.Name == "project_summary" && !brSummaryAskRe.MatchString(low):
+		return "a leitura que eu tenho é o resumo do projeto, e o pedido não pede um resumo: responder com ele seria responder outra pergunta. não fiz nada. diga o que quer ver (ex.: \"lista os arquivos\", \"lista os arquivos json\", \"resumo do projeto\")", "wrong_reading"
+	case brSearchLeadRe.MatchString(low) && brNotSearchIntent(in.Name):
+		return fmt.Sprintf("o pedido é uma busca e a leitura que eu tenho (%s — %s) não procura nada: seria responder outra pergunta. não fiz nada. diga o que procurar e onde (ex.: \"procura X no código\", \"procura X no arquivo.go\")", in.Name, desc), "wrong_reading"
+	case in.Name == "config_get" && brEnvFileRe.MatchString(text):
+		// the config reader prints every value of the file, credentials included
+		return "ler um .env pelo leitor de config imprimiria todos os valores, inclusive credenciais. não fiz. peça \"quais variáveis tem no .env\" (só os nomes) ou \"qual o valor de NOME\" (credencial fica oculta)", "secret_guard"
 	}
 	if brGitNounRe.MatchString(text) && !strings.HasPrefix(in.Name, "git_") && !brGitOK[in.Name] {
 		return fmt.Sprintf("o pedido é sobre git e a leitura que eu tenho (%s — %s) não é: responder com ela seria responder outra pergunta. não fiz nada. sem modelo eu sei: status, diff, log, último commit, branches, stash, quem mexeu num arquivo", in.Name, desc), "wrong_reading"

@@ -377,6 +377,7 @@ func init() {
 		"dotenv_keys":     brDotenvKeys,
 		"fast_cmd":        brFastCmd,
 		"literal_cmd":     brLiteralRun,
+		"git_diff_file":   brGitDiffFile,
 		"log_errors_file": brLogErrorsFile,
 		"csv_sum":         brCSVSum,
 		"list_names":      brListNames,
@@ -3035,6 +3036,9 @@ func brRunTests(cx *brCtx, in map[string]string) brStep {
 		obs.Failures = r.Parsed.Data.Failed + r.Parsed.Data.Errors
 		d := r.Parsed.Data
 		cx.say("%s: %d passaram · %d falharam · %d pulados", d.Format, d.Passed, d.Failed+d.Errors, d.Skipped)
+		if names := brPassedTests(out); len(names) > 0 && len(names) <= 12 {
+			cx.say("passaram: %s", strings.Join(names, ", "))
+		}
 		cx.task.AddEvidence("tests", fmt.Sprintf("%s exit %d: %d ok, %d falhas, %d pulados", d.Format, exit, d.Passed, d.Failed+d.Errors, d.Skipped))
 	} else {
 		cx.say("%s", strings.TrimRight(truncateHeadTail(out, 3000), "\n"))
