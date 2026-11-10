@@ -1002,9 +1002,41 @@ func friendlyErr(err error) string {
 	if errors.As(err, &re) {
 		return re.Error() + " — reformule o pedido ou troque de modelo (/model)"
 	}
+	var fe *acFailError
+	if errors.As(err, &fe) {
+		// the chain ended: the chosen model's error first, then the reserves
+		msg := friendlyErr(fe.Err)
+		var tce *acToolCallError
+		if fe.Ref != "" && !errors.As(fe.Err, &tce) { // the toolcall message names the model already
+			msg = fe.Ref + ": " + msg
+		}
+		if len(fe.Backs) > 0 {
+			names := make([]string, 0, len(fe.Backs))
+			for _, r := range fe.Backs {
+				names = append(names, uiShortModel(r))
+			}
+			msg += "; reserva(s) também falharam: " + strings.Join(names, ", ")
+		}
+		return msg
+	}
+	var tce *acToolCallError
+	if errors.As(err, &tce) {
+		what := "uma chamada de ferramenta inválida"
+		if tce.Name != "" {
+			what = fmt.Sprintf("a ferramenta %q, que não existe", tce.Name)
+		}
+		msg := fmt.Sprintf("o modelo %s gerou %s e o provedor recusou a resposta", tce.Ref, what)
+		if tce.Tries > 1 {
+			msg += fmt.Sprintf(" (%d vezes, mesmo depois do lembrete)", tce.Tries)
+		}
+		return msg + " — troque de modelo (/model)"
+	}
 	var ae *APIError
 	if errors.As(err, &ae) {
 		switch {
+		case pvClassify(ae) == "toolcall":
+			// belt and suspenders for a rejection that never met the retry
+			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
 		case ae.Status == 401 || ae.Status == 403:
 			return "credencial recusada pelo provedor (" + firstSentence(ae.Body) + ") — use /key ou /login"
 		case ae.Status == 402 || pvClassify(ae) == "credit":
