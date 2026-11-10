@@ -46,6 +46,14 @@ func TestBenchClassifyInfra(t *testing.T) {
 		{"pass-com-rede", "morreu-esperando.log", "124", "2700", "PASS", "", "PASS"},
 		// jazz's own --timeout (rc 124 + "tempo esgotado"), no network trouble: a real FAIL
 		{"timeout-proprio", "sympy-16106.log", "124", "100000", "", "2715", "FAIL"},
+		// the provider killed the run (free quota gone; malformed tool call the provider would not
+		// deliver): not the agent's failure. v2 on 0.13.4, 2026-11-10: 8 of 11 tasks died like this.
+		{"cota-esgotada", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA?"},
+		{"toolcall-invalida", "toolcall-invalida.log", "1", "600", "FAIL", "547", "INFRA?"},
+		// the agent finished and the checker failed it: a real FAIL, whatever the log says earlier
+		{"falha-real", "falha-real.log", "0", "600", "FAIL", "484", "FAIL"},
+		// a provider error line with the checker's PASS stays PASS
+		{"cota-mas-passou", "cota-esgotada.log", "1", "600", "PASS", "174", "PASS"},
 		// no log at all: nothing to blame on the infrastructure
 		{"sem-log", "nao-existe.log", "1", "600", "", "", "FAIL"},
 	}

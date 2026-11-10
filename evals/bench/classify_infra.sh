@@ -18,6 +18,10 @@
 #          final) chega a 50% do LIMIT: a rede comeu o prazo, não é o modelo.
 #   HANG?  se RC=124 sem o "tempo esgotado" do próprio jazz no log (o 124 veio
 #          do vigilante externo, LIMIT+60), ou DT >= LIMIT+60.
+#   INFRA? também quando o agente saiu com erro (RC≠0, sem prazo) e a última linha de erro do jazz é do
+#          provedor: cota ("limite de requisições atingido"), crédito, credencial, pedido recusado ou
+#          falha de rede. Rodada v2 de 10/11/2026 na 0.13.4: 8 de 11 tarefas morreram assim e
+#          entraram como FAIL válido (2/11 publicado seria 2/3).
 #   senão  FAIL real (ex.: sympy-16106: 9 min sem rede em 45 min continua FAIL).
 #
 # Pode ser executado direto: bash classify_infra.sh LOG RC LIMIT [RESULT] [DT]
@@ -56,12 +60,24 @@ classify_infra() {
       esac
     done < <(grep -a -E 'esperando a rede voltar|a rede voltou depois de|desisti de esperar|tempo esgotado' "$log" 2>/dev/null)
   fi
+  # o provedor matou a rodada: cota, crédito, credencial, pedido recusado ou resposta do modelo que o
+  # provedor não conseguiu entregar (chamada de ferramenta inválida). O agente não chegou a trabalhar
+  # ou foi cortado no meio por algo que não é dele. Só a linha FINAL de erro do jazz conta.
+  local provdead=0
+  if [ -r "$log" ] && [ "$rc" != 0 ] && [ "$rc" != 124 ]; then
+    if grep -a '^jazz: ' "$log" 2>/dev/null | grep -a -v -E 'execução incompleta|retome com|pasta não confiável|^jazz: aviso' | tail -n 1 |
+       grep -a -q -E 'limite de requisições atingido|sem crédito nesse provedor|credencial recusada pelo provedor|o provedor recusou o pedido|falha de rede:|nenhuma conexão'; then
+      provdead=1
+    fi
+  fi
   CLASSIFY_NET_S=$net
   if [ "$result" = PASS ]; then
     CLASSIFY_RES=PASS
   elif [ "$rc" = 124 ] && [ "$last" = wait ]; then
     CLASSIFY_RES="INFRA?"
   elif [ "$limit" -gt 0 ] 2>/dev/null && [ $(( net * 2 )) -ge "$limit" ]; then
+    CLASSIFY_RES="INFRA?"
+  elif [ "$provdead" = 1 ]; then
     CLASSIFY_RES="INFRA?"
   elif [ "$rc" = 124 ] && [ "$jazz_timeout" = 0 ]; then
     CLASSIFY_RES="HANG?"

@@ -1,0 +1,6 @@
+· sessão 261110-085349-83bf · kilo/cohere/north-mini-code:free
+  ⎿ read linhas 1-50 de 1866 (3ms)
+· tentando gpt-oss-120b
+jazz: limite de requisições atingido (Sign up for free to continue and explore 500 other models); espere ou troque de modelo (/model)
+jazz: execução incompleta (error) — trabalho salvo: checkpoint fb5d1e4d4ef5 · nota sessions/x.handoff.md
+jazz: retome com: jazz -p -r 261110-085349-83bf   (ou jazz -p --resume-last-in work/03)
