@@ -510,3 +510,8 @@ p { margin: 0; text-wrap: pretty; }
 .nf { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; gap: 1.5rem; }
 .nf-term { margin: 0; padding: 1rem 1.2rem; background: var(--t-bg); color: var(--t-fg); border: 1px solid #3b4252; border-radius: var(--radius-sm); font-size: 0.9rem; white-space: pre-wrap; max-width: 32rem; }
 .nf h1 { font-size: clamp(1.8rem, 1.3rem + 2vw, 2.6rem); }
+
+/* ---------- casca (projeto irmão) ---------- */
+.sibling-fig { margin: 0; min-width: 0; }
+.sibling-fig img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.sibling-fig figcaption { margin-top: 0.9rem; font-size: 0.82rem; color: var(--muted); }
