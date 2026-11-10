@@ -1,0 +1,4 @@
+· sessão 261110-110900-bbbb · gemini/gemini-3.8-flash
+jazz: gemini/gemini-3.8-flash: o modelo parou de responder (stream sem dados por muito tempo): nada chegou antes do prazo do primeiro byte — tente de novo ou troque de modelo; reserva(s) também falharam: gpt-oss-120b, beam-free
+jazz: execução incompleta (error) — trabalho salvo: checkpoint 000000000000 · nota sessions/w.handoff.md
+jazz: retome com: jazz -p -r 261110-110900-bbbb   (ou jazz -p --resume-last-in work/08)

@@ -66,7 +66,7 @@ classify_infra() {
   local provdead=0
   if [ -r "$log" ] && [ "$rc" != 0 ] && [ "$rc" != 124 ]; then
     if grep -a '^jazz: ' "$log" 2>/dev/null | grep -a -v -E 'execução incompleta|retome com|pasta não confiável|^jazz: aviso' | tail -n 1 |
-       grep -a -q -E 'limite de requisições atingido|sem crédito nesse provedor|credencial recusada pelo provedor|o provedor recusou o pedido|falha de rede:|nenhuma conexão'; then
+       grep -a -q -E 'limite de requisições atingido|cota diária esgotada|sem crédito nesse provedor|credencial recusada pelo provedor|o provedor recusou o pedido|falha de rede:|nenhuma conexão|: HTTP 5[0-9][0-9]|o modelo parou de responder|reserva\(s\) também falharam'; then
       provdead=1
     fi
   fi

@@ -50,6 +50,9 @@ func TestBenchClassifyInfra(t *testing.T) {
 		// deliver): not the agent's failure. v2 on 0.13.4, 2026-11-10: 8 of 11 tasks died like this.
 		{"cota-esgotada", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA?"},
 		{"toolcall-invalida", "toolcall-invalida.log", "1", "600", "FAIL", "547", "INFRA?"},
+		// provider overloaded (5xx) and model that never answered, both with the fallbacks dead too
+		{"provedor-503", "provedor-503.log", "1", "600", "FAIL", "32", "INFRA?"},
+		{"modelo-mudo", "modelo-mudo.log", "1", "600", "FAIL", "29", "INFRA?"},
 		// the agent finished and the checker failed it: a real FAIL, whatever the log says earlier
 		{"falha-real", "falha-real.log", "0", "600", "FAIL", "484", "FAIL"},
 		// a provider error line with the checker's PASS stays PASS

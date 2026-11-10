@@ -1,0 +1,6 @@
+· sessão 261110-110826-aaaa · gemini/gemini-3.8-flash
+· tentando gpt-oss-120b
+jazz: gemini/gemini-3.8-flash: HTTP 503: [{
+  "error": { "code": 503, "message": "This model is currently experiencing high demand.", "status": "UNAVAILABLE" } } ]
+jazz: execução incompleta (error) — trabalho salvo: checkpoint 000000000000 · nota sessions/z.handoff.md
+jazz: retome com: jazz -p -r 261110-110826-aaaa   (ou jazz -p --resume-last-in work/02)
