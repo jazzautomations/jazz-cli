@@ -1,0 +1,11 @@
+# Tarefas do `jazz eval offline` que falham hoje. O CI roda a suíte inteira com
+# --gate neste arquivo: falha nova = regressão; tarefa que passou a funcionar
+# tem que sair daqui. A lista só encolhe.
+cardapio-v5-text_extract       # confiança 0.06, cai no menu
+cardapio-v5-line_slice         # pedido sem intervalo
+cardapio-v5-perm_find          # lido como list_files
+cardapio-v5-file_users         # lido como perm_find
+cardapio-v5-dir_diff           # pedido sem os dois diretórios
+
+# "~" = depende da máquina: pode passar ou falhar sem derrubar o portão.
+~service-status                # precisa de um systemd que responda (falha no runner do CI)

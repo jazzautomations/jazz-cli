@@ -77,6 +77,7 @@ var sigInlineKV = lazyRx(`(([A-Z][A-Z0-9_]*)?(?:API_?KEY|TOKEN|SECRET|PASSWORD|P
 // (line starts intact — oneLine runs after, in sigOf), then the inline pass
 // for mid-sentence "KEY=value".
 func sigRedact(s string) string {
+	s = nlCredScrub(s) // senha sudo digitada nunca entra no ledger (consent.go) — todo sinal passa por aqui
 	return rdReplaceKeepPH(sigInlineKV.R(), redactSecrets(s), "${1}[REDACTED]")
 }
 
@@ -153,6 +154,7 @@ func sigFlush(text string, r brResult, extra map[string]string) {
 	if !sigEnabled() {
 		return
 	}
+	text = nlCredScrub(text) // uma senha sudo digitada nunca vai pro ledger (consent.go)
 	for _, s := range brSignals(text, r) {
 		for k, v := range extra {
 			if s.Extra == nil {

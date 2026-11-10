@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -213,6 +214,79 @@ func TestBrainBackchainPermitStillGates(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "downloads/new.txt")); err != nil {
 		t.Errorf("new.txt sumiu com permissão negada:\n%s", r.Text)
+	}
+}
+
+// Guarda (T5/backchain): um operando concreto ("v4_csv_to_json.txt") não é
+// descrição — o planner só pode esconder o slot descrito quando o valor é o
+// substantivo do filtro. Apagar o target real deixava o script sem `file`
+// ("pass file or text") — falso-negativo medido no eval offline.
+func TestBrainBackchainKeepsConcreteTarget(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "v4_csv_to_json.txt", "name,count\nana,2\nbruno,3\n",
+		"v4_json_schema_infer.txt", "{\"name\":\"ana\",\"count\":2}\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "converte csv para json v4_csv_to_json.txt")
+	if r.Status != tkSucceeded || !strings.Contains(r.Text, "2 CSV row(s)") {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, "infere esquema json v4_json_schema_infer.txt")
+	if r.Status != tkSucceeded || !strings.Contains(r.Text, "Inferred object schema") {
+		t.Fatalf("%s:\n%s", r.Status, r.Text)
+	}
+}
+
+// Guarda (T5/conf-cliff): intent certa identificada abaixo do gate era
+// recusa de pedido doable. "testa regex F 'pat'" tinha a aspa sem slot
+// (dropped → conf 0.22); "busca literal" não tinha regra v4_* (só
+// classificador → 0.55). A aspa vira pattern e a frase-cardápio dispara
+// a regra determinística — o script prova com a saída esperada.
+func TestBrainV4PatternSlotAndRule(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "v4_regex_test.txt", "ana\nbruno\n",
+		"v4_text_grep.txt", "ana\nbruno\nana\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, `testa regex v4_regex_test.txt "ana"`)
+	// no Windows o script regex_test recusa honesto ("regex timeout unavailable
+	// on this platform"): lá o que se confere é só a leitura do pedido
+	if r.Intent.Name != "regex_test" || runtime.GOOS != "windows" && (r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "1 matching line(s)")) {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, `busca literal v4_text_grep.txt "ana"`)
+	if r.Intent.Name != "text_grep" || r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "2 literal match(es)") {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+}
+
+// Guarda (T5/routing): marcador de código depois de "por" é a tarefa do
+// todo_scan, não o padrão de um grep literal — "FIXME" virava slot file
+// e o pedido morria em "not a regular file". "Tira um snapshot" é a
+// fotografia dos arquivos (file_snapshot), não delete_file — 'tira'
+// só perde o removeword com `snapshot` como 1ª palavra útil à direita.
+func TestBrainMarkersAndSnapshotRoute(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	root := brFixture(t, "lexer.go",
+		"package x\n\n// TODO: handle empty input\nfunc Tokenize(s string) []string { return nil }\n")
+	env, _ := brTestEnv(t, root, nil, -1)
+	r := brRun(context.Background(), env, "procura por TODO e FIXME")
+	if r.Intent.Name != "todo_scan" || r.Status != tkSucceeded {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
+	}
+	env, _ = brTestEnv(t, root, nil, -1)
+	r = brRun(context.Background(), env, "tira um snapshot dos arquivos")
+	if r.Intent.Name != "file_snapshot" || r.Status != tkSucceeded ||
+		!strings.Contains(r.Text, "root_sha256") {
+		t.Fatalf("%s %s:\n%s", r.Intent.Name, r.Status, r.Text)
 	}
 }
 

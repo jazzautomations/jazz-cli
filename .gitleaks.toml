@@ -12,6 +12,8 @@ paths = [
   '''(^|/)redact_test\.go$''',
   '''(^|/)review_fixes_test\.go$''',
   '''(^|/)debug_log_test\.go$''',
+  # senhas sudo fictícias dos testes do consentimento (consent.go nunca as deixa sair da memória)
+  '''(^|/)consent_scrub_test\.go$''',
   # quotes the fake ghp_abcdef... fixture of debug_log_test.go from an old scan
   '''^docs/research/security-review-oss\.md$''',
 ]

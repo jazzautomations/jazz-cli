@@ -152,11 +152,19 @@ func nlQuestioned(folded string, loc []int) bool {
 // nlScanConsent registra grants quando o usuário autoriza explicitamente no
 // texto da conversa. Só roda sobre entrada real do usuário (Run/steer/queue) —
 // nunca sobre saída de ferramenta ou texto do modelo.
-func (a *Agent) nlScanConsent(input string) {
-	if a.sub || strings.TrimSpace(input) == "" {
-		return
+//
+// Devolve o texto com a credencial trocada por nlCredMark: é ESSE texto que
+// segue pro histórico, pro modelo, pra sessão, pros eventos e pros hooks. A
+// senha fica só em a.nl.cred (memória). Quem chama tem que usar o retorno.
+func (a *Agent) nlScanConsent(input string) string {
+	if strings.TrimSpace(input) == "" {
+		return input
+	}
+	if a.sub {
+		return nlCredScrub(input)
 	}
 	a.nlScanCredential(input)
+	input = nlCredScrub(input)
 	folded := fzFold(input)
 	for _, r := range nlConsentRules {
 		loc := r.re.FindStringIndex(folded)
@@ -171,6 +179,7 @@ func (a *Agent) nlScanConsent(input string) {
 			a.nlGrant(class, r.match)
 		}
 	}
+	return input
 }
 
 // ---------- credencial sudo ----------
@@ -204,30 +213,63 @@ var nlCredStop = map[string]bool{
 }
 
 func nlCredOK(pass string) bool {
-	if len(pass) < 3 || len(pass) > 64 || strings.ContainsAny(pass, "\n\r\x00") {
+	if len(pass) < 3 || len(pass) > 64 || strings.ContainsAny(pass, "\n\r\x00") || strings.HasPrefix(pass, "<credencial") {
 		return false
 	}
 	return !nlCredStop[fzFold(pass)]
 }
 
-// nlScanCredential captura a credencial sudo que o usuário digitou. Dar a
-// senha É consentimento de elevação: registra também o grant system-ops
-// implícito. A senha nunca entra em log, audit, evento ou arquivo de sessão.
-func (a *Agent) nlScanCredential(input string) {
+// nlCredMark fica no lugar da senha em tudo que sai da memória da sessão.
+const nlCredMark = "<credencial-recebida>"
+
+// nlCredCtx: "senha: X" / "password = X" soltos só contam como credencial sudo
+// quando a mensagem fala de sudo/root/admin ou é curta (a resposta a um pedido
+// de senha). "põe password: hunter2 no config.yaml" é tarefa, não credencial.
+var nlCredCtx = lazyRx(`(?i)\b(?:sudo|root|admin)\b`)
+
+// nlCredFind acha a primeira credencial sudo em input: usuário, senha e o
+// intervalo de bytes da senha.
+func nlCredFind(input string) (user, pass string, lo, hi int, ok bool) {
 	for _, r := range nlCredRules {
-		m := r.re.FindStringSubmatch(input)
+		m := r.re.FindStringSubmatchIndex(input)
 		if m == nil {
 			continue
 		}
-		user, pass := "", m[1]
+		u, g := "", 1
 		if r.match == "cred:root-user-pass" {
-			user, pass = m[1], m[2]
-		}
-		if !nlCredOK(pass) {
+			u, g = input[m[2]:m[3]], 2
+		} else if (r.match == "cred:senha" || r.match == "cred:password") && len(strings.TrimSpace(input)) > 80 && !nlCredCtx.MatchString(input) {
 			continue
 		}
+		lo, hi = m[2*g], m[2*g+1]
+		if p := input[lo:hi]; nlCredOK(p) {
+			return u, p, lo, hi, true
+		}
+	}
+	return "", "", 0, 0, false
+}
+
+// nlCredScrub devolve text com toda credencial sudo digitada trocada por
+// nlCredMark. Função pura: serve pra qualquer lugar que persista ou envie o
+// texto do usuário (sessão, modelo, sinais, histórico do editor, eventos).
+func nlCredScrub(text string) string {
+	for i := 0; i < 4; i++ {
+		_, _, lo, hi, ok := nlCredFind(text)
+		if !ok {
+			break
+		}
+		text = text[:lo] + nlCredMark + text[hi:]
+	}
+	return text
+}
+
+// nlScanCredential captura a credencial sudo que o usuário digitou. Dar a
+// senha É consentimento de elevação: registra também o grant system-ops
+// implícito. A senha nunca entra em log, audit, evento ou arquivo de sessão:
+// nlScanConsent devolve o texto já sem ela (nlCredScrub).
+func (a *Agent) nlScanCredential(input string) {
+	if user, pass, _, _, ok := nlCredFind(input); ok {
 		a.nlCredSet(user, pass, "chat")
-		return
 	}
 }
 

@@ -126,7 +126,7 @@ func (q *MsgQueue) emit(kind string, f map[string]any) {
 }
 
 // qPreview is the redacted one-line form of a message for events.
-func qPreview(s string) string { return oneLine(redactSecrets(s), 120) }
+func qPreview(s string) string { return oneLine(redactSecrets(nlCredScrub(s)), 120) }
 
 // Add classifies text and queues it. An empty message is ignored.
 func (q *MsgQueue) Add(text, src string) (qItem, bool) {
@@ -347,9 +347,11 @@ func (a *Agent) qInject(where string) bool {
 	if len(items) == 0 {
 		return false
 	}
+	for i := range items {
+		items[i].Text = a.nlScanConsent(items[i].Text) // consentimento explícito na fila também vale; a senha sai do texto aqui (consent.go)
+	}
 	a.append(Message{Role: "user", Content: qSteerMessage(items)}) // session entry before the next request
 	for _, it := range items {
-		a.nlScanConsent(it.Text) // consentimento explícito na fila também vale (consent.go)
 		q.emit("queue.consume", map[string]any{"id": it.ID, "mode": it.Mode.String(), "at": where, "src": it.Src, "text": qPreview(it.Text)})
 		a.ui.Notice("↳ entregue agora: " + oneLine(it.Text, 100))
 	}

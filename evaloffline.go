@@ -115,13 +115,16 @@ type eoReport struct {
 	Summary eoSummary `json:"summary"`
 }
 
-// cmdEval implements `jazz eval offline [--out DIR] [--only id,id] [-v]`.
+// cmdEval implements `jazz eval offline [--out DIR] [--only id,id] [--gate ARQ] [-v]`.
+// --gate ARQ is the CI ratchet: ARQ lists the ids known to fail (one per
+// line, # comments). The command fails when a task outside the list fails
+// (regression) or when a listed task passes (remove it: the list only shrinks).
 func cmdEval(root string, args []string, w io.Writer) int {
 	if len(args) == 0 || args[0] != "offline" {
-		fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [-v]")
+		fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [--gate ARQ] [-v]")
 		return 2
 	}
-	out, only, verbose := filepath.Join(root, "results"), map[string]bool{}, false
+	out, only, verbose, gate := filepath.Join(root, "results"), map[string]bool{}, false, ""
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
 		case "--out", "-out":
@@ -138,8 +141,13 @@ func cmdEval(root string, args []string, w io.Writer) int {
 			}
 		case "-v", "--verbose":
 			verbose = true
+		case "--gate", "-gate":
+			if i+1 < len(args) {
+				gate = args[i+1]
+				i++
+			}
 		default:
-			fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [-v]")
+			fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [--gate ARQ] [-v]")
 			return 2
 		}
 	}
@@ -164,7 +172,66 @@ func cmdEval(root string, args []string, w io.Writer) int {
 	if rep.Summary.FalseSuccess > 0 || rep.Summary.FalseBlocks > 0 {
 		return 1
 	}
+	if gate != "" {
+		known, err := eoGateList(gate)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "jazz:", err)
+			return 1
+		}
+		if msgs := eoGateCheck(rep, known); len(msgs) > 0 {
+			for _, m := range msgs {
+				fmt.Fprintln(w, "gate:", m)
+			}
+			return 1
+		}
+		fmt.Fprintf(w, "gate: ok (%d falha(s) conhecida(s), nenhuma nova)\n", len(known))
+	}
 	return 0
+}
+
+// eoGateList reads the known-failing ids (one per line; blank lines and # comments ignored).
+// An id prefixed with "~" depends on the host (e.g. a working systemd): it may
+// pass or fail without tripping the gate; the map value is false for those.
+func eoGateList(path string) (map[string]bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]bool{}
+	for _, l := range strings.Split(string(b), "\n") {
+		if i := strings.IndexByte(l, '#'); i >= 0 {
+			l = l[:i]
+		}
+		if l = strings.TrimSpace(l); l != "" {
+			known[strings.TrimPrefix(l, "~")] = !strings.HasPrefix(l, "~")
+		}
+	}
+	return known, nil
+}
+
+// eoGateCheck compares a report with the known-failing list: a failure outside
+// the list is a regression, a listed task that passes (or no longer exists) must
+// leave the list. Empty result = gate passes.
+func eoGateCheck(rep *eoReport, known map[string]bool) []string {
+	var msgs []string
+	seen := map[string]bool{}
+	for _, r := range rep.Tasks {
+		seen[r.ID] = true
+		must, listed := known[r.ID]
+		switch {
+		case len(r.Fail) > 0 && !listed:
+			msgs = append(msgs, "REGRESSÃO: "+r.ID+" falhou e não está na lista de falhas conhecidas")
+		case len(r.Fail) == 0 && listed && must:
+			msgs = append(msgs, "passou: "+r.ID+" — tire da lista de falhas conhecidas")
+		}
+	}
+	for id := range known {
+		if !seen[id] {
+			msgs = append(msgs, "lista desatualizada: "+id+" não existe mais na suíte")
+		}
+	}
+	sort.Strings(msgs)
+	return msgs
 }
 
 // eoRun runs the suite (only = subset by id).
@@ -373,6 +440,7 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 		fail("categoria %s, esperada %s", orDash(string(r.Category)), exp.Category)
 	}
 	for _, c := range exp.Contains {
+		c = strings.ReplaceAll(c, "$VERSION", version) // the task follows the binary, not a release number frozen in the fixture
 		if !strings.Contains(r.Text, c) {
 			fail("falta %q", c)
 		}

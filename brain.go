@@ -433,6 +433,13 @@ func brRunIntent(ctx context.Context, env *brEnv, text string, in Intent, res br
 	// honest miss. Mutation stays behind the permission guardrail either way
 	// (env.Permit): this confirmation is of the *intention*, not a replacement.
 	risk := brIntentRisk(env, in)
+	// the seal covers the VERB too (brain_honest.go): a question never
+	// triggers a mutation, a write request is never answered by its read
+	// variant, model work never becomes an empty `create`
+	if why, kind := brVerbGuard(env, text, in, risk); why != "" {
+		res.Miss, res.MissWhy, res.Text = true, kind, why
+		return res
+	}
 	if env.Ask == nil {
 		// the same act threshold as the interactive confirm and level 0
 		// (brActMin): a read-only 0.75 runs online and in the session, so it

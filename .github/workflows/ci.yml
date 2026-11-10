@@ -16,6 +16,11 @@ jobs:
       - run: GOOS=windows GOARCH=amd64 go vet ./...
       # the runner ships pwsh: the PowerShell dialect tests run here too
       - run: JAZZ_TEST_PWSH="$(command -v pwsh || true)" go test -count=1 ./...
+      # a suíte INTEIRA do cérebro offline é portão: falha nova é regressão, e tarefa
+      # que passou a funcionar tem que sair de evals/offline/known-failing.txt
+      - run: |
+          go build -trimpath -o /tmp/jazz-eval .
+          cd "$(mktemp -d)" && HOME="$PWD" JAZZ_HOME="$PWD/.jazz-home" /tmp/jazz-eval eval offline --gate "$GITHUB_WORKSPACE/evals/offline/known-failing.txt" --out "$PWD/results"
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -trimpath -ldflags="-s -w" -o /dev/null .
       - run: CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /dev/null .
       - run: |

@@ -1083,7 +1083,7 @@
     "status": "succeeded",
     "intent": "self_info",
     "contains": [
-     "0.13.1"
+     "$VERSION"
     ],
     "questions": 0
    }

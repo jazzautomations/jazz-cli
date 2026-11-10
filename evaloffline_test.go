@@ -112,3 +112,35 @@ func TestRecoverBwrapErrorIsCommandMissing(t *testing.T) {
 		t.Fatalf("category %s", c)
 	}
 }
+
+// The gate is a ratchet: a failure outside the list is a regression, a listed
+// task that passes must leave the list, and "~id" tolerates both outcomes.
+func TestEvalGateRatchet(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "known.txt")
+	os.WriteFile(f, []byte("# comentário\nvelha-falha   # motivo\n~depende-da-maquina\nsumiu\n"), 0o644)
+	known, err := eoGateList(f)
+	if err != nil || len(known) != 3 || !known["velha-falha"] || known["depende-da-maquina"] {
+		t.Fatalf("lista: %v %v", known, err)
+	}
+	row := func(id string, fail bool) eoRow {
+		r := eoRow{ID: id}
+		if fail {
+			r.Fail = []string{"x"}
+		}
+		return r
+	}
+	rep := &eoReport{Tasks: []eoRow{row("ok", false), row("nova-falha", true), row("velha-falha", false), row("depende-da-maquina", true)}}
+	got := strings.Join(eoGateCheck(rep, known), "\n")
+	for _, want := range []string{"REGRESSÃO: nova-falha", "passou: velha-falha", "lista desatualizada: sumiu"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("faltou %q em:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "depende-da-maquina") {
+		t.Errorf("tarefa ~ não devia aparecer:\n%s", got)
+	}
+	rep.Tasks = []eoRow{row("velha-falha", true), row("depende-da-maquina", false), row("sumiu", true)}
+	if msgs := eoGateCheck(rep, known); len(msgs) != 0 {
+		t.Errorf("portão devia passar: %v", msgs)
+	}
+}

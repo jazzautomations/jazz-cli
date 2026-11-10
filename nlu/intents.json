@@ -36,7 +36,6 @@
       "install",
       "remote",
       "connect",
-      "list",
       "listverb",
       "count",
       "v4_wordcount_stats",
@@ -346,6 +345,23 @@
       "fix",
       "files"
      ]
+    },
+    {
+     "all": [
+      "build",
+      "create|makeword"
+     ],
+     "none": [
+      "error",
+      "execperm",
+      "filenoun",
+      "fix",
+      "files",
+      "find",
+      "test",
+      "version"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -520,8 +536,13 @@
      ],
      "none": [
       "recover",
-      "mutate"
-     ]
+      "mutate",
+      "files",
+      "filenoun",
+      "branch",
+      "git"
+     ],
+     "w": 15
     },
     {
      "all": [
@@ -838,6 +859,18 @@
       "delete",
       "install"
      ]
+    },
+    {
+     "all": [
+      "cron",
+      "list|listverb"
+     ],
+     "none": [
+      "create",
+      "delete",
+      "install"
+     ],
+     "w": 5
     }
    ],
    "slots": {}
@@ -1369,13 +1402,14 @@
      "none": [
       "branch",
       "commit",
-      "recover",
-      "rename",
-      "filenoun",
       "create",
       "delete",
       "dotenv",
-      "envfile"
+      "envfile",
+      "filenoun",
+      "recover",
+      "remote",
+      "rename"
      ],
      "w": 0
     }
@@ -1422,6 +1456,18 @@
       "nameattr",
       "opinion"
      ]
+    },
+    {
+     "all": [
+      "disk",
+      "count"
+     ],
+     "none": [
+      "find",
+      "nameattr",
+      "opinion"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -1513,11 +1559,12 @@
       "duplicate"
      ],
      "none": [
-      "delete",
+      "content",
       "create",
-      "mutate",
+      "delete",
       "download",
-      "content"
+      "git",
+      "mutate"
      ]
     }
    ],
@@ -1718,6 +1765,13 @@
      "all": [
       "explain"
      ]
+    },
+    {
+     "all": [
+      "explain",
+      "tonoun"
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -1751,12 +1805,13 @@
       "files|filenoun"
      ],
      "none": [
-      "delete",
-      "create",
-      "mutate",
-      "symnoun",
       "@symbol",
-      "project"
+      "copy",
+      "create",
+      "delete",
+      "mutate",
+      "project",
+      "symnoun"
      ],
      "w": 0
     }
@@ -1826,43 +1881,43 @@
       "findattr"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "install",
       "between",
-      "download",
-      "net",
-      "remote",
-      "user",
-      "opinion",
       "blame",
-      "session",
-      "who",
-      "error",
       "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
       "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
+      "create",
       "cron",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
-      "permbit",
-      "rename",
+      "delete",
+      "diff",
+      "diskuse",
+      "download",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "install",
+      "move",
+      "mutate",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 10
     },
@@ -1872,41 +1927,41 @@
       "nameattr"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "download",
-      "net",
-      "remote",
-      "user",
-      "opinion",
       "blame",
-      "session",
-      "who",
-      "error",
       "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
       "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
+      "create",
       "cron",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
-      "permbit",
-      "rename",
+      "delete",
+      "diff",
+      "diskuse",
+      "download",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "move",
+      "mutate",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 10
     },
@@ -1915,41 +1970,41 @@
       "newest"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "download",
-      "net",
-      "remote",
-      "user",
-      "opinion",
       "blame",
-      "session",
-      "who",
-      "error",
       "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
       "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
+      "create",
       "cron",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
-      "permbit",
-      "rename",
+      "delete",
+      "diff",
+      "diskuse",
+      "download",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "move",
+      "mutate",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 15
     },
@@ -1959,43 +2014,43 @@
       "files"
      ],
      "none": [
-      "duplicate",
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "net",
-      "remote",
-      "user",
-      "opinion",
-      "blame",
-      "session",
-      "who",
-      "error",
-      "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
-      "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
-      "cron",
-      "symnoun",
-      "nameattr",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
       "@quoted",
+      "blame",
+      "branch",
+      "commit",
+      "create",
+      "cron",
+      "delete",
+      "diff",
+      "diskuse",
+      "duplicate",
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "move",
+      "mutate",
+      "nameattr",
+      "net",
+      "opinion",
+      "permattr",
       "permbit",
+      "remote",
+      "removeword",
       "rename",
-      "removeword"
+      "run",
+      "session",
+      "symnoun",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 5
     },
@@ -2008,42 +2063,42 @@
       "nameattr"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "net",
-      "remote",
-      "user",
-      "opinion",
-      "blame",
-      "session",
-      "who",
-      "error",
-      "branch",
-      "version",
-      "diff",
-      "undo",
-      "commit",
-      "history",
-      "v4_date_normalize",
-      "diskuse",
-      "run",
-      "cron",
-      "content",
-      "symnoun",
-      "lineselect",
       "@quoted",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
-      "permbit",
-      "rename",
+      "blame",
+      "branch",
+      "commit",
+      "content",
+      "create",
+      "cron",
+      "delete",
+      "diff",
+      "diskuse",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "forquoted",
+      "grepword",
+      "history",
+      "lineselect",
+      "move",
+      "mutate",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "symnoun",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 5
     },
@@ -2076,48 +2131,48 @@
       "filenoun"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "net",
-      "remote",
-      "user",
-      "opinion",
-      "blame",
-      "session",
-      "who",
-      "error",
-      "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
-      "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
-      "cron",
-      "symnoun",
-      "have",
-      "nameattr",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "lineselect",
-      "context",
-      "between",
-      "count",
-      "forquoted",
       "@quoted",
-      "permbit",
-      "rename",
+      "between",
+      "blame",
+      "branch",
+      "commit",
+      "context",
+      "count",
+      "create",
+      "cron",
+      "delete",
+      "diff",
+      "diskuse",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "have",
+      "history",
+      "lineselect",
+      "move",
+      "mutate",
+      "nameattr",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "symnoun",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 4
     },
@@ -2166,36 +2221,36 @@
       "nametgt"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "net",
-      "remote",
-      "user",
-      "opinion",
       "blame",
-      "session",
-      "who",
-      "error",
       "branch",
-      "git",
-      "version",
-      "diff",
-      "undo",
       "commit",
-      "history",
-      "diskuse",
-      "run",
+      "create",
       "cron",
-      "move",
-      "forquoted",
-      "permbit",
-      "rename",
+      "delete",
+      "diff",
+      "diskuse",
       "epochnoun",
-      "removeword"
+      "error",
+      "execperm",
+      "extract",
+      "forquoted",
+      "git",
+      "history",
+      "move",
+      "mutate",
+      "net",
+      "opinion",
+      "permattr",
+      "permbit",
+      "remote",
+      "removeword",
+      "rename",
+      "run",
+      "session",
+      "undo",
+      "user",
+      "version",
+      "who"
      ],
      "w": 20
     },
@@ -2205,41 +2260,41 @@
       "files"
      ],
      "none": [
-      "permattr",
-      "execperm",
-      "delete",
-      "create",
-      "mutate",
-      "extract",
-      "net",
-      "remote",
-      "user",
-      "opinion",
-      "blame",
-      "session",
-      "who",
-      "error",
-      "branch",
-      "git",
-      "version",
-      "undo",
-      "commit",
-      "history",
-      "v4_date_normalize",
-      "extractkind",
-      "diskuse",
-      "run",
-      "cron",
-      "symnoun",
-      "nameattr",
-      "grepword",
-      "v4_wordcount_stats",
-      "move",
-      "forquoted",
       "@quoted",
+      "blame",
+      "branch",
+      "commit",
+      "create",
+      "cron",
+      "delete",
+      "diskuse",
+      "error",
+      "execperm",
+      "extract",
+      "extractkind",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "move",
+      "mutate",
+      "nameattr",
+      "net",
+      "opinion",
+      "permattr",
       "permbit",
+      "remote",
+      "removeword",
       "rename",
-      "removeword"
+      "run",
+      "session",
+      "symnoun",
+      "undo",
+      "user",
+      "v4_date_normalize",
+      "v4_wordcount_stats",
+      "version",
+      "who"
      ],
      "w": 12
     },
@@ -2575,7 +2630,7 @@
       "opinion",
       "error"
      ],
-     "w": 10
+     "w": 15
     }
    ],
    "slots": {
@@ -2732,6 +2787,17 @@
       "create",
       "undo"
      ]
+    },
+    {
+     "all": [
+      "snapshot",
+      "create|makeword"
+     ],
+     "none": [
+      "delete",
+      "undo"
+     ],
+     "w": 5
     }
    ],
    "slots": {}
@@ -3059,7 +3125,6 @@
       "delete",
       "mutate",
       "run",
-      "have",
       "content",
       "permbit",
       "rename"
@@ -3089,7 +3154,6 @@
     {
      "all": [
       "find",
-      "filenoun",
       "have"
      ],
      "none": [
@@ -3112,6 +3176,68 @@
       "rename"
      ],
      "w": 5
+    },
+    {
+     "all": [
+      "find",
+      "forquoted"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "nameattr",
+      "scope",
+      "opinion",
+      "delete",
+      "mutate",
+      "run",
+      "have",
+      "permbit",
+      "rename",
+      "filenoun",
+      "files",
+      "grepword",
+      "usage",
+      "callers"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
+      "find",
+      "@symbol"
+     ],
+     "none": [
+      "perf",
+      "duplicate",
+      "sysnoun",
+      "logs",
+      "lineselect",
+      "context",
+      "findattr",
+      "nameattr",
+      "scope",
+      "opinion",
+      "delete",
+      "mutate",
+      "run",
+      "have",
+      "content",
+      "permbit",
+      "rename",
+      "filenoun",
+      "files",
+      "replace",
+      "count",
+      "usage",
+      "callers"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -3186,7 +3312,8 @@
       "ipaddr",
       "pubnet",
       "remote",
-      "host"
+      "host",
+      "count"
      ]
     }
    ],
@@ -3259,8 +3386,14 @@
       "commit",
       "recover",
       "logs",
-      "scope"
-     ]
+      "scope",
+      "find",
+      "newest",
+      "stale",
+      "nameattr",
+      "filequoted"
+     ],
+     "w": 20
     },
     {
      "all": [
@@ -3412,6 +3545,22 @@
       "branch",
       "status"
      ]
+    },
+    {
+     "all": [
+      "merge",
+      "remote"
+     ],
+     "none": [
+      "delete"
+     ]
+    },
+    {
+     "all": [
+      "branch",
+      "host"
+     ],
+     "w": 15
     }
    ],
    "slots": {}
@@ -3440,8 +3589,10 @@
       "checkout"
      ],
      "none": [
-      "rename"
-     ]
+      "rename",
+      "replto"
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -3477,7 +3628,8 @@
     {
      "all": [
       "cochange"
-     ]
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -3518,6 +3670,7 @@
       "commit"
      ],
      "none": [
+      "checkout",
       "history",
       "undo"
      ]
@@ -3664,6 +3817,61 @@
       "update",
       "remote"
      ]
+    },
+    {
+     "all": [
+      "download",
+      "remote"
+     ],
+     "none": [
+      "connect",
+      "install",
+      "delete",
+      "mutate",
+      "copy",
+      "move",
+      "extract"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "remote"
+     ],
+     "none": [
+      "connect",
+      "install",
+      "delete",
+      "mutate",
+      "copy",
+      "move",
+      "extract"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "diff"
+     ],
+     "none": [
+      "open",
+      "explain"
+     ]
+    },
+    {
+     "all": [
+      "pull",
+      "diff",
+      "remote"
+     ],
+     "none": [
+      "open",
+      "explain",
+      "connect",
+      "install",
+      "delete",
+      "mutate"
+     ]
     }
    ],
    "slots": {}
@@ -3697,6 +3905,26 @@
       "start",
       "remote"
      ]
+    },
+    {
+     "all": [
+      "remote",
+      "intocue"
+     ],
+     "none": [
+      "connect",
+      "net",
+      "pull",
+      "download",
+      "copy",
+      "move",
+      "install",
+      "delete",
+      "mutate",
+      "update",
+      "extract"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -3806,8 +4034,12 @@
       "branch",
       "checkout",
       "commit",
+      "connect",
       "diff",
+      "download",
+      "duplicate",
       "find",
+      "findattr",
       "history",
       "install",
       "mutate",
@@ -3817,8 +4049,7 @@
       "sysnoun",
       "tag",
       "undo",
-      "update",
-      "findattr"
+      "update"
      ]
     }
    ],
@@ -3849,6 +4080,17 @@
       "create",
       "delete"
      ]
+    },
+    {
+     "all": [
+      "hashfile",
+      "status"
+     ],
+     "none": [
+      "create",
+      "delete"
+     ],
+     "w": 8
     }
    ],
    "slots": {
@@ -3886,6 +4128,13 @@
       "@service",
       "mutate"
      ]
+    },
+    {
+     "all": [
+      "help",
+      "tonoun"
+     ],
+     "w": 15
     }
    ],
    "slots": {}
@@ -4167,37 +4416,54 @@
       "lineselect"
      ],
      "none": [
+      "@symbol",
+      "blame",
+      "build",
+      "commit",
+      "count",
+      "cpu",
+      "create",
+      "delete",
+      "diff",
+      "duplicate",
+      "env",
+      "envvars",
+      "epochnoun",
+      "forquoted",
+      "git",
+      "grepword",
+      "history",
+      "mutate",
+      "nametgt",
+      "project",
+      "recent",
+      "scope",
+      "service",
+      "session",
+      "sort",
+      "status",
+      "symnoun",
+      "sysnoun",
+      "test",
+      "undo"
+     ],
+     "w": 10
+    },
+    {
+     "all": [
+      "lineselect",
+      "newest"
+     ],
+     "none": [
       "count",
       "delete",
       "create",
       "mutate",
       "duplicate",
-      "envvars",
-      "commit",
-      "git",
-      "history",
-      "recent",
-      "build",
-      "test",
-      "status",
-      "sysnoun",
-      "scope",
-      "env",
-      "diff",
-      "undo",
       "blame",
-      "service",
-      "symnoun",
-      "@symbol",
-      "project",
-      "cpu",
-      "session",
-      "forquoted",
-      "grepword",
-      "nametgt",
-      "epochnoun"
+      "git"
      ],
-     "w": 10
+     "w": 15
     }
    ],
    "slots": {
@@ -4439,6 +4705,9 @@
      "all": [
       "list",
       "host"
+     ],
+     "none": [
+      "branch"
      ]
     },
     {
@@ -4446,13 +4715,14 @@
       "host"
      ],
      "none": [
-      "connect",
-      "online",
-      "status",
       "@host",
-      "user",
+      "branch",
+      "connect",
+      "mutate",
+      "online",
       "process",
-      "mutate"
+      "status",
+      "user"
      ]
     }
    ],
@@ -4595,6 +4865,22 @@
       "mutate",
       "create"
      ]
+    },
+    {
+     "all": [
+      "error",
+      "logs|env",
+      "list|listverb"
+     ],
+     "none": [
+      "test",
+      "build",
+      "fix",
+      "delete",
+      "mutate",
+      "create"
+     ],
+     "w": 10
     }
    ],
    "slots": {}
@@ -4624,7 +4910,6 @@
      ],
      "none": [
       "port",
-      "service",
       "container",
       "blame",
       "kill",
@@ -4632,9 +4917,9 @@
       "user",
       "run",
       "remote",
-      "connect",
       "keynoun"
-     ]
+     ],
+     "w": 10
     },
     {
      "all": [
@@ -5040,6 +5325,9 @@
       "routes",
       "user",
       "eachitem"
+     ],
+     "any": [
+      "content"
      ]
     },
     {
@@ -5048,33 +5336,71 @@
       "@file"
      ],
      "none": [
-      "explain",
-      "undo",
-      "delete",
-      "rename",
-      "create",
-      "fix",
-      "find",
-      "diff",
-      "commit",
-      "run",
-      "install",
-      "format",
-      "lint",
-      "test",
-      "logs",
       "blame",
-      "mutate",
+      "commit",
+      "copy",
+      "create",
+      "delete",
+      "diff",
       "download",
-      "extract",
+      "duplicate",
+      "eachitem",
       "enable",
-      "recover",
-      "ipaddr",
       "envvars",
+      "explain",
+      "extract",
+      "find",
       "findattr",
-      "tag",
+      "fix",
+      "format",
+      "install",
+      "ipaddr",
+      "lint",
+      "logs",
+      "mutate",
       "perf",
-      "eachitem"
+      "recover",
+      "rename",
+      "run",
+      "tag",
+      "test",
+      "undo"
+     ]
+    },
+    {
+     "all": [
+      "open",
+      "@file"
+     ],
+     "none": [
+      "summary",
+      "diff",
+      "blame",
+      "history",
+      "git",
+      "logs",
+      "net",
+      "host",
+      "service",
+      "@host",
+      "status",
+      "remote",
+      "files",
+      "list",
+      "listverb",
+      "lineselect",
+      "keynoun",
+      "config",
+      "recent",
+      "timeref",
+      "epochnoun",
+      "datenoun",
+      "nameattr",
+      "medianoun"
+     ],
+     "w": 10,
+     "any": [
+      "content"
      ]
     }
    ],
@@ -5789,24 +6115,27 @@
       "open"
      ],
      "none": [
-      "find",
-      "format",
-      "lint",
       "build",
-      "test",
-      "run",
-      "fix",
+      "connect",
       "create",
       "delete",
-      "files",
-      "mutate",
-      "findattr",
-      "envvars",
-      "ipaddr",
+      "download",
       "duplicate",
-      "user",
+      "envvars",
+      "files",
+      "find",
+      "findattr",
+      "fix",
+      "format",
+      "ipaddr",
+      "lint",
+      "mutate",
+      "nametgt",
+      "run",
       "sysnoun",
-      "tag"
+      "tag",
+      "test",
+      "user"
      ]
     }
    ],
@@ -5845,6 +6174,14 @@
     }
    ],
    "slots": {
+    "pattern": {
+     "from": "grep:pat",
+     "kinds": [
+      "text",
+      "symbol"
+     ],
+     "required": false
+    },
     "target": {
      "kinds": [
       "file"
@@ -6113,6 +6450,16 @@
      "none": [
       "opinion"
      ]
+    },
+    {
+     "all": [
+      "self",
+      "version"
+     ],
+     "none": [
+      "opinion"
+     ],
+     "w": 8
     }
    ],
    "slots": {}
@@ -6329,6 +6676,28 @@
       "host",
       "install"
      ]
+    },
+    {
+     "all": [
+      "service",
+      "running"
+     ],
+     "none": [
+      "start",
+      "stop",
+      "restart",
+      "logs",
+      "container",
+      "ipaddr",
+      "net",
+      "pubnet",
+      "install",
+      "mutate",
+      "error",
+      "sysnoun",
+      "host",
+      "@host"
+     ]
     }
    ],
    "slots": {
@@ -6428,6 +6797,21 @@
       "replace"
      ],
      "w": 10
+    },
+    {
+     "all": [
+      "removeword",
+      "duplicate"
+     ],
+     "none": [
+      "files",
+      "find",
+      "listverb",
+      "create",
+      "git",
+      "project"
+     ],
+     "w": 15
     }
    ],
    "slots": {
@@ -6823,6 +7207,19 @@
    "rules": [
     {
      "all": [
+      "v4_text_grep"
+     ],
+     "none": [
+      "replace",
+      "delete",
+      "create",
+      "install",
+      "move"
+     ],
+     "w": 20
+    },
+    {
+     "all": [
       "grepword"
      ],
      "none": [
@@ -6995,6 +7392,9 @@
       "service",
       "permattr",
       "install"
+     ],
+     "any": [
+      "replto"
      ]
     }
    ],

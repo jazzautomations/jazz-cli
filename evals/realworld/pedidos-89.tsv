@@ -1,0 +1,89 @@
+git	mostra o git status
+git	o que mudou?
+git	me mostra o diff
+git	quais arquivos eu mexi
+git	qual foi o último commit
+git	mostra os últimos 3 commits
+git	em qual branch eu to
+git	quem mexeu por último no store.go
+git	what changed since the last commit
+git	show me the git log
+arq	abre o README
+arq	abre o reamde
+arq	mostra o main.go
+arq	cadê o arquivo de duração
+arq	lista os arquivos
+arq	quais são os maiores arquivos
+arq	quantas linhas tem o duration.go
+arq	mostra as 5 primeiras linhas do logs/app.log
+arq	quais arquivos mudaram hoje
+arq	list all go files
+arq	find files larger than 1k
+busca	procura por TODO
+busca	procura por TODO e FIXME
+busca	onde está definida a função FormatDuration
+busca	onde a função Soma é usada
+busca	grep ParsePrice
+busca	acha a palavra timeout nos logs
+busca	tem algum FIXME no código?
+teste	roda os testes
+teste	roda só o teste TestParsePrice
+teste	roda os testes do parser
+teste	compila o projeto
+teste	builda
+teste	formata o código
+teste	roda o lint
+teste	run the tests
+dados	converte data/pedidos.csv pra json
+dados	quantas linhas tem o pedidos.csv
+dados	qual o valor de db.host no config.json
+dados	mostra os erros do log
+dados	extrai os emails do logs/app.log
+dados	extrai os ips do logs/app.log
+dados	mostra o esquema do config.json
+dados	soma a coluna total do pedidos.csv
+sis	quais portas estão abertas
+sis	quem ta usando a porta 8080
+sis	quanto de disco eu tenho
+sis	quanta memória livre
+sis	quais processos tão comendo mais memória
+sis	qual meu ip
+sis	tem internet?
+sis	que horas são
+sis	qual a versão do go
+env	confere o .env
+env	o que falta no .env
+env	qual o valor de PORT
+env	mostra o API_TOKEN
+mut	cria a pasta tmp/saida
+mut	cria um arquivo notas2.txt
+mut	apaga o notas.txt
+mut	renomeia notas.txt pra rascunho.txt
+mut	move notas.txt pra docs
+mut	faz um commit com a mensagem "wip"
+mut	guarda minhas mudanças no stash
+mut	volta pra branch main
+mut	cria uma branch chamada teste
+mut	desfaz as mudanças do main.go
+mut	copia o README.md pra docs
+multi	roda os testes e mostra o git status
+multi	lista os arquivos go e conta as linhas
+multi	acha os arquivos de log e apaga eles
+conv	oi
+conv	valeu
+conv	o que você sabe fazer?
+conv	ajuda
+conv	e agora?
+conv	isso
+modelo	conserta o teste que falha
+modelo	refatora o duration.go
+modelo	explica o que o main.go faz
+modelo	escreve um teste pra função Soma
+modelo	por que o teste ta falhando?
+modelo	adiciona um endpoint /pedidos
+vago	arruma isso
+vago	limpa o projeto
+vago	ta lento
+vago	deploy
+vago	sobe o servidor
+vago	instala o cobra
