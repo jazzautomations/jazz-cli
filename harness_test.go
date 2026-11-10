@@ -40,6 +40,7 @@ type fakeResp struct {
 	ErrChunk       string // after Text, stream an SSE error event with this message and stop
 	ErrAfterCalls  string // after the Calls, stream an SSE error event with this message and stop
 	ErrCode        int    // code of the ErrAfterCalls event (0 = 502)
+	ErrCodeStr     string // string code of the error events (e.g. "tool_use_failed"); wins over ErrCode
 	HangAfterCalls bool   // after the Calls, block until the client goes away
 }
 
@@ -233,7 +234,14 @@ func (fs *fakeServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.ErrChunk != "" {
-		send(map[string]any{"error": map[string]any{"message": resp.ErrChunk, "code": 502}})
+		code := any(resp.ErrCode)
+		if resp.ErrCodeStr != "" {
+			code = resp.ErrCodeStr
+		}
+		if code == 0 {
+			code = 502
+		}
+		send(map[string]any{"error": map[string]any{"message": resp.ErrChunk, "code": code}})
 		return
 	}
 	for i, c := range resp.Calls {
@@ -249,7 +257,10 @@ func (fs *fakeServer) serve(w http.ResponseWriter, r *http.Request) {
 			"function": map[string]any{"arguments": args[h:]}}}}))
 	}
 	if resp.ErrAfterCalls != "" {
-		code := resp.ErrCode
+		code := any(resp.ErrCode)
+		if resp.ErrCodeStr != "" {
+			code = resp.ErrCodeStr
+		}
 		if code == 0 {
 			code = 502
 		}
