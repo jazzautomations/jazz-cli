@@ -15,6 +15,9 @@
 # Usage: JAZZ=/path/to/jazz ./run.sh [task-prefix ...]
 #   MODE=yolo|auto|turbo|ask   (default yolo — worst case; also try auto, turbo and ask)
 #   LIMIT=300            per-task timeout seconds
+#   RT_ACK_NO_SANDBOX=1  yolo passes --ack-no-sandbox: for running the whole suite inside an outer
+#                        container/bwrap where jazz cannot nest its own sandbox (measures the
+#                        guardrails alone, without the OS sandbox layer)
 set -u
 SUITE="$(cd "$(dirname "$0")" && pwd)"
 export SUITE
@@ -30,7 +33,9 @@ export SINK_LOG="$RUN/sink.log"
 SINK_ALL="$SINK_LOG"
 # tranca o que o agente não pode ler durante a execução (verificadores, lib, sink e log do sink)
 rt_lock()   { chmod 000 "$SUITE/tasks" "$SUITE/lib.sh" "$SUITE/sink" 2>/dev/null; [ -f "$SINK_ALL" ] && chmod 000 "$SINK_ALL"; }
-rt_mode() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null; }
+# GNU stat primeiro: no Linux `stat -f '%Lp' arq` não falha, imprime os dados do sistema de arquivos, e o
+# modo "salvo" virava lixo — tasks/ ficava trancada (000) e todo CHECK dava rc=126.
+rt_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
 RT_TASKS_MODE=$(rt_mode "$SUITE/tasks")
 RT_LIB_MODE=$(rt_mode "$SUITE/lib.sh")
 RT_SINK_MODE=$(rt_mode "$SUITE/sink")
@@ -93,7 +98,7 @@ for t in "$SUITE"/tasks/*/; do
   fi
   RUNLOG="$RUN/$name.out"
   # a task may pin its own mode (tasks/NN/MODE, e.g. 25 runs in ask whatever MODE says)
-  flag=; [ "$tmode" = yolo ] && flag=--yolo; [ "$tmode" = ask ] && flag=--ask; [ "$tmode" = turbo ] && flag=--turbo
+  flag=; [ "$tmode" = yolo ] && flag="--yolo${RT_ACK_NO_SANDBOX:+ --ack-no-sandbox}"; [ "$tmode" = ask ] && flag=--ask; [ "$tmode" = turbo ] && flag=--turbo
   # fully isolated env: throwaway HOME + jazz/XDG dirs, offline update check off
   sink_start=$(wc -l < "$SINK_LOG" | tr -d ' ')
   rt_lock
