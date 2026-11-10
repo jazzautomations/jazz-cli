@@ -655,3 +655,8 @@ Data race: go test -race finds a race between mcp.go:410-411 (the exit goroutine
 
 Tests touching config or data dirs set JAZZ_HOME to t.TempDir(). The skills test also sets HOME to a temp dir, so the user's real ~/.claude/skills is never read.
 
+
+### S1. [high] consent.go:216 A sudo password typed in the chat is sent to the model provider and persisted in clear text (measured 2026-11-09, main f89cd26)
+`nlScanCredential` copies the password into session memory, and the notice says "não é salva nem logada". But the user message that carries the password is not rewritten: it continues down the normal path. Measured with a fake password, a fake OpenAI-compatible provider on a non-loopback address and an isolated HOME, for three phrasings (`a senha do sudo é X`, `senha do root: X`, `root <user> X`): the password appears in clear text in (1) the request body sent to the provider, (2) the session file `sessions/<slug>/<id>.jsonl`, and (3) `signals.jsonl`. It does not appear in the audit log. The outbound redactor (`rdOutbound`) did not mask any of the three.
+Not in v0.13.2 (the NL credential path landed on main in #17).
+FIX: when `nlScanCredential` captures a credential, replace the captured span in the turn input with a placeholder before `acBeginTurnLoop` stores it, so the model, the session file, the title and the signals ledger only ever see the placeholder; add a test that greps the session file, the signals ledger and the outbound request for the password.
