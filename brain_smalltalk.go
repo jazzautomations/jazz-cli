@@ -23,7 +23,7 @@ var (
 	stHowAre = regexp.MustCompile(`^((oi+|ola|olá|opa|eai|e ai|e aí|fala|salve|bom dia|boa tarde|boa noite|hello|hi|hey) )?(tudo bem|tudo bom|tudo certo|como vai|como voce esta|como você está|beleza|suave|how are you)( (com voce|com você|ai|aí))?$`)
 	stThanks = regexp.MustCompile(`^(valeu|vlw|obrigad[oa]|brigad[oa]|thanks|thank you|thx|show|top|massa|perfeito|boa)( (mano|cara|jazz|demais|mesmo))?$`)
 	stBye    = regexp.MustCompile(`^(tchau|falou|flw|ate mais|até mais|ate logo|até logo|bye|see you)( (mano|jazz))?$`)
-	stModel  = regexp.MustCompile(`\b(refator\w*|implement\w*|document\w*|reescrev\w*|migr\w*|otimiz\w*|traduz\w*|generics|escreve uma? (funcao|função|classe|teste|api|script)|cria uma? (funcao|função|classe|api|feature)|adiciona suporte|refactor\w*|rewrite|write a (function|class|test)|deploy\w*|terraform|kubernetes|k8s|helm|ansible|provision\w*)\b`)
+	stModel  = regexp.MustCompile(`\b(refator\w*|implement\w*|document\w*|reescrev\w*|migr\w*|otimiz\w*|traduz\w*|generics|escreve uma? (funcao|função|classe|teste|api|script)|cria uma? (funcao|função|classe|api|feature)|adiciona suporte|adiciona uma? (endpoint|rota|campo|feature|funcao|função|metodo|método|classe|tela|pagina|página|botao|botão|validacao|validação)|add an? (endpoint|route|field|feature|function|method|class|page|button)|refactor\w*|rewrite|write a (function|class|test)|deploy\w*|terraform|kubernetes|k8s|helm|ansible|provision\w*)\b`)
 )
 
 // stOffline is the short "what I do with no model" line.

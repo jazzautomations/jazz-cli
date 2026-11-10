@@ -60,6 +60,7 @@ type Intent struct {
 	Dropped    []string          `json:"dropped,omitempty"`   // quoted/role operands no slot consumed — "pattern 'x'" num intent sem pattern
 	Git        bool              `json:"git,omitempty"`       // the request names git/repo explicitly
 	TypoOnly   bool              `json:"typo_only,omitempty"` // the intent stands only on a typo-repaired word (conf capped ≤ 0.5)
+	Phrase     bool              `json:"phrase,omitempty"`    // a whole-request phrase read it (nlu_phrases.go): never split it on "e"
 }
 
 // Understood: a named intent with enough confidence to act on.
@@ -2104,6 +2105,22 @@ func (m *nuModel) taskEvidence(text string, w *nuWorld) bool {
 
 // Parse interprets one request against world w (nil = no entities).
 func (m *nuModel) Parse(text string, w *nuWorld) Intent {
+	if m != nil && m.loadErr == nil {
+		if in, ok := nuPhraseParse(strings.TrimSpace(text), w); ok {
+			return in // a whole-request phrase with resolved operands (nlu_phrases.go)
+		}
+	}
+	in := m.parseGrammar(text, w)
+	if !in.Understood() && m != nil && m.loadErr == nil {
+		if fixed, ok := nuPhraseRepair(strings.TrimSpace(text), w); ok {
+			return fixed
+		}
+	}
+	return in
+}
+
+// parseGrammar is the concept grammar + classifier reading of text.
+func (m *nuModel) parseGrammar(text string, w *nuWorld) Intent {
 	in := Intent{Name: "none"}
 	if m == nil || m.loadErr != nil {
 		if m != nil {

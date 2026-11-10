@@ -1,5 +1,6 @@
 {"methods": [
- {"name": "git_stash.list", "intent": "git_stash", "priority": 10,
+  {"name": "git_stash.push", "intent": "git_stash", "priority": 20, "doc": "git stash push -u pela permissão; confere árvore limpa e stash não vazio", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.op", "op": "eq", "val": "push"}], "steps": [{"cap": "git_op", "in": {"sub": "stash_push"}, "out": "g"}], "verify": [{"check": "cmd_ran", "arg": "$g"}], "risk": "high", "cost_ms": 2000},
+{"name": "git_stash.list", "intent": "git_stash", "priority": 10,
   "doc": "git stash list (só leitura); criar/aplicar stash muda o working tree e vai pelo modelo com confirmação",
   "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
   "cmds": ["git stash list"],

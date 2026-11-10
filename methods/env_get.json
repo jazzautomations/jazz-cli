@@ -1,6 +1,7 @@
 {
  "methods": [
-  {
+   {"name": "env_get.dotenv", "intent": "env_get", "priority": 20, "doc": "o nome não está no ambiente do processo mas é chave do .env do projeto: responde de lá (credencial fica oculta)", "pre": [{"fact": "dotenv.key", "op": "set"}], "steps": [{"cap": "dotenv_get", "in": {"name": "$slot.name"}, "out": "v"}], "verify": [{"check": "read_ok", "arg": "$v"}], "risk": "low", "cost_ms": 20},
+{
    "name": "env_get.script",
    "intent": "env_get",
    "priority": 10,

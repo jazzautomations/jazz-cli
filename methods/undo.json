@@ -1,5 +1,6 @@
 {"methods": [
- {"name": "undo.last", "intent": "undo", "priority": 10,
+  {"name": "undo.git_file", "intent": "undo", "priority": 20, "doc": "descarta as mudanças não commitadas de UM arquivo (git checkout HEAD -- arq), guardando o diff em .git antes; confere que o arquivo ficou igual ao último commit", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.file", "op": "set"}], "steps": [{"cap": "git_op", "in": {"sub": "restore_file", "path": "$slot.file"}, "out": "g"}], "verify": [{"check": "cmd_ran", "arg": "$g"}], "risk": "high", "cost_ms": 2000},
+{"name": "undo.last", "intent": "undo", "priority": 10,
   "doc": "restaura os arquivos da última turn que escreveu (checkpoint.go /undo)",
   "steps": [{"cap": "undo", "in": {}, "out": "u"}],
   "verify": [{"check": "read_ok", "arg": "$u"}],

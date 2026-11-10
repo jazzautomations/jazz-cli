@@ -1,5 +1,6 @@
 {"methods": [
- {"name": "git_branch.list", "intent": "git_branch", "priority": 10,
+  {"name": "git_branch.create", "intent": "git_branch", "priority": 20, "doc": "cria a branch e muda pra ela (git checkout -b), pela permissão; confere que a branch atual é a nova", "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}, {"fact": "slot.name", "op": "set"}, {"fact": "slot.op", "op": "eq", "val": "create"}], "steps": [{"cap": "git_op", "in": {"sub": "branch_create", "branch": "$slot.name"}, "out": "g"}], "verify": [{"check": "cmd_ran", "arg": "$g"}], "risk": "high", "cost_ms": 2000},
+{"name": "git_branch.list", "intent": "git_branch", "priority": 10,
   "doc": "git branch lista as branches e marca a atual (só leitura); criar/mudar de branch pede confirmação e vai pelo modelo",
   "pre": [{"fact": "project.git", "op": "set"}, {"fact": "bin.git", "op": "set"}],
   "cmds": ["git branch"],

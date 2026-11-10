@@ -49,7 +49,38 @@
         "o que (?:mudou|eu mudei|foi alterado|foi modificado|mudou ate agora|esta diferente|ta diferente)|oque mudou|que mudou|o que mudou no repo|o que mudou no projeto",
         "what changed|what did i change|what(?:'s| has) changed(?: so far)?",
         "(?:mostra|mostre|me mostra|show|show me)(?: o| the| me o)? diff|git diff|diff",
-        "(?:mostra|mostre|me mostra|show|show me)(?: as| the)? (?:mudancas|alteracoes|changes)"
+        "(?:mostra|mostre|me mostra|show|show me)(?: as| the)? (?:mudancas|alteracoes|changes)",
+        "what(?:'s| has)? changed since (?:the |my )?last commit|o que mudou desde o ultimo commit|o que eu mudei desde o ultimo commit"
+      ]
+    },
+    {
+      "name": "last_commit",
+      "cmd": "{{git}} log -1 --stat",
+      "patterns": [
+        "(?:qual|qual e|qual foi|quem fez|quando foi)(?: o)? ultimo commit|(?:o )?ultimo commit|(?:mostra|mostre|me mostra|ver)(?: o)? ultimo commit",
+        "(?:what was|what is|whats|show|show me)(?: the| my)? last commit|(?:the )?last commit|git log -1|git show"
+      ]
+    },
+    {
+      "name": "log_n",
+      "cmd": "{{git}} log --oneline -n {{n}}",
+      "patterns": [
+        "(?:(?:mostra|mostre|me mostra|ver|lista|quais sao|quais foram) )?(?:os )?ultimos (?P<n>\\d{1,3}) commits",
+        "(?:(?:mostra|mostre|me mostra|ver|lista) )?(?:os )?(?P<n>\\d{1,3}) ultimos commits",
+        "(?:(?:show|show me|list) )?(?:the |my )?last (?P<n>\\d{1,3}) commits",
+        "git log -n? ?(?P<n>\\d{1,3})"
+      ],
+      "slots": {
+        "n": "^[1-9]\\d{0,2}$"
+      }
+    },
+    {
+      "name": "changed_files",
+      "cmd": "{{git}} status --short",
+      "patterns": [
+        "(?:quais|que) arquivos (?:eu )?(?:mexi|mudei|alterei|modifiquei|editei|toquei)|(?:quais|que) arquivos (?:mudaram|foram alterados|foram modificados|estao modificados|tao modificados|eu mexi ate agora)",
+        "(?:lista|mostra|me mostra|ver)(?: os)? arquivos (?:modificados|alterados|que mudaram|que eu mexi|que eu mudei)|arquivos modificados|arquivos alterados",
+        "(?:which|what) files (?:did i (?:change|touch|edit|modify)|have i (?:changed|touched|edited|modified)|changed|are modified|were modified)|modified files|changed files|(?:list|show|show me)(?: the)? (?:modified|changed) files"
       ]
     },
     {
@@ -66,8 +97,40 @@
       "patterns": [
         "(?:onde (?:esta|fica|ta|e definid[oa]|foi definid[oa]|esta definid[oa])|where is|where's|where are|where is defined) (?:o |a |os |as |the )?(?:funcao |function |func |metodo |method |classe |class |tipo |type |struct |interface |simbolo |symbol |variavel |variable |constante |constant )?(?P<sym>[A-Za-z_$][\\w$.]*)(?:\\(\\))?(?: (?:definid[oa]|defined))?"
       ],
-      "slots": {"sym": "^[A-Za-z_$][\\w$.]{2,79}$"},
-      "reject": ["erro", "error", "errors", "bug", "bugs", "problema", "problem", "falha", "issue", "arquivo", "file", "codigo", "code", "isso", "this", "that", "ele", "ela", "config", "configuracao", "teste", "test", "tests", "testes", "projeto", "project", "log", "logs", "readme"]
+      "slots": {
+        "sym": "^[A-Za-z_$][\\w$.]{2,79}$"
+      },
+      "reject": [
+        "erro",
+        "error",
+        "errors",
+        "bug",
+        "bugs",
+        "problema",
+        "problem",
+        "falha",
+        "issue",
+        "arquivo",
+        "file",
+        "codigo",
+        "code",
+        "isso",
+        "this",
+        "that",
+        "ele",
+        "ela",
+        "config",
+        "configuracao",
+        "teste",
+        "test",
+        "tests",
+        "testes",
+        "projeto",
+        "project",
+        "log",
+        "logs",
+        "readme"
+      ]
     },
     {
       "name": "search",
@@ -75,7 +138,9 @@
       "patterns": [
         "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|the))? (?P<sym>[A-Za-z_$][\\w$.]*)"
       ],
-      "slots": {"sym": "^(?:[A-Z_$][\\w$.]{2,79}|[\\w$]+[A-Z_$0-9.][\\w$.]*)$"}
+      "slots": {
+        "sym": "^(?:[A-Z_$][\\w$.]{2,79}|[\\w$]+[A-Z_$0-9.][\\w$.]*)$"
+      }
     },
     {
       "name": "search_code",
@@ -83,8 +148,20 @@
       "patterns": [
         "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$.]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)"
       ],
-      "slots": {"sym": "^[\\w$.]{3,79}$"},
-      "reject": ["erro", "error", "bug", "isso", "this", "that", "coisa", "algo", "something"]
+      "slots": {
+        "sym": "^[\\w$.]{3,79}$"
+      },
+      "reject": [
+        "erro",
+        "error",
+        "bug",
+        "isso",
+        "this",
+        "that",
+        "coisa",
+        "algo",
+        "something"
+      ]
     }
   ]
 }
