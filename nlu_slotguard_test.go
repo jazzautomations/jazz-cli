@@ -2417,8 +2417,14 @@ func TestNLUArchiveCreateGuards(t *testing.T) {
 			map[string]string{"query": "ParseArgs"}},
 		{"find files sorted by date", "find",
 			map[string]string{"query": "sorted date"}},
-		{"encontra a string 'connection refused'", "text_grep",
-			map[string]string{"pattern": "connection refused"}},
+		{"encontra a string 'connection refused'", "find",
+			map[string]string{"query": "connection refused"}},
+		{"grep the string 'timeout' in parser.go", "text_grep",
+			map[string]string{"file": "parser.go", "pattern": "timeout"}},
+		{"grep NewServer", "find",
+			map[string]string{"query": "NewServer"}},
+		{"acha onde tem fmt.Println", "find",
+			map[string]string{"query": "fmt.Println"}},
 		// faixa de tamanho posicional — "between X and Y"
 		{"Find all .gif files in the /var/www directory tree that are between 5 kB and 10 kB in size",
 			"file_find", map[string]string{"ext": "gif",
@@ -2658,6 +2664,420 @@ func TestNLUModePhrasing(t *testing.T) {
 		in := m.Parse(q, w)
 		if nuPredict(in) != "none" {
 			t.Errorf("should refuse: %q -> %s %v %.2f", q, in.Name, in.Slots, in.Confidence)
+		}
+	}
+}
+
+// Under-refusal (T5): o pedido doable não pode parar no penhasco de
+// confiança nem rotear errado —
+//   - a aspa do "testa regex F 'pat'" é o pattern (era operando solto
+//     → conf 0.22); sem ela, vocábulo-cardápio ("testa regex") não cola
+//     como padrão falso (dropped fantasma → conf 0.44);
+//   - "busca literal" tem regra determinística (era só classificador →
+//     0.55);
+//   - marcador maiúsculo depois de "por" é a tarefa do todo_scan —
+//     "procura por TODO e FIXME" virava text_grep com file=FIXME;
+//   - "tira um snapshot" é fotografia (file_snapshot), não remoção —
+//     'tira' só perde o removeword quando `snapshot` é a 1ª palavra útil
+//     à direita ("tira os arquivos de snapshot" continua delete_file).
+func TestNLUUnderRefusalGuards(t *testing.T) {
+	m, w := nuTestWorld(t)
+	in := m.Parse(`testa regex v4_regex_test.txt "ana"`, w)
+	if in.Name != "regex_test" || in.Confidence < 0.7 ||
+		in.Slots["target"] != "v4_regex_test.txt" || in.Slots["pattern"] != "ana" {
+		t.Errorf("regex_test: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	in = m.Parse(`busca literal v4_text_grep.txt "ana"`, w)
+	if in.Name != "text_grep" || in.Confidence < 0.7 ||
+		in.Slots["file"] != "v4_text_grep.txt" || in.Slots["pattern"] != "ana" {
+		t.Errorf("text_grep: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	for _, q := range []string{`procura por TODO e FIXME`, `procura por "TODO"`, `search files for "TODO"`} {
+		in = m.Parse(q, w)
+		if in.Name != "todo_scan" || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	in = m.Parse("tira um snapshot dos arquivos", w)
+	if in.Name != "file_snapshot" || in.Confidence < 0.7 {
+		t.Errorf("snapshot: %s conf %.2f ev %v", in.Name, in.Confidence, in.Evidence)
+	}
+	// negativos: o padrão citado segue padrão; 'tira X de snapshot'
+	// continua remoção; grep literal de marcador explícito sobrevive
+	in = m.Parse(`procura por "abc"`, w)
+	if in.Name != "find" || in.Slots["query"] != "abc" {
+		t.Errorf("forquoted comum: %s %v", in.Name, in.Slots)
+	}
+	in = m.Parse("tira os arquivos de snapshot", w)
+	if in.Name != "delete_file" {
+		t.Errorf("tira arquivos: %s ev %v", in.Name, in.Evidence)
+	}
+	in = m.Parse(`grep "TODO" in parser.go`, w)
+	if in.Name != "text_grep" || in.Slots["pattern"] != "TODO" {
+		t.Errorf("grep literal de marcador: %s %v", in.Name, in.Slots)
+	}
+	// sem aspa, o pedido não tem padrão — e nada inventa um
+	in = m.Parse("testa regex README.md", w)
+	if in.Name != "regex_test" || in.Slots["pattern"] != "" || len(in.Dropped) > 0 {
+		t.Errorf("sem padrão: %s slots %v dropped %v", in.Name, in.Slots, in.Dropped)
+	}
+	// "por favor" abre o cue de padrão mas a frase-cardápio e o arquivo
+	// não são padrão — o cue cola nada e o pedido segue limpo
+	for _, q := range []string{
+		`por favor testa regex README.md`,
+		`por favor regex contra linhas README.md`,
+		`por favor busca literal README.md`,
+	} {
+		in = m.Parse(q, w)
+		if len(in.Dropped) > 0 || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// o artigo do lado B não é label do lado A: o lookback para
+	// no separador do par ("e", "vs", "com")
+	in = m.Parse("diferença entre a pasta a e a pasta b", w)
+	if in.Name != "dir_diff" || in.Slots["a"] != "a" || in.Slots["b"] != "b" || in.Confidence < 0.7 {
+		t.Errorf("dir_diff: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	// "remoto" em intent git é o git-remote (vocábulo de domínio),
+	// não spec de execução remota — o passe não pode dropar
+	for q, want := range map[string]string{
+		"envia pro remoto":                      "git_push",
+		"manda pro github":                      "git_push",
+		"estou atrás do remoto?":                "git_branch_status",
+		"quantos commits estou ahead do origin": "git_branch_status",
+		"baixa do remoto":                       "git_pull",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// uso adjetivo ou host qualificado continua spec remoto —
+	// executar LOCAL quando pediram outra máquina é falso-sucesso
+	for _, q := range []string{
+		"git status da máquina remota",
+		"git pull do servidor remoto",
+		"instala jq na máquina web-01",
+		"git commit no servidor web-01",
+		"roda os testes no servidor",
+	} {
+		in = m.Parse(q, w)
+		if len(in.Dropped) == 0 {
+			t.Errorf("%q: %s conf %.2f sem drop — spec remoto perdido", q, in.Name, in.Confidence)
+		}
+	}
+	// "na máquina" nu = esta aqui; possessivo também aponta pra cá
+	for q, want := range map[string]string{
+		"bota o jq na máquina": "install_dep",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// vocábulo-contexto: "quais erros no log" lista erros (não conta);
+	// "todos" é massa, não verbo; "checa"/"how long" alimentam a regra
+	for q, want := range map[string]string{
+		"quais erros apareceram no log do sistema": "log_errors_recent",
+		"comprime todos os .txt em textos.zip":     "archive_create",
+		"checa se o labbox tá online":              "host_status",
+		"how long has it been up":                  "uptime_load",
+		// "do" nu é genitivo, não comparativo — jazz não é referência
+		// temporal ("do que" segue comparando)
+		"tem versão nova do jazz? atualiza": "update_jazz",
+		// vocábulos de domínio que o roteiro genérico engolia
+		"em que branch eu tô":                 "git_branch",
+		"arquivos modificados na última hora": "fs_recent",
+		"quais arquivos mudam juntos":         "git_cochange",
+		"quais timers do systemd existem":     "cron_list",
+		"limpa o docker":                      "container_prune",
+		"gera o binário":                      "build",
+		"verifica o checksum do download":     "hash_verify",
+		"gera os checksums do projeto":        "file_snapshot",
+		"mostra o codigo do lexer.go":         "open_file",
+		"your version":                        "self_info",
+		"se apresenta":                        "self_info",
+		"who is connected":                    "logged_in",
+		"quem tá conectado no servidor":       "logged_in",
+		"o ssh está ativo?":                   "service_status",
+		"o tailscaled tá rodando?":            "service_status",
+		"o zip é seguro de extrair?":          "archive_list",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// os vetos de domínio seguem decidindo: stop≠prune, arquivo≠docker,
+	// snapshot de apagar é delete, extrair explícito é extract
+	for q, want := range map[string]string{
+		"status das branches":     "git_branch_status",
+		"cria branch foo":         "git_branch",
+		"apaga o container":       "container_stop",
+		"limpa a pasta":           "delete_file",
+		"apaga o snapshot":        "delete_file",
+		"extrai o zip":            "archive_extract",
+		"lista o conteúdo do zip": "archive_list",
+		"ssh no servidor":         "connect_host",
+		"valeu":                   "none",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// conf-cliff: typo-form entra com força de lexema (slang), o idiom
+	// "dar uma olhada" é open e "o conteúdo de X" é phrasing coberto
+	// pela regra (used[content]), nunca operando dropado
+	for q, want := range map[string]string{
+		"corrije o erro do build":         "fix",
+		"mostra o conteudo do config.yml": "open_file",
+		"mostra o conteudo do parser.go":  "open_file",
+		"quero dar uma olhada no conn.go": "open_file",
+		"take a look at conn.go":          "open_file",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 || len(in.Dropped) > 0 {
+			t.Errorf("%q: %s conf %.2f dropped %v", q, in.Name, in.Confidence, in.Dropped)
+		}
+	}
+	// uso de símbolo é refs, não locate: usage/callers vetam o find
+	for q, want := range map[string]string{
+		"usages of handleLogin":     "symbol_refs",
+		"referências de NewServer":  "symbol_refs",
+		"where is Tokenize used":    "symbol_refs",
+		"grep NewServer":            "find",
+		"procura ParseArgs":         "find",
+		"acha onde tem fmt.Println": "find",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// o verbo decide a rota: pull+objeto-diff é pull (não diff);
+	// typo-form e idiom de pedido de capacidade seguem cardápio
+	for q, want := range map[string]string{
+		"puxa as mudança do remoto": "git_pull",
+		"puxa do remoto":            "git_pull",
+		"puxa as mudanças":          "git_pull",
+		"mostra o diff do pull":     "git_diff",
+		"ultimos comits":            "git_log",
+		"switch pra main":           "git_checkout",
+		"git switch main":           "git_checkout",
+		"opn parser.go":             "open_file",
+		"git psuh":                  "git_push",
+		"o que vc sabe fazer?":      "help",
+		"what can you do":           "help",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "troca X por Y" é replace — replto marca o novo valor e veta o
+	// checkout; 'pra'/'para' seguem direção de branch
+	for q, want := range map[string]string{
+		"troca 'foo' por 'bar' em config.txt": "text_replace",
+		"replace foo with bar in app.log":     "text_replace",
+		"troca pra main":                      "git_checkout",
+		"volta pra main":                      "git_checkout",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "o que o X faz" com o operando no meio é explain — o verbo-do
+	// final vira explain, não makeword; "faz o build" segue build
+	for q, want := range map[string]string{
+		"o que o handleLogin faz?":     "explain",
+		"o que a função ParseArgs faz": "explain",
+		"what does NewServer do":       "explain",
+		"faz um commit":                "git_commit",
+		"faz o build":                  "build",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// verbo-count à esquerda torna "erros" o objeto de contagem, não
+	// pedido de fix — o classificador não decide empate conceitual
+	for q, want := range map[string]string{
+		"conta os erros no app.log":    "text_count",
+		"quantos erros tem no app.log": "text_count",
+		"conta os erros":               "text_count",
+		"conserta os erros":            "fix",
+		"corrije o erro do build":      "fix",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "ocorrências de X" — o 'de' é conector do PADRÃO (grepword), não
+	// cue de pasta: X é o contado. 'de' sem grepword segue dir cue.
+	for q, pat := range map[string]string{
+		"conta as ocorrências de erro":   "erro",
+		"conta as ocorrências de TODO":   "TODO",
+		"conta ocorrências de undefined": "undefined",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != "text_count" || in.Slots["pattern"] != pat ||
+			in.Slots["dir"] != "" || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+	}
+	// 'de' real abre escopo — a guarda de grepword não pode matar
+	// o dir cue legítimo
+	in = m.Parse("arquivos de log na pasta de logs", w)
+	if in.Slots["dir"] != "logs" {
+		t.Errorf("dir cue real: slots %v", in.Slots)
+	}
+	// "branch chamada x" — nome de 1 char com cue (nametgt) é literal;
+	// sem cue ("cria a branch x", "na pasta X") segue descriptor
+	// solto e recusa honesto
+	in = m.Parse("cria uma branch nova chamada x", w)
+	if in.Name != "git_branch" || in.Slots["name"] != "x" ||
+		in.Confidence < 0.7 {
+		t.Errorf("branch 1-char: %s conf %.2f slots %v ev %v",
+			in.Name, in.Confidence, in.Slots, in.Evidence)
+	}
+	for q, want := range map[string]string{
+		"cria uma branch chamada feature-x": "feature-x",
+		"cria um arquivo chamado y":         "",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+		_ = want
+	}
+	for _, q := range []string{
+		"cria a branch x",
+		"encontra arquivos na pasta X",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 || len(in.Dropped) == 0 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f slots %v",
+				q, in.Name, in.Confidence, in.Slots)
+		}
+	}
+	// "traz" é pull como "puxa"; "compara com o remoto" é diff de git —
+	// remote é vocábulo de domínio, nunca operando de pasta
+	for q, want := range map[string]string{
+		"traz as mudanças":                    "git_pull",
+		"traz as mudanças do remoto":          "git_pull",
+		"compara com o remoto":                "git_diff",
+		"compara com a main":                  "dir_diff",
+		"quais arquivos foram editados ontem": "fs_recent",
+		"arquivos modificados hoje":           "fs_recent",
+		"commits de ontem":                    "git_log",
+		"quem editou o parser.go":             "git_blame",
+		"ajuda com o comando grep":            "help",
+		"ajuda com a ferramenta tar":          "help",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "volta" é checkout (voltar atrás); "branches remotas" é
+	// branch_status — o 'remote' host é qualificador de branch,
+	// não pedido de hosts SSH. explain cobre "o que faz o <tool>"
+	for q, want := range map[string]string{
+		"volta o commit anterior":    "git_checkout",
+		"volta pra main":             "git_checkout",
+		"lista as branches remotas":  "git_branch_status",
+		"lista as máquinas remotas":  "list_hosts",
+		"lista as branches":          "git_branch",
+		"o que faz o comando grep":   "explain",
+		"o que faz a ferramenta tar": "explain",
+		"mostra os comandos":         "help",
+		"desfaz o último commit":     "undo",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// git clone/baixa-repo não está no cardápio — recusa honesta,
+	// nunca git_status/dup_code/project_summary fingindo a ação
+	for _, q := range []string{
+		"clona o repo",
+		"git clone repo",
+		"baixa o repositório",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f slots %v",
+				q, in.Name, in.Confidence, in.Slots)
+		}
+	}
+	// família sort/slice/dedupe: "embaralha/inverte linhas" é sort_op
+	// com flag; "tira duplicatas" de linhas é uniq (sort_op), de
+	// arquivos é delete_file; "corta linhas X a Y" é slice, não split
+	for q, want := range map[string]string{
+		"embaralha as linhas":             "sort_op",
+		"inverte a ordem das linhas":      "sort_op",
+		"ordena as linhas do csv":         "sort_op",
+		"tira as duplicatas do lista.txt": "sort_op",
+		"remove as linhas duplicadas":     "sort_op",
+		"remove os arquivos duplicados":   "delete_file",
+		"acha arquivos duplicados":        "file_dupes",
+		"corta as linhas 5 a 10":          "line_slice",
+		"pega a última linha do log":      "line_slice",
+		"primeiras 5 linhas do log":       "line_slice",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "copia X pra Y" é file_move op:copy — cópia existe no cardápio
+	for q, dest := range map[string]string{
+		"copia o config pra backup":   "backup",
+		"copia o a.txt pra pasta b":   "b",
+		"move o a.txt pra pasta docs": "docs",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != "file_move" || in.Slots["dest"] != dest ||
+			in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+	}
+	// "quanto pesa a pasta X" é disk_usage com path, não file_find;
+	// "cria uma pasta chamada tmp" — o cue nameattr não vira alvo
+	in = m.Parse("quanto pesa a pasta src", w)
+	if in.Name != "disk_usage" || in.Slots["path"] != "src" ||
+		in.Confidence < 0.7 {
+		t.Errorf("pesa pasta: %s conf %.2f slots %v ev %v",
+			in.Name, in.Confidence, in.Slots, in.Evidence)
+	}
+	in = m.Parse("cria uma pasta chamada tmp", w)
+	if in.Name != "create" || in.Slots["target"] != "tmp" ||
+		in.Slots["targets"] != "" {
+		t.Errorf("pasta chamada: %s slots %v", in.Name, in.Slots)
+	}
+	// posição no arquivo nunca é operando — "no meio" não é dir/file;
+	// concat não está no cardápio — recusa honesta
+	in = m.Parse("corta o arquivo no meio", w)
+	if in.Confidence >= 0.7 || in.Slots["dir"] == "meio" ||
+		in.Slots["file"] == "meio" {
+		t.Errorf("no meio: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	for _, q := range []string{
+		"concatena os dois arquivos",
+		"cria um tag v1.0",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f", q, in.Name, in.Confidence)
 		}
 	}
 }

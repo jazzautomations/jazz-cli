@@ -231,10 +231,19 @@ func brPlanChain(cx *brCtx, in Intent, methods []mhMethod) *mhMethod {
 	// A described slot's literal parse value is the description's own noun
 	// ("downloads" in "o arquivo mais novo da pasta downloads"), never the
 	// target — hide it from every method so a failed or missing chain asks
-	// instead of running `rm downloads`.
+	// instead of running `rm downloads`. A literal that already names the
+	// operand ("v4_csv_to_json.txt") is not a description: it stays in the
+	// slots and leaves `described`, so the planner sees it as satisfied
+	// instead of deleting the only operand the consumer method had.
 	for f := range described {
-		delete(cx.task.Slots, strings.TrimPrefix(f, "slot."))
-		delete(cx.facts, f)
+		name := strings.TrimPrefix(f, "slot.")
+		v := cx.task.Slots[name]
+		if v == "" || !nuFileShaped(fzFold(v)) && !strings.ContainsAny(v, "/\\") {
+			delete(cx.task.Slots, name)
+			delete(cx.facts, f)
+			continue
+		}
+		delete(described, f)
 	}
 	goal := "done." + in.Name
 	var ops []Operator

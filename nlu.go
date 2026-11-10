@@ -405,6 +405,17 @@ func nuTokenize(text string) []nuTok {
 	return out
 }
 
+// nuTodoMarker: uppercase code marker words — the task vocabulary of
+// todo_scan. Only the raw uppercase form counts: lowercase "todo(s)" is
+// PT "all/every" and stays ambiguous.
+func nuTodoMarker(raw string) bool {
+	switch raw {
+	case "TODO", "TODOs", "FIXME", "FIXMEs", "HACK", "HACKs", "XXX":
+		return true
+	}
+	return false
+}
+
 // normalize: slang phrases → canonical words, concept phrases, word
 // concepts, fillers.
 func (m *nuModel) normalize(toks []nuTok) []nuTok {
@@ -487,7 +498,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			for j := i + 1; j < len(out) && j <= i+4; j++ {
 				u := &out[j]
 				switch u.Fold {
-				case "than", "que", "do":
+				case "than", "que":
+					// "do" fora — comparativo pede "do QUE"; "do" nu
+					// é genitivo ("versão nova do jazz" não compara)
 					thanSeen = true
 					continue
 				}
@@ -737,7 +750,9 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					}
 					if isName {
 						t.Concs = append(t.Concs, "nametgt")
-					} else {
+					} else if !nuTodoMarker(t.Raw) {
+						// marcador maiúsculo depois de "por" é a tarefa
+						// do todo_scan ("procura por TODO"), não padrão
 						t.Concs = append(t.Concs, "forquoted")
 					}
 					break
@@ -785,7 +800,8 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 					// nunca o padrão citado)
 					if verb && scope && !nuFileCueWords[t.Fold] &&
 						!t.has("files") && !t.has("filenoun") &&
-						!t.has("dirnoun") && !t.has("dir") && !nuIsNumber(t.Fold) {
+						!t.has("dirnoun") && !t.has("dir") &&
+						!nuIsNumber(t.Fold) && !nuTodoMarker(t.Raw) {
 						t.Concs = append(t.Concs, "forquoted")
 					}
 				}
@@ -1198,11 +1214,90 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 	// minúsculo segue ambíguo com "all" em PT e fica em `list`
 	for i := range out {
 		t := &out[i]
-		switch t.Raw {
-		case "TODO", "TODOs", "FIXME", "FIXMEs", "HACK", "HACKs", "XXX":
-			if !t.has("todo") {
-				t.Concs = append(t.Concs, "todo")
+		if nuTodoMarker(t.Raw) && !t.has("todo") {
+			t.Concs = append(t.Concs, "todo")
+		}
+	}
+	// "tira um snapshot (dos arquivos)": 'tira'/'take' carregam
+	// removeword léxico, mas com `snapshot` logo à direita são o verbo
+	// da fotografia — sem a supressão delete_file casa removeword+files
+	// e um pedido de inventário vira exclusão ("tira os arquivos de
+	// snapshot" mantém o verbo: a primeira palavra útil é 'arquivos')
+	for i := range out {
+		t := &out[i]
+		if !t.has("removeword") {
+			continue
+		}
+		for j := i + 1; j < len(out) && j <= i+3; j++ {
+			u := &out[j]
+			if !u.Quoted && u.has("snapshot") {
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "removeword" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+				break
 			}
+			if !u.Filler {
+				break
+			}
+		}
+	}
+	// "o zip é seguro de extrair?"/"is it safe to extract": adjetivo
+	// de risco imediatamente antes do verbo torna o 'extrair'
+	// hipotético — o pedido é inspecionar o pacote, não extraí-lo;
+	// sem a supressão archive_extract casa e a pergunta vira ação
+	for i := range out {
+		t := &out[i]
+		if !t.has("extract") {
+			continue
+		}
+		for j := i - 1; j >= 0 && j >= i-4; j-- {
+			u := &out[j]
+			if u.Filler {
+				continue
+			}
+			switch u.Fold {
+			case "seguro", "segura", "safe", "perigoso", "perigosa",
+				"dangerous", "arriscado", "arriscada", "risky":
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "extract" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = kept
+				t.Filler = true // verbo hipotético não é palavra solta
+			}
+			break
+		}
+	}
+	// "troca X por Y" — 'por'/'with'/'com' depois de verbo-replace abre
+	// o NOVO valor, não o destino: o operando seguinte é replto e veta
+	// o checkout ('troca' é replace E checkout — "troca pra main" com
+	// 'pra'/'para' segue direção de branch, não marca)
+	for i := range out {
+		if !out[i].has("replace") {
+			continue
+		}
+		sep := false
+		for j := i + 1; j < len(out) && j <= i+6; j++ {
+			u := &out[j]
+			switch u.Fold {
+			case "por", "with", "com":
+				sep = true
+				continue
+			}
+			if u.Filler || u.Slang || u.has("article") {
+				continue
+			}
+			if !sep {
+				continue // o operando antigo não é o novo valor
+			}
+			u.Concs = append(u.Concs, "replto")
+			break
 		}
 	}
 	// "suppress(ing) error messages"/"silence errors" — stderr é efeito
@@ -1291,6 +1386,41 @@ func (m *nuModel) normalize(toks []nuTok) []nuTok {
 			}
 			u.Concs = append(u.Concs, "nametgt")
 			break mark
+		}
+	}
+	// "o que o X faz?" — o verbo-do no FIM é a pergunta de explicação
+	// ("what does X do"), não makeword: com 'que'/'what' de pergunta
+	// antes e operando útil no meio, o verbo vira explain. A forma
+	// colada ("o que faz o X") o slang já cobre.
+	last := -1
+	for i := len(out) - 1; i >= 0; i-- {
+		if !out[i].Filler && !out[i].Slang {
+			last = i
+			break
+		}
+	}
+	if last >= 0 {
+		t := &out[last]
+		switch t.Fold {
+		case "faz", "fazer", "fazem", "do", "does":
+			qu, mid := false, false
+			for j := last - 1; j >= 0; j-- {
+				u := &out[j]
+				if u.Fold == "que" || u.Fold == "what" {
+					qu = true
+				} else if !u.Filler && !u.Slang {
+					mid = true
+				}
+			}
+			if qu && mid {
+				kept := t.Concs[:0]
+				for _, c := range t.Concs {
+					if c != "makeword" {
+						kept = append(kept, c)
+					}
+				}
+				t.Concs = append(kept, "explain")
+			}
 		}
 	}
 	return out
@@ -2022,7 +2152,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				}
 				var alTaken map[int]bool
 				in.Slots, in.Missing, in.Hint, _, alTaken = m.fill(&m.data.Intents[di], toks, hits, used, w)
-				in.Dropped = nuDroppedOps(toks, alTaken, in.Slots)
+				in.Dropped = nuDroppedOps(toks, alTaken, in.Slots, used)
 			}
 			return in
 		}
@@ -2442,7 +2572,7 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			drop(nuExcludeRaw(&toks[i]))
 		}
 	}
-	for _, r := range nuDroppedOps(toks, taken, in.Slots) {
+	for _, r := range nuDroppedOps(toks, taken, in.Slots, used) {
 		drop(r)
 	}
 	// "with group owner X" / "belonging to root": X é predicado de ORIGEM;
@@ -5576,6 +5706,20 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		if len(v) == 1 && v != "." && v != "/" && v != "~" ||
 			dk == "dir" && len(v) > 2 && strings.ToUpper(v) == v &&
 				strings.HasSuffix(v, "DIR") && !strings.HasPrefix(v, "$") {
+			// nome de 1 char com cue explícito ("branch chamada x")
+			// é literal real — só vira descriptor solto sem cue
+			if dk == "name" {
+				named := false
+				for _, t := range toks {
+					if (t.Raw == v || t.Fold == v) && t.has("nametgt") {
+						named = true
+						break
+					}
+				}
+				if named {
+					continue
+				}
+			}
 			delete(in.Slots, dk)
 			in.Dropped = append(in.Dropped, v)
 		}
@@ -5819,16 +5963,25 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		in.Name == "net_ifaces" || in.Name == "net_route" ||
 		in.Name == "net_status" || in.Name == "file_users" ||
 		strings.HasPrefix(in.Name, "service_")
+	// intents git operam sobre o remote por definição — "pro remoto"/
+	// "do origin" é vocábulo do domínio, não spec de execução remota.
+	// Uso adjetivo ("máquina remota", "remote host") continua spec.
+	gitDomain := strings.HasPrefix(in.Name, "git_")
 	remoteVocab := false
 	hostIdx := -1
 	if !hostDomain {
 		for i, t := range toks {
 			switch t.Fold {
 			case "remote", "remoto", "remota":
+				if gitDomain && !nuRemoteAdj(toks, i) {
+					continue
+				}
 				remoteVocab = true
 			case "ssh", "host", "hosts", "node", "nodes", "server",
 				"servers", "machine", "machines", "servidor",
 				"servidores", "maquina", "máquina":
+				machineWord := t.Fold == "machine" || t.Fold == "machines" ||
+					t.Fold == "maquina" || t.Fold == "máquina"
 				demo := false
 				for j := i - 1; j >= 0 && j >= i-3; j-- {
 					u := toks[j]
@@ -5848,7 +6001,10 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 					switch u.Fold {
 					case "on", "at", "em", "no", "na", "via",
 						"ssh", "remote", "remoto":
-						if !demo {
+						// "na máquina" nu = esta aqui;
+						// nome/qualificador depois ("máquina
+						// web-01", "máquina remota") é spec
+						if !demo && (!machineWord || nuHostQualified(toks, i)) {
 							remoteVocab = true
 							if hostIdx < 0 {
 								hostIdx = i
@@ -7090,7 +7246,7 @@ func (m *nuModel) fill(def *nuIntentDef, toks []nuTok, hits []nuHit, used map[st
 			case strings.HasPrefix(sd.From, "diffpair:"):
 				v = nuDiffPart(toks, sd.From[9:] == "b", taken)
 			case strings.HasPrefix(sd.From, "grep:"):
-				v = nuGrepArg(toks, sd.From[5:], taken)
+				v = nuGrepArg(toks, sd.From[5:], taken, def.Name)
 			case sd.From == "wc:what":
 				v = nuWcWhat(toks)
 			case strings.HasPrefix(sd.From, "sort:"):
@@ -8110,10 +8266,13 @@ func nuArchiveArg(toks []nuTok, what string, taken map[int]bool) string {
 // "for/por/containing/contêm" até o cue de escopo ("in FILE", "no log").
 // Palavras-meta ("the string foo", "the word bar") são conceito content,
 // não parte do padrão.
-func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
+func nuGrepArg(toks []nuTok, what string, taken map[int]bool, intent string) string {
 	if what != "pat" {
 		return ""
 	}
+	// pro find o padrão É o texto do pedido — "fmt.Println" é símbolo
+	// qualificado, não operando de arquivo como em text_grep
+	fileSkip := intent != "find"
 	// aspas primeiro: o conteúdo citado é o padrão — com duas citações,
 	// a marcada forquoted (depois de "for") é o padrão, a outra é alvo:
 	// 'search files "f.c" for the string "can'"' → pattern=can, file=f.c
@@ -8196,6 +8355,16 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			if u.has("content") || nuIsNumber(u.Fold) && len(parts) == 0 {
 				continue // "the string foo" — meta, não padrão
 			}
+			v4 := false
+			for _, c := range u.Concs {
+				if strings.HasPrefix(c, "v4_") {
+					v4 = true // "por favor testa regex F" — a frase-cardápio não é padrão
+					break
+				}
+			}
+			if v4 || fileSkip && nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+				continue // file-shaped é alvo do slot file/target, nunca padrão
+			}
 			parts = append(parts, u.Raw)
 			taken[j] = true
 		}
@@ -8217,7 +8386,17 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool) string {
 			u.has("nameattr") || u.has("files") ||
 			u.has("count") || nuCountNouns[u.Fold] ||
 			nuArchiveWord(u.Fold) || nuPureExt(u.Fold) ||
-			nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			fileSkip && nuNameShaped(u.Raw) && strings.ContainsAny(u.Raw, "./") {
+			continue
+		}
+		v4 := false
+		for _, c := range u.Concs {
+			if strings.HasPrefix(c, "v4_") {
+				v4 = true // vocábulo-cardápio ("testa regex") é phrasing, nunca padrão
+				break
+			}
+		}
+		if v4 {
 			continue
 		}
 		switch u.Fold {
@@ -8268,6 +8447,12 @@ func nuDiffPart(toks []nuTok, wantB bool, taken map[int]bool) string {
 		}
 		for p := i - 1; p >= 0; p-- {
 			if toks[p].Filler {
+				switch toks[p].Fold {
+				case "vs", "versus", "e", "and", "com":
+					// separador do par à esquerda — o candidato é o
+					// artigo do LADO B ("a pasta b"), não um label
+					return false
+				}
 				continue
 			}
 			return dirWord(toks[p].Fold)
@@ -8298,6 +8483,70 @@ func nuDiffPart(toks []nuTok, wantB bool, taken map[int]bool) string {
 		}
 	}
 	return ""
+}
+
+// nuHostNoun: substantivo-host — a classe que "remote/remoto" qualifica
+// quando usado como adjetivo.
+func nuHostNoun(fold string) bool {
+	switch fold {
+	case "host", "hosts", "node", "nodes", "server", "servers",
+		"machine", "machines", "servidor", "servidores",
+		"maquina", "máquina", "computador", "computer", "pc",
+		"vps", "peer", "peers", "box", "boxes":
+		return true
+	}
+	return false
+}
+
+// nuRemoteAdj: "remote/remoto" colado num substantivo-host é adjetivo
+// ("máquina remota", "remote host") — spec de execução remota mesmo
+// dentro de intent git, onde o substantivo nu ("pro remoto") é o
+// git-remote de sempre.
+func nuRemoteAdj(toks []nuTok, i int) bool {
+	for _, d := range []int{-1, 1} {
+		j := i + d
+		for j >= 0 && j < len(toks) && toks[j].Filler {
+			j += d
+		}
+		if j >= 0 && j < len(toks) && nuHostNoun(toks[j].Fold) {
+			return true
+		}
+	}
+	return false
+}
+
+// nuHostQualified: a palavra-host é seguida de nome/qualificador —
+// "máquina web-01", "máquina remota", "máquina do cliente". "Na
+// máquina" nu (fim do pedido, verbo/conjunção depois) é esta aqui.
+// Possessivo direto ("máquina minha") também aponta pra cá.
+func nuHostQualified(toks []nuTok, i int) bool {
+	genitive := false
+	for j := i + 1; j < len(toks) && j <= i+3; j++ {
+		u := toks[j]
+		if u.Filler {
+			switch u.Fold {
+			case "de", "do", "da", "dos", "das", "of":
+				genitive = true
+				continue
+			}
+			if !genitive {
+				return false // "a máquina e sai" — conjunção, não nome
+			}
+			continue
+		}
+		switch u.Fold {
+		case "my", "mine", "your", "yours", "our", "ours",
+			"meu", "minha", "meus", "minhas",
+			"nosso", "nossa", "nossos", "nossas",
+			"seu", "sua", "seus", "suas":
+			if genitive {
+				continue // "máquina do meu pai" — o dono vem depois
+			}
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // nuWcWhat: qual grandeza contar — a resposta errada é somar "lines"
@@ -9553,6 +9802,28 @@ func nuDiskPath(toks []nuTok, taken map[int]bool) string {
 	if best >= 0 {
 		taken[best] = true
 		return toks[best].Raw
+	}
+	// "quanto pesa a pasta src" — o nome da pasta é palavra nua após
+	// o cue substantivo; sem path/name-shape o fallback acima não pega
+	for i, t := range toks {
+		switch t.Fold {
+		case "pasta", "pastas", "diretorio", "diretório", "diretorios",
+			"diretórios", "folder", "folders", "directory",
+			"directories":
+		default:
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+2; j++ {
+			u := &toks[j]
+			if u.Filler || u.Slang || taken[j] {
+				continue
+			}
+			if len(u.Concs) > 0 || nuIsNumber(u.Fold) || u.Quoted {
+				continue
+			}
+			taken[j] = true
+			return u.Raw
+		}
 	}
 	return ""
 }
@@ -11209,6 +11480,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"slashes": true, "slash": true, "newline": true,
 			"newlines": true, "used": true, "handle": true,
 			"null": true,
+			// posição dentro do arquivo, nunca pasta — "corta o
+			// arquivo no meio" não tem dir "meio"
+			"meio": true, "meios": true, "metade": true,
+			"metades": true, "middle": true, "half": true,
+			"halves": true,
 			// phrasing de recursão: "non-recursively"/"in sub directories"
 			// descreve o passeio, não uma pasta
 			"non-recursively": true, "nonrecursive": true,
@@ -11330,7 +11606,9 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			}
 		}
 		for i, t := range toks {
-			cue := dirCues[t.Fold]
+			// 'de' com grepword é conector do PADRÃO ("ocorrências de
+			// erro" — erro é o contado), não cue de escopo de pasta
+			cue := dirCues[t.Fold] && !t.has("grepword")
 			if !cue && arcCtx && (t.Fold == "to" || t.Fold == "para") {
 				// "extract archive to ./x" — no contexto archive o
 				// destino É o diretório; fora dele, 'to' é manner
@@ -13648,6 +13926,7 @@ func nuMkArg(toks []nuTok, what string, taken map[int]bool) string {
 				!u.has("permbit") && !u.has("files") && !u.has("filenoun") &&
 				!u.has("dirnoun") && !u.has("dir") && !u.has("extcue") &&
 				!u.has("permattr") && !u.has("findattr") &&
+				!u.has("nameattr") && !u.has("intocue") &&
 				!nuIsNumber(u.Fold) && !nuOctalShaped(u.Fold)
 			if !isName {
 				break
@@ -14149,7 +14428,12 @@ func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				switch u.Fold {
 				case "context", "contexto", "file", "files", "arquivo",
-					"arquivos", "text", "texto", "input":
+					"arquivos", "text", "texto", "input",
+					// posição dentro do arquivo, nunca o arquivo:
+					// "corta o arquivo no meio" não tem file "meio"
+					"meio", "meios", "metade", "metades", "middle",
+					"half", "halves", "inicio", "início", "fim",
+					"final", "comeco", "começo":
 					continue
 				}
 				if !fileWord(u, j) {
@@ -14460,12 +14744,25 @@ func nuMkScopeDir(toks []nuTok, hits []nuHit, taken map[int]bool) string {
 // sobrevive ao fill solta (taken=false) e seu Raw não aparece em
 // valor algum — ignorá-la muda o pedido. O cérebro lê essa lista e
 // derruba pra unverified em vez de selar sucesso incompleto (T8).
-func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string) []string {
+func nuDroppedOps(toks []nuTok, taken map[int]bool, slots map[string]string, used map[string]bool) []string {
 	var out []string
 	for i := range toks {
 		t := &toks[i]
 		if !t.Quoted || taken[i] || t.Raw == "" {
 			continue // só aspa é operando; cue não-citado ("containing") é palavra-ponte
+		}
+		vocab := false
+		for _, c := range t.Concs {
+			if used[c] {
+				// a aspa É o vocábulo da própria intent ("procura por
+				// 'TODO'" — o marcador alimenta a regra do todo_scan,
+				// não é restrição solta)
+				vocab = true
+				break
+			}
+		}
+		if vocab {
+			continue
 		}
 		consumed := false
 		for _, sv := range slots {

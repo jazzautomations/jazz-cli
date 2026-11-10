@@ -114,7 +114,9 @@
    "buildar",
    "building",
    "compilacao",
-   "make"
+   "make",
+   "binario",
+   "binário"
   ],
   "callers": [
    "calls",
@@ -139,7 +141,11 @@
    "vai pra",
    "vai para",
    "volta pra",
-   "volta para"
+   "volta para",
+   "volta",
+   "voltar",
+   "volte",
+   "voltando"
   ],
   "cochange": [
    "mudam juntos",
@@ -302,7 +308,12 @@
    "copias",
    "faça cópia",
    "faz copia",
-   "faz cópia"
+   "faz cópia",
+   "duplica",
+   "duplicar",
+   "duplique",
+   "duplico",
+   "duplicando"
   ],
   "count": [
    "quantas vezes",
@@ -598,7 +609,17 @@
    "free space",
    "space available",
    "space left",
-   "disk usage"
+   "disk usage",
+   "quanto pesa",
+   "quanto pesam",
+   "o peso",
+   "qual o peso",
+   "qual é o peso",
+   "peso do",
+   "peso da",
+   "peso de",
+   "peso total",
+   "a peso"
   ],
   "diskuse": [
    "usage",
@@ -814,7 +835,12 @@
    "unpacks",
    "unpacking",
    "unpacked",
-   "unzipped"
+   "unzipped",
+   "extrair",
+   "extrai-lo",
+   "extrai-la",
+   "extraí-lo",
+   "extraí-la"
   ],
   "extractkind": [
    "emails",
@@ -1160,7 +1186,12 @@
    "checksum do arquivo",
    "soma de verificacao",
    "checksums.txt",
-   "integridade do arquivo"
+   "integridade do arquivo",
+   "checksum",
+   "checksums",
+   "sha",
+   "sha1sum",
+   "sha512sum"
   ],
   "have": [
    "tenho",
@@ -1411,7 +1442,11 @@
    "selects",
    "selected",
    "selecting",
-   "nth"
+   "nth",
+   "corta",
+   "cortar",
+   "corte",
+   "cortando"
   ],
   "lint": [
    "lint",
@@ -1656,7 +1691,12 @@
    "turn off",
    "turn on",
    "turns off",
-   "turns on"
+   "turns on",
+   "concatena",
+   "concatenar",
+   "concatene",
+   "concatenando",
+   "concat"
   ],
   "nameattr": [
    "named",
@@ -1775,7 +1815,10 @@
    "olhar",
    "olhe",
    "see",
-   "print"
+   "print",
+   "pega",
+   "pegar",
+   "pegue"
   ],
   "opinion": [
    "opiniao",
@@ -1977,7 +2020,14 @@
    "dangling",
    "órfãs",
    "orfas",
-   "orphaned"
+   "orphaned",
+   "limpa",
+   "limpar",
+   "limpe",
+   "clean",
+   "cleans",
+   "clean up",
+   "cleanup"
   ],
   "pubnet": [
    "ip externo",
@@ -1998,7 +2048,12 @@
    "fetch",
    "sincroniza",
    "sincronizar",
-   "sync"
+   "sync",
+   "traz",
+   "traga",
+   "trazer",
+   "trazendo",
+   "trouxe"
   ],
   "push": [
    "push",
@@ -2023,7 +2078,10 @@
    "newest",
    "mais novo",
    "mais nova",
-   "last-created"
+   "last-created",
+   "ontem",
+   "anteontem",
+   "yesterday"
   ],
   "recover": [
    "recover",
@@ -2196,7 +2254,9 @@
    "tu",
    "you",
    "yourself",
-   "voce mesmo"
+   "voce mesmo",
+   "your",
+   "yours"
   ],
   "service": [
    "servico",
@@ -2219,7 +2279,13 @@
    "httpd",
    "apache",
    "mysqld",
-   "mariadb"
+   "mariadb",
+   "ssh",
+   "tailscaled",
+   "dockerd",
+   "containerd",
+   "kubelet",
+   "coredns"
   ],
   "session": [
    "logada",
@@ -2234,7 +2300,12 @@
    "sessions",
    "sessoes",
    "sessão",
-   "sessões"
+   "sessões",
+   "connected",
+   "conectado",
+   "conectada",
+   "conectados",
+   "conectadas"
   ],
   "snapshot": [
    "snapshot",
@@ -2276,7 +2347,18 @@
    "descending",
    "desc",
    "in reverse",
-   "reverse order"
+   "reverse order",
+   "embaralha",
+   "embaralhar",
+   "embaralhe",
+   "shuffle",
+   "shuf",
+   "inverte",
+   "inverter",
+   "inverta",
+   "reverse",
+   "reverso",
+   "tac"
   ],
   "split": [
    "split",
@@ -2372,7 +2454,16 @@
    "modificada",
    "modificados",
    "modificadas",
-   "modified"
+   "modified",
+   "checa",
+   "checar",
+   "cheque",
+   "check",
+   "checks",
+   "checking",
+   "verifica",
+   "verificar",
+   "verifique"
   ],
   "stdin": [
    "stdin",
@@ -2566,7 +2657,8 @@
    "applications",
    "builtin",
    "builtins",
-   "pager"
+   "pager",
+   "comandos"
   ],
   "undo": [
    "desfaz",
@@ -2610,7 +2702,10 @@
    "pesada",
    "lento",
    "lenta",
-   "travando"
+   "travando",
+   "how long",
+   "how long has",
+   "been up"
   ],
   "usage": [
    "usa",
@@ -2856,7 +2951,8 @@
    "verbose",
    "verbosely",
    "verbosity"
-  ]
+  ],
+  "replto": []
  },
  "fillers": [
   "-print",
@@ -3296,9 +3392,13 @@
   "acha que": "opinion",
   "acho que": "opinion",
   "am i online": "net",
+  "apresenta-se": "explain yourself",
+  "apresente-se": "explain yourself",
   "baixa as mudancas": "pull",
   "bora": "run",
   "bota no ar": "start",
+  "brigada": "obrigado",
+  "brigado": "obrigado",
   "bugado": "error",
   "bugou": "error",
   "cade": "find",
@@ -3315,6 +3415,7 @@
   "como voce faria": "opinion",
   "como voce melhoraria": "opinion",
   "compose up": "container start",
+  "corrije": "fix",
   "ctrl z": "undo",
   "ctrl+z": "undo",
   "da um jeito": "fix",
@@ -3324,6 +3425,7 @@
   "da uma olhada": "open",
   "da uma olhadinha": "open",
   "dale": "run",
+  "dar uma olhada": "open",
   "de pe": "running",
   "deu erro": "error",
   "deu pau": "error",
@@ -3336,7 +3438,6 @@
   "docker compose up": "container start",
   "docker ps": "container list",
   "docker-compose up": "container start",
-  "em que branch": "branch status",
   "entra na": "connect",
   "entra no": "connect",
   "espaco em disco": "disk",
@@ -3372,6 +3473,7 @@
   "há menos de": "menos",
   "in the last": "last",
   "in the past": "last",
+  "introduce yourself": "explain yourself",
   "is installed": "have",
   "is logged": "logado",
   "is the internet": "net",
@@ -3447,6 +3549,7 @@
   "o que vc faria": "opinion",
   "o que vc melhoraria": "opinion",
   "o que vc mudaria": "opinion",
+  "o que vc sabe fazer": "help",
   "o que voce acha": "opinion",
   "o que voce faria": "opinion",
   "o que voce faz": "help",
@@ -3456,12 +3559,14 @@
   "o que voce recomendaria": "opinion",
   "o que voce sabe fazer": "help",
   "o que voce sugeriria": "opinion",
+  "o que você sabe fazer": "help",
   "older than": "older",
   "onde e definida": "find",
   "onde e definido": "find",
   "onde esta": "find",
   "onde fica": "find",
   "onde ta": "find",
+  "opn": "open",
   "para que serve": "explain",
   "partiu": "run",
   "podman ps": "container list",
@@ -3471,11 +3576,11 @@
   "por último": "ultimo",
   "pra que serve": "explain",
   "ps aux": "process list",
+  "psuh": "push",
   "push pro github": "push",
   "puxa as mudancas": "pull",
   "puxa do remoto": "pull",
   "pytest": "test",
-  "qual branch": "branch status",
   "qual processo usa": "who process",
   "quebrou": "error",
   "quem chama": "usage who",
@@ -3489,6 +3594,8 @@
   "roda ai": "run",
   "roda la": "run",
   "rode ai": "run",
+  "se apresenta": "explain yourself",
+  "se apresente": "explain yourself",
   "sem repetir": "unique",
   "sem repetição": "unique",
   "set up": "instalar",
@@ -3510,6 +3617,7 @@
   "ta logado": "logado",
   "ta quebrado": "error",
   "ta zoado": "error",
+  "take a look": "open",
   "tem internet": "net",
   "tenho a": "have",
   "tenho o": "have",
@@ -3522,9 +3630,14 @@
   "tua opiniao": "opinion",
   "tua opinião": "opinion",
   "tá logado": "logado",
+  "ultimos comites": "history",
+  "ultimos comits": "history",
   "ultimos commits": "history",
+  "valeu": "obrigado",
+  "valeuzão": "obrigado",
   "vc acha": "opinion",
   "visao geral": "summary",
+  "vlw": "obrigado",
   "voce acha": "opinion",
   "voce pensa": "opinion",
   "volta como estava": "undo",
@@ -3544,7 +3657,9 @@
   "younger than": "newer",
   "your opinion": "opinion",
   "your take": "opinion",
-  "zoado": "error"
+  "zoado": "error",
+  "últimos comites": "history",
+  "últimos comits": "history"
  },
  "version": 1
 }
