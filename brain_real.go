@@ -143,6 +143,8 @@ func brLogErrorsFile(cx *brCtx, in map[string]string) brStep {
 	if len(files) == 0 {
 		return brStep{obs: obs, why: "nenhum arquivo de log no projeto"}
 	}
+	which := cx.str(in, "which") // primeiro|first|ultimo|last: only that one
+	var only string
 	total, shown := 0, 0
 	for _, rel := range files {
 		abs, rel, err := brSafePath(cx.env.Root, rel)
@@ -166,6 +168,12 @@ func brLogErrorsFile(cx *brCtx, in map[string]string) brStep {
 				continue
 			}
 			hits++
+			if which != "" {
+				if line := fmt.Sprintf("%s:%d: %s", filepath.ToSlash(rel), i+1, oneLineKeep(l, 240)); only == "" || which == "ultimo" || which == "last" {
+					only = line
+				}
+				continue
+			}
 			if shown < 40 {
 				cx.say("%s:%d: %s", filepath.ToSlash(rel), i+1, oneLineKeep(l, 240))
 				shown++
@@ -173,6 +181,14 @@ func brLogErrorsFile(cx *brCtx, in map[string]string) brStep {
 		}
 		total += hits
 		cx.task.AddEvidence("file", fmt.Sprintf("%s: %d linha(s) de erro", filepath.ToSlash(rel), hits))
+	}
+	if which != "" {
+		if only == "" {
+			cx.say("nenhuma linha de erro em %s", strings.Join(files, ", "))
+		} else {
+			cx.say("%s\n(%s de %d linha(s) de erro em %s)", only, map[bool]string{true: "a última", false: "a primeira"}[which == "ultimo" || which == "last"], total, strings.Join(files, ", "))
+		}
+		return brStep{val: strconv.Itoa(total), obs: obs, ok: true}
 	}
 	if total > shown {
 		cx.say("… +%d linha(s)", total-shown)
@@ -548,9 +564,13 @@ func brIsDir(p string) bool {
 // fpRealWords are real words one typo away from a fast-path word. They are
 // requests of their own ("limpa o projeto" is not "linta o projeto"), so the
 // typo repair leaves them alone.
-var fpRealWords = map[string]bool{"limpa": true, "limpe": true, "limpar": true, "limpo": true, "clean": true,
-	"pinta": true, "tinta": true, "quinta": true, "lista": true, "liste": true, "listar": true, "list": true,
-	"line": true, "lines": true, "link": true, "print": true, "hint": true, "mint": true}
+func fpRealWord(s string) bool {
+	switch s {
+	case "limpa", "limpe", "limpar", "limpo", "clean", "pinta", "tinta", "quinta", "lista", "liste", "listar", "list", "line", "lines", "link", "print", "hint", "mint":
+		return true
+	}
+	return false
+}
 
 var brWeekdayPT = [...]string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"}
 

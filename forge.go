@@ -80,7 +80,7 @@ const (
 var fgMutating = map[string]bool{
 	"create": true, "delete_file": true, "rename": true, "fix": true, "format": true,
 	"install_dep": true, "update_dep": true, "undo": true, "update_jazz": true,
-	"git_checkout": true, "git_commit": true, "git_branch": true, "git_stash": true, "git_pull": true, "git_push": true,
+	"git_checkout": true, "git_commit": true, "git_branch": true, "git_stash": true, "shell_cmd": true, "git_pull": true, "git_push": true,
 	"kill_process":    true,
 	"service_restart": true, "service_start": true, "service_stop": true,
 	"container_stop": true, "container_up": true, "container_prune": true,

@@ -225,9 +225,6 @@ var (
 	// brTodoWordRe: "todo" as the Portuguese word for "all" ("no projeto todo",
 	// "o dia todo", "todo o código"), not the TODO marker.
 	brTodoWordRe = lazyRx(`(?i)\b(?:projeto|repo|repositorio|repositório|codigo|código|dia|mundo|tempo|arquivo|log|sistema) todo\b|\btodo (?:o|a|os|as|mundo|dia)\b`)
-	brCreateStop = map[string]bool{"nova": true, "novo": true, "new": true, "pasta": true, "arquivo": true, "file": true, "folder": true, "dir": true,
-		"vazio": true, "vazia": true, "empty": true, "chamada": true, "chamado": true, "called": true, "named": true, "um": true, "uma": true,
-		"teste": true, "test": true, "isso": true, "aqui": true, "linha": true, "line": true}
 )
 
 // brSemanticGuard catches readings that picked one word of the request and
@@ -248,7 +245,7 @@ func brSemanticGuard(text string, in Intent) (why, kind string) {
 		}
 	case "create":
 		t := in.Slots["target"]
-		if in.Slots["type"] != "dir" && (brCreateStop[strings.ToLower(t)] || !strings.Contains(t, ".") && brFileTokRe.MatchString(strings.ReplaceAll(text, t, ""))) {
+		if in.Slots["type"] != "dir" && (brCreateStopWord(strings.ToLower(t)) || !strings.Contains(t, ".") && brFileTokRe.MatchString(strings.ReplaceAll(text, t, ""))) {
 			return fmt.Sprintf("eu criaria um arquivo chamado %q, e isso não parece ser o nome que você pediu. não criei nada. diga o nome exato (ex.: \"cria a pasta build/artefatos\", \"cria o arquivo notas.md\")", t), "wrong_reading"
 		}
 	}
@@ -261,14 +258,22 @@ func brSemanticGuard(text string, in Intent) (why, kind string) {
 // ---------- comando digitado cru ----------
 
 // brLiteralBins: programs a developer types as a command line, not as prose.
-var brLiteralBins = map[string]bool{"git": true, "go": true, "gofmt": true, "make": true, "cat": true, "ls": true, "wc": true, "grep": true,
-	"rg": true, "head": true, "tail": true, "find": true, "tree": true, "du": true, "pwd": true, "npm": true, "pnpm": true, "yarn": true,
-	"cargo": true, "pytest": true, "python3": true, "node": true, "sort": true, "uniq": true, "diff": true, "stat": true, "file": true}
+func brLiteralBin(s string) bool {
+	switch s {
+	case "git", "go", "gofmt", "make", "cat", "ls", "wc", "grep", "rg", "head", "tail", "find", "tree", "du", "pwd", "npm", "pnpm", "yarn", "cargo", "pytest", "python3", "node", "sort", "uniq", "diff", "stat", "file":
+		return true
+	}
+	return false
+}
 
 // brLiteralProse: words that make the line a sentence ("git status do repo").
-var brLiteralProse = map[string]bool{"o": true, "a": true, "os": true, "as": true, "do": true, "da": true, "de": true, "pra": true, "para": true,
-	"the": true, "of": true, "my": true, "me": true, "e": true, "and": true, "que": true, "no": true, "na": true, "em": true, "um": true, "uma": true,
-	"por": true, "com": true, "to": true, "for": true, "with": true, "please": true, "ai": true, "so": true, "only": true, "all": true, "tudo": true}
+func brLiteralProseWord(s string) bool {
+	switch s {
+	case "o", "a", "os", "as", "do", "da", "de", "pra", "para", "the", "of", "my", "me", "e", "and", "que", "no", "na", "em", "um", "uma", "por", "com", "to", "for", "with", "please", "ai", "so", "only", "all", "tudo":
+		return true
+	}
+	return false
+}
 
 // brLiteralCmd: text IS a command line (first word a known program, the rest
 // flags, paths and words that are not prose), with no shell operators. It
@@ -280,12 +285,12 @@ func brLiteralCmd(text string) (string, bool) {
 		return "", false
 	}
 	f := strings.Fields(t)
-	if len(f) < 2 || len(f) > 12 || !brLiteralBins[f[0]] {
+	if len(f) < 2 || len(f) > 12 || !brLiteralBin(f[0]) {
 		return "", false
 	}
 	shellish := false
 	for _, w := range f[1:] {
-		if brLiteralProse[strings.ToLower(strings.Trim(w, ",.?!"))] || strings.HasSuffix(w, "?") {
+		if brLiteralProseWord(strings.ToLower(strings.Trim(w, ",.?!"))) || strings.HasSuffix(w, "?") {
 			return "", false
 		}
 		if strings.HasPrefix(w, "-") || strings.ContainsAny(w, "./") {
@@ -296,4 +301,12 @@ func brLiteralCmd(text string) (string, bool) {
 		return "", false // "find usages", "file handling": prose that starts with a program name
 	}
 	return t, true
+}
+
+func brCreateStopWord(s string) bool {
+	switch s {
+	case "nova", "novo", "new", "pasta", "arquivo", "file", "folder", "dir", "vazio", "vazia", "empty", "chamada", "chamado", "called", "named", "um", "uma", "teste", "test", "isso", "aqui", "linha", "line":
+		return true
+	}
+	return false
 }

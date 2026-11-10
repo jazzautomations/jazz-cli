@@ -42,7 +42,7 @@
         "git status|git st|status|status do git|status do repo|status do repositorio",
         "(?:mostra|mostre|me mostra|ver|show|show me)(?: o| the)? (?:git )?status(?: do git| do repo| do repositorio)?",
         "qual (?:o|e o) status(?: do git| do repo| do repositorio)?",
-        "(?:is|e) (?:my|the|a|minha)? ?(?:working tree|worktree|arvore|working dir|repo)(?: de trabalho)? (?:clean|limpa|limpo|dirty|suja)|(?:ta|esta) tudo commitado|tem (?:algo|alguma coisa|mudanca) (?:pra|para) commitar|anything to commit|(?:o que|oque) (?:ta|esta) (?:diferente|pendente|modificado)(?: no repo| aqui| ate agora)?"
+        "(?:is|e) (?:my|the|a|minha)? ?(?:working tree|worktree|arvore|working dir|repo)(?: de trabalho)? (?:clean|limpa|limpo|dirty|suja)|(?:ta|esta) tudo commitado|tem (?:algo|alguma coisa|mudanca) pra commitar|anything to commit|(?:o que|oque) (?:ta|esta) (?:diferente|pendente|modificado)(?: no repo| aqui| ate agora)?"
       ]
     },
     {
