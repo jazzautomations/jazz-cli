@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.13.4 — 2026-11-10
 
 Medição do modo offline com pedidos que o código nunca viu, e o que ela achou.
 
