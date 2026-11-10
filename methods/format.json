@@ -2,7 +2,7 @@
  {"name": "format.detected", "intent": "format", "priority": 10,
   "doc": "comando de format da detecção do projeto → roda → saída (reescreve arquivos: passa pelo Permit)",
   "pre": [{"fact": "project.fmt", "op": "set"}],
-  "steps": [{"cap": "proj_cmd", "in": {"which": "fmt"}, "out": "res"}],
+  "steps": [{"cap": "proj_cmd", "in": {"which": "fmt", "file": "$slot.file"}, "out": "res"}],
   "verify": [{"check": "exit_zero", "arg": "$res"}],
   "risk": "med", "cost_ms": 30000},
  {"name": "format.no_cmd", "intent": "format", "priority": 1,
