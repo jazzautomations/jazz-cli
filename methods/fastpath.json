@@ -1,0 +1,3 @@
+{"methods": [
+ {"name": "fastpath.read", "intent": "fastpath", "priority": 10, "doc": "um passo de pedido composto que casa um atalho de leitura (intents.json): roda o comando do atalho, re-derivado do texto do passo", "pre": [{"fact": "slot.cmd", "op": "set"}], "steps": [{"cap": "fast_cmd", "in": {"cmd": "$slot.cmd"}, "out": "r"}], "verify": [{"check": "exit_zero", "arg": "$r"}], "risk": "low", "cost_ms": 300}
+]}

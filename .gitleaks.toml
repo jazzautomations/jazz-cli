@@ -19,7 +19,9 @@ paths = [
 ]
 # CSI 27;m;13~ (shift/alt/ctrl+enter) is a key code, not a key
 regexTarget = "line"
-regexes = ['''"27;[0-9];13".*modifyOtherKeys''']
+# API_TOKEN=abc123segredo is the fake credential of the `jazz eval real` fixture project
+# (evalreal.go): the suite checks that the offline brain never prints it
+regexes = ['''"27;[0-9];13".*modifyOtherKeys''', '''API_TOKEN=abc123segredo''']
 
 # Privacy rules (2026-11-04): the repo is public; the maintainer's tailnet
 # hostnames, home paths and messaging ids never belong in a commit.

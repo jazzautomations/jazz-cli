@@ -44,6 +44,7 @@ type eoExpect struct {
 	Blocked     *bool    `json:"blocked,omitempty"`
 	MaxMS       float64  `json:"max_ms,omitempty"`   // latency budget inside jazz (no process start)
 	Commands    *int     `json:"commands,omitempty"` // exact number of commands run
+	Refuse      bool     `json:"refuse,omitempty"`   // the right answer is NOT to act: status ≠ succeeded
 }
 
 type eoTask struct {
@@ -59,6 +60,12 @@ type eoTask struct {
 	Goal     string    `json:"goal,omitempty"`
 	Expect   eoExpect  `json:"expect"`
 	Missing  *eoExpect `json:"expect_missing,omitempty"`
+	// real suite (evalreal.go): After are shell checks that must exit 0 in the
+	// fixture once the request ran; Changes says the request is allowed to
+	// change the repository (default: tree, HEAD, branches and stash identical)
+	After   []string `json:"after,omitempty"`
+	Changes bool     `json:"changes,omitempty"`
+	real    bool     // run as `--allow-tools bash,edit,write` would
 }
 
 type eoGot struct {
@@ -120,10 +127,15 @@ type eoReport struct {
 // line, # comments). The command fails when a task outside the list fails
 // (regression) or when a listed task passes (remove it: the list only shrinks).
 func cmdEval(root string, args []string, w io.Writer) int {
-	if len(args) == 0 || args[0] != "offline" {
-		fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [--gate ARQ] [-v]")
+	const usage = "uso: jazz eval offline|real [--out DIR] [--only id,id] [--gate ARQ] [--tasks ARQ] [-v]\n     jazz eval parse \"pedido\"   (como o cérebro offline lê o pedido, sem agir)"
+	if len(args) >= 2 && args[0] == "parse" {
+		return erParse(root, strings.Join(args[1:], " "), w)
+	}
+	if len(args) == 0 || args[0] != "offline" && args[0] != "real" {
+		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
+	suite := args[0]
 	out, only, verbose, gate := filepath.Join(root, "results"), map[string]bool{}, false, ""
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
@@ -141,17 +153,27 @@ func cmdEval(root string, args []string, w io.Writer) int {
 			}
 		case "-v", "--verbose":
 			verbose = true
+		case "--tasks", "-tasks": // real suite only: an external task file (a held-out set)
+			if i+1 < len(args) {
+				b, err := os.ReadFile(args[i+1])
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "jazz:", err)
+					return 1
+				}
+				erTasksOverride = b
+				i++
+			}
 		case "--gate", "-gate":
 			if i+1 < len(args) {
 				gate = args[i+1]
 				i++
 			}
 		default:
-			fmt.Fprintln(os.Stderr, "uso: jazz eval offline [--out DIR] [--only id,id] [--gate ARQ] [-v]")
+			fmt.Fprintln(os.Stderr, usage)
 			return 2
 		}
 	}
-	rep, err := eoRun(only, verbose, w)
+	rep, err := eoRunSuite(suite, only, verbose, w)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "jazz:", err)
 		return 1
@@ -160,7 +182,7 @@ func cmdEval(root string, args []string, w io.Writer) int {
 		fmt.Fprintln(os.Stderr, "jazz:", err)
 		return 1
 	}
-	p := filepath.Join(out, "offline-"+rep.Started.Format("20060102-150405")+".json")
+	p := filepath.Join(out, suite+"-"+rep.Started.Format("20060102-150405")+".json")
 	b, _ := json.MarshalIndent(rep, "", "  ")
 	if err := os.WriteFile(p, b, 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, "jazz:", err)
@@ -236,6 +258,12 @@ func eoGateCheck(rep *eoReport, known map[string]bool) []string {
 
 // eoRun runs the suite (only = subset by id).
 func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
+	return eoRunSuite("offline", only, verbose, w)
+}
+
+// eoRunSuite runs "offline" (evals/offline/tasks.json) or "real"
+// (evals/realworld/tasks.json, evalreal.go).
+func eoRunSuite(name string, only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 	// fixtures are not the owner's requests, and the numbers are the
 	// embedded grammar's: no ledger writes, no forge overlay (nlu_overlay.go)
 	sigMuted.Store(true)
@@ -244,8 +272,15 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 	var suite struct {
 		Tasks []eoTask `json:"tasks"`
 	}
-	if err := json.Unmarshal(eoTasksJSON, &suite); err != nil {
-		return nil, fmt.Errorf("evals/offline/tasks.json: %w", err)
+	data, src := eoTasksJSON, "evals/offline/tasks.json"
+	if name == "real" {
+		data, src = erTasksJSON, "evals/realworld/tasks.json"
+		if erTasksOverride != nil {
+			data, src = erTasksOverride, "--tasks"
+		}
+	}
+	if err := json.Unmarshal(data, &suite); err != nil {
+		return nil, fmt.Errorf("%s: %w", src, err)
 	}
 	rep := &eoReport{Version: version, Started: time.Now(), Host: runtime.GOOS + "/" + runtime.GOARCH + fmt.Sprintf(" %d cpu", runtime.NumCPU()), Model: "none"}
 	base, err := eoFixtureBase(sbCurrent())
@@ -261,6 +296,7 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 		if len(only) > 0 && !only[tk.ID] {
 			continue
 		}
+		tk.real = name == "real"
 		row := eoOne(tk, base, prof)
 		rep.Tasks = append(rep.Tasks, row)
 		lat = append(lat, row.Got.MS)
@@ -376,6 +412,10 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 		row.Fail = append(row.Fail, "fixture: "+err.Error())
 		return row
 	}
+	before := ""
+	if tk.real {
+		before = erSnapshot(root)
+	}
 	tb := NewToolbox(root)
 	defer tb.Shell.Close()
 	det := fpDetect(root)
@@ -389,6 +429,17 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 		Permit: func(ctx context.Context, cmd string) (bool, string) {
 			if why := cbMinimalIntervention("bash", nil, cmd, tk.Prompt); why != "" {
 				return false, why
+			}
+			if tk.real {
+				// --allow-tools bash,edit,write: the owner already said yes — but
+				// the suite runs on somebody's machine (CI, a laptop), so only
+				// what stays inside the fixture may run. A misread that reaches
+				// for docker, systemctl or kill is denied here and shows up as a
+				// failed task, not as damage.
+				if IsReadOnly(cmd) || cbReadCmd(cmd) || erLocalCmd(cmd) {
+					return true, ""
+				}
+				return false, "suíte real: comando fora do projeto de teste"
 			}
 			// what runs in a trusted session without asking: read-only
 			// commands, the registry's exact allowlist (what read_cmd itself
@@ -421,9 +472,29 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 			return a, true
 		},
 	}
+	if tk.real {
+		env.HostRun = brHostExec
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	r := brRun(ctx, env, tk.Prompt)
+	var r brResult
+	// the real suite goes through the same door as `jazz -p --offline`
+	// (olHeadless): the fast paths first, the brain after
+	if m, ok := fpIntents(root).Match(tk.Prompt, det, tb.hasRg); ok && tk.real {
+		r = brResult{Handled: true, Intent: Intent{Name: "fast:" + m.Intent, Confidence: 1}, Method: "fastpath", Commands: 1, Status: tkFailed}
+		if okp, why := env.Permit(ctx, m.Cmd); !okp {
+			r.Status, r.Text, r.Commands = tkBlocked, "atalho negado: "+why, 0
+		} else {
+			sr := tb.Shell.Run(ctx, m.Cmd, 10*time.Minute, nil)
+			text, done := olFastText(m, redactSecrets(sr.Output), sr.ExitCode, sr.Reset)
+			r.Text = text
+			if done {
+				r.Status = tkSucceeded
+			}
+		}
+	} else {
+		r = brRun(ctx, env, tk.Prompt)
+	}
 	row.Got = eoGot{Handled: r.Handled, Intent: r.Intent.Name, Conf: r.Intent.Confidence, Status: string(r.Status), Method: r.Method, Category: string(r.Category),
 		Questions: r.Questions, Commands: r.Commands, MS: float64(time.Since(t0).Microseconds()) / 1000, Text: oneLineKeep(r.Text, 4000)}
 	fail := func(f string, a ...any) { row.Fail = append(row.Fail, fmt.Sprintf(f, a...)) }
@@ -441,6 +512,7 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 	}
 	for _, c := range exp.Contains {
 		c = strings.ReplaceAll(c, "$VERSION", version) // the task follows the binary, not a release number frozen in the fixture
+		c = strings.ReplaceAll(c, "$YEAR", time.Now().Format("2006"))
 		if !strings.Contains(r.Text, c) {
 			fail("falta %q", c)
 		}
@@ -468,6 +540,21 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 	if exp.MaxMS > 0 && row.Got.MS > exp.MaxMS {
 		fail("%.0f ms > %.0f ms", row.Got.MS, exp.MaxMS)
 	}
+	if exp.Refuse && r.Status == tkSucceeded {
+		fail("agiu e selou sucesso; o certo era não agir")
+	}
+	if tk.real {
+		if !tk.Changes {
+			if after := erSnapshot(root); after != before {
+				fail("mudou o repositório sem ser pedido: %s", erSnapDiff(before, after))
+			}
+		}
+		for _, chk := range tk.After {
+			if out, err := erCheck(root, chk); err != nil {
+				fail("depois: `%s` falhou %s", chk, oneLineKeep(out, 120))
+			}
+		}
+	}
 	row.Success = len(row.Fail) == 0
 	// false success: jazz said "succeeded" and the task did not call for it
 	// (or the answer is wrong), or it acted when it should have handed off
@@ -486,6 +573,8 @@ func eoFixture(base, id, kind string) (string, error) {
 	files := map[string]string{}
 	git := true
 	switch kind {
+	case "loja":
+		return root, erFixture(root)
 	case "go", "":
 		files = map[string]string{
 			"go.mod":              "module evalfix\n\ngo 1.21\n",

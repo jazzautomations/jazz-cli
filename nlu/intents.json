@@ -527,12 +527,18 @@
    "negatives": [
     "para o container web",
     "apaga o arquivo image.png",
-    "limpa a pasta tmp"
+    "limpa a pasta tmp",
+    "limpa o projeto",
+    "limpa a tela",
+    "limpa o cache",
+    "clean the project",
+    "limpa isso"
    ],
    "rules": [
     {
      "all": [
-      "prune"
+      "prune",
+      "container|image|cvolume"
      ],
      "none": [
       "recover",

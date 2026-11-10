@@ -389,7 +389,7 @@ func fzRepairLine(s string, vocab map[string]bool) (string, bool) {
 	changed := false
 	for i, w := range words {
 		f := fzFold(w)
-		if len([]rune(f)) < 4 || vocab[f] || strings.ContainsAny(f, "0123456789/\\._@-`'\"") {
+		if len([]rune(f)) < 4 || vocab[f] || fpRealWord(f) || strings.ContainsAny(f, "0123456789/\\._@-`'\"") {
 			continue
 		}
 		best, bd, tie := "", 1<<30, false

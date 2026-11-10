@@ -142,7 +142,8 @@
       "path": "$slot.dir"
      },
      "out": "tree"
-    }
+    },
+    {"cap": "list_names", "in": {"path": "$slot.dir"}, "out": "names"}
    ],
    "verify": [
     {

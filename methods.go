@@ -341,43 +341,52 @@ var brCaps map[string]func(cx *brCtx, in map[string]string) brStep
 
 func init() {
 	brCaps = map[string]func(cx *brCtx, in map[string]string) brStep{
-		"resolve_name": brResolve,
-		"choose":       brChoose,
-		"ask_slot":     brAskSlot,
-		"refill":       brRefill,
-		"need":         brNeed,
-		"take":         brTake,
-		"for_each":     brForEach,
-		"enum":         brEnum,
-		"mkdir_in":     brMkdirIn,
-		"save_list":    brSaveList,
-		"learned_cmd":  brLearnedCmd,
-		"read_file":    brReadFile,
-		"run_tests":    brRunTests,
-		"test_context": brTestContext,
-		"git_status":   brGitStatus,
-		"env_status":   brEnvStatus,
-		"self_info":    brSelfInfo,
-		"tool_report":  brToolReport,
-		"tool_status":  brToolStatus,
-		"host_report":  brHostReport,
-		"host_list":    brHostList,
-		"systemd":      brSystemd,
-		"net_status":   brNetStatus,
-		"proj_cmd":     brProjCmd,
-		"read_cmd":     brReadCmd,
-		"say":          brSay,
-		"report":       brReport,
-		"file_op":      brFileOp,
-		"text_op":      brTextOp,
-		"archive_op":   brArchiveOp,
-		"perm_op":      brPermOp,
-		"git_op":       brGitOp,
-		"proc_kill":    brProcKill,
-		"pkg_cmd":      brPkgCmd,
-		"container_op": brContainerOp,
-		"undo":         brUndo,
-		"date_calc":    brDateCalc,
+		"resolve_name":    brResolve,
+		"choose":          brChoose,
+		"ask_slot":        brAskSlot,
+		"refill":          brRefill,
+		"need":            brNeed,
+		"take":            brTake,
+		"for_each":        brForEach,
+		"enum":            brEnum,
+		"mkdir_in":        brMkdirIn,
+		"save_list":       brSaveList,
+		"learned_cmd":     brLearnedCmd,
+		"read_file":       brReadFile,
+		"run_tests":       brRunTests,
+		"test_context":    brTestContext,
+		"git_status":      brGitStatus,
+		"env_status":      brEnvStatus,
+		"self_info":       brSelfInfo,
+		"tool_report":     brToolReport,
+		"tool_status":     brToolStatus,
+		"host_report":     brHostReport,
+		"host_list":       brHostList,
+		"systemd":         brSystemd,
+		"net_status":      brNetStatus,
+		"proj_cmd":        brProjCmd,
+		"read_cmd":        brReadCmd,
+		"say":             brSay,
+		"report":          brReport,
+		"file_op":         brFileOp,
+		"text_op":         brTextOp,
+		"archive_op":      brArchiveOp,
+		"perm_op":         brPermOp,
+		"git_op":          brGitOp,
+		"dotenv_get":      brDotenvGet,
+		"dotenv_keys":     brDotenvKeys,
+		"fast_cmd":        brFastCmd,
+		"literal_cmd":     brLiteralRun,
+		"git_diff_file":   brGitDiffFile,
+		"log_errors_file": brLogErrorsFile,
+		"csv_sum":         brCSVSum,
+		"list_names":      brListNames,
+		"explain_file":    brExplainFile,
+		"proc_kill":       brProcKill,
+		"pkg_cmd":         brPkgCmd,
+		"container_op":    brContainerOp,
+		"undo":            brUndo,
+		"date_calc":       brDateCalc,
 	}
 }
 
@@ -407,6 +416,9 @@ func brDateCalc(cx *brCtx, in map[string]string) brStep {
 	}
 	t := base.Add(time.Duration(shift) * time.Minute)
 	out := t.Format("2006-01-02 15:04:05 MST")
+	if cx.str(in, "epoch") == "" && shift == 0 {
+		cx.say("agora: %s · %s, %s", t.Format("15:04"), brWeekdayPT[t.Weekday()], t.Format("02/01/2006"))
+	}
 	cx.task.AddEvidence("calc", "data = "+out)
 	return brStep{obs: rvNoCmd(), ok: true, val: out}
 }
@@ -902,7 +914,17 @@ func brCap(name string) func(cx *brCtx, in map[string]string) brStep {
 // exemption never covers model- or user-typed commands.
 func brReadCmd(cx *brCtx, in map[string]string) brStep {
 	cmd := in["cmd"]
-	out, exit, obs := cx.runCmdAs(cmd, 20*time.Second, true)
+	var out string
+	var exit int
+	var obs rvObs
+	if strings.HasPrefix(cmd, "ps ") && cx.env.HostRun != nil && !strings.ContainsAny(cmd, "|;&$`<>(){}\"'\\") {
+		// the sandbox has its own pid namespace: `ps` inside it lists only
+		// itself, bash and bwrap, and "quais processos comem mais memória"
+		// got that as the answer. The argv is the method's fixed read-only ps.
+		out, exit, obs = brHostCmd(cx, cmd, strings.Fields(cmd), 20*time.Second)
+	} else {
+		out, exit, obs = cx.runCmdAs(cmd, 20*time.Second, true)
+	}
 	if obs.Exit < 0 || obs.Denied {
 		return brStep{obs: obs, why: obs.Output}
 	}
@@ -1014,6 +1036,15 @@ func brProjCmd(cx *brCtx, in map[string]string) brStep {
 	if cmd == "" {
 		return brStep{obs: obs, why: "não detectei comando de " + label + " neste projeto"}
 	}
+	if which == "fmt" {
+		if f := strings.Fields(cmd); len(f) > 0 && cx.env.Run == nil && !strings.ContainsAny(f[0], "/=$") {
+			if _, err := exec.LookPath(f[0]); err != nil {
+				obs.Exit, obs.Output = 127, f[0]+": command not found"
+				return brStep{obs: obs, why: f[0] + " não está no PATH"}
+			}
+		}
+		return brFormat(cx, cmd)
+	}
 	if f := strings.Fields(cmd); len(f) > 0 && cx.env.Run == nil && !strings.ContainsAny(f[0], "/=$") {
 		if _, err := exec.LookPath(f[0]); err != nil {
 			obs.Exit, obs.Output = 127, f[0]+": command not found"
@@ -1116,6 +1147,14 @@ func brFileOp(cx *brCtx, in map[string]string) brStep {
 		toAbs, toRel, err = brSafePath(cx.env.Root, cx.str(in, "to"))
 		if err != nil {
 			return brStep{obs: obs, why: "destino: " + err.Error()}
+		}
+		// "copia o README.md pra docs": o destino é uma pasta que existe —
+		// o arquivo entra nela com o mesmo nome (como cp faz)
+		if fi, e := os.Stat(toAbs); op == "copy" && e == nil && fi.IsDir() {
+			if sfi, se := os.Stat(abs); se == nil && !sfi.IsDir() {
+				toAbs = filepath.Join(toAbs, filepath.Base(abs))
+				toRel = filepath.ToSlash(filepath.Join(toRel, filepath.Base(abs)))
+			}
 		}
 	} else if op == "link" || op == "symlink" {
 		target = cx.str(in, "to")
@@ -2076,6 +2115,7 @@ func brResolveGroup(name string) (int, error) {
 func brGitOp(cx *brCtx, in map[string]string) brStep {
 	sub, obs := in["sub"], rvNoCmd()
 	var cmds []string
+	post := "" // what the postcondition checks (branch name, file)
 	switch sub {
 	case "commit":
 		msg := strings.TrimSpace(cx.str(in, "msg"))
@@ -2094,7 +2134,43 @@ func brGitOp(cx *brCtx, in map[string]string) brStep {
 	case "push":
 		cmds = []string{"git push"}
 	case "stash_push":
+		if st, _, _ := cx.runCmdAs("git status --porcelain", time.Minute, true); strings.TrimSpace(st) == "" {
+			return brStep{obs: obs, why: "nada pra guardar: a árvore de trabalho está limpa"}
+		}
 		cmds = []string{"git stash push -u"}
+	case "branch_create":
+		b := strings.TrimSpace(cx.str(in, "branch"))
+		if !brGitRefRe.MatchString(b) || strings.Contains(b, "..") || strings.HasPrefix(b, "-") {
+			return brStep{obs: obs, why: "nome de branch inválido: " + b}
+		}
+		if ex, code, _ := cx.runCmdAs("git rev-parse -q --verify refs/heads/"+b, time.Minute, true); code == 0 && strings.TrimSpace(ex) != "" {
+			return brStep{obs: obs, why: "a branch " + b + " já existe (peça \"troca pra branch " + b + "\")"}
+		}
+		post = b
+		cmds = []string{"git checkout -b " + b}
+	case "restore_file":
+		_, rel, err := brSafePath(cx.env.Root, cx.str(in, "path"))
+		if err != nil {
+			return brStep{obs: obs, why: err.Error()}
+		}
+		rel = filepath.ToSlash(rel)
+		q := brShQ(rel)
+		diff, code, _ := cx.runCmdAs("git diff HEAD -- "+q, time.Minute, true)
+		if code != 0 {
+			return brStep{obs: obs, why: "git não conhece " + rel + " (arquivo novo? pra apagar, peça \"apaga " + rel + "\")"}
+		}
+		if strings.TrimSpace(diff) == "" {
+			return brStep{obs: obs, why: rel + " não tem mudança pra desfazer (igual ao último commit)"}
+		}
+		// descartar é perder trabalho: o diff fica guardado antes
+		if gd := filepath.Join(cx.env.Root, ".git"); brIsDir(gd) {
+			name := "jazz-descartado-" + time.Now().Format("20060102-150405") + "-" + strings.ReplaceAll(rel, "/", "_") + ".patch"
+			if os.WriteFile(filepath.Join(gd, name), []byte(diff), 0o600) == nil {
+				cx.say("guardei o diff antes de descartar: .git/%s (`git apply .git/%s` devolve)", name, name)
+			}
+		}
+		post = rel
+		cmds = []string{"git checkout HEAD -- " + q}
 	default:
 		return brStep{obs: obs, why: "git_op desconhecido: " + sub}
 	}
@@ -2113,6 +2189,27 @@ func brGitOp(cx *brCtx, in map[string]string) brStep {
 		if exit != 0 {
 			return brStep{val: last, obs: o, why: cmd + " falhou"}
 		}
+	}
+	// the seal is the state after, not the command having run
+	switch sub {
+	case "stash_push":
+		st, _, _ := cx.runCmdAs("git status --porcelain", time.Minute, true)
+		sl, _, _ := cx.runCmdAs("git stash list", time.Minute, true)
+		if strings.TrimSpace(st) != "" || strings.TrimSpace(sl) == "" {
+			return brStep{val: last, obs: rvNoCmd(), why: "rodei git stash, mas a árvore não ficou limpa ou o stash está vazio"}
+		}
+		cx.say("guardado: a árvore está limpa e o stash tem %d entrada(s) (`git stash pop` devolve)", len(strings.Split(strings.TrimSpace(sl), "\n")))
+	case "branch_create":
+		cur, _, _ := cx.runCmdAs("git branch --show-current", time.Minute, true)
+		if strings.TrimSpace(cur) != post {
+			return brStep{val: last, obs: rvNoCmd(), why: "criei, mas a branch atual é " + strings.TrimSpace(cur) + ", não " + post}
+		}
+		cx.say("branch %s criada e ativa (as mudanças não commitadas vieram junto)", post)
+	case "restore_file":
+		if d, _, _ := cx.runCmdAs("git diff HEAD -- "+brShQ(post), time.Minute, true); strings.TrimSpace(d) != "" {
+			return brStep{val: last, obs: rvNoCmd(), why: post + " ainda difere do último commit"}
+		}
+		cx.say("%s voltou ao último commit", post)
 	}
 	cx.task.AddEvidence("cmd", "git "+sub+": ok")
 	return brStep{val: last, obs: rvNoCmd(), ok: true}
@@ -2897,8 +2994,20 @@ func brTestCmd(cx *brCtx, target, hint string) string {
 			return "python3 -m unittest " + fpShQuote(strings.TrimSuffix(strings.ReplaceAll(rel, "/", "."), ".py"))
 		}
 	}
+	if d, ok := brTestDir(cx.env.Root, target); ok {
+		// the target names a directory with tests: run that package/dir
+		cx.task.AddEvidence("resolve", fmt.Sprintf("alvo '%s' → pasta %s", target, d))
+		switch {
+		case p.Test == "go test ./...":
+			return "go test ./" + d + "/..."
+		case strings.HasPrefix(p.Test, "python3 -m pytest"):
+			return fpTestCommand(p, d)
+		}
+	}
 	if p.Test == "go test ./..." {
-		return "go test -run " + fpShQuote("(?i)"+target) + " ./..."
+		// -v: without it a passing filtered run prints only "ok pkg" and the
+		// count of tests that ran is lost (0 passaram for a test that passed)
+		return "go test -v -run " + fpShQuote("(?i)"+target) + " ./..."
 	}
 	return fpTestCommand(p, target)
 }
@@ -2927,6 +3036,9 @@ func brRunTests(cx *brCtx, in map[string]string) brStep {
 		obs.Failures = r.Parsed.Data.Failed + r.Parsed.Data.Errors
 		d := r.Parsed.Data
 		cx.say("%s: %d passaram · %d falharam · %d pulados", d.Format, d.Passed, d.Failed+d.Errors, d.Skipped)
+		if names := brPassedTests(out); len(names) > 0 && len(names) <= 12 {
+			cx.say("passaram: %s", strings.Join(names, ", "))
+		}
 		cx.task.AddEvidence("tests", fmt.Sprintf("%s exit %d: %d ok, %d falhas, %d pulados", d.Format, exit, d.Passed, d.Failed+d.Errors, d.Skipped))
 	} else {
 		cx.say("%s", strings.TrimRight(truncateHeadTail(out, 3000), "\n"))
@@ -3769,6 +3881,13 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			r, isRes := arg.(brCmdRes)
 			if !isRes || r.Exit < 0 || r.Exit == 126 || r.Exit == 127 {
 				return false, false, "o comando não rodou"
+			}
+			// a command that CHANGES things and exits non-zero did not do the
+			// job: "respondeu (exit 1)" sealed `docker image prune -af` failing
+			// as feito e verificado. Only read-only methods may answer with a
+			// non-zero exit.
+			if r.Exit != 0 && m.Risk != "low" {
+				return false, false, fmt.Sprintf("`%s` saiu com exit %d: não deu certo", r.Cmd, r.Exit)
 			}
 			proofs = append(proofs, brProofCmd(r.Cmd, fmt.Sprintf("respondeu (exit %d)", r.Exit)))
 		case "status_obtained":

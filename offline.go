@@ -625,16 +625,9 @@ func olHeadlessRun(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, m fpMa
 	out := redactSecrets(r.Output)
 	ui.ToolEnd("fastpath", "bash", ToolOutput{Text: out, IsErr: r.ExitCode != 0, Display: Display{Summary: fmt.Sprintf("exit %d · atalho %s", r.ExitCode, m.Intent)}}, r.Duration)
 	dbg("fastpath", map[string]any{"intent": m.Intent, "cmd": m.Cmd, "exit": r.ExitCode, "offline": offline, "headless": true})
-	text := strings.TrimRight(out, "\n")
-	// rg/grep exit 1 on no match: for a search intent that is a verified
-	// "0 resultados", not a failure — and a silent empty answer helps nobody.
-	searchMiss := strings.TrimSpace(out) == "" && r.ExitCode == 1 &&
-		(m.Intent == "search" || m.Intent == "search_code" || m.Intent == "where")
+	text, done := olFastText(m, out, r.ExitCode, r.Reset)
 	switch {
-	case r.ExitCode == 0 && !r.Reset || searchMiss:
-		if strings.TrimSpace(out) == "" {
-			text = fmt.Sprintf("0 resultados — `%s` não encontrou nada", m.Cmd)
-		}
+	case done:
 		return &RunResult{Status: StopDone, Text: text, Model: "fastpath", Tools: 1}, prompt
 	case ctx.Err() != nil:
 		return &RunResult{Status: StopInterrupted, Text: text, Model: "fastpath", Tools: 1}, prompt
@@ -643,4 +636,27 @@ func olHeadlessRun(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, m fpMa
 			Err: fmt.Sprintf("atalho %q falhou (exit %d) e não há modelo pra analisar", m.Cmd, r.ExitCode)}, prompt
 	}
 	return nil, prompt + "\n\n" + fmt.Sprintf("<system-reminder>The harness already ran `%s` for this request (fast path) and it failed (exit %d). Do not re-run it before reading this output:\n%s</system-reminder>", m.Cmd, r.ExitCode, truncateHeadTail(out, 8000))
+}
+
+// olFastText is the answer of a fast path that ran: its output, or a sentence
+// when the command printed nothing. done = the request is answered.
+// rg/grep exit 1 on no match: for a search intent that is a verified
+// "0 resultados", not a failure — and a silent empty answer helps nobody. A
+// build/lint/format that prints nothing and exits 0 did its job: say so
+// ("não encontrou nada" reads as if the build had found no project).
+func olFastText(m fpMatch, out string, exit int, reset bool) (text string, done bool) {
+	text = strings.TrimRight(out, "\n")
+	search := m.Intent == "search" || m.Intent == "search_code" || m.Intent == "where"
+	searchMiss := strings.TrimSpace(out) == "" && exit == 1 && search
+	if !(exit == 0 && !reset || searchMiss) {
+		return text, false
+	}
+	if strings.TrimSpace(out) == "" {
+		if search {
+			text = fmt.Sprintf("0 resultados — `%s` não encontrou nada", m.Cmd)
+		} else {
+			text = fmt.Sprintf("`%s` terminou sem erros (exit 0, sem saída)", m.Cmd)
+		}
+	}
+	return text, true
 }

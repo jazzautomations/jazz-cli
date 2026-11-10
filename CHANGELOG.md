@@ -1,5 +1,38 @@
 # Changelog
 
+## Não lançado
+
+Medição do modo offline com pedidos que o código nunca viu, e o que ela achou.
+
+### Segurança e honestidade
+
+- **"limpa o projeto" não roda mais `docker image prune -af`.** A regra de limpeza de containers disparava
+  só com a palavra "limpa"; agora exige container, imagem ou volume no pedido.
+- **Comando de escrita que falha não é selado.** `cmd_ran` aceitava "o comando respondeu" com exit ≠ 0 em
+  método que muda coisa.
+- **Escrita negada não cai na leitura.** Com o método de escrita negado ou falho, o método de leitura da
+  mesma intenção não roda mais como substituto com selo verde.
+- **Commit offline só em ordem simples, de tudo, com a mensagem dada.** Pergunta, tempo passado, parte dos
+  arquivos, emenda ou mensagem a inventar recusam;
+  `git_commit` exige verbo de commit.
+- Novas recusas honestas: arquivo citado e não usado pela leitura, pedido sobre git lido como outra coisa,
+  pedido composto entendido pela metade, verbo criativo no começo ("melhora", "review", "make this faster").
+- Valor de credencial em `.env` fica oculto; nomes das chaves são listados.
+
+### Novo
+
+- `jazz eval real`: 89 pedidos do dia a dia com veredito por pedido e conferência do repositório depois;
+  `--tasks ARQ` roda um conjunto externo; `jazz eval parse "pedido"` mostra a leitura sem agir.
+- Offline faz de verdade: stash, criar branch, descartar mudanças de um arquivo (guardando o diff),
+  formatar (reescreve e confere), rodar um teste ou um pacote, soma/média/maior/menor de coluna CSV,
+  erros de arquivo de log, resumo estrutural de arquivo, comando digitado cru.
+
+### Medido
+
+Em três conjuntos inéditos (100, 120 e 100 pedidos escritos sem ver a gramática), primeira passada:
+61, 49 e 47 acertos, com 11, 13 e 7 falsos sucessos; num quarto, de frases-armadilha, 33 e 7. Detalhes e limites em
+`docs/research/offline-realworld-probe.md`.
+
 ## 0.13.3 — 2026-11-10
 
 Release de confiança: nada de recurso novo de vitrine; o que o offline diz que fez passa a ser verdade

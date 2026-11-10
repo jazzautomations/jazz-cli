@@ -1,0 +1,12 @@
+# Falhas conhecidas da suíte real (jazz eval real --gate). Só pode encolher.
+# Um id com ~ na frente depende da máquina.
+r14-cade-o-arquivo-de-duracao   # "duração" → duration.go: pede tradução pt→en, não tem como sem modelo
+# dependem da máquina (rede, portas, sandbox, ferramentas instaladas)
+~r45-quais-portas-estao-abertas
+~r46-quem-ta-usando-a-porta
+~r47-quanto-de-disco-eu-tenho
+~r48-quanta-memoria-livre
+~r49-quais-processos-tao-comendo-mais
+~r50-qual-meu-ip
+~r51-tem-internet
+~r53-qual-a-versao-do-go

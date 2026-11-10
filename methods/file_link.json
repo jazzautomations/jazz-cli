@@ -37,7 +37,7 @@
      "arg2": "$slot.target"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 50
   },
   {
@@ -77,7 +77,7 @@
      "arg2": "$slot.target"
     }
    ],
-   "risk": "low",
+   "risk": "med",
    "cost_ms": 50
   }
  ]

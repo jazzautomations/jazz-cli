@@ -100,3 +100,89 @@ cotidiano de dev: nesta sonda são 7 em 89. Os dois conjuntos medem o que as reg
    pelo menos um teste rodado.
 4. Esta sonda vira suíte com veredito esperado por pedido e entra no CI ao lado do eval.
 5. Só então cobertura: resolver nome de arquivo sem caminho, typo em nome de arquivo, inglês básico.
+
+## A sonda virou suíte, e três conjuntos inéditos mediram de verdade (2026-11-10)
+
+`jazz eval real` roda os 89 pedidos com veredito por pedido: texto esperado, estado do repositório depois
+(`after`) e, para todo pedido que não declara `changes`, árvore, HEAD, branches e stash idênticos. Passa
+pela mesma porta do `jazz -p --offline --allow-tools bash,edit,write` (atalhos primeiro, cérebro depois) e
+só deixa rodar comando que fica dentro do projeto de teste. `jazz eval parse "pedido"` mostra a leitura sem
+agir. `--tasks ARQ` roda um conjunto externo.
+
+Consertar olhando os 89 pedidos infla o número desses 89. Por isso cada rodada foi medida num conjunto
+**inédito**, escrito por um agente que não viu a gramática nem o código, só a descrição do projeto de teste
+e a lista de pedidos já usados. Os três estão em `evals/realworld/heldout-{1,2,3}.json`.
+
+| conjunto | primeira passada (o que mede) | depois de consertar olhando as falhas |
+|---|---|---|
+| 89 da sonda (já vistos) | 59 · 10 falsos sucessos | 88 · 0 |
+| inédito 1 (100) | 61 · 11 falsos sucessos | 100 · 0 |
+| inédito 2 (120, mais difícil: comando cru, pedido embrulhado, 13 typos) | 49 · 13 falsos sucessos | 64 · 0 |
+| inédito 3 (100, distribuição do dia a dia) | **47 · 7 falsos sucessos** | não consertado: é o número atual |
+
+Leitura honesta: em pedido escrito por outra pessoa, o offline acerta cerca de metade na primeira vez. A
+cobertura em frase nova **não subiu** de uma rodada para a outra (61 → 49 → 47; os conjuntos não têm a
+mesma dificuldade, mas a tendência não é de alta). O que caiu foi o falso sucesso, e ainda não chegou a
+zero em conjunto novo. Os números da coluna da direita são de desenvolvimento, não de medida.
+
+### O que os conjuntos inéditos acharam (tudo presente na 0.13.3)
+
+- "limpa o projeto" era lido como `container_prune` e rodava `docker image prune -af`: a regra era a
+  palavra "limpa" sozinha.
+- `cmd_ran` selava "feito e verificado" um comando de escrita com exit ≠ 0.
+- Escrita negada pela permissão caía no método de leitura irmão e saía verde (`git stash push` negado →
+  `git stash list`). É o ticket T1 de `jev-build-time-tickets.md` na forma estreita.
+- Pergunta sobre commit commitava por três portas diferentes: dentro de pedido composto ("…e me diz qual
+  foi o último commit"), com interjeição ("uai, qual era a mensagem do commit…"), e "the last commit" como
+  segundo passo. A regra de `git_commit` é a palavra "commit".
+- Arquivo citado e ignorado: "any IP addresses in logs/app.log?" respondia com as interfaces da máquina.
+- "procura localhost no projeto todo" virava a lista de TODOs.
+- "preciso de uma pasta nova chamada build/artefatos" criava um arquivo chamado `nova`.
+- "formata só o store.go, o resto deixa quieto" formatava tudo.
+- "ultmas 2 linhas" mostrava as duas primeiras.
+- `ps` dentro do sandbox listava só `ps`, `bash` e `bwrap`.
+
+### O que entrou
+
+Guardas (recusam em vez de errar): pergunta com interjeição ou embrulho; `git_commit` exige verbo de
+commit; arquivo do projeto citado e não usado pela leitura; pedido sobre git respondido por leitura que
+não é de git; "todo" como palavra; nome de arquivo que não é nome; pedido composto feito pela metade;
+verbo criativo no começo do pedido; método de leitura nunca é fallback de método de escrita; `cmd_ran` de
+método que muda coisa exige exit 0.
+
+Cobertura: frases feitas (`nlu_phrases.go`) com operando resolvido no projeto e correção de digitação só
+nas palavras da frase; atalhos de leitura novos em `intents.json`; passo de pedido composto passa pelos
+atalhos; comando digitado cru roda como veio (sandbox e permissão); releitura sem o embrulho ("dá pra…",
+"preciso ver…"); stash, criar branch e descartar mudanças de um arquivo com pós-condição conferida;
+formatar reescreve e confere; soma/média/maior/menor/contagem de CSV; chaves e valores de `.env` com
+credencial oculta; erros de arquivo de log; resumo estrutural de arquivo; alvo de teste por pacote.
+
+### O que isto diz sobre o caminho
+
+Frase feita por pedido não escala: três rodadas, cobertura em frase nova parada em torno da metade. As
+guardas escalam melhor (o falso sucesso caiu). Os próximos passos que os estudos já apontavam e que esta
+medição confirma: gate estático de assets e matriz slot↔método (`offline-optimization-study.md` #2 e #6,
+que teriam pego `git_stash` só com método de leitura e `cmd_ran` em risco alto), corpus metamórfico (#8),
+convergência dos dois parsers (#4), e recusa com causa nomeada (#10) para o pedido que hoje cai no menu.
+
+### Quarto conjunto: frases-armadilha (mesmo dia)
+
+Um quarto conjunto inédito (`heldout-4.json`, 100 pedidos) foi escrito pedindo de propósito frases em que
+uma palavra engana um casador de palavras-chave ("commit", "test", "log", "clean" usados para pedir outra
+coisa, ou numa pergunta). Primeira passada: **33/100, 7 falsos sucessos**. Depois dos consertos: 36/100, 0.
+
+Falso sucesso na primeira passada, por rodada: 11 → 13 → 7 → 7. Não zera em conjunto novo.
+
+O que ele achou: "já commitei o notas.txt ou ainda não?" commitou (quarta vez que `git_commit` age numa
+pergunta, por uma redação diferente a cada conjunto); "commit only notas.txt" commitou tudo; "quais pacotes
+go tem nesse projeto" listou os pacotes da máquina; "lista as rotas http que a api registra" mostrou a
+tabela de rotas do kernel; "find every .md file that mentions API" rodou como linha de comando.
+
+A resposta deixou de ser remendo: o commit offline agora só acontece numa **ordem simples, de tudo, com a
+mensagem dada**. Pergunta, tempo passado, parte dos arquivos, emenda, desfazer ou mensagem a inventar
+recusam. É a lição geral das quatro rodadas: para intenção que muda coisa, a regra tem de ser positiva
+(lista do que vale), não negativa (lista do que não vale).
+
+Estado depois de tudo, nos conjuntos já vistos: sonda 88/89, inéditos 100/100, 66/120, 55/100, 36/100,
+todos com falso sucesso 0; eval antigo 117/122. A cobertura em frase nova na primeira passada foi
+61 → 49 → 47 → 33 (o quarto conjunto é adversarial).

@@ -1,5 +1,6 @@
 {"methods": [
- {"name": "explain.api_map", "intent": "explain", "priority": 10,
+  {"name": "explain.summary", "intent": "explain", "priority": 20, "doc": "o alvo é um arquivo do projeto: resumo estrutural (pacote, imports, declarações, rotas, marcadores) — diz que não é explicação de comportamento", "pre": [{"fact": "explain.file", "op": "set"}], "steps": [{"cap": "explain_file", "in": {}, "out": "v"}], "verify": [{"check": "read_ok", "arg": "$v"}], "risk": "low", "cost_ms": 50},
+{"name": "explain.api_map", "intent": "explain", "priority": 10,
   "doc": "api_map rankeia símbolos (func/classe/método, assinatura + doc) pelo texto pedido; cobre arquivo e nome de símbolo",
   "needs": ["bin.python3"],
   "pre": [{"fact": "slot.target", "op": "set"}],

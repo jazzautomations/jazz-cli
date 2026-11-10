@@ -57,16 +57,36 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		w = nuRuntimeWorld(env.Root, env.Profile)
 	}
 	in := nuGet().Parse(text, w)
+	if cmd, ok := brLiteralCmd(text); ok && !in.Phrase && (!in.Understood() || in.Confidence < brActMin(in) || brHasFlag(cmd)) && !brGitWriteSub(cmd) {
+		// the request is a command line typed as is ("wc -l x.go", "go test
+		// ./...", "grep -rn FIXME internal/"): run it as typed instead of
+		// guessing an intent from its words
+		in = Intent{Name: "shell_cmd", Slots: map[string]string{"cmd": cmd}, Confidence: 1, Raw: 1, Phrase: true,
+			Evidence: []string{"linha de comando digitada"}}
+		return brRunIntent(ctx, env, text, in, res)
+	}
 	res.Intent = in
 	// multi-intent: "lista os arquivos e mostra o git status" — accept the
 	// split only when EVERY part parses to a CONFIDENT intent (the act
 	// threshold, not the bare "understood" floor): a false split ("procura
 	// por TODO e FIXME" → "FIXME" alone is a classifier-only 0.75) falls back
 	// to the single parse instead of running two half-requests
-	if parts := brSplitMulti(text, nuGet(), w); len(parts) >= 2 && len(parts) <= 4 {
+	if parts := brSplitMulti(text, nuGet(), w); !in.Phrase && len(parts) >= 2 && len(parts) <= 4 {
 		var ins []Intent
 		chain := make([]bool, len(parts))
 		for i, p := range parts {
+			if i > 0 && len(ins) == i {
+				if q := brResolveThere(p, ins[i-1]); q != p {
+					p = q
+					parts[i] = q
+				}
+			}
+			if fm, ok := brFastMatch(env.Root, p); ok {
+				// the part is a read-only fast path of its own (intents.json)
+				ins = append(ins, Intent{Name: "fastpath", Slots: map[string]string{"cmd": fm.Cmd}, Confidence: 1, Raw: 1, Phrase: true,
+					Evidence: []string{"atalho " + fm.Intent}})
+				continue
+			}
 			pi := nuGet().Parse(p, w)
 			// anaphora clause: "e apaga eles" can parse CONFIDENT now that
 			// filter slots eat the pronoun (name=eles) — check the strip
@@ -88,6 +108,10 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		}
 		if len(ins) == len(parts) {
 			return brRunMulti(ctx, env, parts, ins, chain)
+		}
+		if why := brPartialMulti(parts, in, w); why != "" {
+			res.Miss, res.MissWhy, res.Text, res.Req = true, "partial_multi", why, text
+			return res
 		}
 	}
 	return brRunIntent(ctx, env, text, in, res)
@@ -307,6 +331,13 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, c
 			t += " (precisa de entrada)"
 		}
 		texts = append(texts, "» "+strings.TrimSpace(parts[i])+"\n"+t)
+		if r.Status == tkFailed && brRestAreReads(env, ins[i+1:], chain[i+1:]) {
+			// "roda os testes e mostra o git status": o teste falhar é um
+			// resultado, e o resto são leituras independentes — mostrar. O
+			// veredito do run continua sendo o pior passo (failed). Nada que
+			// muda coisa roda depois de uma falha.
+			continue
+		}
 		if r.Status == tkNeedsInput || r.Status == tkFailed || r.Status == tkBlocked {
 			// um passo que pergunta/falha/bloqueia encerra a cadeia —
 			// continuar executando passos seguintes e selar com o veredito
@@ -348,6 +379,20 @@ func brRunMulti(ctx context.Context, env *brEnv, parts []string, ins []Intent, c
 	}
 	res.Text = strings.Join(texts, "\n\n")
 	return res
+}
+
+// brRestAreReads: every remaining step is an independent low-risk read (no
+// chained anaphora, no mutation).
+func brRestAreReads(env *brEnv, ins []Intent, chain []bool) bool {
+	if len(ins) == 0 {
+		return false
+	}
+	for i, in := range ins {
+		if i < len(chain) && chain[i] || brIntentRisk(env, in) != cbLow {
+			return false
+		}
+	}
+	return true
 }
 
 // brRunEach fans a consumer intent out over produced paths — one real run
@@ -883,6 +928,7 @@ func brFacts(cx *brCtx, p *epProfile) map[string]string {
 	f["project.build"] = cx.proj.Build
 	f["project.lint"] = cx.proj.Lint
 	f["project.fmt"] = cx.proj.Fmt
+	brRealFacts(cx, f)
 	if cx.proj.Git {
 		f["project.git"] = "1"
 	}
@@ -913,11 +959,20 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 		cx.env.BeginTurn() // shadow-git: this task's writes become /undo-able
 	}
 	tried := 0
+	wroteTried := false
 	for mi := 0; mi < len(methods); mi++ {
 		m := methods[mi]
 		if !mhApplicable(m, cx.facts) {
 			continue
 		}
+		if wroteTried && m.Risk == "low" && !brReportOnly(m) {
+			// a method that changes things was tried and did not go through
+			// (denied, failed). Its read-only sibling is NOT a fallback: "guarda
+			// no stash" with the push denied ran `git stash list` and sealed
+			// feito e verificado. The request stops with the real reason.
+			continue
+		}
+		wroteTried = wroteTried || m.Risk != "low"
 		tried++
 		cx.mslots = m.Slots // tipos dos slots do método em execução (distill)
 		if t.Status == tkInvestigating || t.Status == tkRecovering || t.Status == tkNeedsInput || t.Status == tkBlocked {
@@ -1081,6 +1136,16 @@ func brExecute(cx *brCtx, methods []mhMethod) {
 	} else if !tkTerminal(t.Status) {
 		t.must(tkBlocked, why)
 	}
+}
+
+// brReportOnly: the method only says something (report/ask), runs nothing.
+func brReportOnly(m mhMethod) bool {
+	for _, s := range m.Steps {
+		if s.Cap != "report" && s.Cap != "ask_slot" {
+			return false
+		}
+	}
+	return true
 }
 
 // brRecover applies the recovery table to a failed step. done = the task

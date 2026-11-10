@@ -57,6 +57,8 @@ func TestBrainQuestionNeverMutates(t *testing.T) {
 }
 
 // Pedido de escrita não é respondido pelo método de leitura com selo verde.
+// Desde a suíte real, stash e criar branch têm método de escrita próprio: o
+// pedido ou roda o comando de escrita, ou não sela.
 func TestBrainWriteRequestNotAnsweredByRead(t *testing.T) {
 	for _, q := range []string{
 		"guarda minhas mudanças no stash",
@@ -67,37 +69,28 @@ func TestBrainWriteRequestNotAnsweredByRead(t *testing.T) {
 	} {
 		env, rec := brHonestRepo(t)
 		r := brRun(context.Background(), env, q)
-		if r.Status == tkSucceeded {
-			t.Errorf("%q: selado como feito (%s) rodando só leitura: %v", q, r.Intent.Name, rec.cmds)
+		wrote := false
+		for _, c := range rec.cmds {
+			if strings.HasPrefix(c, "git stash push") || strings.HasPrefix(c, "git checkout -b") {
+				wrote = true
+			}
+			if c == "git stash list" && !wrote || c == "git branch" {
+				t.Errorf("%q: rodou a leitura irmã no lugar da escrita: %v", q, rec.cmds)
+			}
 		}
-		if r.Intent.Name == "git_stash" || r.Intent.Name == "git_branch" {
-			if r.MissWhy != "write_unsupported" {
-				t.Errorf("%q: esperava recusa write_unsupported, veio miss=%v why=%q status=%s", q, r.Miss, r.MissWhy, r.Status)
-			}
-			if len(rec.cmds) != 0 {
-				t.Errorf("%q: não devia rodar nada, rodou %v", q, rec.cmds)
-			}
-			if !strings.Contains(r.Text, "não fiz nada") {
-				t.Errorf("%q: a recusa tem que dizer que nada foi feito: %q", q, r.Text)
-			}
+		if r.Status == tkSucceeded && !wrote {
+			t.Errorf("%q: selado como feito (%s) sem rodar a escrita: %v", q, r.Intent.Name, rec.cmds)
 		}
 	}
-	// leitura explícita segue funcionando
-	for q, want := range map[string]string{
-		"lista as branches":   "git_branch",
-		"em que branch eu tô": "git_branch",
-		"mostra o stash":      "git_stash",
-		"lista os stashes":    "git_stash",
-	} {
-		env, _ := brHonestRepo(t)
-		r := brRun(context.Background(), env, q)
-		if r.Intent.Name == want && r.MissWhy == "write_unsupported" {
-			t.Errorf("%q: leitura explícita foi recusada como escrita", q)
+	// a leitura explícita continua valendo
+	for _, q := range []string{"lista as branches", "tem stash salvo?"} {
+		env, rec := brHonestRepo(t)
+		if r := brRun(context.Background(), env, q); r.Status != tkSucceeded {
+			t.Errorf("%q: leitura devia passar, veio %s (%v)", q, r.Status, rec.cmds)
 		}
 	}
 }
 
-// Trabalho que precisa de modelo não vira um arquivo vazio.
 func TestBrainModelWorkIsNotCreate(t *testing.T) {
 	env, _ := brHonestRepo(t)
 	r := brRun(context.Background(), env, "escreve um teste pra função Soma")
