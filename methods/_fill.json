@@ -46,7 +46,12 @@
      "out": "slot.target"
     }
    ],
-   "verify": [],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.target"
+    }
+   ],
    "risk": "low",
    "cost_ms": 1600,
    "pre": [
