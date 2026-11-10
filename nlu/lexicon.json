@@ -141,7 +141,11 @@
    "vai pra",
    "vai para",
    "volta pra",
-   "volta para"
+   "volta para",
+   "volta",
+   "voltar",
+   "volte",
+   "voltando"
   ],
   "cochange": [
    "mudam juntos",
@@ -304,7 +308,12 @@
    "copias",
    "faça cópia",
    "faz copia",
-   "faz cópia"
+   "faz cópia",
+   "duplica",
+   "duplicar",
+   "duplique",
+   "duplico",
+   "duplicando"
   ],
   "count": [
    "quantas vezes",
@@ -600,7 +609,17 @@
    "free space",
    "space available",
    "space left",
-   "disk usage"
+   "disk usage",
+   "quanto pesa",
+   "quanto pesam",
+   "o peso",
+   "qual o peso",
+   "qual é o peso",
+   "peso do",
+   "peso da",
+   "peso de",
+   "peso total",
+   "a peso"
   ],
   "diskuse": [
    "usage",
@@ -1423,7 +1442,11 @@
    "selects",
    "selected",
    "selecting",
-   "nth"
+   "nth",
+   "corta",
+   "cortar",
+   "corte",
+   "cortando"
   ],
   "lint": [
    "lint",
@@ -1668,7 +1691,12 @@
    "turn off",
    "turn on",
    "turns off",
-   "turns on"
+   "turns on",
+   "concatena",
+   "concatenar",
+   "concatene",
+   "concatenando",
+   "concat"
   ],
   "nameattr": [
    "named",
@@ -1787,7 +1815,10 @@
    "olhar",
    "olhe",
    "see",
-   "print"
+   "print",
+   "pega",
+   "pegar",
+   "pegue"
   ],
   "opinion": [
    "opiniao",
@@ -2316,7 +2347,18 @@
    "descending",
    "desc",
    "in reverse",
-   "reverse order"
+   "reverse order",
+   "embaralha",
+   "embaralhar",
+   "embaralhe",
+   "shuffle",
+   "shuf",
+   "inverte",
+   "inverter",
+   "inverta",
+   "reverse",
+   "reverso",
+   "tac"
   ],
   "split": [
    "split",
@@ -2615,7 +2657,8 @@
    "applications",
    "builtin",
    "builtins",
-   "pager"
+   "pager",
+   "comandos"
   ],
   "undo": [
    "desfaz",

@@ -2949,4 +2949,98 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
 		}
 	}
+	// "volta" é checkout (voltar atrás); "branches remotas" é
+	// branch_status — o 'remote' host é qualificador de branch,
+	// não pedido de hosts SSH. explain cobre "o que faz o <tool>"
+	for q, want := range map[string]string{
+		"volta o commit anterior":    "git_checkout",
+		"volta pra main":             "git_checkout",
+		"lista as branches remotas":  "git_branch_status",
+		"lista as máquinas remotas":  "list_hosts",
+		"lista as branches":          "git_branch",
+		"o que faz o comando grep":   "explain",
+		"o que faz a ferramenta tar": "explain",
+		"mostra os comandos":         "help",
+		"desfaz o último commit":     "undo",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// git clone/baixa-repo não está no cardápio — recusa honesta,
+	// nunca git_status/dup_code/project_summary fingindo a ação
+	for _, q := range []string{
+		"clona o repo",
+		"git clone repo",
+		"baixa o repositório",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f slots %v",
+				q, in.Name, in.Confidence, in.Slots)
+		}
+	}
+	// família sort/slice/dedupe: "embaralha/inverte linhas" é sort_op
+	// com flag; "tira duplicatas" de linhas é uniq (sort_op), de
+	// arquivos é delete_file; "corta linhas X a Y" é slice, não split
+	for q, want := range map[string]string{
+		"embaralha as linhas":             "sort_op",
+		"inverte a ordem das linhas":      "sort_op",
+		"ordena as linhas do csv":         "sort_op",
+		"tira as duplicatas do lista.txt": "sort_op",
+		"remove as linhas duplicadas":     "sort_op",
+		"remove os arquivos duplicados":   "delete_file",
+		"acha arquivos duplicados":        "file_dupes",
+		"corta as linhas 5 a 10":          "line_slice",
+		"pega a última linha do log":      "line_slice",
+		"primeiras 5 linhas do log":       "line_slice",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// "copia X pra Y" é file_move op:copy — cópia existe no cardápio
+	for q, dest := range map[string]string{
+		"copia o config pra backup":   "backup",
+		"copia o a.txt pra pasta b":   "b",
+		"move o a.txt pra pasta docs": "docs",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != "file_move" || in.Slots["dest"] != dest ||
+			in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f slots %v ev %v",
+				q, in.Name, in.Confidence, in.Slots, in.Evidence)
+		}
+	}
+	// "quanto pesa a pasta X" é disk_usage com path, não file_find;
+	// "cria uma pasta chamada tmp" — o cue nameattr não vira alvo
+	in = m.Parse("quanto pesa a pasta src", w)
+	if in.Name != "disk_usage" || in.Slots["path"] != "src" ||
+		in.Confidence < 0.7 {
+		t.Errorf("pesa pasta: %s conf %.2f slots %v ev %v",
+			in.Name, in.Confidence, in.Slots, in.Evidence)
+	}
+	in = m.Parse("cria uma pasta chamada tmp", w)
+	if in.Name != "create" || in.Slots["target"] != "tmp" ||
+		in.Slots["targets"] != "" {
+		t.Errorf("pasta chamada: %s slots %v", in.Name, in.Slots)
+	}
+	// posição no arquivo nunca é operando — "no meio" não é dir/file;
+	// concat não está no cardápio — recusa honesta
+	in = m.Parse("corta o arquivo no meio", w)
+	if in.Confidence >= 0.7 || in.Slots["dir"] == "meio" ||
+		in.Slots["file"] == "meio" {
+		t.Errorf("no meio: %s conf %.2f slots %v", in.Name, in.Confidence, in.Slots)
+	}
+	for _, q := range []string{
+		"concatena os dois arquivos",
+		"cria um tag v1.0",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 {
+			t.Errorf("%q: deveria recusar — %s conf %.2f", q, in.Name, in.Confidence)
+		}
+	}
 }

@@ -9730,6 +9730,28 @@ func nuDiskPath(toks []nuTok, taken map[int]bool) string {
 		taken[best] = true
 		return toks[best].Raw
 	}
+	// "quanto pesa a pasta src" — o nome da pasta é palavra nua após
+	// o cue substantivo; sem path/name-shape o fallback acima não pega
+	for i, t := range toks {
+		switch t.Fold {
+		case "pasta", "pastas", "diretorio", "diretório", "diretorios",
+			"diretórios", "folder", "folders", "directory",
+			"directories":
+		default:
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+2; j++ {
+			u := &toks[j]
+			if u.Filler || u.Slang || taken[j] {
+				continue
+			}
+			if len(u.Concs) > 0 || nuIsNumber(u.Fold) || u.Quoted {
+				continue
+			}
+			taken[j] = true
+			return u.Raw
+		}
+	}
 	return ""
 }
 
@@ -11385,6 +11407,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"slashes": true, "slash": true, "newline": true,
 			"newlines": true, "used": true, "handle": true,
 			"null": true,
+			// posição dentro do arquivo, nunca pasta — "corta o
+			// arquivo no meio" não tem dir "meio"
+			"meio": true, "meios": true, "metade": true,
+			"metades": true, "middle": true, "half": true,
+			"halves": true,
 			// phrasing de recursão: "non-recursively"/"in sub directories"
 			// descreve o passeio, não uma pasta
 			"non-recursively": true, "nonrecursive": true,
@@ -13822,6 +13849,7 @@ func nuMkArg(toks []nuTok, what string, taken map[int]bool) string {
 				!u.has("permbit") && !u.has("files") && !u.has("filenoun") &&
 				!u.has("dirnoun") && !u.has("dir") && !u.has("extcue") &&
 				!u.has("permattr") && !u.has("findattr") &&
+				!u.has("nameattr") && !u.has("intocue") &&
 				!nuIsNumber(u.Fold) && !nuOctalShaped(u.Fold)
 			if !isName {
 				break
@@ -14323,7 +14351,12 @@ func nuSliceArg(toks []nuTok, what string, taken map[int]bool) string {
 				}
 				switch u.Fold {
 				case "context", "contexto", "file", "files", "arquivo",
-					"arquivos", "text", "texto", "input":
+					"arquivos", "text", "texto", "input",
+					// posição dentro do arquivo, nunca o arquivo:
+					// "corta o arquivo no meio" não tem file "meio"
+					"meio", "meios", "metade", "metades", "middle",
+					"half", "halves", "inicio", "início", "fim",
+					"final", "comeco", "começo":
 					continue
 				}
 				if !fileWord(u, j) {
