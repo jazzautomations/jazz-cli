@@ -2953,7 +2953,7 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 	// branch_status — o 'remote' host é qualificador de branch,
 	// não pedido de hosts SSH. explain cobre "o que faz o <tool>"
 	for q, want := range map[string]string{
-		"volta o commit anterior":    "git_checkout",
+		"volta pro commit abc123":    "git_checkout",
 		"volta pra main":             "git_checkout",
 		"lista as branches remotas":  "git_branch_status",
 		"lista as máquinas remotas":  "list_hosts",
@@ -2974,6 +2974,12 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 		"clona o repo",
 		"git clone repo",
 		"baixa o repositório",
+		// adjetivo não é ref/operando: 'anterior' dropado, sem revert
+		// no cardápio; concat/join e merge-ação idem — nunca clamar
+		"volta o commit anterior",
+		"faz merge da branch dev",
+		"junta os dois arquivos",
+		"concatena a.txt com b.txt",
 	} {
 		in = m.Parse(q, w)
 		if in.Confidence >= 0.7 {
@@ -3041,6 +3047,41 @@ func TestNLUUnderRefusalGuards(t *testing.T) {
 		in = m.Parse(q, w)
 		if in.Confidence >= 0.7 {
 			t.Errorf("%q: deveria recusar — %s conf %.2f", q, in.Name, in.Confidence)
+		}
+	}
+	// família host/service/net: 'ping' é host-domain ("pinga o servidor"
+	// nunca é service_status); 'pacote' é dep, não arquivo; 'testa a
+	// conexão/rede' é net_status, não run_tests; criados/hoje→fs_recent
+	for q, want := range map[string]string{
+		"pinga o servidor":               "host_status",
+		"ping 8.8.8.8":                   "host_status",
+		"o servidor tá online":           "service_status",
+		"status do servidor":             "service_status",
+		"reinicia o servidor":            "service_restart",
+		"verifica se o redis tá rodando": "service_status",
+		"para o serviço de banco":        "service_stop",
+		"testa a conexão":                "net_status",
+		"testa a rede":                   "net_status",
+		"arquivos criados hoje":          "fs_recent",
+		"arquivos criados essa semana":   "fs_recent",
+		"arquivos modificados ontem":     "fs_recent",
+		"extrai a coluna 2":              "text_extract",
+		"extrai o campo email":           "text_extract",
+	} {
+		in = m.Parse(q, w)
+		if in.Name != want || in.Confidence < 0.7 {
+			t.Errorf("%q: %s conf %.2f ev %v", q, in.Name, in.Confidence, in.Evidence)
+		}
+	}
+	// 'remove o pacote' é uninstall — não está no cardápio; o delete
+	// nunca pode fingir que apagou um arquivo
+	for _, q := range []string{
+		"remove o pacote velho",
+		"desinstala o pacote curl",
+	} {
+		in = m.Parse(q, w)
+		if in.Confidence >= 0.7 && in.Name == "delete_file" {
+			t.Errorf("%q: delete_file fingindo uninstall — conf %.2f", q, in.Confidence)
 		}
 	}
 }

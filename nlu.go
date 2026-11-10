@@ -2416,6 +2416,47 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 		}
 		break
 	}
+	// "nome contendo log" / "name containing 'x'" — o literal depois do
+	// verbo-relação é substring do nome (namepat=*x*), mesmo sem aspa
+	// nem nametgt (o contendo marca a relação, não o cue named)
+	if hasPat && in.Slots["namepat"] == "" {
+		for i, t := range toks {
+			switch t.Fold {
+			case "nome", "nomes", "name", "names", "filename", "filenames":
+			default:
+				continue
+			}
+			if taken[i] {
+				continue
+			}
+			ci := -1
+			for j := i + 1; j < len(toks) && j <= i+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang {
+					continue
+				}
+				switch u.Fold {
+				case "contain", "contains", "containing", "contem",
+					"contém", "contendo", "contenha":
+					ci = j
+				}
+				break
+			}
+			if ci < 0 {
+				continue
+			}
+			for j := ci + 1; j < len(toks) && j <= ci+3; j++ {
+				u := &toks[j]
+				if u.Filler || u.Slang || taken[j] {
+					continue
+				}
+				in.Slots["namepat"] = "*" + u.Raw + "*"
+				taken[i], taken[ci], taken[j] = true, true, true
+				break
+			}
+			break
+		}
+	}
 	// name == name_re: o mesmo literal alimentou os dois slots ("names
 	// matching 'a+'"). Como glob, "a+" casa só o literal 'a+' — junto com
 	// o regex restringiria demais. O regex é o predicado real.
@@ -4054,7 +4095,19 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			"process", "processes", "processo", "have", "has",
 			"had", "tem", "possui", "tenha":
 			delete(in.Slots, "dir")
-			drop(v)
+			// palavra já consumida por outro passe ("nome contendo
+			// log" — o contendo alimentou o namepat) não é operando
+			// descoberto; não infla o Dropped
+			covered := false
+			for ti, tt := range toks {
+				if tt.Raw == v && taken[ti] {
+					covered = true
+					break
+				}
+			}
+			if !covered {
+				drop(v)
+			}
 		}
 	}
 	// file/target com substantivo-classe é a CLASSE relida como alvo —
@@ -5734,6 +5787,13 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				if toks[j].Filler {
 					continue
 				}
+				// "nome contendo log" — o verbo-relação não é valor;
+				// o literal vem depois dele
+				switch toks[j].Fold {
+				case "contain", "contains", "containing", "contem",
+					"contém", "contendo", "contenha":
+					continue
+				}
 				cuedVals[strings.ToLower(toks[j].Raw)] = true
 				cuedVals[toks[j].Fold] = true
 				break
@@ -5783,8 +5843,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			"preceded", "followed", "matching", "matched",
 			"existing", "remaining", "taken", "given", "looking",
 			"residing", "located", "beneath", "ignoring",
+			"anterior", "ultimo", "último", "ultima", "última",
+			"previous", "prev", "proximo", "próximo", "proxima",
+			"próxima", "novo", "nova", "novos", "novas",
+			"velho", "velha", "antigo", "antiga", "recente",
+			"recentes", "latest", "earliest", "current", "atual",
+			"criados", "criadas", "modificados", "modificadas",
+			"editados", "editadas", "new", "old",
 			"excluding", "skipping", "within", "beginning",
-			"ending", "starting", "contain", "containing", "type",
+			"ending", "starting", "contain", "containing",
+			"contendo", "contem", "contém", "contenido", "type",
 			"types", "information", "info", "strings",
 			"characters", "copies", "backups", "symlinks",
 			"entries", "things", "stuff", "contents", "access",
@@ -5820,7 +5888,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			"sees", "saw", "want", "wants", "wanted", "need",
 			"needs", "needed", "try", "tries", "tried":
 			delete(in.Slots, sk)
-			drop(v)
+			covered := false
+			for ti, tt := range toks {
+				if tt.Raw == v && taken[ti] {
+					covered = true
+					break
+				}
+			}
+			if !covered {
+				drop(v)
+			}
 		}
 		// função-words/pronomes nunca são operando — "size between
 		// 5kB and 10kB" não tem arquivo 'between', "files you
@@ -5857,7 +5934,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 				"aquilo", "esse", "essa", "este", "esta",
 				"e", "ou":
 				delete(in.Slots, sk)
-				drop(v)
+				covered := false
+				for ti, tt := range toks {
+					if tt.Raw == v && taken[ti] {
+						covered = true
+						break
+					}
+				}
+				if !covered {
+					drop(v)
+				}
 			}
 		}
 	}
@@ -8312,8 +8398,11 @@ func nuGrepArg(toks []nuTok, what string, taken map[int]bool, intent string) str
 			u.has("content") || u.has("grepword") || u.has("find") ||
 			// "localiza o arquivo que tem X" — a classe do substantivo
 			// e o verbo de posse são phrasing; o padrão é X. "whose
-			// names begin" idem: vocábulo de nome, não de conteúdo
+			// names begin" idem: vocábulo de nome, não de conteúdo.
+			// tonoun idem: "onde fica o binário do go" — a pergunta é
+			// sobre uma CLASSE de alvo (binário/ferramenta), o valor é o genitivo
 			u.has("filenoun") || u.has("dirnoun") || u.has("have") ||
+			u.has("tonoun") ||
 			u.has("nameattr") || u.has("files") ||
 			u.has("count") || nuCountNouns[u.Fold] ||
 			nuArchiveWord(u.Fold) || nuPureExt(u.Fold) ||
@@ -9672,6 +9761,32 @@ func nuSvcName(toks []nuTok, taken map[int]bool) string {
 			return t.Raw
 		}
 	}
+	// nome sem conceito depois do cue de serviço: "o serviço de banco",
+	// "service called authd" — a preposição é ponte, o nome é o valor
+	for i, t := range toks {
+		switch t.Fold {
+		case "servico", "serviço", "servicos", "serviços", "service",
+			"services", "daemon", "daemons", "unit", "units":
+		default:
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+4; j++ {
+			u := &toks[j]
+			if u.Filler || u.Slang || taken[j] {
+				continue
+			}
+			switch u.Fold {
+			case "de", "do", "da", "dos", "das", "of", "the", "a",
+				"called", "named", "chamado", "chamada":
+				continue
+			}
+			if len(u.Concs) == 0 && len(u.Tags) == 0 && !u.Quoted {
+				taken[j] = true
+				return u.Raw
+			}
+			break
+		}
+	}
 	return ""
 }
 
@@ -11005,6 +11120,11 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"certo": true, "other": true, "outros": true, "outras": true,
 			"the": true, "a": true, "an": true, "o": true, "os": true,
 			"as": true, "um": true, "uma": true, "current": true,
+			"dois": true, "duas": true, "tres": true, "três": true,
+			"quatro": true, "cinco": true, "seis": true, "sete": true,
+			"oito": true, "nove": true, "dez": true, "two": true,
+			"three": true, "four": true, "five": true, "six": true,
+			"seven": true, "eight": true, "nine": true, "ten": true,
 		}
 		for i := 0; i+1 < len(toks); i++ {
 			f := toks[i+1].Fold
@@ -11351,6 +11471,10 @@ func nuFindArg(toks []nuTok, what string, taken map[int]bool) string {
 			"specfied": true, "specfic": true, "especificado": true,
 			"especificada": true, "determinado": true, "determinada": true,
 			"regular": true, "normal": true, "standard": true, "certain": true,
+			// modo de permissão depois de "de" — "permissão de leitura"
+			// não tem pasta 'leitura'
+			"leitura": true, "escrita": true, "execucao": true,
+			"execução": true, "gravação": true, "gravacao": true,
 			"particular": true, "specific": true, "common": true,
 			"where": true, "path": true, "location": true, "place": true,
 			// vocab de filesystem descreve o alvo, não um diretório —
@@ -14279,6 +14403,26 @@ var nuExtractPats = []struct {
 }
 
 func nuExtractPat(toks []nuTok) string {
+	// "extrai a coluna 2" / "cut field 3" — o pattern é o NÚMERO do
+	// campo, não um tipo fixo; sem número o operando falta (recusa)
+	for i, t := range toks {
+		switch t.Fold {
+		case "coluna", "colunas", "column", "columns", "campo",
+			"campos", "field", "fields":
+		default:
+			continue
+		}
+		for j := i + 1; j < len(toks) && j <= i+3; j++ {
+			u := &toks[j]
+			if u.Filler || u.Slang {
+				continue
+			}
+			if nuIsNumber(u.Fold) || nuIsNumber(u.Raw) {
+				return u.Raw
+			}
+			break
+		}
+	}
 	for _, e := range nuExtractPats {
 		for _, t := range toks {
 			for _, w := range e.words {

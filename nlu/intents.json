@@ -341,9 +341,10 @@
       "error",
       "execperm",
       "filenoun",
+      "files",
+      "find",
       "findattr",
-      "fix",
-      "files"
+      "fix"
      ]
     },
     {
@@ -355,9 +356,9 @@
       "error",
       "execperm",
       "filenoun",
-      "fix",
       "files",
       "find",
+      "fix",
       "test",
       "version"
      ],
@@ -1041,13 +1042,14 @@
       "delete"
      ],
      "none": [
-      "container",
-      "branch",
-      "recover",
-      "service",
       "@service",
+      "branch",
+      "container",
+      "dep",
       "mutate",
-      "permattr"
+      "permattr",
+      "recover",
+      "service"
      ]
     },
     {
@@ -1056,20 +1058,21 @@
       "files"
      ],
      "none": [
-      "container",
+      "@quoted",
+      "@service",
       "branch",
+      "container",
+      "count",
+      "dep",
+      "extract",
+      "find",
+      "listverb",
+      "mutate",
+      "open",
+      "permattr",
       "recover",
       "service",
-      "@service",
-      "mutate",
-      "listverb",
-      "find",
-      "count",
-      "permattr",
-      "extract",
-      "symnoun",
-      "@quoted",
-      "open"
+      "symnoun"
      ],
      "w": 10
     },
@@ -1079,9 +1082,10 @@
       "linknoun"
      ],
      "none": [
-      "find",
-      "create",
       "archive",
+      "create",
+      "dep",
+      "find",
       "listverb",
       "service"
      ],
@@ -1093,23 +1097,24 @@
       "files|filenoun"
      ],
      "none": [
-      "container",
+      "@service",
+      "archive",
       "branch",
+      "container",
+      "content",
+      "count",
+      "create",
+      "dep",
+      "extract",
+      "find",
+      "grepword",
+      "listverb",
+      "mutate",
+      "open",
+      "permattr",
       "recover",
       "service",
-      "@service",
-      "mutate",
-      "listverb",
-      "find",
-      "count",
-      "permattr",
-      "extract",
-      "symnoun",
-      "open",
-      "archive",
-      "content",
-      "grepword",
-      "create"
+      "symnoun"
      ]
     }
    ],
@@ -2611,24 +2616,25 @@
       "move|copy"
      ],
      "none": [
-      "rename",
+      "container",
       "delete",
-      "permattr",
+      "error",
       "execperm",
       "git",
-      "remote",
-      "net",
-      "install",
-      "run",
-      "undo",
       "history",
-      "service",
-      "container",
+      "install",
       "kill",
-      "user",
-      "who",
+      "net",
       "opinion",
-      "error"
+      "permattr",
+      "rebaseword",
+      "remote",
+      "rename",
+      "run",
+      "service",
+      "undo",
+      "user",
+      "who"
      ],
      "w": 15
     }
@@ -3377,6 +3383,26 @@
    "rules": [
     {
      "all": [
+      "create",
+      "timeref",
+      "files"
+     ],
+     "none": [
+      "commit",
+      "delete",
+      "filequoted",
+      "find",
+      "logs",
+      "nameattr",
+      "newest",
+      "recover",
+      "scope",
+      "stale"
+     ],
+     "w": 20
+    },
+    {
+     "all": [
       "recent",
       "files"
      ],
@@ -3479,6 +3505,9 @@
      "all": [
       "create",
       "branch"
+     ],
+     "none": [
+      "rebaseword"
      ]
     },
     {
@@ -3487,8 +3516,9 @@
      ],
      "none": [
       "checkout",
+      "delete",
       "push",
-      "delete"
+      "rebaseword"
      ]
     }
    ],
@@ -3529,6 +3559,9 @@
      "all": [
       "branch",
       "merge"
+     ],
+     "none": [
+      "makeword"
      ]
     },
     {
@@ -3552,7 +3585,8 @@
       "remote"
      ],
      "none": [
-      "delete"
+      "delete",
+      "makeword"
      ]
     },
     {
@@ -3589,6 +3623,7 @@
       "checkout"
      ],
      "none": [
+      "rebaseword",
       "rename",
       "replto"
      ],
@@ -3947,7 +3982,13 @@
     {
      "all": [
       "stash"
-     ]
+     ],
+     "any": [
+      "listverb",
+      "open",
+      "list"
+     ],
+     "w": 10
     }
    ],
    "slots": {}
@@ -4161,6 +4202,26 @@
     "estou online?"
    ],
    "rules": [
+    {
+     "all": [
+      "ping"
+     ],
+     "none": [
+      "list",
+      "service"
+     ],
+     "w": 15
+    },
+    {
+     "all": [
+      "ping",
+      "service"
+     ],
+     "none": [
+      "list"
+     ],
+     "w": 20
+    },
     {
      "all": [
       "online",
@@ -4551,28 +4612,29 @@
       "files"
      ],
      "none": [
-      "diff",
-      "mutate",
-      "extract",
-      "findattr",
-      "download",
       "blame",
-      "ipaddr",
-      "envvars",
-      "enable",
-      "recover",
-      "install",
-      "perf",
-      "status",
-      "scope",
-      "recent",
+      "diff",
+      "disk",
+      "download",
       "duplicate",
-      "sort",
+      "enable",
+      "envvars",
+      "extract",
       "find",
+      "findattr",
       "grepword",
-      "rename",
+      "install",
+      "ipaddr",
+      "joinword",
+      "mutate",
+      "perf",
+      "recent",
+      "recover",
       "removeword",
-      "disk"
+      "rename",
+      "scope",
+      "sort",
+      "status"
      ]
     },
     {
@@ -4583,30 +4645,31 @@
       "open"
      ],
      "none": [
-      "delete",
-      "create",
-      "diff",
-      "mutate",
-      "extract",
-      "findattr",
-      "download",
       "blame",
-      "ipaddr",
-      "envvars",
-      "enable",
-      "recover",
-      "install",
-      "perf",
-      "status",
-      "scope",
-      "recent",
+      "create",
+      "delete",
+      "diff",
+      "disk",
+      "download",
       "duplicate",
-      "sort",
+      "enable",
+      "envvars",
+      "extract",
       "find",
+      "findattr",
       "grepword",
-      "rename",
+      "install",
+      "ipaddr",
+      "joinword",
+      "mutate",
+      "perf",
+      "recent",
+      "recover",
       "removeword",
-      "disk"
+      "rename",
+      "scope",
+      "sort",
+      "status"
      ]
     },
     {
@@ -4615,20 +4678,21 @@
       "outtgt"
      ],
      "none": [
-      "sort",
-      "find",
-      "grepword",
-      "mutate",
-      "delete",
       "content",
+      "delete",
+      "disk",
+      "find",
       "forquoted",
+      "grepword",
+      "joinword",
+      "mutate",
       "nametgt",
-      "permattr",
       "net",
+      "permattr",
       "remote",
-      "rename",
       "removeword",
-      "disk"
+      "rename",
+      "sort"
      ],
      "w": 25
     }
@@ -4837,15 +4901,17 @@
       "logs"
      ],
      "none": [
-      "test",
       "build",
-      "fix",
-      "find",
+      "create",
+      "delete",
       "filenoun",
       "files",
-      "delete",
+      "find",
+      "fix",
       "mutate",
-      "create"
+      "split",
+      "splitnoun",
+      "test"
      ]
     },
     {
@@ -4854,16 +4920,18 @@
       "env"
      ],
      "none": [
-      "test",
       "build",
-      "fix",
-      "version",
-      "find",
+      "create",
+      "delete",
       "filenoun",
       "files",
-      "delete",
+      "find",
+      "fix",
       "mutate",
-      "create"
+      "split",
+      "splitnoun",
+      "test",
+      "version"
      ]
     },
     {
@@ -4873,12 +4941,14 @@
       "list|listverb"
      ],
      "none": [
-      "test",
       "build",
-      "fix",
+      "create",
       "delete",
+      "fix",
       "mutate",
-      "create"
+      "split",
+      "splitnoun",
+      "test"
      ],
      "w": 10
     }
@@ -5266,65 +5336,66 @@
       "open"
      ],
      "none": [
+      "@container",
+      "@host",
+      "archive",
       "blame",
-      "logs",
-      "status",
-      "port",
+      "branch",
+      "cochange",
+      "conflict",
+      "container",
+      "context",
+      "cpu",
+      "cron",
+      "dep",
+      "diff",
+      "disk",
+      "download",
+      "duplicate",
+      "eachitem",
+      "enable",
+      "envvars",
+      "error",
+      "explain",
+      "extract",
+      "files",
+      "find",
+      "findattr",
+      "fix",
+      "git",
+      "history",
+      "host",
       "ifaces",
       "ipaddr",
-      "envvars",
-      "history",
-      "summary",
-      "mutate",
-      "findattr",
-      "recent",
-      "download",
-      "extract",
-      "enable",
-      "recover",
-      "perf",
-      "diff",
-      "git",
-      "net",
-      "branch",
-      "files",
-      "container",
-      "@container",
-      "host",
-      "@host",
-      "memory",
-      "disk",
-      "cpu",
-      "process",
-      "dep",
-      "version",
-      "todo",
-      "archive",
-      "duplicate",
-      "license",
-      "snapshot",
-      "conflict",
-      "cron",
-      "usage",
-      "listen",
-      "cochange",
-      "fix",
-      "error",
-      "find",
-      "explain",
-      "symnoun",
-      "message",
-      "stale",
       "jazz",
+      "license",
+      "lineselect",
+      "listen",
+      "logs",
+      "memory",
+      "message",
+      "mutate",
+      "net",
       "online",
+      "perf",
+      "port",
+      "process",
+      "recent",
+      "recover",
+      "routes",
+      "snapshot",
+      "stale",
+      "stash",
+      "status",
+      "summary",
+      "symnoun",
       "sysnoun",
       "tag",
-      "context",
-      "who",
-      "lineselect",
-      "routes",
+      "todo",
+      "usage",
       "user",
-      "eachitem"
+      "version",
+      "who"
      ],
      "any": [
       "content"
@@ -5362,6 +5433,7 @@
       "recover",
       "rename",
       "run",
+      "stash",
       "tag",
       "test",
       "undo"
@@ -5373,30 +5445,31 @@
       "@file"
      ],
      "none": [
-      "summary",
-      "diff",
-      "blame",
-      "history",
-      "git",
-      "logs",
-      "net",
-      "host",
-      "service",
       "@host",
-      "status",
-      "remote",
+      "blame",
+      "config",
+      "datenoun",
+      "diff",
+      "epochnoun",
       "files",
+      "git",
+      "history",
+      "host",
+      "keynoun",
+      "lineselect",
       "list",
       "listverb",
-      "lineselect",
-      "keynoun",
-      "config",
-      "recent",
-      "timeref",
-      "epochnoun",
-      "datenoun",
+      "logs",
+      "medianoun",
       "nameattr",
-      "medianoun"
+      "net",
+      "recent",
+      "remote",
+      "service",
+      "stash",
+      "status",
+      "summary",
+      "timeref"
      ],
      "w": 10,
      "any": [
@@ -6208,6 +6281,9 @@
     {
      "all": [
       "rename"
+     ],
+     "none": [
+      "rebaseword"
      ]
     }
    ],
@@ -6312,13 +6388,19 @@
       "test"
      ],
      "none": [
-      "mutate"
+      "mutate",
+      "net",
+      "ping"
      ]
     },
     {
      "all": [
       "run",
       "@test"
+     ],
+     "none": [
+      "net",
+      "ping"
      ]
     },
     {
@@ -6326,16 +6408,18 @@
       "test"
      ],
      "none": [
-      "open",
-      "explain",
-      "find",
       "create",
-      "fix",
       "delete",
       "error",
-      "rename",
+      "explain",
+      "find",
+      "fix",
       "mutate",
-      "port"
+      "net",
+      "open",
+      "ping",
+      "port",
+      "rename"
      ]
     }
    ],
@@ -6531,8 +6615,9 @@
       "restart"
      ],
      "none": [
+      "@container",
       "container",
-      "@container"
+      "ping"
      ]
     }
    ],
@@ -6573,7 +6658,8 @@
      ],
      "none": [
       "enable",
-      "mutate"
+      "mutate",
+      "ping"
      ],
      "w": 2
     },
@@ -6582,12 +6668,13 @@
       "start"
      ],
      "none": [
-      "container",
       "@container",
-      "remote",
-      "push",
+      "container",
       "enable",
-      "mutate"
+      "mutate",
+      "ping",
+      "push",
+      "remote"
      ]
     }
    ],
@@ -6629,12 +6716,13 @@
       "service|@service"
      ],
      "none": [
+      "host",
+      "install",
       "ipaddr",
       "net",
+      "ping",
       "pubnet",
-      "remote",
-      "host",
-      "install"
+      "remote"
      ]
     },
     {
@@ -6643,12 +6731,13 @@
       "running"
      ],
      "none": [
+      "host",
+      "install",
       "ipaddr",
       "net",
+      "ping",
       "pubnet",
-      "remote",
-      "host",
-      "install"
+      "remote"
      ]
     },
     {
@@ -6660,21 +6749,22 @@
       "list"
      ],
      "none": [
-      "start",
-      "stop",
-      "restart",
-      "logs",
       "container",
       "enable",
-      "mutate",
       "error",
-      "sysnoun",
+      "host",
+      "install",
       "ipaddr",
+      "logs",
+      "mutate",
       "net",
+      "ping",
       "pubnet",
       "remote",
-      "host",
-      "install"
+      "restart",
+      "start",
+      "stop",
+      "sysnoun"
      ]
     },
     {
@@ -6683,21 +6773,48 @@
       "running"
      ],
      "none": [
+      "@host",
+      "container",
+      "error",
+      "host",
+      "install",
+      "ipaddr",
+      "logs",
+      "mutate",
+      "net",
+      "ping",
+      "pubnet",
+      "restart",
       "start",
       "stop",
-      "restart",
-      "logs",
-      "container",
-      "ipaddr",
-      "net",
-      "pubnet",
-      "install",
-      "mutate",
-      "error",
-      "sysnoun",
-      "host",
-      "@host"
+      "sysnoun"
      ]
+    },
+    {
+     "all": [
+      "status",
+      "running"
+     ],
+     "none": [
+      "@host",
+      "container",
+      "enable",
+      "error",
+      "host",
+      "install",
+      "ipaddr",
+      "logs",
+      "mutate",
+      "net",
+      "ping",
+      "pubnet",
+      "remote",
+      "restart",
+      "start",
+      "stop",
+      "sysnoun"
+     ],
+     "w": 10
     }
    ],
    "slots": {
@@ -6732,6 +6849,9 @@
      "all": [
       "stop",
       "service|@service"
+     ],
+     "none": [
+      "ping"
      ]
     }
    ],
@@ -6781,19 +6901,20 @@
       "sort"
      ],
      "none": [
-      "find",
-      "listverb",
-      "files",
+      "content",
+      "count",
       "create",
       "delete",
-      "permattr",
       "execperm",
+      "files",
+      "find",
       "git",
       "grepword",
-      "count",
       "install",
-      "content",
+      "joinword",
+      "listverb",
       "mutate",
+      "permattr",
       "replace"
      ],
      "w": 10
@@ -6804,11 +6925,12 @@
       "duplicate"
      ],
      "none": [
+      "create",
       "files",
       "find",
-      "listverb",
-      "create",
       "git",
+      "joinword",
+      "listverb",
       "project"
      ],
      "w": 15

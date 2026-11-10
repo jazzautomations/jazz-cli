@@ -863,7 +863,15 @@
    "uuids",
    "uuid",
    "ipv4",
-   "ipv6"
+   "ipv6",
+   "coluna",
+   "colunas",
+   "column",
+   "columns",
+   "campo",
+   "campos",
+   "field",
+   "fields"
   ],
   "filenoun": [
    "arquivo",
@@ -942,7 +950,15 @@
    "detect",
    "detects",
    "detected",
-   "detecting"
+   "detecting",
+   "onde fica",
+   "onde tá",
+   "onde esta",
+   "onde está",
+   "where is",
+   "aonde fica",
+   "onde fica o",
+   "onde tá o"
   ],
   "findattr": [
    "400",
@@ -1956,7 +1972,12 @@
    "proprietario",
    "proprietário",
    "proprietarios",
-   "proprietários"
+   "proprietários",
+   "leitura",
+   "escrita",
+   "execucao",
+   "execução",
+   "gravação"
   ],
   "permbit": [],
   "pkgs": [
@@ -2285,7 +2306,15 @@
    "dockerd",
    "containerd",
    "kubelet",
-   "coredns"
+   "coredns",
+   "banco",
+   "database",
+   "db",
+   "banco de dados",
+   "mysql",
+   "redis",
+   "mongodb",
+   "mongo"
   ],
   "session": [
    "logada",
@@ -2377,7 +2406,11 @@
    "divide em",
    "chop",
    "chops",
-   "chopping"
+   "chopping",
+   "quebra",
+   "quebrar",
+   "quebre",
+   "quebrando"
   ],
   "splitnoun": [
    "piece",
@@ -2727,7 +2760,21 @@
    "onde usa",
    "onde e usado",
    "onde é usado",
-   "where is it used"
+   "where is it used",
+   "refs",
+   "ref",
+   "usos",
+   "é chamada",
+   "é chamado",
+   "e chamada",
+   "e chamado",
+   "sao chamados",
+   "são chamados",
+   "é chamado em",
+   "is called",
+   "are called",
+   "foi chamada",
+   "foi chamado"
   ],
   "user": [
    "usuario",
@@ -2872,7 +2919,48 @@
    "documentário"
   ],
   "exctgt": [],
-  "replto": []
+  "replto": [],
+  "joinword": [
+   "junta",
+   "juntar",
+   "junte",
+   "juntando",
+   "une",
+   "unir",
+   "unindo",
+   "concatena",
+   "concatenar",
+   "concatene",
+   "concatenando",
+   "combina",
+   "combinar",
+   "combine",
+   "combinando",
+   "join",
+   "joins",
+   "joining",
+   "concatenate",
+   "concat",
+   "merge files",
+   "junta os",
+   "juntar os"
+  ],
+  "ping": [
+   "pinga",
+   "pingar",
+   "ping",
+   "pingando",
+   "pingue",
+   "pong"
+  ],
+  "rebaseword": [
+   "rebase",
+   "rebasear",
+   "rebasing",
+   "rebaseando",
+   "rebasing",
+   "faz rebase"
+  ]
  },
  "fillers": [
   "-print",
