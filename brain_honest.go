@@ -199,7 +199,7 @@ func brFileIgnored(env *brEnv, text string, in Intent) string {
 			continue // not a file of this project: nothing to say
 		}
 		base := filepath.Base(rel)
-		if strings.Contains(slots, base) || strings.Contains(slots, strings.TrimSuffix(base, filepath.Ext(base))) && len(base) > 6 {
+		if stem := strings.TrimSuffix(base, filepath.Ext(base)); strings.Contains(slots, base) || len(stem) >= 7 && strings.Contains(slots, stem) {
 			continue
 		}
 		if pre, self := brFileSelf[in.Name]; self && (pre == "" || strings.HasPrefix(base, pre)) {
@@ -252,6 +252,9 @@ func brSemanticGuard(text string, in Intent) (why, kind string) {
 	desc := nuGet().descOf(in.Name)
 	switch in.Name {
 	case "git_commit":
+		if why := brCommitRefuse(text); why != "" {
+			return why, "question_mutation"
+		}
 		if !brCommitVerbRe.MatchString(text) {
 			return "o pedido fala de commit mas não manda commitar, e a leitura que eu tenho (git_commit) muda o repositório. não commitei nada. pra ver: \"último commit\" ou \"mostra o git log\"; pra commitar: \"commita com a mensagem ...\"", "question_mutation"
 		}
@@ -267,6 +270,10 @@ func brSemanticGuard(text string, in Intent) (why, kind string) {
 	}
 	low := strings.ToLower(text)
 	switch {
+	case brMachineIntent(in.Name) && brProjectWordRe.MatchString(low):
+		// "quais pacotes go tem nesse projeto" read as the machine's installed
+		// packages; "rotas http que a api registra" as the kernel routing table
+		return fmt.Sprintf("o pedido é sobre o projeto e a leitura que eu tenho (%s — %s) é sobre a máquina: seria responder outra pergunta. não fiz nada. reformule dizendo o que procurar no código (ex.: \"procura HandleFunc no código\", \"lista os arquivos go\")", in.Name, desc), "wrong_reading"
 	case in.Name == "git_diff" && brCommitNounRe.MatchString(low):
 		// "quais arquivos mudaram no último commit" is about a commit; git_diff
 		// answers with the uncommitted changes
@@ -327,6 +334,18 @@ func brLiteralCmd(text string) (string, bool) {
 			shellish = true
 		}
 	}
+	plain := 0
+	for i, w := range f[1:] {
+		if i == 0 && (f[0] == "git" || f[0] == "go" || f[0] == "make" || f[0] == "npm" || f[0] == "cargo" || f[0] == "pnpm" || f[0] == "yarn") {
+			continue // the subcommand
+		}
+		if len(w) >= 3 && strings.IndexFunc(w, func(r rune) bool { return r < 'a' || r > 'z' }) < 0 {
+			plain++
+		}
+	}
+	if plain >= 2 {
+		return "", false // "find every .md file that mentions API": a sentence, not a command line
+	}
 	if !shellish && f[0] != "git" && f[0] != "go" && f[0] != "make" && f[0] != "cat" && f[0] != "ls" && f[0] != "npm" && f[0] != "cargo" {
 		return "", false // "find usages", "file handling": prose that starts with a program name
 	}
@@ -336,6 +355,41 @@ func brLiteralCmd(text string) (string, bool) {
 func brCreateStopWord(s string) bool {
 	switch s {
 	case "nova", "novo", "new", "pasta", "arquivo", "file", "folder", "dir", "vazio", "vazia", "empty", "chamada", "chamado", "called", "named", "um", "uma", "teste", "test", "isso", "aqui", "linha", "line":
+		return true
+	}
+	return false
+}
+
+var (
+	brProjectWordRe = lazyRx(`\b(?:projeto|repo|repositorio|repositório|codigo|código|api|codebase|project|code|source|fonte|pacotes? go|go packages?|handlers?|rotas? http|http routes?|endpoints?)\b`)
+	// brCommitPastRe: "já commitei?", "foi commitado", "did I commit" — about a
+	// commit that happened (or not), never an order.
+	brCommitPastRe = lazyRx(`(?i)\b(?:comm?itei|comm?itou|comm?itamos|comm?itaram|comm?itad[oa]s?|committed|did i commit|have i committed|was it committed|ja comm?it\w*|já comm?it\w*)\b`)
+	// brCommitPartRe: a commit of PART of the tree, an amend, an undo, or a
+	// message to be invented. The only offline commit is "everything, with
+	// the message given".
+	brCommitPartRe = lazyRx(`(?i)(?:^|[^\p{L}])(?:so|só|only|apenas|somente|just|menos|except|exceto|sem o|sem a|without|amend|emenda|desfaz\w*|undo|revert\w*|reset|sugere|sugira|suggest|uma boa mensagem|mensagem boa|good message|changelog|squash|fixup|staged|stage)(?:$|[^\p{L}])`) // RE2: \b é ASCII e falha em "só"
+)
+
+// brCommitRefuse: reasons not to commit even though the reading is git_commit.
+// The intent has committed on a question four separate times across the
+// held-out sets, each through a different wording; the rule is now positive:
+// an order, about everything, with the message given.
+func brCommitRefuse(text string) string {
+	t := strings.TrimSpace(text)
+	switch {
+	case strings.HasSuffix(t, "?") || brCommitPastRe.MatchString(t):
+		return "isso pergunta sobre um commit, não manda commitar. não commitei nada. pra saber: \"mostra o git status\" (o que falta commitar) ou \"último commit\""
+	case brCommitPartRe.MatchString(t):
+		return "sem modelo eu só sei commitar TUDO com a mensagem dada (git add -A + commit). o pedido é outro (parte dos arquivos, emenda, desfazer ou mensagem a inventar) e fazer o commit inteiro seria errado. não commitei nada"
+	}
+	return ""
+}
+
+func brMachineIntent(n string) bool {
+	switch n {
+	case "pkg_installed", "net_route", "net_ifaces", "list_ports", "mem_usage", "uptime_load", "logged_in", "host_status",
+		"service_status", "service_logs", "cron_list", "list_processes", "list_hosts":
 		return true
 	}
 	return false

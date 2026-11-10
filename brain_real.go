@@ -691,7 +691,11 @@ func brLiteralRun(cx *brCtx, in map[string]string) brStep {
 		return brStep{obs: obs, why: "a linha de comando não corresponde mais ao pedido"}
 	}
 	read := IsReadOnly(cmd) || cbReadCmd(cmd)
-	out, exit, o := cx.runCmdAs(cmd, 10*time.Minute, read)
+	run := cmd
+	if strings.HasPrefix(cmd, "git shortlog") && !strings.Contains(cmd, "HEAD") {
+		run = cmd + " HEAD" // with no tty, shortlog reads stdin and prints nothing
+	}
+	out, exit, o := cx.runCmdAs(run, 10*time.Minute, read)
 	if o.Exit < 0 || o.Denied || o.BudgetLeft == 0 {
 		return brStep{obs: o, why: o.Output}
 	}

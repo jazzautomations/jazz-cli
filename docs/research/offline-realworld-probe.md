@@ -164,3 +164,25 @@ guardas escalam melhor (o falso sucesso caiu). Os próximos passos que os estudo
 medição confirma: gate estático de assets e matriz slot↔método (`offline-optimization-study.md` #2 e #6,
 que teriam pego `git_stash` só com método de leitura e `cmd_ran` em risco alto), corpus metamórfico (#8),
 convergência dos dois parsers (#4), e recusa com causa nomeada (#10) para o pedido que hoje cai no menu.
+
+### Quarto conjunto: frases-armadilha (mesmo dia)
+
+Um quarto conjunto inédito (`heldout-4.json`, 100 pedidos) foi escrito pedindo de propósito frases em que
+uma palavra engana um casador de palavras-chave ("commit", "test", "log", "clean" usados para pedir outra
+coisa, ou numa pergunta). Primeira passada: **33/100, 7 falsos sucessos**. Depois dos consertos: 36/100, 0.
+
+Falso sucesso na primeira passada, por rodada: 11 → 13 → 7 → 7. Não zera em conjunto novo.
+
+O que ele achou: "já commitei o notas.txt ou ainda não?" commitou (quarta vez que `git_commit` age numa
+pergunta, por uma redação diferente a cada conjunto); "commit only notas.txt" commitou tudo; "quais pacotes
+go tem nesse projeto" listou os pacotes da máquina; "lista as rotas http que a api registra" mostrou a
+tabela de rotas do kernel; "find every .md file that mentions API" rodou como linha de comando.
+
+A resposta deixou de ser remendo: o commit offline agora só acontece numa **ordem simples, de tudo, com a
+mensagem dada**. Pergunta, tempo passado, parte dos arquivos, emenda, desfazer ou mensagem a inventar
+recusam. É a lição geral das quatro rodadas: para intenção que muda coisa, a regra tem de ser positiva
+(lista do que vale), não negativa (lista do que não vale).
+
+Estado depois de tudo, nos conjuntos já vistos: sonda 88/89, inéditos 100/100, 66/120, 55/100, 36/100,
+todos com falso sucesso 0; eval antigo 117/122. A cobertura em frase nova na primeira passada foi
+61 → 49 → 47 → 33 (o quarto conjunto é adversarial).

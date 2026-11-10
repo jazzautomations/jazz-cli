@@ -371,3 +371,38 @@ func TestFileIgnoredGuard(t *testing.T) {
 		t.Errorf("arquivo que não existe não é do projeto: %q", f)
 	}
 }
+
+// Quarto conjunto inédito: a única ordem de commit que o offline aceita é
+// "tudo, com a mensagem dada".
+func TestCommitOnlyOnPlainOrder(t *testing.T) {
+	for _, q := range []string{
+		"ja commitei o notas.txt ou ainda nao?",
+		"commit only notas.txt, message \"add notas\"",
+		"commita só o main.go com a mensagem x",
+		"amend the last commit message to \"y\"",
+		"sugere uma mensagem de commit boa pras minhas mudancas",
+		"did I commit notas.txt",
+	} {
+		if brCommitRefuse(q) == "" {
+			t.Errorf("devia recusar o commit: %q", q)
+		}
+		env, rec := brHonestRepo(t)
+		brRun(context.Background(), env, q)
+		for _, c := range rec.cmds {
+			if strings.Contains(c, "git commit") || strings.HasPrefix(c, "git add") {
+				t.Errorf("%q: commitou (%v)", q, rec.cmds)
+			}
+		}
+	}
+	for _, q := range []string{"commita com a mensagem 'wip'", "faz um commit com a mensagem \"ajusta readme\"", "commit everything with the message \"x\""} {
+		if why := brCommitRefuse(q); why != "" {
+			t.Errorf("ordem simples recusada: %q (%s)", q, why)
+		}
+	}
+	if _, ok := brLiteralCmd("find every .md file that mentions API"); ok {
+		t.Error("frase que começa com find não é linha de comando")
+	}
+	if _, kind := brSemanticGuard("quais pacotes go tem nesse projeto?", Intent{Name: "pkg_installed"}); kind != "wrong_reading" {
+		t.Error("pacotes do projeto não é pacotes da máquina")
+	}
+}

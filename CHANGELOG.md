@@ -12,7 +12,8 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
   método que muda coisa.
 - **Escrita negada não cai na leitura.** Com o método de escrita negado ou falho, o método de leitura da
   mesma intenção não roda mais como substituto com selo verde.
-- **Pergunta sobre commit não commita**, nem dentro de pedido composto, nem com interjeição na frente;
+- **Commit offline só em ordem simples, de tudo, com a mensagem dada.** Pergunta, tempo passado, parte dos
+  arquivos, emenda ou mensagem a inventar recusam;
   `git_commit` exige verbo de commit.
 - Novas recusas honestas: arquivo citado e não usado pela leitura, pedido sobre git lido como outra coisa,
   pedido composto entendido pela metade, verbo criativo no começo ("melhora", "review", "make this faster").
@@ -29,7 +30,7 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
 ### Medido
 
 Em três conjuntos inéditos (100, 120 e 100 pedidos escritos sem ver a gramática), primeira passada:
-61, 49 e 47 acertos, com 11, 13 e 7 falsos sucessos. Detalhes e limites em
+61, 49 e 47 acertos, com 11, 13 e 7 falsos sucessos; num quarto, de frases-armadilha, 33 e 7. Detalhes e limites em
 `docs/research/offline-realworld-probe.md`.
 
 ## 0.13.3 — 2026-11-10

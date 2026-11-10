@@ -65,7 +65,7 @@ func brNeedsModel(text string) (string, bool) {
 // this is safe to check whatever the grammar read: "melhora o código" read as
 // project_summary and "can you make this faster?" read as build were both
 // sealed feito e verificado.
-var stModelLead = lazyRx(`^(?:(?:por favor|pfv|please|can you|could you|pode|voce pode|vc pode|bora|vamos)[, ]+)*(?:melhor[ae]r?|improve|review|revis[ae]r?|avali[ae]r?|critique|otimiz[ae]r?|design|projet[ae]r?|optimi[sz]e|refator[ae]r?|refactor|implement[ae]r?|implement|reescrev[ae]r?|rewrite|make (?:this|it|that|the code) (?:faster|better|cleaner|simpler)|deixa (?:isso|o codigo|o código) mais)\b`)
+var stModelLead = lazyRx(`^(?:(?:por favor|pfv|please|can you|could you|pode|voce pode|vc pode|bora|vamos)[, ]+)*(?:melhor[ae]r?|improve|generate|gera|gere|gerar|sugere|sugira|suggest|traduz\w*|translate|draft|redige|summari[sz]e|resuma|resume em|review|revis[ae]r?|avali[ae]r?|critique|otimiz[ae]r?|design|projet[ae]r?|optimi[sz]e|refator[ae]r?|refactor|implement[ae]r?|implement|reescrev[ae]r?|rewrite|make (?:this|it|that|the code) (?:faster|better|cleaner|simpler)|deixa (?:isso|o codigo|o código) mais)\b`)
 
 func brNeedsModelLead(text string) (string, bool) {
 	m := stModelLead.FindString(strings.ToLower(strings.TrimSpace(text)))
