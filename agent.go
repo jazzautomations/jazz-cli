@@ -425,8 +425,8 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	if !a.sub {
 		input = a.grSanitizeInput(input) // pasted text can smuggle invisible instructions (sanitize.go)
 	}
+	input = a.nlScanConsent(input) // explicit NL consent → audited session grants; a typed sudo password leaves the text here (consent.go)
 	lt = a.acBeginTurnLoop(ctx, input)
-	a.nlScanConsent(lt.input)     // explicit NL consent → audited session grants (consent.go)
 	a.obTurnStart(lt.input)       // obs.go
 	a.sessAutoTitleTurn(lt.input) // first turn of a new session: its title (sessions_ui.go)
 	if !a.sub && a.Hooks.Has(HookUserPromptSubmit) {
@@ -737,8 +737,7 @@ turnLoop:
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
-				a.nlScanConsent(strings.Join(steer, "\n\n"))
-				a.append(Message{Role: "user", Content: strings.Join(steer, "\n\n")})
+				a.append(Message{Role: "user", Content: a.nlScanConsent(strings.Join(steer, "\n\n"))})
 				continue
 			}
 			if a.qInject("final") { // queued steer messages (queue.go)
@@ -900,8 +899,7 @@ turnLoop:
 			continue
 		}
 		if steer := a.takeSteer(); len(steer) > 0 {
-			a.nlScanConsent(strings.Join(steer, "\n\n"))
-			a.append(Message{Role: "user", Content: "<system-reminder>The user sent this while you were working:</system-reminder>\n" + strings.Join(steer, "\n\n")})
+			a.append(Message{Role: "user", Content: "<system-reminder>The user sent this while you were working:</system-reminder>\n" + a.nlScanConsent(strings.Join(steer, "\n\n"))})
 		}
 		a.qInject("tool") // queued steer messages, at the tool boundary (queue.go)
 	}

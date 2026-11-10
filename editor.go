@@ -91,6 +91,7 @@ func (e *Editor) remember(s string) {
 	if strings.TrimSpace(s) == "" {
 		return
 	}
+	s = nlCredScrub(s) // o histórico vai pra disco: sem senha sudo (consent.go)
 	if n := len(e.history); n > 0 && e.history[n-1] == s {
 		return
 	}

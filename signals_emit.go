@@ -153,6 +153,7 @@ func sigFlush(text string, r brResult, extra map[string]string) {
 	if !sigEnabled() {
 		return
 	}
+	text = nlCredScrub(text) // uma senha sudo digitada nunca vai pro ledger (consent.go)
 	for _, s := range brSignals(text, r) {
 		for k, v := range extra {
 			if s.Extra == nil {
