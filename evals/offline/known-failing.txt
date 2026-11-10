@@ -1,12 +1,6 @@
 # Tarefas do `jazz eval offline` que falham hoje. O CI roda a suíte inteira com
 # --gate neste arquivo: falha nova = regressão; tarefa que passou a funcionar
 # tem que sair daqui. A lista só encolhe.
-multi-false-split              # "procura por TODO e FIXME" lido como text_grep
-card-snapshot                  # "tira um snapshot" lido como delete_file
-cardapio-v4-csv_to_json        # arquivo citado não vira argumento
-cardapio-v4-json_schema_infer  # idem
-cardapio-v4-regex_test         # confiança 0.22, cai no menu
-cardapio-v4-text_grep          # confiança 0.55, cai no menu
 cardapio-v5-text_extract       # confiança 0.06, cai no menu
 cardapio-v5-line_slice         # pedido sem intervalo
 cardapio-v5-perm_find          # lido como list_files

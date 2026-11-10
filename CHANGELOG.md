@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.13.3 — 2026-11-10
+
+Release de confiança: nada de recurso novo de vitrine; o que o offline diz que fez passa a ser verdade
+em mais casos, e duas falhas de segurança fecham.
+
+### Segurança
+
+- **A senha `sudo` digitada no chat não sai mais da memória.** Antes, a mensagem com a senha seguia como
+  qualquer outra: ia em texto claro para o provedor do modelo, para o arquivo de sessão e para o
+  `signals.jsonl` (medido em 09/11 com senha e provedor falsos; FINDINGS S1). Agora o texto que segue
+  adiante leva `<credencial-recebida>` no lugar: entrada do turno, mensagens no meio do turno, fila, sinais
+  e histórico do editor. `senha:`/`password:` soltos numa tarefa longa que não fala de sudo/root/admin deixam
+  de ser capturados como credencial. Guarda: `TestNLCredentialNeverLeavesMemory` procura a senha nas
+  requisições ao provedor, no histórico e em todo arquivo do diretório de dados e do projeto.
+- **O agente não derruba a rede da própria máquina sem confirmação** (`netlockout.go`). `sv down connman`,
+  `systemctl stop NetworkManager`/`sshd`, `ifdown`, `ip link set … down`, `nmcli networking off`,
+  `rfkill block`, `tailscale down`, `ufw enable`, `iptables -P INPUT DROP`, `pkill sshd`, `modprobe -r` de
+  driver de rede: viram comando perigoso em qualquer modo, inclusive atrás de `sudo`. Em sessão SSH a
+  mensagem avisa que não há volta remota e manda armar a restauração antes. `restart` e leitura seguem
+  livres. Origem: em 09/11 um agente com sudo, por SSH, parou o gerenciador de rede da máquina de referência
+  e ela só voltou com alguém no teclado.
+- Os exemplos e testes de credencial usam um par fictício.
+
+### Offline: o selo cobre o verbo do pedido
+
+Uma sonda de 89 pedidos de dev (`docs/research/offline-realworld-probe.md`, pedidos em
+`evals/realworld/pedidos-89.tsv`) achou sete respostas `feito e verificado` que não cumpriam o pedido.
+Fechadas nesta versão (`brain_honest.go`):
+
+- **Pergunta nunca dispara ação que muda coisa.** "qual foi o último commit" era lido como `git_commit` e
+  commitava tudo com a mensagem "último". Agora recusa, sem tocar em nada.
+- **Pedido de escrita não é respondido com leitura.** "guarda minhas mudanças no stash" rodava
+  `git stash list` e "cria uma branch chamada teste" rodava `git branch`, as duas com selo verde. Agora
+  dizem que sem modelo só existe a parte de leitura e que nada foi feito.
+- **Trabalho que precisa de modelo não vira arquivo vazio.** "escreve um teste pra função Soma" criava um
+  arquivo `Soma`.
+- **"Testes passaram" exige teste rodado.** Com alvo que não casa com nenhum teste, `go test -run X` sai
+  com 0; agora o resultado é `não verificado`.
+- **Nome de arquivo sem caminho** em script de leitura resolve para o único arquivo do projeto com aquele
+  nome ("quantas linhas tem o duration.go").
+
+Ainda abertos da mesma sonda, e ditos no relatório: "formata o código" só confere e sela; "explica o
+main.go" pode sair vazio; "mostra os erros do log" lê o journal do sistema em vez do log do projeto;
+"quais processos comem mais memória" enxerga só o sandbox.
+
+### Parser: under-refusal (T5, parte 1)
+
+- 11 commits de cobertura: penhasco de confiança em "testa regex F 'pat'" e "busca literal", snapshot,
+  marcadores (`TODO e FIXME` não divide mais o pedido), `dir_diff`, rotas por verbo, `traz` → pull.
+  As guardas `should refuse` continuam verdes.
+- `jazz eval offline`: 110/122 → **117/122**, falso sucesso 0, 118/122 sem modelo.
+
+### Eval como portão
+
+- `jazz eval offline --gate ARQ`: catraca de falhas conhecidas. Falha fora da lista é regressão; tarefa da
+  lista que passa tem que sair dela. O CI roda a suíte inteira assim (antes rodava 13 das 122 tarefas, e o
+  site publicou 101/101 quando o número real era 105/112).
+- A tarefa `self-version` segue a versão do binário em vez de um número fixo.
+
+## 0.13.2 — 2026-11-09
+
+- **`yolo` é yolo de verdade.** Consentimento explícito cobre baixo nível: `sudo`, `/etc`, alvos fora do
+  projeto. Continuam fechados em qualquer modo: alvo hostil, injeção suspeita e segredo saindo da máquina.
+  A recusa do `sudo` ensina o caminho em vez de só travar.
+- **Detector de injeção em dois níveis.** O que indica intenção de esconder (tag, bidi, base64, rot13, hex,
+  leet, HTML oculto, pedido de segredo, rótulo de sistema falso, homóglifo) trava o turno; texto que apenas
+  fala com agentes e contagem de caractere invisível viram dado não-confiável com aviso.
+- **Windows:** suíte verde no CI (caminhos relativos, saída UTF-8, confinamento) e correção de uma corrida no
+  encerramento por `--timeout` que matava o processo já terminado.
+- Cardápio com 69 scripts.
+
 ## 0.13.1 — 2026-11-09
 
 (0.13.0 existiu como tag mas não publicou release: o CI pegou `syscall.Stat_t`

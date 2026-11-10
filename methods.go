@@ -2395,6 +2395,20 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 			effect = e
 		}
 	}
+	// a read script given a bare file name that is not at the root: when exactly
+	// one file in the project has that name, that is the file ("quantas linhas
+	// tem o duration.go" → internal/parser/duration.go). Never for scripts that
+	// write: a guessed target must not be mutated (brain_honest.go).
+	if effect == "read" {
+		for _, k := range []string{"path", "file", "input"} {
+			if v, _ := argStr(args, k); v != "" {
+				if rel, ok := brBareFile(cx.env.Root, v); ok {
+					args[k] = rel
+					cx.say("→ %s", rel)
+				}
+			}
+		}
+	}
 	desc := "script:" + name
 	if len(kv) > 0 {
 		desc += " " + strings.Join(kv, " ")
@@ -3986,6 +4000,11 @@ func brVerify(cx *brCtx, m mhMethod) (ok bool, unavailable bool, why string) {
 			}
 			if d.Passed == 0 && d.Total == 0 && len(d.Suites) == 0 {
 				return false, true, "nenhum teste rodou"
+			}
+			// a target that matches no test is not a pass: `go test -run X`
+			// exits 0 with "[no tests to run]" in every package (brain_honest.go)
+			if tgt := cx.in.Slots["target"]; tgt != "" && d.Passed == 0 && brNoTestsRan(r.Out) {
+				return false, true, fmt.Sprintf("nenhum teste casou com %q: nada rodou, então não dá pra dizer que passou", tgt)
 			}
 			proofs = append(proofs, brProofTests(d))
 		default:
