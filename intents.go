@@ -344,7 +344,7 @@ type fpMatch struct {
 }
 
 var (
-	fpLead   = lazyRx(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now)[,:]?\s+)+`)
+	fpLead   = lazyRx(`(?i)^(?:(?:por favor|pfv|pf|please|pls|jazz|ei|hey|ok|okay|so|just|pode|voce pode|vc pode|can you|could you|agora|now|me diz|me diga|me fala|me fale|me conta|tell me|bora|vamos|vamo)[,:]?\s+)+`)
 	fpTrail  = lazyRx(`(?i)(?:[,\s]+(?:por favor|pfv|pf|please|pls|pra mim|for me|agora|now))+$`)
 	fpWordRE = lazyRx(`[a-z]{4,}`)
 	fpVar    = lazyRx(`\{\{(\w+)\}\}`)

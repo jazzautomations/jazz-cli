@@ -3,6 +3,7 @@ package main
 import (
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // nlu_phrases.go — frases feitas: pedidos do dia a dia que a gramática de
@@ -27,10 +28,28 @@ const nuPhraseExt = `go|golang|py|python|js|javascript|ts|typescript|tsx|jsx|md|
 var nuPhraseExtCanon = map[string]string{"golang": "go", "python": "py", "javascript": "js", "typescript": "ts",
 	"markdown": "md", "rust": "rs", "ruby": "rb"}
 
+// nuPhInProj: an optional "no projeto"/"in this repo" tail.
+const nuPhInProj = `(?: (?:tem|existem|ha))?(?: (?:no|neste|nesse|aqui no|do|in the|in this|in) (?:projeto|repo|repositorio|project|codigo|codebase))?(?: (?:tem|existem))?`
+
+// nuPhCSVIn: an optional "do <arquivo>.csv" / "no csv" tail; nuPhCSVFile
+// resolves it (the named file, or the project's only CSV).
+const nuPhCSVIn = `(?: (?:do|da|de|no|na|of|in|from|em)(?: the)? (?:csv|` + `(?:arquivo |file )?(?P<file>[\w./-]+\.csv)))?`
+
+func nuPhCSVFile(g map[string]string, w *nuWorld) bool {
+	if g["file"] != "" {
+		return true
+	}
+	if all := nuWorldByExt(w, ".csv"); len(all) == 1 {
+		g["file"] = all[0]
+		return true
+	}
+	return false
+}
+
 const (
 	nuPhShow = `(?:(?:mostra|mostre|me mostra|me mostre|exibe|ver|veja|show|show me|print|imprime|da|me da) )?`
 	nuPhFile = `(?:arquivo |file )?(?P<file>[\w./-]+)`
-	nuPhSym  = `(?P<sym>[A-Za-z_][A-Za-z0-9_]{2,79})`
+	nuPhSym  = `(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?P<sym>[A-Za-z_][A-Za-z0-9_]{2,79})`
 	nuPhKind = `(?:funcao |metodo |classe |tipo |struct |variavel |constante |function |method |class |type )?`
 	nuPhFind = `(?:acha|ache|achar|procura|procure|procurar|busca|busque|buscar|encontra|encontre|encontrar|find|search|grep)`
 )
@@ -129,7 +148,153 @@ var nuPhrases = []*nuPhraseDef{
 	{id: "arquivos-por-extensao", intent: "list_files", fixed: map[string]string{"type": "file"}, groups: map[string]string{"ext": "ext"},
 		pats: []string{
 			`(?:(?:lista|liste|listar|mostra|mostre|me mostra|list|show|show me|quais sao|ver) )?(?:todos |all )?(?:os |the )?(?:arquivos|files) (?:\.|de |do tipo |em |in )?(?P<ext>` + nuPhraseExt + `)`,
-			`(?:(?:list|show|show me|lista|mostra) )?(?:all )?(?:the )?\.?(?P<ext>` + nuPhraseExt + `) files`,
+			`(?:(?:list|show|show me|lista|mostra) )?(?:all )?(?:the )?\.?(?P<ext>` + nuPhraseExt + `) files` + nuPhInProj,
+			`(?:quais|que) arquivos \.?(?P<ext>` + nuPhraseExt + `)(?: tem| existem| ha| que tem)?` + nuPhInProj,
+			`(?:quais|que) (?:sao )?os arquivos \.?(?P<ext>` + nuPhraseExt + `)` + nuPhInProj,
+			`(?:which|what) \.?(?P<ext>` + nuPhraseExt + `) files (?:are there|exist|do we have|are)` + nuPhInProj,
+		}},
+	{id: "maior-arquivo", intent: "file_find", fixed: map[string]string{"sort": "size", "type": "file"},
+		pats: []string{
+			`(?:qual|quais)(?: e| sao)? (?:o|os) (?:maior|maiores|mais pesado|mais pesados) arquivos?(?: daqui| aqui| do projeto| do repo| da pasta)?|maior arquivo(?: daqui| do projeto)?`,
+			`(?:what is|whats|what's|which is|show|show me|find) the (?:biggest|largest) file(?: here| in the project| in this project| in the repo)?|(?:biggest|largest) files?`,
+		}},
+	{id: "cade-o-arquivo", intent: "file_find", fixed: map[string]string{"type": "file"}, groups: map[string]string{"base": "name"},
+		pats: []string{
+			`(?:cade|onde (?:esta|fica|ta)|aonde (?:esta|fica|ta)|where is|where's|wheres|localiza|locate|em que pasta (?:esta|fica|ta)) (?:o |a |the )?` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { g["base"] = filepath.Base(g["file"]); return true }},
+	{id: "conteudo-do-arquivo", intent: "open_file", groups: map[string]string{"file": "target"},
+		pats: []string{
+			`(?:o que|oque|oq) (?:ta|esta|tem|ha) (?:escrito )?(?:no|na|em|dentro do|dentro da) ` + nuPhFile,
+			`(?:what(?:'s| is)|whats) (?:in|inside|written in) (?:the )?` + nuPhFile,
+			`(?:` + nuPhShow + `)?(?:o |the )?(?:conteudo|contents?) (?:do|da|de|of) (?:the )?` + nuPhFile,
+			`(?:le|leia|ler|read|cat|print) (?:o |a |the )?` + nuPhFile,
+		}},
+	{id: "titulos-do-markdown", intent: "md_outline", groups: map[string]string{"file": "target"},
+		pats: []string{
+			`(?:(?:quais|mostra|mostre|lista|me mostra|show|show me|list)(?: sao)?(?: os| as| the)? )?(?:titulos|secoes|cabecalhos|topicos|headings|headers|sections|outline|sumario|indice|toc)(?: do| da| de| of| in| from)? ` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			l := strings.ToLower(g["file"])
+			return strings.HasSuffix(l, ".md") || strings.HasSuffix(l, ".markdown")
+		}},
+	{id: "onde-define", intent: "find", groups: map[string]string{"sym": "query"},
+		pats: []string{
+			`(?:onde|aonde) (?:e que )?(?:esta|ta|fica|foi|e) (?:definid[oa]|declarad[oa]|implementad[oa]) (?:a |o )?` + nuPhKind + nuPhSym,
+			`(?:onde|aonde) (?:fica|esta|ta) (?:a |o )?(?:funcao |metodo |classe |tipo |struct |teste |function |method |class |type |test )` + nuPhSym,
+			`(?:onde|aonde) (?:fica|esta|ta) (?:a |o )?(?P<sym>[A-Za-z_][a-z0-9_]*[A-Z_][A-Za-z0-9_]*)`,
+			`(?:definicao|definition|declaracao|declaration) (?:de|da|do|of) ` + nuPhKind + nuPhSym,
+		}},
+	{id: "funcoes-do-arquivo", intent: "explain", groups: map[string]string{"file": "target"},
+		pats: []string{
+			`(?:(?:quais|que|lista|liste|list|mostra|mostre|show|show me)(?: sao)?(?: as| os| the)? )?(?:funcoes|metodos|functions|methods|simbolos|symbols|declaracoes)(?: que)?(?: tem| existem| are| ha| estao| defined| definidas)? (?:no|na|em|do|da|in|of|inside) (?:the )?` + nuPhFile,
+			`o que (?:o |a )?` + nuPhFile + ` (?:define|declara|exporta)`,
+		}},
+	{id: "roda-um-teste", intent: "run_tests", groups: map[string]string{"t": "target"},
+		pats: []string{
+			`(?:roda|rode|rodar|executa|execute|executar|run|testa)(?: so| somente| apenas| only| just)?(?: o| the)?(?: teste| test)? (?P<t>Test[A-Za-z0-9_]+|test_[a-z0-9_]+)(?: so| only| apenas| somente)?`,
+			`(?:roda|rode|rodar|executa|execute|run)(?: o| the)?(?: teste| test) (?P<t>Test[A-Za-z0-9_]+|test_[a-z0-9_]+)(?: so| only| apenas)?`,
+			`go test -run (?P<t>Test[A-Za-z0-9_]+)`,
+		}},
+	{id: "extrai-padrao", intent: "text_extract", groups: map[string]string{"file": "file", "kind": "pattern"},
+		pats: []string{
+			`(?:any|are there(?: any)?|list|show|show me|find|extract|get|tem|ha|quais|quais sao|lista|mostra|extrai|extraia|pega)(?: os| as| the| all| all the| algum| alguns)? ?(?P<kind>ips?|ip addresses|enderecos ip|enderecos de ip|emails?|e-mails?|email addresses|enderecos de email|urls?|links) (?:in|no|na|do|da|from|em|que aparecem no|que aparecem em|dentro do) (?:the )?` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			k := strings.ToLower(g["kind"])
+			switch {
+			case strings.Contains(k, "ip"):
+				g["kind"] = "ipv4"
+			case strings.Contains(k, "mail"):
+				g["kind"] = "email"
+			default:
+				g["kind"] = "url"
+			}
+			return true
+		}},
+	{id: "csv-como-json", intent: "csv_to_json", groups: map[string]string{"file": "target"},
+		pats: []string{
+			nuPhShow + `(?:o |a |the )?` + nuPhFile + ` (?:em|no|como|in|as)(?: formato| format)? json(?: format)?`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			return strings.HasSuffix(strings.ToLower(g["file"]), ".csv")
+		}},
+	{id: "media-coluna-csv", intent: "csv_sum", fixed: map[string]string{"op": "avg"}, groups: map[string]string{"col": "col", "file": "file"},
+		pats: []string{
+			`(?:(?:qual|what is|whats|what's)(?: e)? )?(?:a |o |the )?(?:media|average|mean|avg) (?:da|do|de|of)(?: a| the)?(?: coluna| column| campo)? (?P<col>\w{1,40})(?: column| coluna)?` + nuPhCSVIn,
+			`(?:calcula|calcule|calculate|compute)(?: a| the)? (?:media|average|mean) (?:da|do|de|of)(?: the)?(?: coluna| column)? (?P<col>\w{1,40})(?: column)?` + nuPhCSVIn,
+		}, prepare: nuPhCSVFile},
+	{id: "extremo-coluna-csv", intent: "csv_sum", groups: map[string]string{"col": "col", "file": "file", "op": "op"},
+		pats: []string{
+			`(?:qual|quais|que) (?:\w+ )?(?:tem|possui|esta com) (?:o |a )?(?P<op>maior|menor) (?P<col>\w{1,40})` + nuPhCSVIn,
+			`(?:qual|what is|whats|what's)(?: e)? (?:o |a |the )?(?P<op>maior|menor|maximo|minimo|max|min|highest|lowest|largest|smallest|biggest) (?P<col>\w{1,40})` + nuPhCSVIn,
+			`(?:which|what) (?:\w+ )?has the (?P<op>highest|lowest|largest|smallest|biggest) (?P<col>\w{1,40})` + nuPhCSVIn,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			switch strings.ToLower(g["op"]) {
+			case "maior", "maximo", "max", "highest", "largest", "biggest":
+				g["op"] = "max"
+			default:
+				g["op"] = "min"
+			}
+			return nuPhCSVFile(g, w)
+		}},
+	{id: "conta-linhas-csv", intent: "csv_sum", fixed: map[string]string{"op": "count"}, groups: map[string]string{"file": "file"},
+		pats: []string{
+			`quant[oa]s (?P<noun>\w+) (?:tem|ha|existem|sao|tem ai)(?: no| na| em| dentro do| dentro da)? ` + nuPhFile,
+			`how many (?P<noun>\w+) (?:are (?:there )?)?(?:in|inside) (?:the )?` + nuPhFile,
+			`(?:conta|conte|count)(?: os| as| the)? (?P<noun>registros|pedidos|itens|entradas|rows|records|entries) (?:do|da|de|no|na|in|of) ` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			switch strings.ToLower(g["noun"]) {
+			case "linhas", "lines", "palavras", "words", "caracteres", "characters", "bytes", "colunas", "columns":
+				return false // counting text units is wordcount's job, not rows of data
+			}
+			return strings.HasSuffix(strings.ToLower(g["file"]), ".csv")
+		}},
+	{id: "chaves-do-env", intent: "env_get", fixed: map[string]string{"op": "keys"}, groups: map[string]string{"envfile": "file"},
+		pats: []string{
+			`(?:quais|que|lista|liste|list|mostra|mostre|show|show me)(?: sao)?(?: as| os| the)? ?(?:variaveis|chaves|keys|vars|variables|nomes)(?: que)?(?: tem| existem| estao| are| ha)?(?: definidas| defined| set)? (?:no|na|em|do|in|of|from) (?:the )?(?P<envfile>\.env[\w.]*)`,
+			`(?:what(?:'s| is)|o que (?:tem|ha)) (?:in|no|na|em) (?:the )?(?P<envfile>\.env[\w.]*)`,
+		}},
+	{id: "variavel-no-env", intent: "env_get", groups: map[string]string{"name": "name"},
+		pats: []string{
+			`(?:qual|que|what)(?: e)?(?: o valor d[eo]| o| a| the value of)? \$?(?P<name>[A-Z][A-Z0-9_]{1,60}) (?:ta|esta|que ta|que esta|definid[oa]|configurad[oa]|is|is set) (?:no|na|em|in) (?:the )?\.env[\w.]*`,
+			`(?:valor|value) (?:de|do|da|of) \$?(?P<name>[A-Z][A-Z0-9_]{1,60}) (?:no|na|em|in) (?:the )?\.env[\w.]*`,
+		}},
+	{id: "chave-de-config", intent: "config_get", groups: map[string]string{"file": "target"},
+		pats: []string{
+			`(?:qual|que|what is|whats|what's)(?: e)? (?:a |o |the )?(?P<key>[\w.]{2,60}) (?:configurad[oa]|definid[oa]|setad[oa]|que (?:ta|esta)|set|configured|defined) (?:no|na|em|in) (?:the )?` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			switch strings.ToLower(filepath.Ext(g["file"])) {
+			case ".json", ".yaml", ".yml", ".toml", ".ini":
+				return true
+			}
+			return false
+		}},
+	{id: "move-pra-pasta", intent: "file_move", fixed: map[string]string{"op": "rename", "type": "file"}, groups: map[string]string{"file": "target", "dest": "dest"},
+		pats: []string{
+			`(?:move|mova|mover|mv|joga|jogue|coloca|coloque|bota|bote|poe|leva|leve) (?:o |a |the )?` + nuPhFile + ` (?:pra|para|pro|to|into|em|no|na)(?: a| o| the)?(?: pasta| dir| diretorio| folder| dentro de| dentro da| dentro do)* (?P<dest>[\w./-]+)`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { return nuWorldDir(w, g["dest"]) }},
+	{id: "copia-pra-pasta", intent: "file_move", fixed: map[string]string{"op": "copy", "type": "file"}, groups: map[string]string{"file": "target", "dest": "dest"},
+		pats: []string{
+			`(?:copia|copie|copiar|copy|cp) (?:o |a |the )?` + nuPhFile + ` (?:pra|para|pro|to|into|em|no|na)(?: a| o| the)?(?: pasta| dir| diretorio| folder| dentro de| dentro da| dentro do)+ (?P<dest>[\w./-]+)`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { return nuWorldDir(w, g["dest"]) }},
+	{id: "cria-arquivo-vazio", intent: "create", fixed: map[string]string{"type": "file"}, groups: map[string]string{"newfile": "target"},
+		pats: []string{
+			`(?:cria|crie|criar|create|make|touch)(?: um| uma| an?| o| the)?(?: novo| new)?(?: arquivo| file)?(?: vazio| empty)?(?: arquivo| file)?(?: chamado| com o nome| de nome| called| named)? (?P<newfile>[\w][\w./-]{0,120}\.[A-Za-z0-9]{1,8})`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { _, exists := nuWorldFile(w, g["newfile"]); return !exists }},
+	{id: "cria-e-muda-branch", intent: "git_branch", fixed: map[string]string{"op": "create"}, groups: map[string]string{"name": "name"},
+		pats: []string{
+			`(?:cria|crie|criar|create) (?:e |and )(?:ja )?(?:muda|mude|mudar|troca|trocar|vai|ir|switch|checkout|go)(?: to)? (?:pra|para|pro|to)?(?: a| the)? ?(?:branch |ramo )?(?P<name>[A-Za-z0-9][\w./-]{0,79})`,
+			`(?:cria|crie|criar|create)(?: a| uma| the| a new)? (?:branch|ramo) (?P<name>[A-Za-z0-9][\w./-]{0,79}) (?:e |and )(?:ja )?(?:muda|troca|vai|switch|checkout|go)(?: to it| pra ela| pra la)?`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			return brGitRefRe.MatchString(g["name"]) && !strings.Contains(g["name"], "..") && strings.ToLower(g["name"]) != "branch"
 		}},
 	{id: "linhas-por-extensao", intent: "wordcount_stats", fixed: map[string]string{"what": "lines"}, groups: map[string]string{"ext": "ext"},
 		pats: []string{
@@ -182,6 +347,70 @@ func nuPhraseParse(text string, w *nuWorld) (Intent, bool) {
 	if n == "" {
 		return Intent{}, false
 	}
+	if in, ok := nuPhraseMatch(n, w); ok {
+		return in, true
+	}
+	// typos in the phrase's own words ("ultmas 2 linhas", "ond fica"): repair
+	// against the phrase vocabulary and try once more. The operands must be
+	// in the request exactly as typed, and a repaired reading never carries a
+	// write.
+	fixed, changed := fzRepairLine(nuPhraseSlang(n), nuPhraseVocab())
+	if !changed && fixed == n {
+		return Intent{}, false
+	}
+	in, ok := nuPhraseMatch(fixed, w)
+	if !ok || nuPhraseWrites[in.Name] {
+		return Intent{}, false
+	}
+	for _, v := range in.Slots {
+		if strings.ContainsAny(v, "./_") || v != strings.ToLower(v) {
+			if !strings.Contains(n, filepath.Base(v)) && !strings.Contains(n, v) {
+				return Intent{}, false // the repair touched an operand
+			}
+		}
+	}
+	in.Confidence, in.Raw = 0.9, 0.9
+	in.Evidence = append(in.Evidence, "pedido lido com correção de digitação: \""+fixed+"\"")
+	return in, true
+}
+
+// nuPhraseWrites: phrase intents that change things.
+var nuPhraseWrites = map[string]bool{"git_branch": true, "git_stash": true, "undo": true, "file_move": true, "create": true}
+
+func nuPhraseSlang(n string) string {
+	w := strings.Fields(n)
+	for i, x := range w {
+		switch strings.ToLower(x) {
+		case "ond", "aond":
+			w[i] = "onde"
+		case "oq", "oque":
+			w[i] = "o que"
+		}
+	}
+	return strings.Join(w, " ")
+}
+
+var (
+	nuPhraseVocabOnce sync.Once
+	nuPhraseVocabMap  map[string]bool
+)
+
+// nuPhraseVocab: the literal words (4+ letters) of the phrase patterns.
+func nuPhraseVocab() map[string]bool {
+	nuPhraseVocabOnce.Do(func() {
+		nuPhraseVocabMap = map[string]bool{}
+		for _, p := range nuPhrases {
+			for _, pat := range p.pats {
+				for _, wd := range fpWordRE.FindAllString(strings.ToLower(pat), -1) {
+					nuPhraseVocabMap[wd] = true
+				}
+			}
+		}
+	})
+	return nuPhraseVocabMap
+}
+
+func nuPhraseMatch(n string, w *nuWorld) (Intent, bool) {
 	for _, p := range nuPhrases {
 		if p.res == nil {
 			for _, pat := range p.pats {

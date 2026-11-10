@@ -31,6 +31,10 @@ import (
 //go:embed evals/realworld/tasks.json
 var erTasksJSON []byte
 
+// erTasksOverride replaces the embedded suite (`jazz eval real --tasks ARQ`):
+// a held-out set written by someone who has not read the grammar.
+var erTasksOverride []byte
+
 const erHistorico = "linha de histórico do projeto para o arquivo passar de um kilobyte com folga\n"
 
 func erFiles() map[string]string {

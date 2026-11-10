@@ -28,7 +28,7 @@ import (
 
 // brQuestionRe: a frase começa com palavra interrogativa. Um "?" no fim não
 // basta ("commita isso pra mim?" é pedido educado, não pergunta).
-var brQuestionRe = lazyRx(`(?i)^\s*(?:e\s+|ent[aã]o\s+|mas\s+|a[ií]\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
+var brQuestionRe = lazyRx(`(?i)^\s*(?:e\s+|ent[aã]o\s+|mas\s+|a[ií]\s+)?(?:(?:me\s+(?:diz|diga|fala|fale|conta|conte|explica)|sabe(?:\s+me\s+dizer)?|pode\s+me\s+dizer|quero\s+saber|tell\s+me|do\s+you\s+know|can\s+you\s+tell\s+me)\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
 
 func brIsQuestion(text string) bool { return brQuestionRe.MatchString(text) }
 
@@ -95,6 +95,14 @@ func brVerbGuard(env *brEnv, text string, in Intent, risk cbRisk) (why, kind str
 			return w, "needs_model"
 		}
 	}
+	if in.Name != "fix" && in.Name != "fastpath" {
+		if w, ok := brNeedsModelLead(text); ok {
+			return w, "needs_model"
+		}
+	}
+	if f := brFileIgnored(env, text, in); f != "" {
+		return fmt.Sprintf("o pedido cita %s, e a leitura que eu tenho (%s — %s) não usa esse arquivo: responder com ela seria responder outra pergunta. não fiz nada. reformule dizendo o que quer do arquivo (ex.: \"abre o %s\", \"procura X no %s\")", f, in.Name, desc, f, f), "file_ignored"
+	}
 	if m, ok := brFirstMethod(env, in); ok && brReadOnlyMethod(m) {
 		verb := strings.TrimSpace(brWriteVerbRe.FindString(text))
 		verb = strings.TrimLeft(verb, ",;: ")
@@ -151,4 +159,50 @@ func brBareFile(root, name string) (rel string, ok bool) {
 		}
 	}
 	return found, found != ""
+}
+
+// brFileTokRe: a token that looks like a file path (has an extension or a slash).
+var brFileTokRe = lazyRx(`[\w.-]*[\w-]+(?:/[\w.-]+)+|[\w-]*\.?[\w-]+\.[A-Za-z0-9]{1,6}\b|\.env[\w.]*`)
+
+// brFileSelf are intents whose method reads a fixed project file whatever the
+// slots say, so naming that file in the request is consumed by definition.
+var brFileSelf = map[string]string{"dotenv_check": ".env", "env_get": ".env", "project_summary": "", "git_status": "", "git_diff": "", "run_tests": "", "build": "", "lint": "", "format": ""}
+
+// brFileIgnored returns the project file the request names that the reading
+// does not use at all ("" = none). "any IP addresses in logs/app.log?" was read
+// as net_ifaces and answered with the machine's interfaces; "qual a porta
+// configurada no config.json?" listed the listening sockets. The operand
+// guard covered quoted operands (Dropped); this covers a named file.
+func brFileIgnored(env *brEnv, text string, in Intent) string {
+	if in.Phrase || in.Name == "fastpath" || in.Name == "smalltalk" || in.Name == "none" {
+		return ""
+	}
+	w := env.World
+	if w == nil {
+		w = nuRuntimeWorld(env.Root, env.Profile)
+	}
+	var blob strings.Builder
+	for _, v := range in.Slots {
+		blob.WriteString(v)
+		blob.WriteByte('\n')
+	}
+	slots := blob.String()
+	for _, tok := range brFileTokRe.FindAllString(text, 8) {
+		tok = strings.Trim(tok, ".,;:?!")
+		rel := tok
+		if f, ok := nuWorldFile(w, tok); ok {
+			rel = f
+		} else if fi, err := os.Stat(filepath.Join(env.Root, filepath.FromSlash(tok))); err != nil || fi.IsDir() || strings.Contains(tok, "..") || filepath.IsAbs(tok) {
+			continue // not a file of this project: nothing to say
+		}
+		base := filepath.Base(rel)
+		if strings.Contains(slots, base) || strings.Contains(slots, strings.TrimSuffix(base, filepath.Ext(base))) && len(base) > 6 {
+			continue
+		}
+		if pre, self := brFileSelf[in.Name]; self && (pre == "" || strings.HasPrefix(base, pre)) {
+			continue
+		}
+		return rel
+	}
+	return ""
 }

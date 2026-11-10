@@ -127,7 +127,7 @@ type eoReport struct {
 // line, # comments). The command fails when a task outside the list fails
 // (regression) or when a listed task passes (remove it: the list only shrinks).
 func cmdEval(root string, args []string, w io.Writer) int {
-	const usage = "uso: jazz eval offline|real [--out DIR] [--only id,id] [--gate ARQ] [-v]\n     jazz eval parse \"pedido\"   (como o cérebro offline lê o pedido, sem agir)"
+	const usage = "uso: jazz eval offline|real [--out DIR] [--only id,id] [--gate ARQ] [--tasks ARQ] [-v]\n     jazz eval parse \"pedido\"   (como o cérebro offline lê o pedido, sem agir)"
 	if len(args) >= 2 && args[0] == "parse" {
 		return erParse(root, strings.Join(args[1:], " "), w)
 	}
@@ -153,6 +153,16 @@ func cmdEval(root string, args []string, w io.Writer) int {
 			}
 		case "-v", "--verbose":
 			verbose = true
+		case "--tasks", "-tasks": // real suite only: an external task file (a held-out set)
+			if i+1 < len(args) {
+				b, err := os.ReadFile(args[i+1])
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "jazz:", err)
+					return 1
+				}
+				erTasksOverride = b
+				i++
+			}
 		case "--gate", "-gate":
 			if i+1 < len(args) {
 				gate = args[i+1]
@@ -265,6 +275,9 @@ func eoRunSuite(name string, only map[string]bool, verbose bool, w io.Writer) (*
 	data, src := eoTasksJSON, "evals/offline/tasks.json"
 	if name == "real" {
 		data, src = erTasksJSON, "evals/realworld/tasks.json"
+		if erTasksOverride != nil {
+			data, src = erTasksOverride, "--tasks"
+		}
 	}
 	if err := json.Unmarshal(data, &suite); err != nil {
 		return nil, fmt.Errorf("%s: %w", src, err)

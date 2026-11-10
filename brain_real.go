@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -198,6 +200,18 @@ func brCSVSum(cx *brCtx, in map[string]string) brStep {
 	if err != nil || len(rows) < 2 {
 		return brStep{obs: obs, why: rel + ": não li como CSV com cabeçalho e linhas"}
 	}
+	op := cx.str(in, "op")
+	if op == "count" {
+		n := 0
+		for _, row := range rows[1:] {
+			if len(row) > 1 || len(row) == 1 && strings.TrimSpace(row[0]) != "" {
+				n++
+			}
+		}
+		cx.say("%s tem %d linha(s) de dados (sem contar o cabeçalho: %s)", filepath.ToSlash(rel), n, strings.Join(rows[0], ", "))
+		cx.task.AddEvidence("calc", fmt.Sprintf("%s: %d linhas de dados", filepath.ToSlash(rel), n))
+		return brStep{val: strconv.Itoa(n), obs: obs, ok: true}
+	}
 	col, want := -1, strings.TrimSpace(cx.str(in, "col"))
 	for i, h := range rows[0] {
 		if strings.EqualFold(strings.TrimSpace(h), want) {
@@ -211,6 +225,7 @@ func brCSVSum(cx *brCtx, in map[string]string) brStep {
 		return brStep{obs: obs, why: fmt.Sprintf("%s não tem a coluna %q (colunas: %s)", rel, want, strings.Join(rows[0], ", "))}
 	}
 	sum, used, skipped := 0.0, 0, 0
+	best, bestRow := 0.0, []string(nil)
 	for _, row := range rows[1:] {
 		if col >= len(row) || strings.TrimSpace(row[col]) == "" {
 			skipped++
@@ -227,12 +242,33 @@ func brCSVSum(cx *brCtx, in map[string]string) brStep {
 		}
 		sum += x
 		used++
+		if bestRow == nil || op == "max" && x > best || op == "min" && x < best {
+			best, bestRow = x, row
+		}
 	}
 	if used == 0 {
 		return brStep{obs: obs, why: fmt.Sprintf("a coluna %s de %s não tem número nenhum", rows[0][col], rel)}
 	}
+	num := func(x float64) string { return strconv.FormatFloat(math.Round(x*1e6)/1e6, 'f', -1, 64) }
+	switch op {
+	case "avg":
+		cx.say("média de %s em %s: %s (soma %s em %d linha(s), %d sem número)", rows[0][col], filepath.ToSlash(rel), num(sum/float64(used)), num(sum), used, skipped)
+		cx.task.AddEvidence("calc", fmt.Sprintf("%s.%s: %d valores", filepath.ToSlash(rel), rows[0][col], used))
+		return brStep{val: num(sum / float64(used)), obs: obs, ok: true}
+	case "max", "min":
+		word := map[string]string{"max": "maior", "min": "menor"}[op]
+		var cells []string
+		for i, h := range rows[0] {
+			if i < len(bestRow) {
+				cells = append(cells, strings.TrimSpace(h)+"="+strings.TrimSpace(bestRow[i]))
+			}
+		}
+		cx.say("%s %s em %s: %s — linha: %s (%d linha(s) comparada(s), %d sem número)", word, rows[0][col], filepath.ToSlash(rel), num(best), strings.Join(cells, ", "), used, skipped)
+		cx.task.AddEvidence("calc", fmt.Sprintf("%s.%s: %d valores", filepath.ToSlash(rel), rows[0][col], used))
+		return brStep{val: num(best), obs: obs, ok: true}
+	}
 	cx.say("soma de %s em %s: %s (%d linha(s) somada(s), %d sem número)", rows[0][col], filepath.ToSlash(rel),
-		strconv.FormatFloat(sum, 'f', -1, 64), used, skipped)
+		num(sum), used, skipped)
 	cx.task.AddEvidence("calc", fmt.Sprintf("%s.%s: %d valores", filepath.ToSlash(rel), rows[0][col], used))
 	return brStep{val: strconv.FormatFloat(sum, 'f', -1, 64), obs: obs, ok: true}
 }
@@ -493,3 +529,88 @@ var fpRealWords = map[string]bool{"limpa": true, "limpe": true, "limpar": true, 
 	"texto": true, "text": true, "build": true, "guild": true, "roda": true, "moda": true, "toda": true, "todo": true}
 
 var brWeekdayPT = [...]string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"}
+
+// brDotenvKeys lists the variable NAMES of a .env file — never the values.
+func brDotenvKeys(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	fn := cx.str(in, "file")
+	if fn == "" {
+		fn = ".env"
+	}
+	if !strings.HasPrefix(filepath.Base(fn), ".env") {
+		return brStep{obs: obs, why: fn + " não é um arquivo .env"}
+	}
+	abs, rel, err := brSafePath(cx.env.Root, fn)
+	if err != nil {
+		return brStep{obs: obs, why: err.Error()}
+	}
+	b, err := os.ReadFile(abs)
+	if err != nil {
+		return brStep{obs: obs, why: "não achei " + rel + " no projeto"}
+	}
+	var keys []string
+	empty := 0
+	for _, l := range strings.Split(string(b), "\n") {
+		l = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(l), "export "))
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		if k, v, ok := strings.Cut(l, "="); ok && strings.TrimSpace(k) != "" {
+			keys = append(keys, strings.TrimSpace(k))
+			if strings.TrimSpace(v) == "" {
+				empty++
+			}
+		}
+	}
+	cx.say("%s tem %d variável(is): %s", rel, len(keys), strings.Join(keys, ", "))
+	cx.say("(só os nomes; %d sem valor. os valores não são mostrados: podem ser credenciais)", empty)
+	cx.task.AddEvidence("file", fmt.Sprintf("%s: %d chaves", rel, len(keys)))
+	return brStep{val: strings.Join(keys, ","), obs: obs, ok: true}
+}
+
+// ---------- atalho dentro do cérebro ----------
+
+// brFastMatch: the read-only fast path (intents.json) the text resolves to.
+// The offline door tries the fast paths before the brain for a whole request;
+// this gives the same reading to one PART of a multi-step request ("show the
+// current branch and the last commit" read "the last commit" as git_commit).
+func brFastMatch(root, text string) (fpMatch, bool) {
+	_, rgErr := exec.LookPath("rg")
+	m, ok := fpIntents(root).Match(text, fpDetect(root), rgErr == nil)
+	if !ok || !IsReadOnly(m.Cmd) && !cbReadCmd(m.Cmd) {
+		return fpMatch{}, false
+	}
+	return m, true
+}
+
+// brFastCmd runs the fast path of the task's own text. The command is
+// re-derived here: the slot is only compared, never executed as given.
+func brFastCmd(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	m, ok := brFastMatch(cx.env.Root, cx.task.Goal)
+	if !ok || m.Cmd != cx.str(in, "cmd") {
+		return brStep{obs: obs, why: "o atalho não corresponde mais ao pedido"}
+	}
+	out, exit, o := cx.runCmdAs(m.Cmd, time.Minute, true)
+	if o.Exit < 0 || o.Denied {
+		return brStep{obs: o, why: o.Output}
+	}
+	text, done := olFastText(m, redactSecrets(out), exit, false)
+	cx.say("$ %s\n%s", m.Cmd, strings.TrimRight(truncateHeadTail(text, 4000), "\n"))
+	if !done {
+		return brStep{val: brCmdRes{m.Cmd, exit, out}, obs: o, why: m.Cmd + " falhou"}
+	}
+	return brStep{val: brCmdRes{m.Cmd, 0, out}, obs: o, ok: true}
+}
+
+// brThereRe: "pra lá" / "there" pointing at the folder the previous step made.
+var brThereRe = lazyRx(`(?i)\b(?:pra|para) (?:l[aá]|ela|ele|essa pasta|esta pasta)\b|\bl[aá] dentro\b|\b(?:in|into|to) (?:it|there|that folder)\b|\bthere\b`)
+
+// brResolveThere rewrites the anaphora of part with the directory the previous
+// part creates ("cria a pasta backup e copia o config.json pra lá").
+func brResolveThere(part string, prev Intent) string {
+	if prev.Name != "create" || prev.Slots["type"] != "dir" || prev.Slots["target"] == "" || !brThereRe.MatchString(part) {
+		return part
+	}
+	return brThereRe.ReplaceAllString(part, "pra pasta "+prev.Slots["target"])
+}

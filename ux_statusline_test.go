@@ -228,7 +228,7 @@ func TestUXConferiProof(t *testing.T) {
 
 	cx = newCtx()
 	cx.vars["g"] = brCmdRes{Cmd: "systemctl status x", Exit: 3}
-	if ok, _, _ := brVerify(cx, mhMethod{Verify: []mhCheck{{Check: "cmd_ran", Arg: "$g"}}}); !ok {
+	if ok, _, _ := brVerify(cx, mhMethod{Risk: "low", Verify: []mhCheck{{Check: "cmd_ran", Arg: "$g"}}}); !ok {
 		t.Fatal("cmd_ran: a non-zero informative answer still ran")
 	}
 	if !strings.Contains(cx.out.String(), "conferi: `systemctl status x` respondeu (exit 3)") {

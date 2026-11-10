@@ -30,7 +30,9 @@
       "name": "fmt",
       "cmd": "{{fmt}}",
       "patterns": [
-        "(?:checa|checar|verifica|verificar|check)(?: a| o| the)? (?:formatacao|formatting|format|fmt)"
+        "(?:checa|checar|verifica|verificar|check)(?: a| o| the)? (?:formatacao|formatting|format|fmt)",
+        "(?:quais|que) arquivos (?:estao|tao|ficaram) (?:fora do padrao|fora do formato|desformatados|sem formatar|mal formatados|fora da formatacao)(?: do gofmt| de formatacao| do formatador)?(?:[?,.;]? ?(?:so|apenas|somente) (?:lista|listar|mostra|mostrar|confere|conferir)(?:[, ]+(?:nao|sem) (?:mexe|mexer|muda|mudar|altera|alterar|reescreve|reescrever)(?: em nada| nada)?)?)?",
+        "(?:which|what) files (?:are not|aren't|are un)formatted|(?:which|what) files need (?:formatting|gofmt)|gofmt -l(?: \\.)?"
       ]
     },
     {
@@ -58,7 +60,8 @@
       "cmd": "{{git}} log -1 --stat",
       "patterns": [
         "(?:qual|qual e|qual foi|quem fez|quando foi)(?: o)? ultimo commit|(?:o )?ultimo commit|(?:mostra|mostre|me mostra|ver)(?: o)? ultimo commit",
-        "(?:what was|what is|whats|show|show me)(?: the| my)? last commit|(?:the )?last commit|git log -1|git show"
+        "(?:what was|what is|whats|show|show me)(?: the| my)? last commit|(?:the )?last commit|git log -1|git show",
+        "(?:who|quem) (?:authored|made|wrote|did|fez|foi o autor d[oe]|e o autor d[oe])(?: the| o)? (?:last|ultimo|latest) commit|(?:autor|author) (?:do|of the) (?:ultimo|last) commit|(?:what(?:'s| is| was))(?: the)? (?:last|latest) commit|(?:the )?latest commit"
       ]
     },
     {
@@ -80,7 +83,92 @@
       "patterns": [
         "(?:quais|que) arquivos (?:eu )?(?:mexi|mudei|alterei|modifiquei|editei|toquei)|(?:quais|que) arquivos (?:mudaram|foram alterados|foram modificados|estao modificados|tao modificados|eu mexi ate agora)",
         "(?:lista|mostra|me mostra|ver)(?: os)? arquivos (?:modificados|alterados|que mudaram|que eu mexi|que eu mudei)|arquivos modificados|arquivos alterados",
-        "(?:which|what) files (?:did i (?:change|touch|edit|modify)|have i (?:changed|touched|edited|modified)|changed|are modified|were modified)|modified files|changed files|(?:list|show|show me)(?: the)? (?:modified|changed) files"
+        "(?:which|what) files (?:did i (?:change|touch|edit|modify)|have i (?:changed|touched|edited|modified)|changed|are modified|were modified)|modified files|changed files|(?:list|show|show me)(?: the)? (?:modified|changed) files",
+        "(?:which|what) files (?:are|were) (?:modified|changed)(?: right now| now| so far| at the moment)?|(?:quais|que) arquivos (?:estao|tao) (?:modificados|alterados)(?: agora| ate agora)?",
+        "(?:which|what) files (?:are|were) (?:modified|changed) right|(?:which|what) files (?:have|did) i (?:changed|touched|edited|modified|change|touch|edit|modify) (?:so far|right|today)"
+      ]
+    },
+    {
+      "name": "untracked",
+      "cmd": "{{git}} status --short --untracked-files=all",
+      "patterns": [
+        "(?:tem|ha|existe)(?: algum| algums| alguns)? arquivos?(?: novos?)? (?:untracked|nao rastreados?|nao versionados?|fora do git)|(?:quais|que)(?: sao os)? arquivos (?:estao |tao )?(?:untracked|nao rastreados|nao versionados)|arquivos untracked|o que (?:ta|esta) untracked",
+        "(?:any|are there(?: any)?|what are the|list|show|show me)(?: the)? untracked files|untracked files|what(?:'s| is) untracked"
+      ]
+    },
+    {
+      "name": "commit_count",
+      "cmd": "{{git}} rev-list --count HEAD",
+      "patterns": [
+        "quantos commits (?:tem|ha|existem|ja tem|foram feitos)(?: (?:no|neste|nesse|aqui no) (?:repo|repositorio|projeto|branch))?|quantos commits|numero de commits",
+        "how many commits(?: (?:does|do|are|has|in|on|there).*)?|commit count|number of commits"
+      ]
+    },
+    {
+      "name": "diff_file",
+      "cmd": "{{git}} diff -- {{path}}",
+      "patterns": [
+        "(?:(?:mostra|mostre|me mostra|ver|show|show me) )?(?:o |the )?diff (?:do|da|de|of|for|in|no|na) (?:arquivo |file )?(?P<path>[\\w./-]+)",
+        "(?:o que|oque) (?:mudou|eu mudei|foi alterado) (?:no|na|em) (?:arquivo )?(?P<path>[\\w./-]+\\.[A-Za-z0-9]+)",
+        "what changed in (?P<path>[\\w./-]+\\.[A-Za-z0-9]+)",
+        "git diff (?P<path>[\\w./-]+)"
+      ],
+      "slots": {
+        "path": "^[\\w.][\\w./-]{0,199}$"
+      },
+      "reject": [
+        "repo",
+        "projeto",
+        "project",
+        "git",
+        "codigo",
+        "code",
+        "main",
+        "master",
+        "head",
+        "staging",
+        "stage"
+      ]
+    },
+    {
+      "name": "which_file",
+      "cmd": "{{search}} -l -- {{sym}} .",
+      "patterns": [
+        "(?:em )?(?:qual|quais|que) arquivos? (?:aparece|aparecem|tem|contem|contem a|usa|usam|menciona|mencionam)(?: a| o)?(?: palavra| texto| termo| string)? (?P<sym>[\\w$./-]+)",
+        "(?:which|what) files? (?:contains?|has|have|mentions?|uses?)(?: the)?(?: word| text| string)? (?P<sym>[\\w$./-]+)"
+      ],
+      "slots": {
+        "sym": "^[\\w$./-]{3,79}$"
+      },
+      "reject": [
+        "erro",
+        "error",
+        "bug",
+        "isso",
+        "this",
+        "that",
+        "coisa",
+        "algo",
+        "mudancas",
+        "changes",
+        "conflito",
+        "conflitos",
+        "conflict",
+        "conflicts",
+        "todo",
+        "todos",
+        "fixme",
+        "testes",
+        "tests",
+        "teste"
+      ]
+    },
+    {
+      "name": "list_tests",
+      "cmd": "{{search}} -e '^func Test' -e 'def test_' -e '^func Benchmark' .",
+      "patterns": [
+        "(?:list|show|show me|what are)(?: all)?(?: the)? (?:test functions|tests|test cases|test names)(?: (?:in|of) (?:this|the) (?:project|repo|codebase))?",
+        "(?:lista|liste|mostra|mostre|me mostra|quais sao|quais)(?: todos)?(?: os| as)? (?:testes|funcoes de teste|casos de teste)(?: (?:do|deste|desse|no) (?:projeto|repo)| que existem| que tem| existentes)?"
       ]
     },
     {
@@ -95,7 +183,8 @@
       "name": "where",
       "cmd": "{{search}} -w -- {{sym}} . | head -n 80",
       "patterns": [
-        "(?:onde (?:esta|fica|ta|e definid[oa]|foi definid[oa]|esta definid[oa])|where is|where's|where are|where is defined) (?:o |a |os |as |the )?(?:funcao |function |func |metodo |method |classe |class |tipo |type |struct |interface |simbolo |symbol |variavel |variable |constante |constant )?(?P<sym>[A-Za-z_$][\\w$.]*)(?:\\(\\))?(?: (?:definid[oa]|defined))?"
+        "(?:onde (?:esta|fica|ta|e definid[oa]|foi definid[oa]|esta definid[oa])|where is|where's|where are|where is defined) (?:o |a |os |as |the )?(?:funcao |function |func |metodo |method |classe |class |tipo |type |struct |interface |simbolo |symbol |variavel |variable |constante |constant )?(?P<sym>[A-Za-z_$][\\w$.]*)(?:\\(\\))?(?: (?:definid[oa]|defined))?",
+        "(?:onde|aonde) (?:ta|esta|fica|foi|e) (?:definid[oa]|declarad[oa]) (?:o |a )?(?:funcao |metodo |classe |tipo |struct |variavel |constante )?(?P<sym>[A-Za-z_$][\\w$.]*)(?:\\(\\))?"
       ],
       "slots": {
         "sym": "^[A-Za-z_$][\\w$.]{2,79}$"
@@ -146,10 +235,10 @@
       "name": "search_code",
       "cmd": "{{search}} -- {{sym}} . | head -n 80",
       "patterns": [
-        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$.]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)"
+        "(?:procura|procure|procurar|busca|busque|buscar|ache|acha|encontra|encontre|find|search|grep)(?: (?:por|pelo|pela|for|o|a|os|as|the))? (?P<sym>[\\w$./-]+) (?:no|nos|na|em|in the|in) (?:codigo|projeto|repo|repositorio|code|codebase|arquivos|fonte|fontes)"
       ],
       "slots": {
-        "sym": "^[\\w$.]{3,79}$"
+        "sym": "^[\\w$./-]{3,79}$"
       },
       "reject": [
         "erro",

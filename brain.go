@@ -67,6 +67,18 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		var ins []Intent
 		chain := make([]bool, len(parts))
 		for i, p := range parts {
+			if i > 0 && len(ins) == i {
+				if q := brResolveThere(p, ins[i-1]); q != p {
+					p = q
+					parts[i] = q
+				}
+			}
+			if fm, ok := brFastMatch(env.Root, p); ok {
+				// the part is a read-only fast path of its own (intents.json)
+				ins = append(ins, Intent{Name: "fastpath", Slots: map[string]string{"cmd": fm.Cmd}, Confidence: 1, Raw: 1, Phrase: true,
+					Evidence: []string{"atalho " + fm.Intent}})
+				continue
+			}
 			pi := nuGet().Parse(p, w)
 			// anaphora clause: "e apaga eles" can parse CONFIDENT now that
 			// filter slots eat the pronoun (name=eles) — check the strip

@@ -23,7 +23,7 @@ var (
 	stHowAre = regexp.MustCompile(`^((oi+|ola|olá|opa|eai|e ai|e aí|fala|salve|bom dia|boa tarde|boa noite|hello|hi|hey) )?(tudo bem|tudo bom|tudo certo|como vai|como voce esta|como você está|beleza|suave|how are you)( (com voce|com você|ai|aí))?$`)
 	stThanks = regexp.MustCompile(`^(valeu|vlw|obrigad[oa]|brigad[oa]|thanks|thank you|thx|show|top|massa|perfeito|boa)( (mano|cara|jazz|demais|mesmo))?$`)
 	stBye    = regexp.MustCompile(`^(tchau|falou|flw|ate mais|até mais|ate logo|até logo|bye|see you)( (mano|jazz))?$`)
-	stModel  = regexp.MustCompile(`\b(refator\w*|implement\w*|document\w*|reescrev\w*|migr\w*|otimiz\w*|traduz\w*|generics|escreve uma? (funcao|função|classe|teste|api|script)|cria uma? (funcao|função|classe|api|feature)|adiciona suporte|adiciona uma? (endpoint|rota|campo|feature|funcao|função|metodo|método|classe|tela|pagina|página|botao|botão|validacao|validação)|add an? (endpoint|route|field|feature|function|method|class|page|button)|refactor\w*|rewrite|write a (function|class|test)|deploy\w*|terraform|kubernetes|k8s|helm|ansible|provision\w*)\b`)
+	stModel  = regexp.MustCompile(`\b(refator\w*|implement\w*|document\w*|reescrev\w*|migr\w*|otimiz\w*|traduz\w*|generics|escreve uma? (funcao|função|classe|teste|api|script)|cria uma? (funcao|função|classe|api|feature)|adiciona suporte|melhora\w*|melhore\w*|improve\w*|make (this|it|that|the code) (faster|better|cleaner|simpler)|deixa (isso|o codigo|o código) mais \w+|write (a |an |some |the )?(unit |integration |e2e )?tests?|escreve (um |uns |os |alguns )?testes?|cria (um |uns |alguns )?testes? (pra|para|de|do|da)|add (a |some )?(unit )?tests?|resolve (aquele|o|esse|este) todo|adiciona uma? (endpoint|rota|campo|feature|funcao|função|metodo|método|classe|tela|pagina|página|botao|botão|validacao|validação)|add an? (endpoint|route|field|feature|function|method|class|page|button)|refactor\w*|rewrite|write a (function|class|test)|deploy\w*|terraform|kubernetes|k8s|helm|ansible|provision\w*)\b`)
 )
 
 // stOffline is the short "what I do with no model" line.
@@ -58,4 +58,23 @@ func brNeedsModel(text string) (string, bool) {
 	}
 	return "isso (" + m + ") é trabalho criativo de código: precisa de um modelo, e agora estou sem modelo. " +
 		stOffline + ". pra usar um modelo: rode sem --offline (ou /online), ou configure um com `jazz login chatgpt`, `jazz key <provedor>` ou `jazz omni setup` (tem modelos grátis).", true
+}
+
+// stModelLead: the request OPENS with a creative verb. Unlike stModel (which
+// may match a word in the middle of a read request — "docs: migrations"),
+// this is safe to check whatever the grammar read: "melhora o código" read as
+// project_summary and "can you make this faster?" read as build were both
+// sealed feito e verificado.
+var stModelLead = regexp.MustCompile(`^(?:(?:por favor|pfv|please|can you|could you|pode|voce pode|vc pode|bora|vamos)[, ]+)*(?:melhor[ae]r?|improve|otimiz[ae]r?|optimi[sz]e|refator[ae]r?|refactor|implement[ae]r?|implement|reescrev[ae]r?|rewrite|make (?:this|it|that|the code) (?:faster|better|cleaner|simpler)|deixa (?:isso|o codigo|o código) mais)\b`)
+
+func brNeedsModelLead(text string) (string, bool) {
+	m := stModelLead.FindString(strings.ToLower(strings.TrimSpace(text)))
+	if m == "" {
+		return "", false
+	}
+	if why, ok := brNeedsModel(text); ok {
+		return why, true
+	}
+	return "isso (" + m + ") é trabalho criativo de código: precisa de um modelo, e agora estou sem modelo. " +
+		stOffline + ". pra usar um modelo: rode sem --offline (ou /online).", true
 }

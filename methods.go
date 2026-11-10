@@ -374,6 +374,8 @@ func init() {
 		"perm_op":         brPermOp,
 		"git_op":          brGitOp,
 		"dotenv_get":      brDotenvGet,
+		"dotenv_keys":     brDotenvKeys,
+		"fast_cmd":        brFastCmd,
 		"log_errors_file": brLogErrorsFile,
 		"csv_sum":         brCSVSum,
 		"list_names":      brListNames,
