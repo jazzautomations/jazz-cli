@@ -211,3 +211,95 @@ func erParse(root, text string, w io.Writer) int {
 	}
 	return 0
 }
+
+// ---------- corpus metamórfico ----------
+
+// erVariants: `jazz eval real --variants` runs every request again under
+// surface variations that do not change what is asked (a wrapper, a polite
+// tail, an interjection, capitals). The expectation is the base task's: a
+// request that passes plain and fails wrapped is a robustness bug, found
+// without anybody writing a new test (offline-optimization-study.md, item 8).
+var erVariants bool
+
+type erVariant struct {
+	key string
+	fn  func(string) string
+}
+
+var erVariantList = []erVariant{
+	{"por-favor-antes", func(p string) string { return "por favor, " + p }},
+	{"por-favor-depois", func(p string) string { return erNoTail(p) + " por favor" }},
+	{"mano", func(p string) string { return "mano, " + p }},
+	{"ai", func(p string) string { return erNoTail(p) + " ai" }},
+	{"pra-mim", func(p string) string { return erNoTail(p) + " pra mim" }},
+	{"maiuscula", func(p string) string { return strings.ToUpper(p[:1]) + p[1:] }},
+	{"ponto", func(p string) string { return erNoTail(p) + "." }},
+	{"please", func(p string) string { return "please " + p }},
+}
+
+func erNoTail(p string) string { return strings.TrimRight(p, " ?.!") }
+
+// erExpandVariants returns the base tasks followed by their variants
+// (id~variant). Greetings and one-word requests are left alone: wrapping them
+// changes what they are.
+func erExpandVariants(tasks []eoTask) []eoTask {
+	out := append([]eoTask(nil), tasks...)
+	for _, tk := range tasks {
+		if len(strings.Fields(tk.Prompt)) < 2 || tk.Cat == "conv" || tk.GuardCmd != "" || tk.Prompt == "" {
+			continue
+		}
+		for _, v := range erVariantList {
+			p := v.fn(tk.Prompt)
+			if p == tk.Prompt {
+				continue
+			}
+			vt := tk
+			vt.ID, vt.Prompt, vt.Cat = tk.ID+"~"+v.key, p, "variante:"+v.key
+			out = append(out, vt)
+		}
+	}
+	return out
+}
+
+// erVariantReport prints, per variation, how many of the requests that pass
+// plain still pass varied, and how many turned into a false success.
+func erVariantReport(rep *eoReport, w io.Writer) {
+	base := map[string]bool{}
+	for _, r := range rep.Tasks {
+		if !strings.Contains(r.ID, "~") {
+			base[r.ID] = r.Success
+		}
+	}
+	type acc struct{ n, ok, falso int }
+	by := map[string]*acc{}
+	var broken []string
+	for _, r := range rep.Tasks {
+		id, key, isVar := strings.Cut(r.ID, "~")
+		if !isVar || !base[id] {
+			continue
+		}
+		a := by[key]
+		if a == nil {
+			a = &acc{}
+			by[key] = a
+		}
+		a.n++
+		if r.Success {
+			a.ok++
+		} else if len(broken) < 400 {
+			broken = append(broken, r.ID)
+		}
+		if r.FalseSuccess {
+			a.falso++
+		}
+	}
+	fmt.Fprintln(w, "\nvariações de superfície (sobre os pedidos que passam sem variação):")
+	tn, tok, tf := 0, 0, 0
+	for _, v := range erVariantList {
+		if a := by[v.key]; a != nil {
+			fmt.Fprintf(w, "  %-18s %3d/%3d · falso sucesso %d\n", v.key, a.ok, a.n, a.falso)
+			tn, tok, tf = tn+a.n, tok+a.ok, tf+a.falso
+		}
+	}
+	fmt.Fprintf(w, "  %-18s %3d/%3d · falso sucesso %d\n", "total", tok, tn, tf)
+}

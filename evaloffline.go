@@ -127,7 +127,7 @@ type eoReport struct {
 // line, # comments). The command fails when a task outside the list fails
 // (regression) or when a listed task passes (remove it: the list only shrinks).
 func cmdEval(root string, args []string, w io.Writer) int {
-	const usage = "uso: jazz eval offline|real [--out DIR] [--only id,id] [--gate ARQ] [--tasks ARQ] [-v]\n     jazz eval parse \"pedido\"   (como o cérebro offline lê o pedido, sem agir)"
+	const usage = "uso: jazz eval offline|real [--out DIR] [--only id,id] [--gate ARQ] [--tasks ARQ] [--variants] [-v]\n     jazz eval parse \"pedido\"   (como o cérebro offline lê o pedido, sem agir)"
 	if len(args) >= 2 && args[0] == "parse" {
 		return erParse(root, strings.Join(args[1:], " "), w)
 	}
@@ -153,6 +153,8 @@ func cmdEval(root string, args []string, w io.Writer) int {
 			}
 		case "-v", "--verbose":
 			verbose = true
+		case "--variants", "-variants": // real suite only: surface variations of every request (evalreal.go)
+			erVariants = true
 		case "--tasks", "-tasks": // real suite only: an external task file (a held-out set)
 			if i+1 < len(args) {
 				b, err := os.ReadFile(args[i+1])
@@ -187,6 +189,9 @@ func cmdEval(root string, args []string, w io.Writer) int {
 	if err := os.WriteFile(p, b, 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, "jazz:", err)
 		return 1
+	}
+	if suite == "real" && erVariants {
+		erVariantReport(rep, w)
 	}
 	fmt.Fprintln(w, "resultado:", p)
 	// princípio 2 vira gate de CI: um falso-bloqueio (guardrail cego) falha o
@@ -281,6 +286,9 @@ func eoRunSuite(name string, only map[string]bool, verbose bool, w io.Writer) (*
 	}
 	if err := json.Unmarshal(data, &suite); err != nil {
 		return nil, fmt.Errorf("%s: %w", src, err)
+	}
+	if name == "real" && erVariants {
+		suite.Tasks = erExpandVariants(suite.Tasks)
 	}
 	rep := &eoReport{Version: version, Started: time.Now(), Host: runtime.GOOS + "/" + runtime.GOARCH + fmt.Sprintf(" %d cpu", runtime.NumCPU()), Model: "none"}
 	base, err := eoFixtureBase(sbCurrent())

@@ -2111,6 +2111,11 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 			return in // a whole-request phrase with resolved operands (nlu_phrases.go)
 		}
 	}
+	// a conversational tail ("mostra o git status aí", "... pra mim, valeu")
+	// is not part of the request: the grammar read "aí" as an operand and
+	// either refused or answered something else (corpus metamórfico: 22 of 80
+	// passing requests broke with the tail, 5 as false success)
+	text = nuTailRe.ReplaceAllString(strings.TrimSpace(text), "$1")
 	in := m.parseGrammar(text, w)
 	if !in.Understood() && m != nil && m.loadErr == nil {
 		// the request wrapped in conversation ("dá pra listar as branches
@@ -2129,6 +2134,9 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	}
 	return in
 }
+
+// nuTailRe: trailing conversational filler, kept apart from the punctuation.
+var nuTailRe = lazyRx(`(?i)(?:[,\s]+(?:a[ií]|a[eê]|aew|mano|cara|blz|beleza|valeu|vlw|pfv|por favor|please|pls|thanks|thx))+\s*([?.!]*)$`)
 
 // parseGrammar is the concept grammar + classifier reading of text.
 func (m *nuModel) parseGrammar(text string, w *nuWorld) Intent {

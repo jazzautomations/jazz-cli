@@ -23,6 +23,10 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
 
 - `jazz eval real`: 89 pedidos do dia a dia com veredito por pedido e conferência do repositório depois;
   `--tasks ARQ` roda um conjunto externo; `jazz eval parse "pedido"` mostra a leitura sem agir.
+- `jazz eval real --variants`: corpus metamórfico. Cada pedido roda de novo sob oito variações de
+  superfície ("mano, …", "… aí", "… pra mim", "por favor"); 639 de 640 seguem passando. A primeira rodada
+  achou que "aí" no fim do pedido quebrava 22 de 80 pedidos, 5 com falso sucesso; rabo de conversa agora
+  sai antes da leitura.
 - Offline faz de verdade: stash, criar branch, descartar mudanças de um arquivo (guardando o diff),
   formatar (reescreve e confere), rodar um teste ou um pacote, soma/média/maior/menor de coluna CSV,
   erros de arquivo de log, resumo estrutural de arquivo, comando digitado cru.
