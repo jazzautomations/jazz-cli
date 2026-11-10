@@ -3,8 +3,8 @@
 ## O que sobrevive / o que morreu
 
 - **Commit `8b77265` (harness/calib-v2): PERDIDO.** Objeto não existe em
-  nenhum repo local (`git show 8b77265` falha em /home/h/jazz-cli e
-  /home/h/jazz-cli-study; busca ampla em packs/objects nada achou).
+  nenhum repo local (`git show 8b77265` falha em no clone principal e
+  no clone de estudo; busca ampla em packs/objects nada achou).
   O worktree /tmp/jr-cal morreu no reboot.
 - **O que NÃO se perdeu:** os commits de calibração ANTERIORES já estão em
   main (`dec7e6c`, `87b7ba3`, `0d1bbc9`, `6e70f63`) — incluindo `calib.go`,
