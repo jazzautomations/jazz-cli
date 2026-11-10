@@ -166,14 +166,14 @@ func TestNLGrantSessionScoped(t *testing.T) {
 func TestNLGrantAudit(t *testing.T) {
 	h := newHarness(t, nil, nil)
 	h.ag.nlScanConsent("autorizo operações de baixo nível")
-	h.ag.nlScanConsent("root jazz jazz123")
+	h.ag.nlScanConsent("root ana s3nha-exemplo")
 	audit := nlAudit(t)
-	for _, want := range []string{`"consent.grant"`, `"system-ops"`, `"user:nl"`, `"consent.credential"`, `"jazz"`} {
+	for _, want := range []string{`"consent.grant"`, `"system-ops"`, `"user:nl"`, `"consent.credential"`, `"ana"`} {
 		if !strings.Contains(audit, want) {
 			t.Errorf("audit must record %s", want)
 		}
 	}
-	if strings.Contains(audit, "jazz123") {
+	if strings.Contains(audit, "s3nha-exemplo") {
 		t.Error("the password must NEVER reach the audit log")
 	}
 }
@@ -263,7 +263,7 @@ func TestNLCredentialCapture(t *testing.T) {
 	cases := []struct {
 		input, user, pass string
 	}{
-		{"root jazz jazz123", "jazz", "jazz123"},
+		{"root ana s3nha-exemplo", "ana", "s3nha-exemplo"},
 		{"a senha do sudo é s3cret!pw", "", "s3cret!pw"},
 		{"senha do root: abc12345", "", "abc12345"},
 		{"sudo senha minhaPass99", "", "minhaPass99"},
@@ -310,7 +310,7 @@ func TestNLElevatedRunsSudoS(t *testing.T) {
 		return "active (running)", 0, nil
 	})
 	h := newHarness(t, nil, nil)
-	h.ag.nlScanConsent("root jazz jazz123")
+	h.ag.nlScanConsent("root ana s3nha-exemplo")
 
 	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo systemctl restart NetworkManager"})})
 	if calls != 1 {
@@ -319,20 +319,20 @@ func TestNLElevatedRunsSudoS(t *testing.T) {
 	if len(gotArgv) < 5 || gotArgv[0] != "sudo" || gotArgv[1] != "-S" {
 		t.Errorf("must run via sudo -S: %v", gotArgv)
 	}
-	if gotStdin != "jazz123\n" {
+	if gotStdin != "s3nha-exemplo\n" {
 		t.Errorf("the credential must feed sudo's stdin exactly once: %q", gotStdin)
 	}
 	if out.IsErr || !strings.Contains(out.Text, "active (running)") || !strings.Contains(out.Text, "[exit code 0]") {
 		t.Errorf("elevated output malformed: %+v", out)
 	}
-	if strings.Contains(out.Text, "jazz123") || strings.Contains(out.Display.Summary, "jazz123") {
+	if strings.Contains(out.Text, "s3nha-exemplo") || strings.Contains(out.Display.Summary, "s3nha-exemplo") {
 		t.Errorf("the password must never reach tool output: %+v", out)
 	}
 	audit := nlAudit(t)
 	if !strings.Contains(audit, `"elevated.exec"`) || !strings.Contains(audit, `"sudo -S"`) || !strings.Contains(audit, "systemctl restart NetworkManager") {
 		t.Errorf("elevated execution must be audited (who, what, evidence)")
 	}
-	if strings.Contains(audit, "jazz123") {
+	if strings.Contains(audit, "s3nha-exemplo") {
 		t.Error("the password must NEVER reach the audit log")
 	}
 }
@@ -359,7 +359,7 @@ func TestNLCredentialRejected(t *testing.T) {
 		return "Sorry, try again.\nsudo: 1 incorrect password attempt", 1, fmt.Errorf("exit status 1")
 	})
 	h := newHarness(t, nil, nil)
-	h.ag.nlScanConsent("root jazz jazz123")
+	h.ag.nlScanConsent("root ana s3nha-exemplo")
 	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo apt update"})})
 	if !out.IsErr || calls != 1 {
 		t.Fatalf("expected one failed elevation: out=%+v calls=%d", out, calls)
@@ -406,7 +406,7 @@ func TestNLSysOpsEndToEnd(t *testing.T) {
 	h.ag.Headless = true
 
 	// o usuário autoriza em linguagem natural e fornece a credencial
-	h.ag.nlScanConsent("arruma meu wifi. e eu autorizo operacoes de baixo nivel, pode torar caraio\nroot jazz jazz123")
+	h.ag.nlScanConsent("arruma meu wifi. e eu autorizo operacoes de baixo nivel, pode torar caraio\nroot ana s3nha-exemplo")
 	if err := h.run(t, "arruma meu wifi"); err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestNLSysOpsEndToEnd(t *testing.T) {
 	if n := strings.Count(audit, `"elevated.exec"`); n != 3 {
 		t.Errorf("3 elevated executions must be audited: %d", n)
 	}
-	if strings.Contains(audit, "jazz123") {
+	if strings.Contains(audit, "s3nha-exemplo") {
 		t.Error("the password must NEVER reach the audit log")
 	}
 }

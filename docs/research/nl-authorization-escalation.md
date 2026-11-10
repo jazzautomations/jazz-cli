@@ -7,7 +7,7 @@ O jazz diagnosticou certo (iwconfig, modinfo, firmware) e o usuário
 autorizou TUDO em linguagem natural:
 - "pode ir"
 - "e eu autorizo operacoes de baixo nivel, pode torar caraio"
-- "root jazz jazz123"  (chegou a dar a senha)
+- "root ana s3nha-exemplo"  (chegou a dar a senha)
 E mesmo assim: 4× action.refused (guard=permission) + 1× budget, e o modelo
 fraco respondeu mandando o usuário rodar o comando. Citação dele:
 "eu pago seus tokens pra vc fazer n pra vc falar pra eu fazer... minha

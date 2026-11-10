@@ -60,7 +60,7 @@ type nlGrantRec struct {
 
 // nlCred é a credencial sudo da sessão: só memória, nunca salva nem logada.
 type nlCred struct {
-	user string // login capturado ("root jazz jazz123" → jazz), só audit
+	user string // login capturado ("root ana s3nha-exemplo" → ana), só audit
 	pass string
 	via  string // "chat" | "env:JAZZ_SUDO_PASS"
 	bad  bool   // sudo recusou uma vez: pede de novo em vez de retentar
@@ -187,7 +187,7 @@ var nlCredRules = []struct {
 	// "sudo senha X", "root password X"
 	{"cred:keyword", lazyRx(`(?i)\b(?:sudo|root|admin)\s+(?:senha|pass|password|pw|credencial|credential)s?\s*[:=]?\s*["']?([^\s"',;]{3,64})`)},
 	{"cred:password", lazyRx(`(?i)\b(?:password|pass|pw|credencial|credentials?)\s*[:=]\s*["']?([^\s"',;]{3,64})`)},
-	// "root jazz jazz123": uma linha que é só <papel> <user> <senha>
+	// "root ana s3nha-exemplo": uma linha que é só <papel> <user> <senha>
 	{"cred:root-user-pass", lazyRx(`(?im)^[ \t]*(?:root|sudo|admin)\s+([a-zA-Z_][\w.-]{0,31})\s+([^\s"',;]{3,64})[ \t]*[!.]?[ \t]*$`)},
 }
 
