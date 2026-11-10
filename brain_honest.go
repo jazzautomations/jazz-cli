@@ -28,7 +28,7 @@ import (
 
 // brQuestionRe: a frase começa com palavra interrogativa. Um "?" no fim não
 // basta ("commita isso pra mim?" é pedido educado, não pergunta).
-var brQuestionRe = lazyRx(`(?i)^\s*(?:e\s+|ent[aã]o\s+|mas\s+|a[ií]\s+)?(?:(?:me\s+(?:diz|diga|fala|fale|conta|conte|explica)|sabe(?:\s+me\s+dizer)?|pode\s+me\s+dizer|quero\s+saber|tell\s+me|do\s+you\s+know|can\s+you\s+tell\s+me)\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
+var brQuestionRe = lazyRx(`(?i)^\s*(?:(?:e|ent[aã]o|mas|a[ií]|uai|mano|cara|p[oô]|bah|opa|oxe|eita|v[eé]i|tipo|bom|olha|hey|so|well|hmm|ok)[,\s]+)*(?:(?:queria\s+saber|preciso\s+saber|quero\s+ver|d[aá]\s+pra\s+(?:saber|ver)|consegue\s+me\s+dizer|could\s+you\s+tell\s+me|i\s+(?:need|want)\s+to\s+know|i\s+wonder|wondering|me\s+(?:diz|diga|fala|fale|conta|conte|explica)|sabe(?:\s+me\s+dizer)?|pode\s+me\s+dizer|quero\s+saber|tell\s+me|do\s+you\s+know|can\s+you\s+tell\s+me)\s+)?(?:qual|quais|quem|quando|onde|cad[eê]|quant[oa]s?|por\s*qu[eê]|porqu[eê]|pq|como|o\s+que|oq|what|which|who|whose|when|where|why|how|is|are|was|were|does|do|did|tem|existe|h[aá])(?:[\s?,.!:]|$)`) // RE2: \b é ASCII e falha depois de "cadê"
 
 func brIsQuestion(text string) bool { return brQuestionRe.MatchString(text) }
 
@@ -100,6 +100,9 @@ func brVerbGuard(env *brEnv, text string, in Intent, risk cbRisk) (why, kind str
 			return w, "needs_model"
 		}
 	}
+	if why, kind := brSemanticGuard(text, in); why != "" {
+		return why, kind
+	}
 	if f := brFileIgnored(env, text, in); f != "" {
 		return fmt.Sprintf("o pedido cita %s, e a leitura que eu tenho (%s — %s) não usa esse arquivo: responder com ela seria responder outra pergunta. não fiz nada. reformule dizendo o que quer do arquivo (ex.: \"abre o %s\", \"procura X no %s\")", f, in.Name, desc, f, f), "file_ignored"
 	}
@@ -166,7 +169,7 @@ var brFileTokRe = lazyRx(`[\w.-]*[\w-]+(?:/[\w.-]+)+|[\w-]*\.?[\w-]+\.[A-Za-z0-9
 
 // brFileSelf are intents whose method reads a fixed project file whatever the
 // slots say, so naming that file in the request is consumed by definition.
-var brFileSelf = map[string]string{"dotenv_check": ".env", "env_get": ".env", "project_summary": "", "git_status": "", "git_diff": "", "run_tests": "", "build": "", "lint": "", "format": ""}
+var brFileSelf = map[string]string{"dotenv_check": ".env", "env_get": ".env", "project_summary": "", "git_status": "", "git_diff": "", "run_tests": "", "build": "", "lint": ""}
 
 // brFileIgnored returns the project file the request names that the reading
 // does not use at all ("" = none). "any IP addresses in logs/app.log?" was read
@@ -205,4 +208,92 @@ func brFileIgnored(env *brEnv, text string, in Intent) string {
 		return rel
 	}
 	return ""
+}
+
+// brCommitVerbRe: the request orders a commit (a verb form, or "commit" used
+// as a command). The noun alone — "a mensagem do commit mais recente" — is
+// somebody asking about a commit.
+var brCommitVerbRe = lazyRx(`(?i)\b(?:comm?it[ae]\w*|comm?itar|comm?itando|fa(?:z|zer|ca|ça) (?:um |o |outro )?commit|manda (?:um |o )?commit|salva (?:um |o )?commit|git commit)\b|^\s*(?:(?:por favor|please|pode|bora|vamos)[, ]+)*commit(?:$|[: ]\s*(?:-|"|\x27|with|everything|all|tudo|isso|the|my|these|this|com|as|os|so|only|just))`)
+
+// brGitNounRe / brGitOK: a request that talks about git objects is answered
+// by a git reading (or a fast path), never by a listing of files or a
+// project summary that happened to share a word with it.
+var (
+	brGitNounRe = lazyRx(`(?i)\b(commits?|branch(?:es|s)?|stash|merge|rebase|untracked|rastread[oa]s?|rastreando|versionad[oa]s?|staged|git)\b`)
+	brGitOK     = map[string]bool{"fastpath": true, "undo": true, "tool_info": true, "tool_status": true, "pkg_installed": true, "help": true,
+		"smalltalk": true, "multi": true, "self_info": true, "shell_cmd": true, "fix": true, "update_jazz": true, "env_status": true, "explain": true}
+	// brTodoWordRe: "todo" as the Portuguese word for "all" ("no projeto todo",
+	// "o dia todo", "todo o código"), not the TODO marker.
+	brTodoWordRe = lazyRx(`(?i)\b(?:projeto|repo|repositorio|repositório|codigo|código|dia|mundo|tempo|arquivo|log|sistema) todo\b|\btodo (?:o|a|os|as|mundo|dia)\b`)
+	brCreateStop = map[string]bool{"nova": true, "novo": true, "new": true, "pasta": true, "arquivo": true, "file": true, "folder": true, "dir": true,
+		"vazio": true, "vazia": true, "empty": true, "chamada": true, "chamado": true, "called": true, "named": true, "um": true, "uma": true,
+		"teste": true, "test": true, "isso": true, "aqui": true, "linha": true, "line": true}
+)
+
+// brSemanticGuard catches readings that picked one word of the request and
+// answered something else (second held-out set, 13 false successes).
+func brSemanticGuard(text string, in Intent) (why, kind string) {
+	if in.Phrase {
+		return "", ""
+	}
+	desc := nuGet().descOf(in.Name)
+	switch in.Name {
+	case "git_commit":
+		if !brCommitVerbRe.MatchString(text) {
+			return "o pedido fala de commit mas não manda commitar, e a leitura que eu tenho (git_commit) muda o repositório. não commitei nada. pra ver: \"último commit\" ou \"mostra o git log\"; pra commitar: \"commita com a mensagem ...\"", "question_mutation"
+		}
+	case "todo_scan":
+		if brTodoWordRe.MatchString(text) && !strings.Contains(text, "TODO") && !strings.Contains(strings.ToLower(text), "fixme") {
+			return "li \"todo\" como a palavra (tudo), não como o marcador TODO, então não vou responder com a lista de TODOs. diga o que procurar e onde (ex.: \"procura localhost no código\")", "wrong_reading"
+		}
+	case "create":
+		t := in.Slots["target"]
+		if in.Slots["type"] != "dir" && (brCreateStop[strings.ToLower(t)] || !strings.Contains(t, ".") && brFileTokRe.MatchString(strings.ReplaceAll(text, t, ""))) {
+			return fmt.Sprintf("eu criaria um arquivo chamado %q, e isso não parece ser o nome que você pediu. não criei nada. diga o nome exato (ex.: \"cria a pasta build/artefatos\", \"cria o arquivo notas.md\")", t), "wrong_reading"
+		}
+	}
+	if brGitNounRe.MatchString(text) && !strings.HasPrefix(in.Name, "git_") && !brGitOK[in.Name] {
+		return fmt.Sprintf("o pedido é sobre git e a leitura que eu tenho (%s — %s) não é: responder com ela seria responder outra pergunta. não fiz nada. sem modelo eu sei: status, diff, log, último commit, branches, stash, quem mexeu num arquivo", in.Name, desc), "wrong_reading"
+	}
+	return "", ""
+}
+
+// ---------- comando digitado cru ----------
+
+// brLiteralBins: programs a developer types as a command line, not as prose.
+var brLiteralBins = map[string]bool{"git": true, "go": true, "gofmt": true, "make": true, "cat": true, "ls": true, "wc": true, "grep": true,
+	"rg": true, "head": true, "tail": true, "find": true, "tree": true, "du": true, "pwd": true, "npm": true, "pnpm": true, "yarn": true,
+	"cargo": true, "pytest": true, "python3": true, "node": true, "sort": true, "uniq": true, "diff": true, "stat": true, "file": true}
+
+// brLiteralProse: words that make the line a sentence ("git status do repo").
+var brLiteralProse = map[string]bool{"o": true, "a": true, "os": true, "as": true, "do": true, "da": true, "de": true, "pra": true, "para": true,
+	"the": true, "of": true, "my": true, "me": true, "e": true, "and": true, "que": true, "no": true, "na": true, "em": true, "um": true, "uma": true,
+	"por": true, "com": true, "to": true, "for": true, "with": true, "please": true, "ai": true, "so": true, "only": true, "all": true, "tudo": true}
+
+// brLiteralCmd: text IS a command line (first word a known program, the rest
+// flags, paths and words that are not prose), with no shell operators. It
+// runs as typed, through the sandbox and the permission check — the same
+// thing `!cmd` does, without the user having to know about `!`.
+func brLiteralCmd(text string) (string, bool) {
+	t := strings.TrimSpace(text)
+	if t == "" || len(t) > 200 || strings.ContainsAny(t, ";|&<>`$\n(){}\\") {
+		return "", false
+	}
+	f := strings.Fields(t)
+	if len(f) < 2 || len(f) > 12 || !brLiteralBins[f[0]] {
+		return "", false
+	}
+	shellish := false
+	for _, w := range f[1:] {
+		if brLiteralProse[strings.ToLower(strings.Trim(w, ",.?!"))] || strings.HasSuffix(w, "?") {
+			return "", false
+		}
+		if strings.HasPrefix(w, "-") || strings.ContainsAny(w, "./") {
+			shellish = true
+		}
+	}
+	if !shellish && f[0] != "git" && f[0] != "go" && f[0] != "make" && f[0] != "cat" && f[0] != "ls" && f[0] != "npm" && f[0] != "cargo" {
+		return "", false // "find usages", "file handling": prose that starts with a program name
+	}
+	return t, true
 }

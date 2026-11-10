@@ -42,6 +42,16 @@ func brRealFacts(cx *brCtx, f map[string]string) {
 				f["project.logs"] = strings.Join(logs, ",")
 			}
 		}
+	case "shell_cmd":
+		if c := cx.task.Slots["cmd"]; IsReadOnly(c) || cbReadCmd(c) {
+			f["shell.read"] = "1"
+		}
+	case "format":
+		if t := cx.task.Slots["file"]; t != "" {
+			if rel, ok := brProjectFile(root, t); ok {
+				f["format.file"] = rel
+			}
+		}
 	case "explain":
 		if t := cx.task.Slots["target"]; t != "" {
 			if rel, ok := brProjectFile(root, t); ok {
@@ -430,7 +440,7 @@ var brFmtCheckOnly = lazyRx(`(?i)\b(checa|checar|cheque|verifica|verificar|verif
 
 // brFmtDirty: the check command's result says files are out of format.
 func brFmtDirty(check, out string, exit int) bool {
-	if check == "gofmt -l ." {
+	if strings.HasPrefix(check, "gofmt -l ") {
 		return strings.TrimSpace(out) != ""
 	}
 	return exit != 0
@@ -440,6 +450,21 @@ func brFmtDirty(check, out string, exit int) bool {
 // on the second check, not on the formatter having run.
 func brFormat(cx *brCtx, check string) brStep {
 	fix := fpFmtFix(check)
+	if one := cx.facts["format.file"]; one != "" {
+		// "formata só o X": only that file, and only for a formatter that
+		// takes a path
+		if check != "gofmt -l ." {
+			return brStep{obs: rvNoCmd(), why: "formatar um arquivo só eu sei fazer com gofmt; o formatador deste projeto é `" + check + "`"}
+		}
+		q := brShQ(one)
+		check, fix = "gofmt -l "+q, "gofmt -w "+q
+		cx.say("só %s (o resto do projeto não é tocado)", one)
+		return brFormatRun(cx, check, fix, true)
+	}
+	return brFormatRun(cx, check, fix, check == "gofmt -l .")
+}
+
+func brFormatRun(cx *brCtx, check, fix string, gofmtList bool) brStep {
 	run := func(cmd string) (string, int, rvObs) {
 		cx.say("$ %s", cmd)
 		out, exit, obs := cx.runCmd(cmd, 10*time.Minute)
@@ -475,7 +500,7 @@ func brFormat(cx *brCtx, check string) brStep {
 	if brFmtDirty(check, out2, exit2) {
 		return brStep{val: brCmdRes{check, 1, out2}, obs: obs2, why: "rodei `" + fix + "` e ainda há arquivo fora do formato"}
 	}
-	if check == "gofmt -l ." {
+	if gofmtList {
 		cx.say("formatado: %d arquivo(s) reescrito(s); conferência depois: limpo (/undo ou git diff mostram o que mudou)", before)
 	} else {
 		cx.say("formatado; conferência depois: limpo")
@@ -525,8 +550,7 @@ func brIsDir(p string) bool {
 // typo repair leaves them alone.
 var fpRealWords = map[string]bool{"limpa": true, "limpe": true, "limpar": true, "limpo": true, "clean": true,
 	"pinta": true, "tinta": true, "quinta": true, "lista": true, "liste": true, "listar": true, "list": true,
-	"line": true, "lines": true, "link": true, "print": true, "hint": true, "mint": true, "resta": true, "festa": true,
-	"texto": true, "text": true, "build": true, "guild": true, "roda": true, "moda": true, "toda": true, "todo": true}
+	"line": true, "lines": true, "link": true, "print": true, "hint": true, "mint": true}
 
 var brWeekdayPT = [...]string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"}
 
@@ -613,4 +637,77 @@ func brResolveThere(part string, prev Intent) string {
 		return part
 	}
 	return brThereRe.ReplaceAllString(part, "pra pasta "+prev.Slots["target"])
+}
+
+func brHasFlag(cmd string) bool {
+	for _, w := range strings.Fields(cmd)[1:] {
+		if strings.HasPrefix(w, "-") {
+			return true
+		}
+	}
+	return false
+}
+
+// brGitWriteSub: git subcommands that change the repository keep going
+// through their own intents (message checks, postconditions, confirmation).
+func brGitWriteSub(cmd string) bool {
+	f := strings.Fields(cmd)
+	if len(f) < 2 || f[0] != "git" {
+		return false
+	}
+	switch f[1] {
+	case "commit", "push", "pull", "stash", "checkout", "switch", "reset", "rebase", "merge", "clean", "rm", "branch", "restore", "add", "tag", "fetch", "cherry-pick", "revert", "init", "clone", "config":
+		return true
+	}
+	return false
+}
+
+// brLiteralRun runs the command line the user typed (brLiteralCmd), re-derived
+// from the request itself.
+func brLiteralRun(cx *brCtx, in map[string]string) brStep {
+	obs := rvNoCmd()
+	cmd, ok := brLiteralCmd(cx.task.Goal)
+	if !ok || cmd != cx.str(in, "cmd") {
+		return brStep{obs: obs, why: "a linha de comando não corresponde mais ao pedido"}
+	}
+	read := IsReadOnly(cmd) || cbReadCmd(cmd)
+	out, exit, o := cx.runCmdAs(cmd, 10*time.Minute, read)
+	if o.Exit < 0 || o.Denied || o.BudgetLeft == 0 {
+		return brStep{obs: o, why: o.Output}
+	}
+	shown := strings.TrimRight(truncateHeadTail(redactSecrets(out), 6000), "\n")
+	if shown == "" {
+		shown = fmt.Sprintf("(sem saída, exit %d)", exit)
+	}
+	cx.say("$ %s\n%s", cmd, shown)
+	cx.task.AddEvidence("cmd", fmt.Sprintf("%s: exit %d", cmd, exit))
+	if exit == 126 || exit == 127 {
+		return brStep{val: brCmdRes{cmd, exit, out}, obs: o, why: strings.Fields(cmd)[0] + " não rodou (exit " + strconv.Itoa(exit) + ")"}
+	}
+	return brStep{val: brCmdRes{cmd, exit, out}, obs: o, ok: true}
+}
+
+// brPartialMulti: the request has two clauses, the split was not accepted
+// (one part is not understood well enough to run), and the whole-request
+// reading answers only one of them. Doing half and sealing it is a false
+// success ("conta as linhas do X e mostra os erros dele" counted the lines and
+// stopped). "" = not that case ("procura por TODO e FIXME" is one request).
+func brPartialMulti(parts []string, whole Intent, w *nuWorld) string {
+	if whole.Phrase || !whole.Understood() {
+		return ""
+	}
+	other := 0
+	for _, p := range parts {
+		if len(strings.Fields(p)) < 2 {
+			return "" // a one-word tail is an operand, not a clause
+		}
+		pi := nuGet().Parse(p, w)
+		if pi.Name != "none" && pi.Name != whole.Name && pi.Raw >= 0.4 {
+			other++
+		}
+	}
+	if other == 0 {
+		return ""
+	}
+	return fmt.Sprintf("o pedido tem %d partes e eu só entendi bem uma delas (%s). fazer metade e dizer que fiz seria errado: não fiz nada. peça uma parte de cada vez: %s", len(parts), whole.Name, "\""+strings.Join(parts, "\" · \"")+"\"")
 }

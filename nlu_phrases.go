@@ -256,6 +256,8 @@ var nuPhrases = []*nuPhraseDef{
 		pats: []string{
 			`(?:quais|que|lista|liste|list|mostra|mostre|show|show me)(?: sao)?(?: as| os| the)? ?(?:variaveis|chaves|keys|vars|variables|nomes)(?: que)?(?: tem| existem| estao| are| ha)?(?: definidas| defined| set)? (?:no|na|em|do|in|of|from) (?:the )?(?P<envfile>\.env[\w.]*)`,
 			`(?:what(?:'s| is)|o que (?:tem|ha)) (?:in|no|na|em) (?:the )?(?P<envfile>\.env[\w.]*)`,
+			`(?:which|what) (?:variables|keys|vars) does (?:the )?(?P<envfile>\.env[\w.]*) (?:expect|need|define|have|contain|list|declare|use)`,
+			`(?:quais|que) (?:variaveis|chaves) (?:o |a )?(?P<envfile>\.env[\w.]*) (?:espera|precisa|define|tem|declara|usa)`,
 		}},
 	{id: "variavel-no-env", intent: "env_get", groups: map[string]string{"name": "name"},
 		pats: []string{
@@ -288,6 +290,48 @@ var nuPhrases = []*nuPhraseDef{
 			`(?:cria|crie|criar|create|make|touch)(?: um| uma| an?| o| the)?(?: novo| new)?(?: arquivo| file)?(?: vazio| empty)?(?: arquivo| file)?(?: chamado| com o nome| de nome| called| named)? (?P<newfile>[\w][\w./-]{0,120}\.[A-Za-z0-9]{1,8})`,
 		},
 		prepare: func(g map[string]string, w *nuWorld) bool { _, exists := nuWorldFile(w, g["newfile"]); return !exists }},
+	{id: "linha-n-do-arquivo", intent: "line_slice", groups: map[string]string{"n": "start", "m": "end", "file": "file"},
+		pats: []string{
+			nuPhShow + `(?:a |the )?(?:linha|line) (?P<n>\d{1,6}) (?:do|da|de|of|in|from) ` + nuPhFile,
+			nuPhShow + `(?:as |the )?(?:linhas|lines) (?P<n>\d{1,6}) (?:a|ate|to|through|-) (?P<m>\d{1,6}) (?:do|da|de|of|in|from) ` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			if g["m"] == "" {
+				g["m"] = g["n"]
+			}
+			return true
+		}},
+	{id: "colunas-do-csv", intent: "csv_sum", fixed: map[string]string{"op": "count"}, groups: map[string]string{"file": "file"},
+		pats: []string{
+			`(?:quais|que)(?: sao as)? colunas (?:tem|ha|existem|do|da|de)(?: o| a| no| na)? ?` + nuPhFile,
+			`(?:what|which) columns (?:are in|does|is in)(?: the)? ` + nuPhFile + `(?: have| contain)?`,
+			`(?:colunas|columns|cabecalho|header) (?:do|da|de|of) ` + nuPhFile,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			return strings.HasSuffix(strings.ToLower(g["file"]), ".csv")
+		}},
+	{id: "primeiro-erro-do-log", intent: "log_errors_recent", groups: map[string]string{"file": "file"},
+		pats: []string{
+			`(?:qual|quais|what|which)(?: e| foi| foram| was| is| were)?(?: o| os| the)? ?(?:primeiro|ultimo|primeiros|ultimos|first|last)? ?(?:erros?|errors?)(?: que)?(?: apareceu| apareceram| aconteceu| rolou| deu| happened| showed up)? (?:no|na|em|do|in|of|from) (?:the )?` + nuPhFile,
+		}},
+	{id: "formata-um-arquivo", intent: "format", groups: map[string]string{"file": "file"},
+		pats: []string{
+			`(?:formata|formate|formatar|format|gofmt)(?: so| somente| apenas| only| just)?(?: o| a| the)? ` + nuPhFile + `(?:[, ]+(?:o resto|e so|so ele|only that|nothing else|leave the rest).*)?`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { return strings.HasSuffix(g["file"], ".go") }},
+	{id: "cria-pasta-nomeada", intent: "create", fixed: map[string]string{"type": "dir"}, groups: map[string]string{"newdir": "target"},
+		pats: []string{
+			`(?:cria|crie|criar|create|make|mkdir|faz)?(?: uma| a| an?| the)?(?: nova| new)? ?(?:pasta|diretorio|folder|directory|dir)(?: nova| novo)?(?: chamad[oa]| com o nome| de nome| called| named)? (?P<newdir>[\w][\w./-]{0,120})`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool {
+			return !brCreateStop[strings.ToLower(g["newdir"])] && !nuWorldDir(w, g["newdir"]) && !strings.Contains(g["newdir"], "..")
+		}},
+	{id: "variavel-do-env-en", intent: "env_get", groups: map[string]string{"lname": "name"},
+		pats: []string{
+			`(?:what|which) (?P<lname>[a-z][a-z0-9_]{1,40}) (?:does|is)(?: the)? \.env[\w.]* (?:set|setting|use|using|define|have)`,
+			`(?:qual|que) (?P<lname>[a-z][a-z0-9_]{1,40}) (?:o |a )?\.env[\w.]* (?:define|usa|seta|tem)`,
+		},
+		prepare: func(g map[string]string, w *nuWorld) bool { g["lname"] = strings.ToUpper(g["lname"]); return true }},
 	{id: "cria-e-muda-branch", intent: "git_branch", fixed: map[string]string{"op": "create"}, groups: map[string]string{"name": "name"},
 		pats: []string{
 			`(?:cria|crie|criar|create) (?:e |and )(?:ja )?(?:muda|mude|mudar|troca|trocar|vai|ir|switch|checkout|go)(?: to)? (?:pra|para|pro|to)?(?: a| the)? ?(?:branch |ramo )?(?P<name>[A-Za-z0-9][\w./-]{0,79})`,
@@ -315,7 +359,7 @@ var nuPhrases = []*nuPhraseDef{
 			case "nova", "novo", "new", "chamada", "chamado", "called", "named", "pra", "para", "aqui", "branch", "ramo", "isso", "uma", "de":
 				return false
 			}
-			return brGitRefRe.MatchString(g["name"]) && !strings.Contains(g["name"], "..")
+			return len(g["name"]) >= 2 && brGitRefRe.MatchString(g["name"]) && !strings.Contains(g["name"], "..")
 		}},
 	{id: "stash", intent: "git_stash", fixed: map[string]string{"op": "push"},
 		pats: []string{

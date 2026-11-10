@@ -376,6 +376,7 @@ func init() {
 		"dotenv_get":      brDotenvGet,
 		"dotenv_keys":     brDotenvKeys,
 		"fast_cmd":        brFastCmd,
+		"literal_cmd":     brLiteralRun,
 		"log_errors_file": brLogErrorsFile,
 		"csv_sum":         brCSVSum,
 		"list_names":      brListNames,

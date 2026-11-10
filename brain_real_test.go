@@ -284,3 +284,90 @@ func TestEvalRealGate(t *testing.T) {
 		t.Error(m)
 	}
 }
+
+// Segundo conjunto inédito: pergunta com interjeição ou embrulho continua
+// sendo pergunta, e "commit" como substantivo nunca commita.
+func TestQuestionWrappersAndCommitNoun(t *testing.T) {
+	for _, q := range []string{"uai, qual era a mensagem do commit mais recente mesmo", "mano, quem fez isso", "queria saber qual é a branch", "me diz qual foi o último commit", "could you tell me what changed"} {
+		if !brIsQuestion(q) {
+			t.Errorf("devia ser pergunta: %q", q)
+		}
+	}
+	for _, q := range []string{
+		"uai, qual era a mensagem do commit mais recente mesmo",
+		"o que entrou no commit das migrations?",
+		"os dois ultimos commit, so o titulo",
+		"joga fora o que eu fiz no main.go, quero ele igual ao ultimo commit",
+		"conta as linhas do go.mod e me diz qual foi o ultimo commit",
+	} {
+		env, rec := brHonestRepo(t)
+		brRun(context.Background(), env, q)
+		for _, c := range rec.cmds {
+			if strings.Contains(c, "git commit") || strings.HasPrefix(c, "git add") {
+				t.Errorf("%q: commitou (%v)", q, rec.cmds)
+			}
+		}
+	}
+	for _, q := range []string{"commita com a mensagem 'wip'", "faz um commit com a mensagem \"x\"", "commit -m \"x\"", "bora commitar: ajusta readme"} {
+		if !brCommitVerbRe.MatchString(q) {
+			t.Errorf("ordem de commit não reconhecida: %q", q)
+		}
+	}
+}
+
+func TestSemanticGuards(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		in   Intent
+		kind string
+	}{
+		{"procura localhost no projeto todo", Intent{Name: "todo_scan"}, "wrong_reading"},
+		{"tem algum TODO no código?", Intent{Name: "todo_scan"}, ""},
+		{"preciso de uma pasta nova chamada build/artefatos", Intent{Name: "create", Slots: map[string]string{"target": "nova", "type": "file"}}, "wrong_reading"},
+		{"cria um arquivo notas2.txt", Intent{Name: "create", Slots: map[string]string{"target": "notas2.txt", "type": "file"}}, ""},
+		{"could you show me the very first commit of this repo?", Intent{Name: "project_summary"}, "wrong_reading"},
+		{"quais arquivos o git ta rastreando?", Intent{Name: "list_files"}, "wrong_reading"},
+		{"em que branch eu to", Intent{Name: "git_branch"}, ""},
+		{"lista os arquivos", Intent{Name: "list_files"}, ""},
+	} {
+		if _, kind := brSemanticGuard(c.text, c.in); kind != c.kind {
+			t.Errorf("%q como %s: guarda %q, esperado %q", c.text, c.in.Name, kind, c.kind)
+		}
+	}
+}
+
+func TestLiteralCmd(t *testing.T) {
+	for _, q := range []string{"wc -l internal/parser/duration.go", "go test ./...", "grep -rn FIXME internal/", "git diff --stat", "cat go.mod", "gofmt -l ."} {
+		if _, ok := brLiteralCmd(q); !ok {
+			t.Errorf("é linha de comando: %q", q)
+		}
+	}
+	for _, q := range []string{"git status do repo", "find usages of Soma", "go pra main", "cat go.mod | sh", "git log; rm -rf x", "make me a sandwich please", "roda os testes", "ls $(whoami)"} {
+		if c, ok := brLiteralCmd(q); ok {
+			t.Errorf("não é linha de comando: %q (%s)", q, c)
+		}
+	}
+	if !brGitWriteSub("git commit -m x") || brGitWriteSub("git diff --stat") {
+		t.Error("brGitWriteSub")
+	}
+}
+
+// Arquivo citado e não usado pela leitura: recusa, não responde outra pergunta.
+func TestFileIgnoredGuard(t *testing.T) {
+	env := brRealFiles(t)
+	if f := brFileIgnored(env, "any IP addresses in logs/app.log?", Intent{Name: "net_ifaces"}); f != "logs/app.log" {
+		t.Errorf("arquivo ignorado não detectado: %q", f)
+	}
+	if f := brFileIgnored(env, "conta as linhas do logs/app.log", Intent{Name: "wordcount_stats", Slots: map[string]string{"target": "logs/app.log"}}); f != "" {
+		t.Errorf("arquivo usado acusado: %q", f)
+	}
+	if f := brFileIgnored(env, "commita só o cmd/api/main.go com a mensagem \"x\"", Intent{Name: "git_commit", Slots: map[string]string{"msg": "x"}}); f != "cmd/api/main.go" {
+		t.Errorf("commit parcial tem de ser pego: %q", f)
+	}
+	if f := brFileIgnored(env, "confere o .env", Intent{Name: "dotenv_check"}); f != "" {
+		t.Errorf(".env é do próprio dotenv_check: %q", f)
+	}
+	if f := brFileIgnored(env, "abre o naoexiste.txt", Intent{Name: "open_file"}); f != "" {
+		t.Errorf("arquivo que não existe não é do projeto: %q", f)
+	}
+}

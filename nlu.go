@@ -60,6 +60,7 @@ type Intent struct {
 	Dropped    []string          `json:"dropped,omitempty"`   // quoted/role operands no slot consumed — "pattern 'x'" num intent sem pattern
 	Git        bool              `json:"git,omitempty"`       // the request names git/repo explicitly
 	TypoOnly   bool              `json:"typo_only,omitempty"` // the intent stands only on a typo-repaired word (conf capped ≤ 0.5)
+	Residual   int               `json:"residual,omitempty"`  // words of the request the grammar could not place (no concept, no slot)
 	Phrase     bool              `json:"phrase,omitempty"`    // a whole-request phrase read it (nlu_phrases.go): never split it on "e"
 }
 
@@ -2112,6 +2113,16 @@ func (m *nuModel) Parse(text string, w *nuWorld) Intent {
 	}
 	in := m.parseGrammar(text, w)
 	if !in.Understood() && m != nil && m.loadErr == nil {
+		// the request wrapped in conversation ("dá pra listar as branches
+		// desse repo?", "preciso ver ...", "mano, ..."): read it once more
+		// without the wrapper. Only a reading the grammar itself is sure of
+		// counts; the wrapper never adds confidence.
+		if bare := fpNormalize(strings.TrimSpace(text)); bare != "" && len(bare)+3 < len(strings.TrimSpace(text)) {
+			if in2 := m.parseGrammar(bare, w); in2.Understood() && in2.Confidence >= 0.85 {
+				in2.Evidence = append(in2.Evidence, "lido sem o embrulho: \""+bare+"\"")
+				return in2
+			}
+		}
 		if fixed, ok := nuPhraseRepair(strings.TrimSpace(text), w); ok {
 			return fixed
 		}
@@ -6476,7 +6487,9 @@ func (m *nuModel) parseGrammar(text string, w *nuWorld) Intent {
 			in.Evidence = append(in.Evidence, fmt.Sprintf("'%s' não parece nome de arquivo", v))
 		}
 	}
-	if res := m.residualCount(toks, used, taken); res >= 3 {
+	res := m.residualCount(toks, used, taken)
+	in.Residual = res
+	if res >= 3 {
 		conf *= 0.6 // a long free-form request is a job for the model, not a template
 		in.Evidence = append(in.Evidence, fmt.Sprintf("%d palavras fora da gramática: pedido livre", res))
 	}

@@ -1,0 +1,4 @@
+{"methods": [
+ {"name": "shell_cmd.read", "intent": "shell_cmd", "priority": 20, "doc": "o pedido é uma linha de comando só de leitura digitada crua: roda como veio (sandbox + permissão)", "pre": [{"fact": "slot.cmd", "op": "set"}, {"fact": "shell.read", "op": "set"}], "steps": [{"cap": "literal_cmd", "in": {"cmd": "$slot.cmd"}, "out": "r"}], "verify": [{"check": "cmd_ran", "arg": "$r"}], "risk": "low", "cost_ms": 500},
+ {"name": "shell_cmd.write", "intent": "shell_cmd", "priority": 10, "doc": "linha de comando digitada crua que pode mudar coisa (go test, make, gofmt -w): passa pela permissão; o selo exige exit 0", "pre": [{"fact": "slot.cmd", "op": "set"}, {"fact": "shell.read", "op": "unset"}], "steps": [{"cap": "literal_cmd", "in": {"cmd": "$slot.cmd"}, "out": "r"}], "verify": [{"check": "cmd_ran", "arg": "$r"}], "risk": "high", "cost_ms": 20000}
+]}

@@ -57,6 +57,14 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		w = nuRuntimeWorld(env.Root, env.Profile)
 	}
 	in := nuGet().Parse(text, w)
+	if cmd, ok := brLiteralCmd(text); ok && !in.Phrase && (!in.Understood() || in.Confidence < brActMin(in) || brHasFlag(cmd)) && !brGitWriteSub(cmd) {
+		// the request is a command line typed as is ("wc -l x.go", "go test
+		// ./...", "grep -rn FIXME internal/"): run it as typed instead of
+		// guessing an intent from its words
+		in = Intent{Name: "shell_cmd", Slots: map[string]string{"cmd": cmd}, Confidence: 1, Raw: 1, Phrase: true,
+			Evidence: []string{"linha de comando digitada"}}
+		return brRunIntent(ctx, env, text, in, res)
+	}
 	res.Intent = in
 	// multi-intent: "lista os arquivos e mostra o git status" — accept the
 	// split only when EVERY part parses to a CONFIDENT intent (the act
@@ -100,6 +108,10 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 		}
 		if len(ins) == len(parts) {
 			return brRunMulti(ctx, env, parts, ins, chain)
+		}
+		if why := brPartialMulti(parts, in, w); why != "" {
+			res.Miss, res.MissWhy, res.Text, res.Req = true, "partial_multi", why, text
+			return res
 		}
 	}
 	return brRunIntent(ctx, env, text, in, res)

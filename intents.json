@@ -41,7 +41,8 @@
       "patterns": [
         "git status|git st|status|status do git|status do repo|status do repositorio",
         "(?:mostra|mostre|me mostra|ver|show|show me)(?: o| the)? (?:git )?status(?: do git| do repo| do repositorio)?",
-        "qual (?:o|e o) status(?: do git| do repo| do repositorio)?"
+        "qual (?:o|e o) status(?: do git| do repo| do repositorio)?",
+        "(?:is|e) (?:my|the|a|minha)? ?(?:working tree|worktree|arvore|working dir|repo)(?: de trabalho)? (?:clean|limpa|limpo|dirty|suja)|(?:ta|esta) tudo commitado|tem (?:algo|alguma coisa|mudanca) (?:pra|para) commitar|anything to commit|(?:o que|oque) (?:ta|esta) (?:diferente|pendente|modificado)(?: no repo| aqui| ate agora)?"
       ]
     },
     {
@@ -93,7 +94,8 @@
       "cmd": "{{git}} status --short --untracked-files=all",
       "patterns": [
         "(?:tem|ha|existe)(?: algum| algums| alguns)? arquivos?(?: novos?)? (?:untracked|nao rastreados?|nao versionados?|fora do git)|(?:quais|que)(?: sao os)? arquivos (?:estao |tao )?(?:untracked|nao rastreados|nao versionados)|arquivos untracked|o que (?:ta|esta) untracked",
-        "(?:any|are there(?: any)?|what are the|list|show|show me)(?: the)? untracked files|untracked files|what(?:'s| is) untracked"
+        "(?:any|are there(?: any)?|what are the|list|show|show me)(?: the)? untracked files|untracked files|what(?:'s| is) untracked",
+        "(?:anything|something|any files?)(?: here| in here)? (?:that )?(?:isn't|is not|aren't|not) (?:tracked|in git|versioned|committed)(?: yet)?(?: by git)?|(?:tem|ha) (?:algo|alguma coisa|algum arquivo) (?:fora do git|sem versionar|nao versionado|que nao (?:ta|esta) no git)"
       ]
     },
     {
@@ -109,8 +111,6 @@
       "cmd": "{{git}} diff -- {{path}}",
       "patterns": [
         "(?:(?:mostra|mostre|me mostra|ver|show|show me) )?(?:o |the )?diff (?:do|da|de|of|for|in|no|na) (?:arquivo |file )?(?P<path>[\\w./-]+)",
-        "(?:o que|oque) (?:mudou|eu mudei|foi alterado) (?:no|na|em) (?:arquivo )?(?P<path>[\\w./-]+\\.[A-Za-z0-9]+)",
-        "what changed in (?P<path>[\\w./-]+\\.[A-Za-z0-9]+)",
         "git diff (?P<path>[\\w./-]+)"
       ],
       "slots": {
@@ -172,11 +172,28 @@
       ]
     },
     {
+      "name": "first_commit",
+      "cmd": "{{git}} log --reverse --format='%h %an %ad %s' --date=short | head -n 1",
+      "patterns": [
+        "(?:(?:qual|qual e|qual foi|mostra|mostre|me mostra|ver) )?(?:o )?(?:primeiro commit|commit inicial|commit mais antigo)(?: (?:do|deste|desse|do meu) (?:repo|repositorio|projeto))?",
+        "(?:(?:what was|what is|whats|show|show me) )?(?:the )?(?:very )?(?:first|initial|oldest|earliest) commit(?: (?:of|in) (?:this|the) (?:repo|repository|project))?"
+      ]
+    },
+    {
+      "name": "tracked_files",
+      "cmd": "{{git}} ls-files",
+      "patterns": [
+        "(?:quais|que) arquivos (?:o git )?(?:ta|esta|tao|estao) (?:rastreando|rastreados|versionando|versionados|no git|sendo rastreados)(?: pelo git)?|arquivos (?:rastreados|versionados)(?: pelo git)?|git ls-files",
+        "(?:which|what) files (?:is git tracking|does git track|are tracked(?: by git)?)|tracked files|(?:list|show)(?: the)? tracked files"
+      ]
+    },
+    {
       "name": "log",
       "cmd": "{{git}} log --oneline -n 15",
       "patterns": [
         "(?:os )?ultimos commits|git log|recent commits|(?:the )?last commits|historico(?: de commits| do git)?",
-        "(?:mostra|mostre|me mostra|show|show me)(?: os| the)? (?:ultimos |last |recent )?commits"
+        "(?:mostra|mostre|me mostra|show|show me)(?: os| the)? (?:ultimos |last |recent )?commits",
+        "(?:(?:mostra|lista|list|show|show me) )?(?:todos os commits|every commit|all(?: the)? commits|o historico inteiro|the (?:full|whole) history)(?: .*)?"
       ]
     },
     {
