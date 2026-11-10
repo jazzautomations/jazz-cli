@@ -23,6 +23,18 @@ import (
 var mcWriteCaps = map[string]bool{"file_op": true, "text_op": true, "archive_op": true, "perm_op": true, "git_op": true,
 	"proc_kill": true, "pkg_cmd": true, "container_op": true, "undo": true, "mkdir_in": true, "save_list": true, "learned_cmd": true}
 
+// mcStepWrites refina a tabela por step: text_op com op=sort e sem destino
+// (to/inplace) só despeja o conteúdo ordenado na resposta — brTextSort nem
+// abre o arquivo pra escrita. Qualquer outro text_op reescreve o arquivo.
+func mcStepWrites(s mhStep) bool {
+	if s.Cap == "text_op" && s.In["op"] == "sort" {
+		_, to := s.In["to"]
+		_, inplace := s.In["inplace"]
+		return to || inplace
+	}
+	return mcWriteCaps[s.Cap]
+}
+
 var mcSlotRef = regexp.MustCompile(`\$slot\.([a-zA-Z_][a-zA-Z0-9_]*)`)
 
 func mcViolations(t *testing.T) []string {
@@ -48,7 +60,7 @@ func mcViolations(t *testing.T) []string {
 				if brCap(s.Cap) == nil && !strings.HasPrefix(s.Cap, "script:") {
 					add("cap-desconhecida", me.Name, s.Cap)
 				}
-				writes = writes || mcWriteCaps[s.Cap]
+				writes = writes || mcStepWrites(s)
 				runs = runs || s.Cap != "report" && s.Cap != "ask_slot" && s.Cap != "say"
 				for _, v := range s.In {
 					for _, r := range mcSlotRef.FindAllStringSubmatch(v, -1) {
