@@ -630,6 +630,29 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
     </ol>
   </div>
 </section>
+<!-- ============ CASCA ============ -->
+<section class="section" id="casca" aria-labelledby="casca-title">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="kicker mono">07 · <span data-l="pt">da mesma bancada</span><span data-l="en" lang="en">from the same bench</span></p>
+      <h2 id="casca-title"><span data-l="pt">casca: os outros agentes, a partir do mesmo Dell.</span><span data-l="en" lang="en">casca: the other agents, from the same Dell.</span></h2>
+      <p class="sec-lede"><span data-l="pt">O jazz roda no notebook velho. Claude Code, Codex e Devin não. O casca abre esses nas suas outras máquinas, por ssh + tmux.</span><span data-l="en" lang="en">jazz runs on the old laptop. Claude Code, Codex and Devin don't. casca opens those on your other machines, over ssh + tmux.</span></p>
+    </header>
+    <div class="story-grid sibling">
+      <div class="prose">
+        <p data-l="pt">É um binário Go estático (<code>linux/386</code>, 6,3 MB) com uma janela GTK3: os hosts e as sessões tmux vivas em cada um ficam na lateral, e um clique abre o agente. Ele só transporta o terminal; o agente roda no host, dentro de tmux, então fechar a janela ou perder o WiFi não mata nada. Quando a rede volta, ele reanexa sozinho.</p>
+        <p data-l="en" lang="en">It is a static Go binary (<code>linux/386</code>, 6.3 MB) with a GTK3 window: the hosts and the tmux sessions alive on each sit in the sidebar, and one click opens the agent. It only carries the terminal; the agent runs on the host, inside tmux, so closing the window or losing WiFi kills nothing. When the network comes back, it reattaches by itself.</p>
+        <p data-l="pt">O <code>jazz</code> já vem na lista de agentes do casca, ao lado de <code>claude</code>, <code>codex</code> e <code>devin</code>. Código aberto (MIT), projeto novo: ainda sem binários prontos e com estado do agente só aproximado.</p>
+        <p data-l="en" lang="en"><code>jazz</code> ships in casca's agent list, next to <code>claude</code>, <code>codex</code> and <code>devin</code>. Open source (MIT), a new project: no prebuilt binaries yet, and the agent state is only approximate.</p>
+        <p><a href="https://casca.jazzautomations.com.br">casca.jazzautomations.com.br</a> · <a href="https://github.com/jazzautomations/casca">GitHub</a></p>
+      </div>
+      <figure class="sibling-fig">
+        <a href="https://casca.jazzautomations.com.br"><img src="/assets/casca.png" width="1000" height="676" loading="lazy" alt="Janela do casca: hosts e sessões vivas na lateral, e a lista para abrir shell, claude, codex ou devin em cada host."></a>
+        <figcaption><span data-l="pt">A janela do casca, com hosts de demonstração.</span><span data-l="en" lang="en">The casca window, with demo hosts.</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
 </main>
 
 <footer class="site-footer">
@@ -643,6 +666,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <p class="f-h mono"><span data-l="pt">projeto</span><span data-l="en" lang="en">project</span></p>
       <a href="/docs"><span data-l="pt">Documentação</span><span data-l="en" lang="en">Documentation</span></a>
       <a href="https://github.com/jazzautomations/jazz-cli">GitHub</a>
+      <a href="https://casca.jazzautomations.com.br">casca</a>
       <a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" data-l="pt">README</a><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.en.md" data-l="en" lang="en">README</a>
       <a href="https://github.com/jazzautomations/jazz-cli/blob/main/SECURITY.md">SECURITY.md</a>
       <a href="https://github.com/jazzautomations/jazz-cli/blob/main/CHANGELOG.md">CHANGELOG</a>
