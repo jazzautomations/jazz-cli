@@ -190,6 +190,8 @@ func cmdEval(root string, args []string, w io.Writer) int {
 }
 
 // eoGateList reads the known-failing ids (one per line; blank lines and # comments ignored).
+// An id prefixed with "~" depends on the host (e.g. a working systemd): it may
+// pass or fail without tripping the gate; the map value is false for those.
 func eoGateList(path string) (map[string]bool, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -201,7 +203,7 @@ func eoGateList(path string) (map[string]bool, error) {
 			l = l[:i]
 		}
 		if l = strings.TrimSpace(l); l != "" {
-			known[l] = true
+			known[strings.TrimPrefix(l, "~")] = !strings.HasPrefix(l, "~")
 		}
 	}
 	return known, nil
@@ -215,10 +217,11 @@ func eoGateCheck(rep *eoReport, known map[string]bool) []string {
 	seen := map[string]bool{}
 	for _, r := range rep.Tasks {
 		seen[r.ID] = true
+		must, listed := known[r.ID]
 		switch {
-		case len(r.Fail) > 0 && !known[r.ID]:
+		case len(r.Fail) > 0 && !listed:
 			msgs = append(msgs, "REGRESSÃO: "+r.ID+" falhou e não está na lista de falhas conhecidas")
-		case len(r.Fail) == 0 && known[r.ID]:
+		case len(r.Fail) == 0 && listed && must:
 			msgs = append(msgs, "passou: "+r.ID+" — tire da lista de falhas conhecidas")
 		}
 	}
