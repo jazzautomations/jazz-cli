@@ -166,6 +166,10 @@
    "not_orphan": {
     "type": "boolean",
     "description": "only symlinks whose target exists"
+   },
+   "namelen": {
+    "type": "string",
+    "description": "exact base-name length: a number ('5') or a ?-glob ('?????')"
    }
   }
  },

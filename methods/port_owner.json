@@ -23,6 +23,6 @@
   "steps": [
    {"cap": "read_cmd", "in": {"cmd": "ss -tln"}, "out": "ports"},
    {"cap": "report", "in": {"text": "dizer quem é o dono da porta usa o script port_free, que precisa de python3 — as portas abertas estão acima", "status": "blocked", "category": "command_missing"}}],
-  "verify": [],
+  "verify": [{"check": "cmd_ran", "arg": "$ports"}],
   "risk": "low", "cost_ms": 200}
 ]}

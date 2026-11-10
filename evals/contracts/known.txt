@@ -1,13 +1,3 @@
 # Violações de contrato conhecidas (methods_contract_test.go). Só pode encolher.
 # Cada linha é uma dívida: ou conserta o asset, ou explica aqui por que é exceção.
-escrita-com-risco-baixo sort_op.print
-sem-verificador _fill.by_find
-sem-verificador connect_host.resolve
-sem-verificador port_owner.no_python
-slot-sem-consumidor file_find.namelen
-slot-sem-consumidor file_find.not_empty
-slot-sem-consumidor file_find.not_orphan
-slot-sem-consumidor list_files.newer_file
-slot-sem-consumidor list_files.older_file
-slot-sem-consumidor perm_find.not_writable
-slot-sem-consumidor perm_find.writable
+sem-verificador connect_host.resolve # exceção: o método só resolve o host e devolve o comando sugerido — não abre conexão remota; verificar "conectou" seria falso sucesso (o eval offline espera 'unverified')

@@ -22,6 +22,8 @@
       "name": "$slot.namepat",
       "ext": "$slot.ext",
       "type": "$slot.type",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
       "limit": "500"
      },
      "out": "res"
@@ -70,6 +72,8 @@
       "name": "$slot.namepat",
       "ext": "$slot.ext",
       "type": "$slot.type",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
       "limit": "50"
      },
      "out": "lst"
@@ -109,6 +113,92 @@
       "path": "$slot.dir",
       "ext": "$slot.ext",
       "type": "file",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
+      "limit": "50"
+     },
+     "out": "lst"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$lst"
+    },
+    {
+     "check": "nonempty",
+     "arg": "$lst"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 300
+  },
+  {
+   "name": "list_files.newer",
+   "intent": "list_files",
+   "priority": 11,
+   "doc": "'mais novos que X': a referência temporal vira filtro do file_find em vez de listagem sem filtro",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.newer_file",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.namepat",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
+      "limit": "50"
+     },
+     "out": "lst"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$lst"
+    },
+    {
+     "check": "nonempty",
+     "arg": "$lst"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 300
+  },
+  {
+   "name": "list_files.older",
+   "intent": "list_files",
+   "priority": 11,
+   "doc": "'mais velhos que X': idem pro lado older_file",
+   "needs": [
+    "bin.python3"
+   ],
+   "pre": [
+    {
+     "fact": "slot.older_file",
+     "op": "set"
+    }
+   ],
+   "steps": [
+    {
+     "cap": "script:file_find",
+     "in": {
+      "path": "$slot.dir",
+      "name": "$slot.namepat",
+      "ext": "$slot.ext",
+      "type": "$slot.type",
+      "newer_file": "$slot.newer_file",
+      "older_file": "$slot.older_file",
       "limit": "50"
      },
      "out": "lst"
@@ -135,6 +225,16 @@
    "needs": [
     "bin.python3"
    ],
+   "pre": [
+    {
+     "fact": "slot.newer_file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.older_file",
+     "op": "unset"
+    }
+   ],
    "steps": [
     {
      "cap": "script:tree_summary",
@@ -159,6 +259,16 @@
    "intent": "list_files",
    "priority": 5,
    "doc": "sem python3: lista as entradas da pasta (read_file entende diretório)",
+   "pre": [
+    {
+     "fact": "slot.newer_file",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.older_file",
+     "op": "unset"
+    }
+   ],
    "steps": [
     {
      "cap": "read_file",

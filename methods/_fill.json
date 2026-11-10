@@ -29,6 +29,9 @@
       "newer_min": "$slot.newer",
       "older_min": "$slot.older",
       "empty": "$slot.empty",
+      "not_empty": "$slot.not_empty",
+      "not_orphan": "$slot.not_orphan",
+      "namelen": "$slot.namelen",
       "limit": "1"
      },
      "out": "cand"
@@ -43,7 +46,12 @@
      "out": "slot.target"
     }
    ],
-   "verify": [],
+   "verify": [
+    {
+     "check": "file_exists",
+     "arg": "$slot.target"
+    }
+   ],
    "risk": "low",
    "cost_ms": 1600,
    "pre": [
