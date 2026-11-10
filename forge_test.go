@@ -365,6 +365,17 @@ func TestForgeMutatingListCoversRisk(t *testing.T) {
 // The command: usage, exit codes and --json.
 func TestForgeCommand(t *testing.T) {
 	o := fgTestHome(t)
+	// cmdForge splits held-in/held-out with the per-install random key; a new
+	// test home means a new key on every run, and with some splits the second
+	// paraphrase below does not classify on the candidate (1 run in ~14 failed,
+	// on main too). A fixed key makes the command test deterministic; the
+	// split's own properties are covered by the tests that pass fgOpts.Seed.
+	if err := os.MkdirAll(filepath.Join(dataDir(), "forge"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir(), "forge", "split.key"), []byte("jazz-forge-command-test-key-0001"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if cmdForge([]string{"--nope"}, &strings.Builder{}) != 2 {
 		t.Error("flag desconhecida = uso (2)")
 	}

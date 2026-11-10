@@ -229,7 +229,7 @@ var (
 
 var (
 	brCommitNounRe = lazyRx(`\b(?:ultimo|último|last|latest|primeiro|first|penultimo|penúltimo|previous|anterior) commit\b|\bno commit\b|\bin the (?:last |latest )?commit\b|\bcommit (?:anterior|passado|mais recente)\b`)
-	brSummaryAskRe = lazyRx(`\b(resumo|resume|resuma|sumario|sumário|summary|summari[sz]e|overview|visao geral|visão geral|sobre o que|que projeto|what is this|what's this|describe|descreve|descreva|detecta|detect|stack|tecnologias|linguagens?|languages?|como (?:roda|builda|testa)|how (?:do i|to) (?:run|build|test))\b`)
+	brSummaryAskRe = lazyRx(`\b(explica\w*|explique\w*|explain\w*|entender|entenda|understand|como funciona|how does|resumo|resume|resuma|sumario|sumário|summary|summari[sz]e|overview|visao geral|visão geral|sobre o que|que projeto|what is this|what's this|describe|descreve|descreva|detecta|detect|stack|tecnologias|linguagens?|languages?|como (?:roda|builda|testa)|how (?:do i|to) (?:run|build|test))\b`)
 	brSearchLeadRe = lazyRx(`^\s*(?:(?:por favor|please|pode|bora|me)[, ]+)*(?:busca|busque|buscar|procura|procure|procurar|acha|ache|achar|encontra|encontre|find|search|grep|seach|serach|procrua|procurra)\b`)
 	brEnvFileRe    = lazyRx(`(?:^|[\s/"'])\.env[\w.]*\b`)
 )
