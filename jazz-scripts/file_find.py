@@ -65,6 +65,21 @@ if exclude is not None:
     exclude = [g for g in str(exclude).lower().split("|") if g]
     if not exclude or sum(len(g) for g in exclude) > 120 or any(len(g) > 60 for g in exclude):
         fail("exclude must be short globs like '.git*' or '*_test.go'")
+# comprimento EXATO do basename: "names are 33 characters long" chega
+# como glob ?×33 (ou como número); comparativos ("shorter than N") a
+# gramática já recusa — o filtro é o equivalente do glob, não um range
+namelen = arg("namelen")
+namelen_n = None
+if namelen is not None:
+    namelen_s = str(namelen).strip()
+    if namelen_s.isdigit():
+        namelen_n = int(namelen_s)
+    elif namelen_s and all(c == "?" for c in namelen_s):
+        namelen_n = len(namelen_s)
+    else:
+        fail("namelen must be a number (5) or a ?-glob ('?????')")
+    if not (1 <= namelen_n <= 200):
+        fail("namelen must be 1..200")
 min_depth = as_int("min_depth", 0, 0, 200)
 max_depth = as_int("max_depth", 200, 0, 200)
 if min_depth > max_depth:
@@ -218,9 +233,9 @@ if older_file is not None:
     older_ts = ref_ts(older_file)
     older_strict = True
 if not (name or name_re or exclude or ext or kind != "any" or min_size or max_size != (1 << 40)
-        or newer_ts or older_ts or empty_only or min_depth or max_depth != 200 or sort_by != "name"
+        or newer_ts or older_ts or empty_only or not_empty or min_depth or max_depth != 200 or sort_by != "name"
         or line_filter or newer_file or older_file or orphan_only or
-        not_orphan or
+        not_orphan or namelen_n is not None or
         links_eq >= 0 or uid_eq >= 0 or gid_eq >= 0):
     # "find all files under X" is a literal request — unbounded in intent,
     # still bounded by limit/MAX_SCAN like every other query
@@ -276,6 +291,8 @@ def match(p, base, st):
     if name and not fnmatch.fnmatch(base.lower(), name_l):
         return False
     if name_re and not name_re.search(base):
+        return False
+    if namelen_n is not None and len(base) != namelen_n:
         return False
     if exclude and any(fnmatch.fnmatch(base.lower(), g)
                        or fnmatch.fnmatch(p.lower(), g)

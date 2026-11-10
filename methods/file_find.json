@@ -46,8 +46,11 @@
       "follow": "$slot.follow",
       "links": "$slot.links",
       "orphan": "$slot.orphan",
+      "not_orphan": "$slot.not_orphan",
       "uid": "$slot.uid",
-      "gid": "$slot.gid"
+      "gid": "$slot.gid",
+      "not_empty": "$slot.not_empty",
+      "namelen": "$slot.namelen"
      },
      "out": "res"
     },
@@ -113,8 +116,11 @@
       "follow": "$slot.follow",
       "links": "$slot.links",
       "orphan": "$slot.orphan",
+      "not_orphan": "$slot.not_orphan",
       "uid": "$slot.uid",
-      "gid": "$slot.gid"
+      "gid": "$slot.gid",
+      "not_empty": "$slot.not_empty",
+      "namelen": "$slot.namelen"
      },
      "out": "res"
     }

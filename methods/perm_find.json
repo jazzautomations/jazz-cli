@@ -42,7 +42,9 @@
       "older_min": "$slot.older",
       "newer_date": "$slot.newer_date",
       "older_date": "$slot.older_date",
-      "time_field": "$slot.tfield"
+      "time_field": "$slot.tfield",
+      "writable": "$slot.writable",
+      "not_writable": "$slot.not_writable"
      },
      "out": "res"
     }
