@@ -81,12 +81,12 @@
     <div class="hero-copy">
       <p class="eyebrow mono"><span class="dot-ok" aria-hidden="true"></span>v0.13.4 · Go · MIT · linux/386 → arm64</p>
       <h1 id="hero-title">
-        <span data-l="pt">Um agente de código no terminal que roda em qualquer máquina — <em>até num Pentium M de 2005.</em></span>
-        <span data-l="en" lang="en">A coding agent for the terminal that runs on any machine — <em>even a 2005 Pentium M.</em></span>
+        <span data-l="pt">Nenhum agente de código rodava num notebook de 2005. <em>Então a Jazz construiu o próprio harness.</em></span>
+        <span data-l="en" lang="en">No coding agent would run on a 2005 laptop. <em>So Jazz built its own harness.</em></span>
       </h1>
       <p class="lede">
-        <span data-l="pt">O <strong>jazz</strong> é um binário estático só, escrito em Go, sem Node e sem dependências. Lê, roda, edita e <em>confere</em> o que fez, com o modelo que você escolher, inclusive os grátis. Se o modelo é fraco, o harness cobra o que um prompt só pediria.</span>
-        <span data-l="en" lang="en"><strong>jazz</strong> is a single static binary written in Go, with no Node and no dependencies. It reads, runs, edits and <em>checks</em> what it did, with the model you choose, free ones included. When the model is weak, the harness enforces what a prompt could only ask for.</span>
+        <span data-l="pt">O <strong>jazz</strong> é um agente de terminal inteiro num binário de Go: o laço, as ferramentas, as permissões, o sandbox, um modo offline que resolve sem modelo nenhum e as suítes que <em>pegam o próprio jazz mentindo</em>. Roda de um Pentium M de 32 bits a um arm64, com o modelo que você escolher, inclusive os grátis.</span>
+        <span data-l="en" lang="en"><strong>jazz</strong> is a whole terminal agent in one Go binary: the loop, the tools, the permissions, the sandbox, an offline mode that works with no model at all, and the suites that <em>catch jazz itself lying</em>. It runs from a 32-bit Pentium M to arm64, with the model you choose, free ones included.</span>
       </p>
 
       <div class="install" id="install">
@@ -165,6 +165,48 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
   </div>
 </section>
 
+<!-- ============ EM 30 SEGUNDOS ============ -->
+<section class="section alt" id="resumo" aria-labelledby="resumo-title">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="kicker mono"><span data-l="pt">em 30 segundos</span><span data-l="en" lang="en">in 30 seconds</span></p>
+      <h2 id="resumo-title"><span data-l="pt">Um harness que publica onde acerta e onde erra.</span><span data-l="en" lang="en">A harness that publishes where it gets things right and where it doesn't.</span></h2>
+      <p class="sec-lede"><span data-l="pt">Seis números para quem tem pressa. Cada um tem versão, data e método na seção <a href="#numbers">números honestos</a>.</span><span data-l="en" lang="en">Six numbers for people in a hurry. Each one has its version, date and method in the <a href="#numbers">honest numbers</a> section.</span></p>
+    </header>
+    <ul class="stats" role="list">
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">um binário só</span><span data-l="en" lang="en">a single binary</span></p>
+        <p class="stat-v mono">16<small>MB</small></p>
+        <p class="stat-d"><span data-l="pt">Go estático, sem Node e sem runtime. O mesmo código compila para linux/386 (Pentium M, 2 GB), amd64, arm64, macOS, Windows e Termux.</span><span data-l="en" lang="en">Static Go, no Node, no runtime. The same code builds for linux/386 (Pentium M, 2 GB), amd64, arm64, macOS, Windows and Termux.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">sem modelo nenhum</span><span data-l="en" lang="en">with no model at all</span></p>
+        <p class="stat-v mono">117/122</p>
+        <p class="stat-d"><span data-l="pt">Eval offline da v0.13.4: tarefas resolvidas por gramática, métodos e scripts, sem gastar um token e sem rede. Falso sucesso: 0.</span><span data-l="en" lang="en">Offline eval on v0.13.4: tasks solved by grammar, methods and scripts, without a single token or a network. False success: 0.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">pego mentindo, e corrigido</span><span data-l="en" lang="en">caught lying, then fixed</span></p>
+        <p class="stat-v mono">38<span class="arrow"> → </span>0</p>
+        <p class="stat-d"><span data-l="pt">Vezes em que o offline disse "feito e verificado" sem ter feito, em 420 pedidos que ele nunca tinha visto, escritos por quem não conhecia as regras. Todas corrigidas. O acerto na primeira passada (61/100, 49/120, 47/100, 33/100) também está publicado.</span><span data-l="en" lang="en">Times offline said "done and verified" without having done it, across 420 requests it had never seen, written by someone who did not know the rules. All fixed. The first-pass hit rate (61/100, 49/120, 47/100, 33/100) is published too.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">red-team</span><span data-l="en" lang="en">red team</span></p>
+        <p class="stat-v mono">14/14</p>
+        <p class="stat-d"><span data-l="pt">Cenários de ataque bloqueados na suíte própria, medida na v0.5.0 e ainda não rodada de novo na 0.13. Os cenários 15 a 25 estão especificados e não implementados.</span><span data-l="en" lang="en">Attack scenarios blocked in the project's own suite, measured on v0.5.0 and not rerun on 0.13 yet. Scenarios 15 to 25 are specified and not implemented.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">dito de outro jeito</span><span data-l="en" lang="en">said another way</span></p>
+        <p class="stat-v mono">639/640</p>
+        <p class="stat-d"><span data-l="pt">Pedidos que continuam certos quando a frase muda por fora: "mano, …", "… aí", "… pra mim", "por favor". O eval gera as variações sozinho; a primeira rodada achou 22 quebras e 5 falsos sucessos, hoje corrigidos.</span><span data-l="en" lang="en">Requests that stay right when the wording changes on the surface: an interjection, a filler tail, "for me", "please". The eval generates the variations itself; the first run found 22 breaks and 5 false successes, now fixed.</span></p>
+      </li>
+      <li class="stat">
+        <p class="stat-k mono"><span data-l="pt">estudo antes de código</span><span data-l="en" lang="en">study before code</span></p>
+        <p class="stat-v mono">43</p>
+        <p class="stat-d"><span data-l="pt">Relatórios de pesquisa no repositório, cruzados com o código numa <a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/study-synthesis.md">síntese</a> que diz o que foi adotado, o que ficou pela metade e o que foi rejeitado.</span><span data-l="en" lang="en">Research reports in the repository, cross-checked against the code in a <a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/study-synthesis.md">synthesis</a> that says what was adopted, what is half done and what was rejected.</span></p>
+      </li>
+    </ul>
+  </div>
+</section>
 <!-- ============ STORY ============ -->
 <section class="section" id="story" aria-labelledby="story-title">
   <div class="wrap">
@@ -495,7 +537,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
       <li class="stat">
         <p class="stat-k mono">jazz eval offline</p>
         <p class="stat-v mono">117/122</p>
-        <p class="stat-d"><span data-l="pt"><strong>v0.13.4</strong>, 10/11/2026, linux/amd64 (na 0.13.3, linux/386 deu o mesmo resultado): 117 de 122 com sucesso verificado, falso sucesso 0, 118/122 sem modelo. As 5 que falham são do cardápio v5 e estão listadas em <code>evals/offline/known-failing.txt</code>. O CI agora roda a suíte inteira como portão. Antes: 105/112 na v0.13.2.</span><span data-l="en" lang="en"><strong>v0.13.4</strong>, 2026-11-10, linux/amd64 (on 0.13.3, linux/386 gave the same result): 117 of 122 with verified success, 0 false success, 118/122 without a model. The 5 that fail are from menu v5 and are listed in <code>evals/offline/known-failing.txt</code>. CI now runs the whole suite as a gate. Before: 105/112 on v0.13.2.</span></p>
+        <p class="stat-d"><span data-l="pt"><strong>v0.13.4</strong>, 10/11/2026, linux/amd64 e linux/386: 117 de 122 com sucesso verificado, falso sucesso 0, 118/122 sem modelo. As 5 que falham são do cardápio v5 e estão listadas em <code>evals/offline/known-failing.txt</code>. O CI agora roda a suíte inteira como portão. Antes: 105/112 na v0.13.2.</span><span data-l="en" lang="en"><strong>v0.13.4</strong>, 2026-11-10, linux/amd64 and linux/386: 117 of 122 with verified success, 0 false success, 118/122 without a model. The 5 that fail are from menu v5 and are listed in <code>evals/offline/known-failing.txt</code>. CI now runs the whole suite as a gate. Before: 105/112 on v0.13.2.</span></p>
       </li>
       <li class="stat">
         <p class="stat-k mono"><span data-l="pt">pedidos inéditos, 1ª passada</span><span data-l="en" lang="en">unseen requests, first pass</span></p>
@@ -622,7 +664,7 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
     </header>
     <ol class="roadmap" role="list">
       <li><span class="rm-n mono">01</span><div><h3><span data-l="pt">Medir de novo na versão atual, e comparar</span><span data-l="en" lang="en">Remeasure on the current version, and compare</span></h3><p data-l="pt">Rodar de novo eval v2, terminal-tasks, polyglot e o red-team na 0.13 (as medidas publicadas são da 0.3 à 0.5). E a medida que falta: mesmo modelo grátis, mesmas tarefas, jazz ao lado de outros agentes de terminal, com a tabela publicada ganhe ou perca.</p><p data-l="en" lang="en">Rerun eval v2, terminal-tasks, polyglot and the red-team on 0.13 (the published measurements are from 0.3 to 0.5). And the missing measurement: same free model, same tasks, jazz next to other terminal agents, with the table published win or lose.</p></div></li>
-      <li><span class="rm-n mono">02</span><div><h3><span data-l="pt">Drenar o under-refusal</span><span data-l="en" lang="en">Drain the under-refusal</span></h3><p data-l="pt">Frente ativa e medida: no corpus de 1051 pedidos reais, ~450 casos fazíveis ainda caem em recusa. O trabalho é por cluster — cada fix de cobertura leva um guarda permanente, nunca um afrouxamento de guarda.</p><p data-l="en" lang="en">Active, measured front: across the 1051-request real corpus, ~450 doable cases still get refused. The work is per-cluster — every coverage fix ships with a permanent guard, never a loosened one.</p></div></li>
+      <li><span class="rm-n mono">02</span><div><h3><span data-l="pt">Cobertura em pedido que ele nunca viu</span><span data-l="en" lang="en">Coverage on requests it has never seen</span></h3><p><span data-l="pt">Medido na 0.13.4 com quatro conjuntos inéditos: o offline acerta cerca de metade na primeira passada e recusa o resto. Escrever frase por frase não subiu esse número (61, 49, 47, 33). O caminho agora é estrutural: unificar os dois parsers, ampliar o corpus metamórfico e pagar as 11 dívidas que o portão estático de métodos listou. Cada ganho de cobertura leva uma guarda permanente.</span><span data-l="en" lang="en">Measured on 0.13.4 with four unseen sets: offline gets about half right on the first pass and refuses the rest. Writing phrase by phrase did not raise that number (61, 49, 47, 33). The path is now structural: unify the two parsers, grow the metamorphic corpus and pay the 11 debts the static method gate listed. Every coverage gain ships with a permanent guard.</span></p></div></li>
       <li><span class="rm-n mono">03</span><div><h3><span data-l="pt">Aulas dentro do offline</span><span data-l="en" lang="en">Lessons inside offline mode</span></h3><p data-l="pt">Trilhas didáticas que ensinam o cardápio executando de verdade: o que o offline sabe, como pedir, o que esperar — resolve a descoberta sem depender de documentação.</p><p data-l="en" lang="en">Guided lesson tracks that teach the menu by executing for real: what offline knows, how to ask, what to expect — solves discovery without depending on docs.</p></div></li>
       <li><span class="rm-n mono">04</span><div><h3><span data-l="pt">Confiança calibrada com tráfego real</span><span data-l="en" lang="en">Confidence calibrated on real traffic</span></h3><p data-l="pt">A calibração isotônica existe (<code>JAZZ_NLU_CALIB</code>, opt-in) mas foi treinada em exemplos de laboratório. Refit com decisões reais registradas, depois vira padrão — hoje o limiar é honesto mas conservador.</p><p data-l="en" lang="en">Isotonic calibration exists (<code>JAZZ_NLU_CALIB</code>, opt-in) but was trained on lab examples. Refit on recorded real decisions, then it becomes default — today's threshold is honest but conservative.</p></div></li>
       <li><span class="rm-n mono">05</span><div><h3><span data-l="pt">Memória e replay de planos</span><span data-l="en" lang="en">Memory and plan replay</span></h3><p data-l="pt">Duas peças do estudo de 43 relatórios (em <code>docs/research/study-synthesis.md</code>): loja de memória unificada (<code>remember</code>/<code>forget</code>/<code>recall</code>) e replay verificado de planos com fingerprint de estado — o que já deu certo volta sem gastar modelo.</p><p data-l="en" lang="en">Two pieces from the 43-report study (in <code>docs/research/study-synthesis.md</code>): a unified memory store (<code>remember</code>/<code>forget</code>/<code>recall</code>) and verified plan replay with state fingerprints — what already worked comes back without spending a model.</p></div></li>
@@ -651,6 +693,17 @@ install -m 755 jazz ~/.local/bin/jazz"><span data-l="pt">copiar</span><span data
         <figcaption><span data-l="pt">A janela do casca, com hosts de demonstração.</span><span data-l="en" lang="en">The casca window, with demo hosts.</span></figcaption>
       </figure>
     </div>
+  </div>
+</section>
+<!-- ============ PALESTRAS ============ -->
+<section class="section alt" id="palestras" aria-labelledby="palestras-title">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="kicker mono">08 · <span data-l="pt">no palco</span><span data-l="en" lang="en">on stage</span></p>
+      <h2 id="palestras-title"><span data-l="pt">Construir o próprio harness virou palestra.</span><span data-l="en" lang="en">Building your own harness became a talk.</span></h2>
+      <p class="sec-lede"><span data-l="pt"><strong>Agentes de IA na prática</strong> (WoHackers, 26/10/2026): o que é um harness, por que o modelo é só uma peça, e o que acontece quando você mede o seu de verdade. Deck, vídeo e transcrição estão em <a href="https://agentesdeianapratica.jazzautomations.com.br">agentesdeianapratica.jazzautomations.com.br</a>. Outras duas palestras estão marcadas.</span><span data-l="en" lang="en"><strong>Agentes de IA na prática</strong> (WoHackers, 2026-10-26, in Portuguese): what a harness is, why the model is only one part, and what happens when you really measure yours. Slides, video and transcript are at <a href="https://agentesdeianapratica.jazzautomations.com.br">agentesdeianapratica.jazzautomations.com.br</a>. Two more talks are booked.</span></p>
+      <p class="sec-lede"><span data-l="pt">Quer levar esse assunto para o seu evento, ou esse jeito de trabalhar para o seu time? O projeto é da <a href="https://github.com/jazzautomations">Jazz Automations</a>; o código, os estudos e os números estão todos abertos no <a href="https://github.com/jazzautomations/jazz-cli">repositório</a>.</span><span data-l="en" lang="en">Want this topic at your event, or this way of working on your team? The project belongs to <a href="https://github.com/jazzautomations">Jazz Automations</a>; the code, the studies and the numbers are all open in the <a href="https://github.com/jazzautomations/jazz-cli">repository</a>.</span></p>
+    </header>
   </div>
 </section>
 </main>
