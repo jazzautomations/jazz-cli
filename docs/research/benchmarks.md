@@ -52,3 +52,11 @@ com exatamente 1206 s (2× prazo de 10 min) e no swebench 11 instâncias com ~27
 Próximo: refazer as inválidas com a 0.7.0, no cabo, sem a ferramenta `fetch`, em 2 processos.
 
 **Fechamento das faixas (21/10 09:58, lido pelo monitor):** polyglot restante TOTAL 7/17 (as 10 falhas = janela sem rede, rc 124); swebench TOTAL **5/20** bruto (41.082 s). Das 15 falhas do swebench, 12 são timeout (rc 124), quase todas na janela sem rede; 2 (`23191`, `24909`) terminaram com saída 3 do agente já com rede (falhas reais a investigar); `18835` falhou com rede (f2p 0/1). Número honesto do swebench **com rede**: ~5 aprovadas em ~9 tentativas válidas; o resto precisa ser refeito no cabo. Binário das faixas: 0.5.0 (a 0.7.0 foi instalada no Dell às 09:35, depois do fim).
+
+## terminal-tasks no Dell, 2026-11-04: 14/14
+Rodada `terminal-tasks-20261104-064148`, lida do disco do Dell em 2026-11-09. Cabeçalho do `summary.txt`:
+`suite=terminal-tasks agent=jazz model=default limit=10m`, `host i686`, `jazz=jazz-cli 0.11.0` (build de
+desenvolvimento com a onda 1 e o sandbox host-PID, que virou a 0.12.0). **TOTAL 14/14 PASS, 379 s.**
+`cancel-async-tasks` (a única falha da 0.4.1) passou em 66 s; `process-supervisor` em 37 s.
+Uma rodada só, sem repetição; o modelo é o `default` da configuração do dia e não ficou registrado no resumo.
+Ainda não repetido na 0.13.
