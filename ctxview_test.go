@@ -272,3 +272,29 @@ func TestEstTokensFollowsView(t *testing.T) {
 		t.Fatalf("com contagem do provedor: %d", got)
 	}
 }
+
+func TestEvalContextResumeKeepsValidRows(t *testing.T) {
+	alt := []ecAlt{{Name: "a"}, {Name: "b"}}
+	rows := []ecRow{
+		{File: "p/s.jsonl@e1", Entry: "e1", Full: ecAct{Name: "bash"}, Others: alt},
+		{File: "p/s.jsonl@e2", Entry: "e2", Infra: "HTTP 429"},
+		{File: "p/s.jsonl@e3", Entry: "e3", Full: ecAct{Name: "read"}}, // measured without --compare
+	}
+	b, _ := json.Marshal(map[string]any{"rows": rows})
+	f := filepath.Join(t.TempDir(), "r.json")
+	if err := os.WriteFile(f, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := ecLoadRows(f, true); len(got) != 1 || got["p/s.jsonl@e1"].Full.Name != "bash" {
+		t.Fatalf("com --compare só vale a linha completa: %v", got)
+	}
+	if got := ecLoadRows(f, false); len(got) != 2 {
+		t.Fatalf("sem --compare valem as duas medidas: %v", got)
+	}
+	if k := ecRowKey(ecPoint{File: "/x/p/s.jsonl", Entry: "e1"}); k != "p/s.jsonl@e1" {
+		t.Fatalf("chave %q", k)
+	}
+	if len(ecLoadRows("", true)) != 0 || len(ecLoadRows(filepath.Join(t.TempDir(), "nada.json"), true)) != 0 {
+		t.Fatal("sem arquivo não há linha")
+	}
+}

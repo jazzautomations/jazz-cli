@@ -32,8 +32,9 @@ type ecOpts struct {
 	perSession int    // at most this many points per session
 	model      string
 	pol        cvPolicy
-	compare    bool // also replay the stale-read policies on the same points
-	dry        bool // no model calls: only what the policy would save
+	resume     string // a previous result file: its valid rows are kept, only the rest is replayed
+	compare    bool   // also replay the stale-read policies on the same points
+	dry        bool   // no model calls: only what the policy would save
 	out        string
 	timeout    time.Duration
 }
@@ -278,7 +279,7 @@ var ecAsk = func(ctx context.Context, cfg *Config, ref, system string, msgs []Me
 }
 
 func cmdEvalContext(root string, args []string, w io.Writer) int {
-	const usage = "uso: jazz eval context [--sessions DIR|ARQ] [--match TXT] [--n 40] [--per-session 3] [--model REF] [--keep 3] [--min 1000] [--spare read] [--reads stale|edited] [--compare] [--dry] [--out DIR]"
+	const usage = "uso: jazz eval context [--sessions DIR|ARQ] [--match TXT] [--n 40] [--per-session 3] [--model REF] [--keep 3] [--min 1000] [--spare read] [--reads stale|edited] [--compare] [--resume ARQ.json] [--dry] [--out DIR]"
 	o := ecOpts{dir: filepath.Join(dataDir(), "sessions"), n: 40, perSession: 3, pol: cvDefault(), out: filepath.Join(root, "results"), timeout: 3 * time.Minute}
 	for i := 0; i < len(args); i++ {
 		val := func() string {
@@ -319,6 +320,8 @@ func cmdEvalContext(root string, args []string, w io.Writer) int {
 		case "reads":
 			o.pol.Reads = val()
 			ok = o.pol.Reads == "stale" || o.pol.Reads == "edited"
+		case "resume":
+			o.resume = val()
 		case "compare":
 			o.compare = true
 		case "dry":
@@ -373,8 +376,14 @@ func cmdEvalContext(root string, args []string, w io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(w, "modelo: %s · 3 chamadas por decisão (histórico inteiro duas vezes, com a política uma)\n\n", ref)
+	done := ecLoadRows(o.resume, o.compare)
 	var rows []ecRow
 	for k, p := range pts {
+		if row, ok := done[ecRowKey(p)]; ok {
+			rows = append(rows, row)
+			fmt.Fprintf(w, "  %2d/%d %s (já medida)\n", k+1, len(pts), filepath.Base(p.File)+"@"+p.Entry)
+			continue
+		}
 		row := ecReplayPoint(cfg, ref, p, o)
 		rows = append(rows, row)
 		mark := "="
@@ -417,7 +426,7 @@ func cmdEvalContext(root string, args []string, w io.Writer) int {
 }
 
 func ecReplayPoint(cfg *Config, ref string, p ecPoint, o ecOpts) ecRow {
-	row := ecRow{File: filepath.Base(filepath.Dir(p.File)) + "/" + filepath.Base(p.File), Entry: p.Entry}
+	row := ecRow{File: ecRowKey(p), Entry: p.Entry}
 	msgs, system, rec, err := ecHistory(p)
 	if err != nil {
 		row.Infra = err.Error()
@@ -556,4 +565,32 @@ func (s ecSummary) altText() string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// ecRowKey names a point across runs: project dir, session file and entry.
+func ecRowKey(p ecPoint) string {
+	return filepath.Base(filepath.Dir(p.File)) + "/" + filepath.Base(p.File) + "@" + p.Entry
+}
+
+// ecLoadRows reads the valid rows of a previous result (--resume), by point.
+// With --compare a row counts only if it has the other policies too.
+func ecLoadRows(path string, compare bool) map[string]ecRow {
+	out := map[string]ecRow{}
+	if path == "" {
+		return out
+	}
+	var prev struct {
+		Rows []ecRow `json:"rows"`
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || json.Unmarshal(b, &prev) != nil {
+		return out
+	}
+	for _, r := range prev.Rows {
+		if r.Infra != "" || r.Full.Name == "" || (compare && len(r.Others) < len(ecVariants(cvPolicy{}))) {
+			continue
+		}
+		out[r.File] = r
+	}
+	return out
 }
