@@ -67,7 +67,7 @@ type ecRow struct {
 	Infra    string `json:"infra,omitempty"` // provider failure: the point does not count
 	InFull   int    `json:"in_full,omitempty"`
 	InView   int    `json:"in_view,omitempty"`
-	quota  bool // the provider's free quota is used up: no point in going on
+	quota    bool   // the provider's free quota is used up: no point in going on
 	// Others: the same point under the other policies of --compare
 	Others []ecAlt `json:"others,omitempty"`
 }
