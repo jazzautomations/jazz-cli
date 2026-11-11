@@ -293,8 +293,12 @@ func (a *Agent) estTokens() int {
 		n = len(a.System) / 4
 		from = 0
 	}
+	msgs := a.Msgs
+	if from == 0 {
+		msgs = cvApply(msgs) // no provider count yet: estimate what is actually sent (ctxview.go)
+	}
 	chars := 0
-	for _, m := range a.Msgs[min(from, len(a.Msgs)):] {
+	for _, m := range msgs[min(from, len(msgs)):] {
 		chars += len(m.Content) + len(m.Reasoning)
 		for _, tc := range m.ToolCalls {
 			chars += len(tc.Args) + len(tc.Name)

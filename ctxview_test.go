@@ -249,3 +249,26 @@ func TestEvalContextStopsOnQuota(t *testing.T) {
 		t.Fatalf("cota esgotada tem que marcar a linha: %+v", row)
 	}
 }
+
+// Without a token count from the provider the estimate has to follow what is
+// sent, or the view would save tokens and compaction would still fire early.
+func TestEstTokensFollowsView(t *testing.T) {
+	a := &Agent{System: "s"}
+	for i := 0; i < 6; i++ {
+		a.Msgs = append(a.Msgs, Message{Role: "tool", ToolName: "bash", Content: cvBig("r", 35000)})
+	}
+	prev := opSetSettings(opDefaultSettings())
+	defer opSetSettings(prev)
+	full := a.estTokens()
+	s := opDefaultSettings()
+	s.CtxView = "tier"
+	opSetSettings(s)
+	view := a.estTokens()
+	if full < 55000 || view > full*6/10 || view < 25000 {
+		t.Fatalf("inteiro %d, visão %d: 3 dos 6 resultados viram aviso", full, view)
+	}
+	a.lastPrompt, a.countedIdx = 40000, len(a.Msgs) // the provider counted the view already
+	if got := a.estTokens(); got != 40000 {
+		t.Fatalf("com contagem do provedor: %d", got)
+	}
+}
