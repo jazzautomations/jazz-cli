@@ -218,3 +218,34 @@ func TestCvApplyFollowsSetting(t *testing.T) {
 		t.Fatalf("valor inválido tem que ficar off, veio %q", bad.CtxView)
 	}
 }
+
+func TestEvalContextStopsOnQuota(t *testing.T) {
+	old := ecAsk
+	defer func() { ecAsk = old }()
+	ecAsk = func(ctx context.Context, cfg *Config, ref, system string, msgs []Message) (*ChatResponse, error) {
+		return nil, &APIError{Status: 429, Body: "PROMOTION_MODEL_LIMIT_REACHED", Quota: true, Daily: true}
+	}
+	dir := t.TempDir()
+	e := func(id, parent string, m *Message) string {
+		b, _ := json.Marshal(sessEntry{T: "msg", ID: id, ParentID: parent, Msg: m})
+		return string(b)
+	}
+	meta, _ := json.Marshal(sessEntry{T: "meta", ID: "m", V: 2, System: "sys"})
+	lines := []string{string(meta),
+		e("a", "m", &Message{Role: "assistant", ToolCalls: []ToolCall{{ID: "1", Name: "bash", Args: `{"command":"ls"}`}}}),
+		e("b", "a", &Message{Role: "tool", ToolCallID: "1", ToolName: "bash", Content: cvBig("x", 3000)}),
+		e("c", "b", &Message{Role: "assistant", ToolCalls: []ToolCall{{ID: "2", Name: "bash", Args: `{"command":"pwd"}`}}}),
+	}
+	file := filepath.Join(dir, "s.jsonl")
+	if err := os.WriteFile(file, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pts := ecScan(file, cvPolicy{Keep: 0, MinBytes: 1000})
+	if len(pts) != 1 {
+		t.Fatalf("pontos = %d", len(pts))
+	}
+	row := ecReplayPoint(nil, "x/y", pts[0], ecOpts{pol: cvPolicy{Keep: 0, MinBytes: 1000}})
+	if !row.quota || row.Infra == "" {
+		t.Fatalf("cota esgotada tem que marcar a linha: %+v", row)
+	}
+}

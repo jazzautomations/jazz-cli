@@ -67,6 +67,7 @@ type ecRow struct {
 	Infra    string `json:"infra,omitempty"` // provider failure: the point does not count
 	InFull   int    `json:"in_full,omitempty"`
 	InView   int    `json:"in_view,omitempty"`
+	quota  bool // the provider's free quota is used up: no point in going on
 	// Others: the same point under the other policies of --compare
 	Others []ecAlt `json:"others,omitempty"`
 }
@@ -384,6 +385,10 @@ func cmdEvalContext(root string, args []string, w io.Writer) int {
 			mark = "≠ " + row.Full.Name + " → " + row.View.Name
 		}
 		fmt.Fprintf(w, "  %2d/%d %s %s\n", k+1, len(pts), filepath.Base(p.File)+"@"+p.Entry, mark)
+		if row.quota {
+			fmt.Fprintf(w, "  a cota do provedor acabou: parei em %d de %d decisões\n", k+1, len(pts))
+			break
+		}
 	}
 	s := ecSummarize(rows)
 	fmt.Fprintln(w)
@@ -429,6 +434,8 @@ func ecReplayPoint(cfg *Config, ref string, p ecPoint, o ecOpts) ecRow {
 		}
 		if err != nil {
 			row.Infra = err.Error()
+			var ae *APIError
+			row.quota = errors.As(err, &ae) && (ae.Daily || ae.Quota)
 			return false
 		}
 		*act = ecAction(resp.ToolCalls)
