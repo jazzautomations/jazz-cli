@@ -14,6 +14,8 @@ package main
 //     one bash result; auto = 8% of the model's window (3.5 bytes/token),
 //     clamped to 6–30 KB.
 //   - prefetch      (--prefetch, JAZZ_PREFETCH, default off): see prefetch.go.
+//   - context_view  (JAZZ_CONTEXT_VIEW, default off): old tool results as
+//     one-line stubs in what the model sees; see ctxview.go.
 //
 // Precedence: flag > env > config.json > default.
 
@@ -34,6 +36,7 @@ type opSettings struct {
 	GrepMode   string // grouped | headtail
 	ToolBudget int    // bytes per bash result; 0 = from the context window
 	Prefetch   string // off | grep
+	CtxView    string // off | tier | stale | edited: what of the old tool results the model sees (ctxview.go)
 }
 
 var (
@@ -43,7 +46,7 @@ var (
 )
 
 func opDefaultSettings() opSettings {
-	return opSettings{Parse: true, GrepMode: "grouped", Prefetch: "off"}
+	return opSettings{Parse: true, GrepMode: "grouped", Prefetch: "off", CtxView: "off"}
 }
 
 // opSettingsNow returns the effective settings (loaded once from config.json and env).
@@ -74,6 +77,7 @@ func opLoadSettings(cfgPath string, getenv func(string) string) opSettings {
 		GrepTrunc   string `json:"grep_trunc"`
 		ToolBudget  int    `json:"tool_budget"`
 		Prefetch    string `json:"prefetch"`
+		CtxView     string `json:"context_view"`
 	}
 	if b, err := os.ReadFile(cfgPath); err == nil {
 		_ = json.Unmarshal(b, &c)
@@ -89,6 +93,12 @@ func opLoadSettings(cfgPath string, getenv func(string) string) opSettings {
 	}
 	if opValidPrefetch(c.Prefetch) {
 		s.Prefetch = c.Prefetch
+	}
+	if cvValidMode(c.CtxView) {
+		s.CtxView = c.CtxView
+	}
+	if v := getenv("JAZZ_CONTEXT_VIEW"); cvValidMode(v) {
+		s.CtxView = v
 	}
 	if v := getenv("JAZZ_PARSE_OUTPUT"); v != "" {
 		if b, err := opParseBool(v); err == nil {

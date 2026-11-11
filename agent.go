@@ -1269,6 +1269,7 @@ func (a *Agent) buildRequest(ref, mid string, o acChatOpt) ChatRequest {
 	if msgs == nil {
 		msgs = a.Msgs
 	}
+	msgs = cvApply(msgs) // context_view: old tool results as stubs (off by default; ctxview.go)
 	if !a.cfg.SupportsImages(ref) {
 		msgs = acStripImages(msgs, ref)
 	}

@@ -131,6 +131,9 @@ func cmdEval(root string, args []string, w io.Writer) int {
 	if len(args) >= 2 && args[0] == "parse" {
 		return erParse(root, strings.Join(args[1:], " "), w)
 	}
+	if len(args) >= 1 && args[0] == "context" {
+		return cmdEvalContext(root, args[1:], w) // replay de decisões gravadas sob uma política de contexto (evalctx.go)
+	}
 	if len(args) == 0 || args[0] != "offline" && args[0] != "real" {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
