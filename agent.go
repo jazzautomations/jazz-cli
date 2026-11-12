@@ -48,6 +48,7 @@ type Agent struct {
 	countedIdx  int // Msgs index already included in lastPrompt
 	allow       map[string]bool
 	recent      []string
+	badCalls    map[string]bool // calls refused by validation in this turn (argfix.go)
 	steerMu     sync.Mutex
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
@@ -480,7 +481,8 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
 	boostOut := false // the last reply was cut: the next request asks for more output (cutoff.go)
-	a.recent = nil
+	a.recent, a.badCalls = nil, nil
+	emptyRetried := false // one silent re-ask per turn for a `bash {}`-style call (argfix.go)
 	// lean budget: hard stop at 2x the step budget (budget.go)
 	maxSteps := a.bgStepLimit(a.stepLimit())
 	compactFailStep := -100 // a failed proactive compaction is retried 5 steps later, not every step
@@ -623,6 +625,15 @@ turnLoop:
 			if !a.mcp.Has(calls[i].Name) {
 				calls[i].Name = CanonicalTool(calls[i].Name)
 			}
+		}
+		// `bash {}`: a built-in call with no argument at all. Re-ask once per
+		// turn without putting the empty call or an error in the history; it
+		// does not count as a step (argfix.go).
+		if !emptyRetried && !atLimit && len(calls) > 0 && !resp.Truncated() && afAllEmpty(calls) {
+			emptyRetried = true
+			dbg("repair", map[string]any{"empty_args_retry": calls[0].Name, "model": turnModel})
+			step--
+			continue
 		}
 		// A write/edit cut inside its content: ask for the rest and splice it
 		// instead of throwing the work away (cutoff.go).
@@ -802,9 +813,14 @@ turnLoop:
 			fan = a.saFanoutAt(ctx, step, calls, i, fan)
 			out, ran, denied, pre := fan.take(tc.ID)
 			if !pre {
-				a.ptIdx = i
-				out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
-				a.ptIdx = -1
+				if o, short := a.acBadCallShort(tc); short { // identical call already refused by validation (argfix.go)
+					out = o
+				} else {
+					a.ptIdx = i
+					out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
+					a.ptIdx = -1
+					a.acBadCallSeen(tc, out)
+				}
 			}
 			if ran {
 				toolsRun++
