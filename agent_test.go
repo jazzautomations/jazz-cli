@@ -444,16 +444,16 @@ func TestAgentLoopDetectionWarnsThenStops(t *testing.T) {
 	// request k (0-based) carries results of calls 1..k
 	for k := 1; k < len(reqs); k++ {
 		res := reqs[k].toolResults()[fmt.Sprintf("call_%d_0", k-1)]
-		warned := strings.Contains(res, "exact call")
+		warned := strings.Contains(res, "mesma chamada já foi feita")
 		if want := k >= 3; warned != want {
 			t.Errorf("call #%d: warned=%v want %v (%q)", k, warned, want, res)
 		}
-		if k >= 3 && !strings.Contains(res, fmt.Sprintf("%d times", k)) {
+		if k >= 3 && !strings.Contains(res, fmt.Sprintf("%d vezes", k)) {
 			t.Errorf("call #%d: warning should count repetitions: %q", k, res)
 		}
 	}
 	lm := lastMsg(h.ag.Msgs)
-	if lm.Role != "user" || !strings.Contains(lm.Content, "stuck repeating") {
+	if lm.Role != "user" || !strings.Contains(lm.Content, "ficou repetindo a mesma chamada") {
 		t.Errorf("last message should be loop reminder: %+v", lm)
 	}
 	if !anyContains(h.ui.warns, "loop") {
@@ -477,7 +477,7 @@ func TestAgentLoopDetectionCatchesAlternatingCycle(t *testing.T) {
 		t.Fatalf("ABAB loop should stop well before the step budget; requests=%d", len(reqs))
 	}
 	lm := lastMsg(h.ag.Msgs)
-	if lm.Role != "user" || !strings.Contains(lm.Content, "stuck repeating") {
+	if lm.Role != "user" || !strings.Contains(lm.Content, "ficou repetindo a mesma chamada") {
 		t.Errorf("last message should be loop reminder: %+v", lm)
 	}
 	if !anyContains(h.ui.warns, "loop") {
@@ -520,7 +520,7 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 	}
 	for _, r := range h.fs.requests() {
 		for _, c := range r.toolResults() {
-			if strings.Contains(c, "exact call") {
+			if strings.Contains(c, "mesma chamada já foi feita") {
 				t.Fatalf("false-positive loop warning: %q", c)
 			}
 		}
@@ -539,12 +539,12 @@ func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 	if len(reqs) != 2 {
 		t.Fatalf("empty reply nudged exactly once => 2 requests, got %d", len(reqs))
 	}
-	if !reqs[1].contains("user", "Your last reply was empty") {
+	if !reqs[1].contains("user", "última resposta veio vazia") {
 		t.Errorf("nudge missing from 2nd request")
 	}
 	n := 0
 	for _, m := range h.ag.Msgs {
-		if strings.Contains(m.Content, "Your last reply was empty") {
+		if strings.Contains(m.Content, "última resposta veio vazia") {
 			n++
 		}
 	}
@@ -582,7 +582,7 @@ func TestAgentVerifyNudge(t *testing.T) {
 			if len(reqs) != tc.wantReqs {
 				t.Fatalf("requests=%d want %d", len(reqs), tc.wantReqs)
 			}
-			got := reqs[len(reqs)-1].contains("user", "You changed code but did not run anything")
+			got := reqs[len(reqs)-1].contains("user", "Você mudou código e não rodou nada")
 			if got != tc.wantNudge {
 				t.Errorf("verify nudge = %v, want %v", got, tc.wantNudge)
 			}
@@ -610,7 +610,7 @@ func TestAgentOpenTodoNudge(t *testing.T) {
 	}
 	l := reqs[2].last()
 	c, _ := l["content"].(string)
-	if l["role"] != "user" || !strings.Contains(c, "unfinished items") || !strings.Contains(c, "add tests") {
+	if l["role"] != "user" || !strings.Contains(c, "itens abertos") || !strings.Contains(c, "add tests") {
 		t.Errorf("todo nudge = %q", c)
 	}
 	if strings.Contains(c, "write parser") {
@@ -631,7 +631,7 @@ func TestAgentNoTodoNudgeWhenAllCompleted(t *testing.T) {
 
 func TestAgentMaxStepsForcesFinalNoToolsRequest(t *testing.T) {
 	h := newHarness(t, func(n int, r recReq) fakeResp {
-		if r.contains("user", "Step limit reached") {
+		if r.contains("user", "Limite de passos atingido") {
 			return fakeResp{Text: "summary of work"}
 		}
 		return fakeResp{Calls: []fakeCall{{Name: "bash", Args: fmt.Sprintf(`{"command":"echo step%d"}`, n)}}}
@@ -656,7 +656,7 @@ func TestAgentMaxStepsForcesFinalNoToolsRequest(t *testing.T) {
 		t.Errorf("final request tool_choice = %v, want none", tc)
 	}
 	l := reqs[2].last()
-	if c, _ := l["content"].(string); l["role"] != "user" || !strings.Contains(c, "Step limit reached") {
+	if c, _ := l["content"].(string); l["role"] != "user" || !strings.Contains(c, "Limite de passos atingido") {
 		t.Errorf("last message of final request = %v", l)
 	}
 	if lm := lastMsg(h.ag.Msgs); lm.Content != "summary of work" {

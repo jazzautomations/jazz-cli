@@ -247,7 +247,7 @@ func TestBudgetExplorationCap(t *testing.T) {
 
 func TestBudgetStepHardStopAtCloseGrace(t *testing.T) {
 	stepStop := func(n int, r recReq) fakeResp {
-		if r.contains("user", "Step limit reached") {
+		if r.contains("user", "Limite de passos atingido") {
 			return fakeResp{Text: "partial"}
 		}
 		return fakeResp{Calls: []fakeCall{{ID: fmt.Sprintf("b%d", n), Name: "bash", Args: fmt.Sprintf(`{"command":"true %d"}`, n)}}}

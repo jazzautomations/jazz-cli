@@ -362,7 +362,7 @@ func (a *Agent) stepLimit() int {
 
 const planReminder = "<system-reminder>Plan mode is on: investigate with read-only tools (read, read-only bash such as rg/ls/git log, task), then reply with a concise numbered plan (files, changes, verification). Do not edit or write files and do not run commands that change anything.</system-reminder>"
 
-const stepLimitReminder = "<system-reminder>Step limit reached. Do not call any more tools. Give your final answer now: what was done, what is left.</system-reminder>"
+const stepLimitReminder = "<system-reminder>Limite de passos atingido. Não chame mais ferramentas: responda agora com o que foi feito e o que falta.</system-reminder>"
 
 const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
 
@@ -387,6 +387,7 @@ func (a *Agent) obDeadlineWarned() bool {
 // Run handles one user message until the model gives a final answer.
 func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err error) {
 	a.EnsureSystem()
+	a.langNote(input) // Portuguese in → "Responda em português do Brasil" at the end of the system prompt (lang.go)
 	mode := a.mode()
 	a.ui.SetMode(mode)
 	a.gr.injection, a.gr.startHit = a.gr.startHit, "" // the injection guard is per turn
@@ -514,7 +515,7 @@ turnLoop:
 		}
 		if why := a.overBudget(); why != "" {
 			a.ui.Warn("limite do turno atingido: " + why)
-			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Stop now: give your final answer with what was done and what is left. Do not call any more tools.</system-reminder>"})
+			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Pare agora: responda com o que foi feito e o que falta, sem chamar mais ferramentas.</system-reminder>"})
 			stop = StopStepLimit
 			return stop, nil
 		}
@@ -711,7 +712,7 @@ turnLoop:
 			if text == "" && !nudgedEmpty {
 				nudgedEmpty = true
 				dbg("nudge", "empty")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your last reply was empty. Continue the task, or give your final answer.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Sua última resposta veio vazia. Continue a tarefa ou dê a resposta final.</system-reminder>"})
 				continue
 			}
 			// Anti-fake guard: a final answer claiming actions with no tool call
@@ -730,13 +731,13 @@ turnLoop:
 			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your todo list still has unfinished items:\n" + open + "\nContinue working on them, or update the list (mark items completed or remove ones that are no longer needed) and explain why.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>A lista de tarefas ainda tem itens abertos:\n" + open + "\nContinue neles, ou atualize a lista (marque como feito ou tire o que não precisa mais) dizendo por quê.</system-reminder>"})
 				continue
 			}
 			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
-				a.append(Message{Role: "user", Content: "<system-reminder>You changed code but did not run anything afterwards. If this project can be built, tested, linted or run, verify your change now with bash and fix any problem you caused. If verification isn't possible, say so in one line and finish.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Você mudou código e não rodou nada depois. Se dá para compilar, testar ou rodar, verifique agora com bash e corrija o que quebrou; se não dá, diga isso numa frase e termine.</system-reminder>"})
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
@@ -870,14 +871,14 @@ turnLoop:
 					continue turnLoop // handed off to a clean context
 				}
 				a.ui.Warn("o modelo entrou em loop (mesma chamada 6×) — parei o turno")
-				a.append(Message{Role: "user", Content: "<system-reminder>You were stuck repeating the same tool call. The turn was stopped. Next time, change approach.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Você ficou repetindo a mesma chamada e o turno foi parado. Na próxima, mude de abordagem.</system-reminder>"})
 				stop = StopLoop
 				return stop, nil
 			}
 			if rep >= 3 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You have made this exact call %d times with the same result. Stop repeating it: change your approach, or give the final answer.</system-reminder>", rep)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Esta mesma chamada já foi feita %d vezes com o mesmo resultado. Pare de repetir: mude a abordagem ou dê a resposta final.</system-reminder>", rep)
 			} else if per > 1 && cyc >= 2 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You are repeating a cycle of %d tool calls (%d times in a row, same results). Stop looping: change your approach, or give the final answer.</system-reminder>", per, cyc)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Você está repetindo um ciclo de %d chamadas (%d vezes seguidas, mesmos resultados). Saia do laço: mude a abordagem ou dê a resposta final.</system-reminder>", per, cyc)
 			}
 			out.Text += a.acSteeringNote(tc, out)  // fileMatch steering, once per rule
 			out.Text += a.dcHintNote(tc, out)      // API error on a pinned library: point to the docs tool (docs.go)
