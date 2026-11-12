@@ -454,20 +454,56 @@ func (s *Sandbox) bwrapCacheEnv(getenv func(string) string) []string {
 	return out
 }
 
-// sbPruneTmp removes private temp dirs left by jazz processes that are gone
-// (older than a day: a dead pid may be reused).
+// sbPruneTmp removes private temp dirs left by jazz processes that are gone.
+// The dir is named "<pid>-…": only a dead pid's dir goes. Age alone is not
+// enough — a session open for more than a day had its temp dir pruned by the
+// next jazz started on the machine, and every command after that died with
+// bwrap's "Can't find source path" (d610, v0.12.1).
 func sbPruneTmp(base string) {
 	ents, err := os.ReadDir(base)
 	if err != nil {
 		return
 	}
 	for _, e := range ents {
-		fi, err := e.Info()
-		if err != nil || time.Since(fi.ModTime()) < 24*time.Hour {
+		pre, _, ok := strings.Cut(e.Name(), "-")
+		pid, err := strconv.Atoi(pre)
+		if !ok || err != nil || pid == os.Getpid() || procAlive(pid) {
 			continue
 		}
 		_ = os.RemoveAll(filepath.Join(base, e.Name()))
 	}
+}
+
+// sbStarted is when this process started (the uptime in sandbox.tmp_recreated).
+var sbStarted = time.Now()
+
+// ensureTmp recreates the private temp dir when something removed it under a
+// live session (a /tmp cleaner, a reboot-less tmpfs reset, a prune): bwrap
+// binds it, and a missing source kills every command with "Can't find source
+// path". It reports whether the dir had to be recreated.
+func (s *Sandbox) ensureTmp() bool {
+	if s == nil || s.Tmp == "" {
+		return false
+	}
+	if _, err := os.Stat(s.Tmp); err == nil || !os.IsNotExist(err) {
+		return false
+	}
+	if err := os.MkdirAll(s.Tmp, 0o700); err != nil {
+		dbg("sandbox", map[string]any{"tmp_recreate_err": err.Error()})
+		return false
+	}
+	f := map[string]any{"pid": os.Getpid(), "uptime_s": int(time.Since(sbStarted).Seconds())}
+	if fi, err := os.Stat(filepath.Dir(s.Tmp)); err == nil {
+		f["base_mtime"] = fi.ModTime().UTC().Format(time.RFC3339)
+	}
+	obEmit("sandbox.tmp_recreated", f)
+	dbg("sandbox", f)
+	return true
+}
+
+// sbSourceMissing: bwrap could not bind a path that vanished.
+func sbSourceMissing(out string) bool {
+	return strings.Contains(out, "Can't find source path")
 }
 
 // Close removes the private temp dir.
@@ -513,6 +549,7 @@ func (s *Sandbox) Wrap(cmd *exec.Cmd) {
 	if !s.Isolates() || cmd == nil || cmd.Err != nil || cmd.Path == "" {
 		return
 	}
+	s.ensureTmp()
 	dir := cmd.Dir
 	if dir == "" {
 		dir, _ = os.Getwd()

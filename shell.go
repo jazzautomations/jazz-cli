@@ -264,6 +264,41 @@ func (o *outBuf) upTo(end int) (string, int) {
 
 // Run executes one command. onChunk (optional) receives live output for the UI.
 func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, onChunk func([]byte)) ShellResult {
+	r := s.runOnce(ctx, command, timeout, onChunk)
+	if r.Reset && sbSourceMissing(r.Output) && ctx.Err() == nil {
+		// the sandbox lost its temp dir: bwrap refused before the command
+		// started, so running it again is safe. Wrap recreates the dir.
+		sbCurrent().ensureTmp()
+		r2 := s.runOnce(ctx, command, timeout, onChunk)
+		if r2.Reset && sbSourceMissing(r2.Output) {
+			r2.Note = "[jazz: o sandbox não conseguiu montar o temporário privado duas vezes seguidas; o comando não rodou. Avise o usuário: `jazz doctor` mostra o sandbox, e `--sandbox off` roda sem isolamento se ele quiser]"
+		}
+		return r2
+	}
+	return r
+}
+
+// shDrainDead collects what a shell that already exited printed (up to 1s).
+func shDrainDead(inst *shellInst) string {
+	var b []byte
+	timeout := time.NewTimer(time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case c, ok := <-inst.out:
+			if !ok {
+				return strings.TrimSpace(string(b))
+			}
+			if len(b) < 8<<10 {
+				b = append(b, c...)
+			}
+		case <-timeout.C:
+			return strings.TrimSpace(string(b))
+		}
+	}
+}
+
+func (s *Shell) runOnce(ctx context.Context, command string, timeout time.Duration, onChunk func([]byte)) ShellResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.gen.Add(1)
@@ -284,8 +319,9 @@ func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, 
 	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta(marker) + `(-?\d+)_(.*?)_` + regexp.QuoteMeta(marker) + `E\r?\n`)
 	line := s.d.wrapLine(command, marker)
 	if _, err := io.WriteString(inst.stdin, line); err != nil {
+		out := shDrainDead(inst) // what the dying shell said (bwrap's mount error)
 		s.kill()
-		return ShellResult{Output: "", ExitCode: -1, Reset: true, Note: "[shell was dead and has been reset — run the command again]", Duration: time.Since(t0)}
+		return ShellResult{Output: out, ExitCode: -1, Reset: true, Note: "[shell was dead and has been reset — run the command again]", Duration: time.Since(t0)}
 	}
 
 	ob := &outBuf{headCap: s.maxKeep / 4, tailCap: s.maxKeep - s.maxKeep/4}
