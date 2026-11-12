@@ -1389,24 +1389,33 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 					a.ui.Notice(ref + " não aceita tools nativas — usando tools em modo texto")
 					continue
 				}
+				switch kind := pvClassify(err); kind {
+				case "gone", "auth", "toomanytools":
+					// waiting never fixes these on this ref (retired model,
+					// refused key, too many tools for the provider): the
+					// limiter recorded it (gone/auth persist) — next candidate
+					msg := acKindWarn(ref, kind, ae)
+					if ci+1 < len(cands) {
+						why = msg
+					} else if !o.quiet {
+						a.ui.Warn(msg)
+					}
+					break attempts
+				}
 				if ae.Daily {
 					MarkExhausted(ref, acResetTime(ae))
 					a.ui.Warn(fmt.Sprintf("%s: cota diária esgotada", ref))
 					break attempts
 				}
-				if ae.Status == 401 || ae.Status == 403 {
-					a.ui.Warn(fmt.Sprintf("%s recusou a credencial (%d)", pname, ae.Status))
-					break attempts // next candidate
-				}
 				if ae.Status == 400 || ae.Status == 404 || ae.Status == 402 || ae.Status == 422 {
-					a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+					a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 					break attempts
 				}
 				if !ae.Retryable() {
 					// classified as "try another model" (413 too big, model gone,
 					// no tool support …): RetryDelay 0 means next candidate now
 					if ci+1 < len(cands) && a.retryWait(err, attempt) == 0 {
-						a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+						a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 						break attempts
 					}
 					return acPartialOnly(resp), ref, wrapFail(ref, err)
@@ -1467,6 +1476,33 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		lastErr = errors.New("nenhum modelo disponível — configure uma chave (/key) ou faça login (/login)")
 	}
 	return lastPartial, model, wrapFail(lastRef, lastErr)
+}
+
+// acEOLDateRE pulls the retirement date out of a 410 ("reached its end of
+// life on 2026-10-28").
+var acEOLDateRE = lazyRx(`(?i)end[ -]of[ -]life (?:on|at) (\d{4})-(\d\d)-(\d\d)`)
+
+// acKindWarn says in PT-BR why ref left the chain for a class that waiting
+// never fixes (pvClassify: gone, auth, toomanytools).
+func acKindWarn(ref, kind string, ae *APIError) string {
+	short := uiShortModel(ref)
+	switch kind {
+	case "gone":
+		if m := acEOLDateRE.FindStringSubmatch(ae.Body); m != nil {
+			return fmt.Sprintf("%s foi aposentado pelo provedor em %s/%s — tirei do rodízio", short, m[3], m[2])
+		}
+		return short + " foi aposentado/removido pelo provedor — tirei do rodízio"
+	case "auth":
+		prov, _ := SplitModel(ref)
+		return fmt.Sprintf("%s recusou a credencial (%d) — %s; confira com /key %s", prov, ae.Status, pvPlainErr(ae.Body), prov)
+	case "toomanytools":
+		n := ""
+		if m := pvTooManyToolsRE.FindStringSubmatch(ae.Body); m != nil {
+			n = " (máx. " + m[1] + ")"
+		}
+		return short + " não aceita tantas ferramentas num pedido" + n
+	}
+	return fmt.Sprintf("%s: HTTP %d: %s", short, ae.Status, pvPlainErr(ae.Body))
 }
 
 // acPartialOnly keeps a reply that failed mid-stream (text and cut tool calls

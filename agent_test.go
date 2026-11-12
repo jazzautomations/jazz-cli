@@ -362,7 +362,7 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 	}{
 		{401, `{"error":{"message":"bad key"}}`, "recusou a credencial (401)"},
 		{403, `{"error":{"message":"forbidden"}}`, "recusou a credencial (403)"},
-		{404, `{"error":{"message":"no such model"}}`, "fake/m1"},
+		{404, `{"error":{"message":"no such model"}}`, "m1 foi aposentado/removido"},
 		{400, `{"error":{"message":"invalid parameter foo"}}`, "fake/m1"},
 	}
 	for _, tc := range cases {

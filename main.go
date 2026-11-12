@@ -1033,31 +1033,41 @@ func friendlyErr(err error) string {
 	}
 	var ae *APIError
 	if errors.As(err, &ae) {
+		// one classifier (pvClassify) and never raw JSON (pvPlainErr)
+		kind := pvClassify(ae)
 		switch {
-		case pvClassify(ae) == "toolcall":
-			// belt and suspenders for a rejection that never met the retry
-			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
-		case ae.Status == 401 || ae.Status == 403:
-			return "credencial recusada pelo provedor (" + firstSentence(ae.Body) + ") — use /key ou /login"
-		case ae.Status == 402 || pvClassify(ae) == "credit":
-			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
-		case ae.Status == 429:
-			msg := "limite de requisições atingido (" + firstSentence(pvErrMessage(ae.Body)) + ")"
-			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
-				msg += ". Na OpenRouter grátis o limite é baixo"
-			}
-			return msg + "; espere ou troque de modelo (/model)"
 		case ae == errNoNet:
 			if p := pvProxyFor(); p != "" {
 				return "o proxy " + p + " (HTTPS_PROXY) não responde"
 			}
 			return "nenhuma conexão: nem o provedor nem 1.1.1.1 responderam"
+		case kind == "toolcall":
+			// belt and suspenders for a rejection that never met the retry
+			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
+		case kind == "auth":
+			return "credencial recusada pelo provedor (" + pvPlainErr(ae.Body) + ") — use /key ou /login"
+		case kind == "gone":
+			return "o modelo foi aposentado/removido pelo provedor (" + pvPlainErr(ae.Body) + ") — escolha outro com /model"
+		case ae.Status == 402 || kind == "credit":
+			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
+		case ae.Quota || pvIsQuotaBody(ae.Status, ae.Body):
+			return pvQuotaAdvice(ae)
+		case ae.Status == 429:
+			msg := "limite de requisições atingido (" + pvPlainErr(ae.Body) + ")"
+			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
+				msg += ". Na OpenRouter grátis o limite é baixo"
+			}
+			return msg + "; espere ou troque de modelo (/model)"
+		case kind == "toobig":
+			return "o pedido ficou grande demais para esse modelo (" + pvPlainErr(ae.Body) + ") — /compact ou troque de modelo (/model)"
+		case kind == "toomanytools":
+			return "ferramentas demais para esse provedor (" + pvPlainErr(ae.Body) + ") — desligue servidores MCP que não usa ou troque de modelo (/model)"
 		case ae.Status == 0:
-			return "falha de rede: " + firstSentence(ae.Body)
+			return "falha de rede: " + pvPlainErr(ae.Body)
 		case ae.Status >= 400 && ae.Status < 500:
-			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, firstSentence(pvErrMessage(ae.Body)))
+			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, pvPlainErr(ae.Body))
 		}
-		return ae.Error()
+		return fmt.Sprintf("o provedor falhou (HTTP %d: %s) — tente de novo ou troque de modelo (/model)", ae.Status, pvPlainErr(ae.Body))
 	}
 	if errors.Is(err, errStreamIdle) {
 		return err.Error() + " — tente de novo ou troque de modelo"
