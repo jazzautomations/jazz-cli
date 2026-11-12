@@ -349,6 +349,12 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.olRun(ctx, act)
 		return true, text
 	}
+	offline := a.ol.on || a.ol.forced
+	if !offline {
+		// online the model owns the turn: only a literal command line of the
+		// closed list runs here, everything else goes to it (synergy.go)
+		return a.syOnline(ctx, text)
+	}
 	if ohIsHome(text) { // "menu": the offline brain as buttons (offline_home.go)
 		a.ohShow("")
 		return true, text
@@ -363,29 +369,16 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		}
 		return true, text
 	}
-	offline := a.ol.on || a.ol.forced
-	if offline && olSummaryRe.MatchString(fpNormalize(text)) {
+	if olSummaryRe.MatchString(fpNormalize(text)) {
 		a.olSummary(ctx)
 		return true, text
 	}
-	toModel := false // the user explicitly chose "Mandar pro modelo" on a fast path
-	if offline || fpEnabled(a.cfg) {
-		if m, ok := fpIntents(a.root).Match(text, fpDetect(a.root), a.tools.hasRg); ok {
-			done, note := a.olFastPath(ctx, m, offline)
-			if done {
-				return true, text
-			}
-			toModel = note == ""
-			if note != "" {
-				text += "\n\n" + note
-			}
-		}
-	}
-	if !offline {
-		if !toModel && a.brLevel0Interactive(ctx, text) { // brain level-0: understood read-only intents skip the model online too
+	if m, ok := fpIntents(a.root).Match(text, fpDetect(a.root), a.tools.hasRg); ok {
+		if done, note := a.olFastPath(ctx, m, true); done {
 			return true, text
+		} else if note != "" {
+			text += "\n\n" + note
 		}
-		return false, text
 	}
 	if olIsLocalRef(a.cfg, a.agent.Model) {
 		return false, text // a local model needs no network
@@ -581,9 +574,19 @@ func cmdScript(root string, args []string) int {
 func olHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, cfg *Config, prompt string, o pfOpts) (*RunResult, string) {
 	offline := (o.offline || olForcedEnv()) && !olIsLocalRef(cfg, ag.Model) // a local model is allowed offline
 	if !offline && !o.fastPath {
-		// level 0: a clear read-only request needs no model (brain.go)
-		if r := brHeadlessLevel0(ctx, ag, tools, ui, prompt); r != nil {
-			return r, prompt
+		// online the model owns the turn: only a literal command line of the
+		// closed list ("git status", "whoami") runs without it (synergy.go);
+		// JAZZ_BRAIN=level0 brings back the brain's generic answer (brain.go)
+		if brLevel0Forced() {
+			if r := brHeadlessLevel0(ctx, ag, tools, ui, prompt); r != nil {
+				return r, prompt
+			}
+			return nil, prompt
+		}
+		if brLevel0On() && fpEnabled(cfg) {
+			if m, ok := syLiteralMatch(tools.Root, prompt, tools.hasRg); ok {
+				return olHeadlessRun(ctx, ag, tools, ui, m, false, prompt)
+			}
 		}
 		return nil, prompt
 	}

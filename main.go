@@ -1087,6 +1087,7 @@ type App struct {
 	warnedModel map[string]bool // ModelWarning already shown per ref
 
 	ol olState // offline mode (offline.go)
+	sy syState // online/offline hand-off: last offline result, kept request (synergy.go)
 
 	// mode chip (P5): the offline↔online transitions seen recently, so a
 	// flapping link reads "rede instável" instead of a permanent alarm.
@@ -1265,6 +1266,10 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 		}
 		line = strings.TrimRight(line, " \t")
 		if strings.TrimSpace(line) == "" {
+			app.syEscalate() // Enter on an empty line: the last offline answer goes to the model (synergy.go)
+			continue
+		}
+		if strings.TrimSpace(line) == "/m" && app.syEscalate() {
 			continue
 		}
 		switch {
@@ -1517,6 +1522,7 @@ func (a *App) send(text string) {
 	if text, ok = a.confirmPastedToolTranscript(text); !ok {
 		return
 	}
+	orig := text      // the request as typed: what a takeover answers or keeps (synergy.go)
 	defer a.qSend()() // message queue: next queued turn, or back to the editor (queue.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	a.turnMu.Lock()
@@ -1546,6 +1552,7 @@ func (a *App) send(text string) {
 		a.agent.Attach(imgs...)
 	}
 	stop := a.ui.WatchTurn(cancel, a.agent.Steer)
+	n0 := len(a.agent.Msgs)
 	reason, err := a.agent.Run(ctx, text)
 	stop()
 	FlushRateLimits()
@@ -1555,8 +1562,19 @@ func (a *App) send(text string) {
 	}
 	a.pfShowProviderWarnings()
 	a.ui.Jobs(a.tools.RunningJobs())
-	if a.olAfter(err) { // no model reachable: offline mode banner instead of a bare error
+	reported := a.olAfter(err) // no model reachable: offline mode banner instead of a bare error
+	var turn []Message
+	if n0 <= len(a.agent.Msgs) {
+		turn = a.agent.Msgs[n0:]
+	}
+	if a.syTakeover(ctx, orig, err, turn) { // the offline brain answers what it can, and says so
 		return
+	}
+	if reported {
+		return
+	}
+	if err == nil {
+		a.syPendingNotice()
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {
 		a.ui.Error(friendlyErr(err))

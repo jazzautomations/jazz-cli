@@ -450,8 +450,10 @@ func TestBrainFarTypoIsConfirmed(t *testing.T) {
 	}
 }
 
-// Level 0: with a model available, "abre o README.md" and "git status" are
-// answered with no request (the Dell baseline of 0.8.1 sent both to the model).
+// Level 0 in -p: by default only a literal command line ("git status")
+// runs with no request; a sentence the brain reads ("abre o README.md") goes
+// to the model, unless JAZZ_BRAIN=level0 asks for the generic level 0 (the
+// Dell smoke tests and evals).
 func TestBrainLevel0NoModelCall(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
@@ -466,10 +468,17 @@ func TestBrainLevel0NoModelCall(t *testing.T) {
 	t.Setenv("JAZZ_ENV_NO_NET", "1")
 	defer epSetForTest(nil)()
 	ui := &HeadlessUI{}
+	if res, _ := olHeadless(context.Background(), h.ag, h.ag.tools, ui, h.cfg, "git status", pfOpts{}); res == nil || res.Status != StopDone || res.Model != "fastpath" {
+		t.Fatalf("literal git status: %+v", res)
+	}
+	if res, p := olHeadless(context.Background(), h.ag, h.ag.tools, ui, h.cfg, "abre o README.md", pfOpts{}); res != nil || p != "abre o README.md" {
+		t.Fatalf("a sentence goes to the model by default: %+v", res)
+	}
+	t.Setenv("JAZZ_BRAIN", "level0")
 	for _, q := range []string{"abre o README.md", "git status"} {
 		res, _ := olHeadless(context.Background(), h.ag, h.ag.tools, ui, h.cfg, q, pfOpts{})
 		if res == nil || res.Status != StopDone || res.Model != "offline-brain" {
-			t.Fatalf("%q: %+v", q, res)
+			t.Fatalf("JAZZ_BRAIN=level0 %q: %+v", q, res)
 		}
 	}
 	if n := len(h.fs.requests()); n != 0 {
