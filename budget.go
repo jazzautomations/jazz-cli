@@ -3,17 +3,19 @@ package main
 // budget.go: the "ponytail" process budget (docs/research/skills-personas-scripts.md
 // section B). The harness, not the prompt, keeps a weak model from wandering:
 //
-//   - task size S/M/L and kind (bugfix/greenfield/refactor/sensitive/question)
-//     are classified from the user's message with regexes (no LLM call);
+//   - task size S/M/L and kind (bugfix/greenfield/refactor/question/ops/chat,
+//     plus a sensitive flag) are classified from the user's message with
+//     regexes (no LLM call); ops (sysadmin on the user's machine) and chat
+//     (a few words, no task) never get an exploration cap or a kind hint;
 //   - step budget S 12 / M 25 / L 50: a reminder at 70% and at 100%, and in
 //     lean mode a hard stop at ~1.5x (never above --max-steps);
 //   - exploration cap S 4 / M 8 / L 15 read/search calls before the first edit:
-//     a nudge when it is reached, refused calls at 2x (lean);
+//     one soft note when it is reached, never a refusal (05-dois-bugs: the
+//     refusal at 2x blocked reading the very file that had to be fixed);
 //   - reread guard: a second full read of an unchanged file returns a pointer
 //     to the earlier tool result instead of the content;
 //   - a write that replaces an existing file keeping > 50% of its lines is
 //     refused once with "use edit";
-//   - final-answer brevity rule (lean), sent with the turn's budget reminder.
 //
 // Config `budget: lean|normal|off` (default lean), flag --budget, env
 // JAZZ_BUDGET. normal doubles the budgets and never hard-stops. Everything is
@@ -26,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // Budget levels.
@@ -45,7 +48,7 @@ const bgCloseGrace = 5
 // bgTask is what the classifier makes of a request.
 type bgTask struct {
 	Size       byte   // 'S', 'M' or 'L'
-	Kind       string // bugfix | greenfield | refactor | question | change
+	Kind       string // bugfix | greenfield | refactor | question | ops | chat | change
 	Sensitive  bool   // auth/money/migrations/secrets: quality strict
 	NoTestEdit bool   // the request forbids changing the tests ("não altere tests/")
 }
@@ -60,7 +63,6 @@ type bgTurn struct {
 	explore    int  // read/search calls before the first edit
 	edited     bool // a write/edit (or a writing bash) ran
 	nudgedExpl bool
-	warnedExpl bool
 	warned70   bool
 	warned100  bool
 	warnedLast bool            // the 1.25x "last pass" nudge already fired
@@ -139,6 +141,22 @@ var (
 	bgSpecErrRE = lazyRx(`(?i)\b(é|e|d[áa]|dar|gera|gerar|levanta|lan[çc]a|retorna|devolve|vira|mesmo|mesma|raises?|returns?|throws?|same|an?)\s+(um\s+|o\s+|a\s+)?(mesmo\s+)?(erro|error|exce[çc][ãa]o|exception)s?\b|\b(mensage(m|ns)|messages?)\s+(do|de|of)\s+(erro|error)s?\b|\bexce[çc][õo]es\s+e\s+mensagens\b`)
 	// bgNoTestEditRE: the request forbids changing tests.
 	bgNoTestEditRE = lazyRx(`(?i)\b(n[ãa]o|nem|never|don'?t|do not)\s+(\w+\s+){0,2}?(alter\w*|mex\w*|edit\w*|modifi\w*|toqu\w*|toca\w*|change|modify|touch|edit)\b[^.\n]{0,25}\b(tests?/?|testes?)(\b|/)`)
+	// bgOpsRE: the request is about the machine itself (network, services,
+	// disks, packages, devices…), not about code. Only counts when the
+	// request names no file and no `symbol` and has no code word (bgCodeWordRE).
+	bgOpsRE = lazyRx(`(?i)\b(wi-?fi|wlan\d*|wlp\w*|eth\d|redes?|network|internet|conex[ãa]o|conectad[oa]s?|desconect\w*|offline|online|tailscale|vpn|wireguard|dns|ip|ping|modem|firewall|ufw|iptables|nftables|portas?|ssh|sshd|systemd|systemctl|runit|servi[çc]os?|daemon|nginx|apache|docker|podman|containers?|cont[êe]ineres?|discos?|hd|ssd|parti[çc](ão|ao|ões|oes)|mount|montar|pendrive|usb|mem[óo]ria|ram|swap|cpu|temperatura|bateria|ventoinha|impressora|bluetooth|som|[áa]udio|pipewire|pulseaudio|alsa|drivers?|kernel|grub|boot|reinici\w*|reboot|desligar|apt|apt-get|pacman|yay|dnf|yum|brew|snap|flatpak|pacotes?|sudo|root|hostname|timezone|fuso|locale|teclado|monitor|resolu[çc](ão|ao)|xorg|wayland|hyprland|processos?|uptime|dispositivos?|devices?|m[áa]quina|sistema|notebook|computador|servidor|instal\w*|desinstal\w*)\b`)
+	// bgCodeWordRE: a word that makes a request about code even with a
+	// sysadmin word in it ("muda a porta do servidor no código").
+	bgCodeWordRE = lazyRx(`(?i)\b(c[óo]digo|code|fun[çc](ão|ao|ões|oes)|functions?|classes?|m[ée]todos?|methods?|endpoints?|api|m[óo]dulos?|modules?|componentes?|components?|testes?|tests?|scripts?|repo\w*|projeto|project|commits?|branch\w*|merge|compil\w*|refator\w*|refactor\w*|bibliotecas?|library|libs?|depend[êe]ncias?|dependenc\w*|vari[áa]ve(l|is)|variables?|structs?|types?|tipos?|schema|query|sql|html|css|frontend|backend)\b`)
+	// bgDoRE: an action verb, wider than bgActionRE (infinitives and the
+	// colloquial "arruma"/"roda"): a request with one is no question or chat.
+	bgDoRE = lazyRx(`(?i)\b(fix|add|create|implement|change|edit|write|update|remove|delete|rename|refactor|make|run|install|conserte|consert\w*|corrij\w*|corrig\w*|arrum\w*|adicion\w*|cri[ae]r?|implement\w*|mud[ae]r?|alter\w*|edit\w*|escrev\w*|atualiz\w*|remov\w*|apag\w*|renome\w*|refator\w*|fa[çc]a|fazer|faz|rod[ae]r?|roda|execut\w*|instal\w*|configur\w*|liga|ligar|deslig\w*|reinici\w*|mostr\w*|list[ae]r?|abr[ae]|abrir|testa|testar|verific\w*|confer\w*|checa\w*|cheq\w*|v[êe]|ver)\b`)
+	// bgGoOnRE: one-word go-aheads ("bora", "continua") carry the task on;
+	// they are never chat.
+	bgGoOnRE = lazyRx(`(?i)^\W*(bora|vai|vamo|vamos|continu\w*|segue|siga|manda|pode|marcha|go|ok|okay|sim|s|yes|y|isso|faz|fa[çc]a|prossiga|next|pr[óo]ximo)\b`)
+	// bgAskLeadRE: openings of a Portuguese question without "?" ("tá
+	// ligado?", "tem como…", "cadê o log").
+	bgAskLeadRE = lazyRx(`(?i)^\s*(que|o que|t[áa]|tem|cad[êe]|consegue)\b`)
 	// bgLeadNewRE: the request opens with "add/implement/create": a feature.
 	bgLeadNewRE = lazyRx(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a)\b`)
 )
@@ -148,24 +166,31 @@ func bgClassify(input string) bgTask {
 	s := strings.TrimSpace(acStripReminders(input))
 	t := bgTask{Size: 'M', Kind: "change", NoTestEdit: bgNoTestEditRE.MatchString(s)}
 	k := bgSpecErrRE.ReplaceAllString(bgNegatedRE.ReplaceAllString(s, " "), " ") // for the kind only
+	files := map[string]bool{}
+	for _, f := range bgFileRE.FindAllString(s, -1) {
+		files[f] = true
+	}
+	syms := len(bgSymbolRE.FindAllString(s, -1))
 	switch {
+	case len(files) == 0 && syms == 0 && bgOpsRE.MatchString(s) && !bgCodeWordRE.MatchString(s):
+		t.Kind = "ops" // sysadmin on this machine: reading is the work, no edit to aim at
+	case bgSmallTalk(s):
+		t.Kind = "chat" // "oi tudo bem?", "valeu", "salve jazz"
 	case bgRefactorRE.MatchString(k):
 		t.Kind = "refactor"
 	case bgLeadNewRE.MatchString(k):
 		t.Kind = "greenfield"
 	case bgBugRE.MatchString(k):
 		t.Kind = "bugfix"
-	case bgQuestionRE.MatchString(s) && !bgActionRE.MatchString(s):
+	case bgQuestionRE.MatchString(s) && !bgActionRE.MatchString(s),
+		(strings.HasSuffix(s, "?") || bgAskLeadRE.MatchString(s)) && !bgDoRE.MatchString(s):
 		t.Kind = "question"
 	case bgNewRE.MatchString(k):
 		t.Kind = "greenfield"
+	case len(files) == 0 && syms == 0 && bgContentTerms(s) < 4 && !bgDoRE.MatchString(s) && !bgGoOnRE.MatchString(s):
+		t.Kind = "chat" // "oi", "valeu", "e aí": no task, no budget
 	}
 	t.Sensitive = bgSensitiveRE.MatchString(s)
-	files := map[string]bool{}
-	for _, f := range bgFileRE.FindAllString(s, -1) {
-		files[f] = true
-	}
-	syms := len(bgSymbolRE.FindAllString(s, -1))
 	switch {
 	case len(files) >= 3 || bgLargeRE.MatchString(bgNegatedRE.ReplaceAllString(s, " ")):
 		t.Size = 'L'
@@ -173,6 +198,35 @@ func bgClassify(input string) bgTask {
 		t.Size = 'S'
 	}
 	return t
+}
+
+// bgSmallTalk: a greeting, thanks or goodbye the offline brain also answers
+// (brain_smalltalk.go). "bora", "marcha" and "continua" are not in it.
+func bgSmallTalk(s string) bool {
+	_, ok := brSmallTalk(s)
+	return ok
+}
+
+// bgStopWords are the function words bgContentTerms skips (PT and EN).
+var bgStopWords = map[string]bool{}
+
+func init() {
+	for _, w := range strings.Fields(`o a os as um uma uns umas de do da dos das d e é em no na nos nas num numa pra pro pras pros para por pelo pela com sem que se me te lhe nos vos eu tu ele ela eles elas voce você vc vcs meu minha meus minhas seu sua teu tua isso isto esse essa este esta aqui ai aí la lá ja já mas mais muito bem tão tao entao então ne né ta tá to tô
+		the a an of to in on at is are was be it its this that and or i you me my your we he she they what so do does just`) {
+		bgStopWords[w] = true
+	}
+}
+
+// bgContentTerms counts the words of s that carry content: letters only,
+// two or more of them, not a function word.
+func bgContentTerms(s string) int {
+	n := 0
+	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) }) {
+		if len([]rune(w)) >= 2 && !bgStopWords[w] {
+			n++
+		}
+	}
+	return n
 }
 
 // bgBudgets returns the step budget and exploration cap of a task.
@@ -194,8 +248,16 @@ func bgBudgets(t bgTask, level string) (steps, explore int) {
 	default:
 		steps, explore = 25, 8
 	}
-	if t.Kind == "question" {
+	switch t.Kind {
+	case "question":
 		explore = 0 // nothing to edit: reading is the task
+	case "chat":
+		explore = 0 // conversation: nothing to cap
+	case "ops":
+		explore = 0 // sysadmin: looking around is the task, not a detour
+		if steps < 40 {
+			steps = 40 // diagnose, change, check again: more steps than an S/M edit
+		}
 	}
 	if level == bgNormal {
 		steps, explore = steps*2, explore*2
@@ -213,6 +275,9 @@ func (a *Agent) bgBeginTurn(input string) string {
 	if a.sub {
 		return input
 	}
+	// chat still gets a turn (quality gate and reread guard keep working if
+	// the classifier got a short task wrong) but no cap, no hard stop and no
+	// reminder: "oi" is not a task to budget.
 	bt := &bgTurn{task: bgClassify(input), level: a.budgetLevel(), refused: map[string]bool{}, pre: map[string]*qgPre{}}
 	st.turn = bt
 	if bt.level == bgOff {
@@ -222,23 +287,21 @@ func (a *Agent) bgBeginTurn(input string) string {
 		bt.task.Kind = "question" // plan mode only reads: no exploration cap
 	}
 	bt.stepBudget, bt.exploreCap = bgBudgets(bt.task, bt.level)
-	bt.hardSteps = bt.level == bgLean
+	bt.hardSteps = bt.level == bgLean && bt.task.Kind != "ops" && bt.task.Kind != "chat" // ops: diagnosis takes what it takes (--max-steps still holds)
 	dbg("budget", map[string]any{"size": string(bt.task.Size), "kind": bt.task.Kind, "sensitive": bt.task.Sensitive, "steps": bt.stepBudget, "explore": bt.exploreCap, "level": bt.level})
-	if bt.task.Kind == "question" || len(strings.TrimSpace(acStripReminders(input))) < 12 {
+	if bt.task.Kind == "question" || bt.task.Kind == "ops" || bt.task.Kind == "chat" || len(strings.TrimSpace(acStripReminders(input))) < 12 {
 		return input
 	}
 	return bgReminder(bt) + "\n" + input
 }
 
-// bgReminder is the short per-turn budget note (about 70 tokens).
+// bgReminder is the short per-turn budget note, in Portuguese like the user
+// (weak models answered in English 31–40% of the time when every note was English).
 func bgReminder(bt *bgTurn) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "<system-reminder>Budget for this task (size %c): about %d steps; at most %d read/search calls before your first edit; do not re-read a file you already read unless it changed (use offset/limit or rg).", bt.task.Size, bt.stepBudget, bt.exploreCap)
+	fmt.Fprintf(&b, "<system-reminder>Orçamento desta tarefa (tamanho %c): uns %d passos, até %d leituras antes de editar; não releia arquivo sem mudança.", bt.task.Size, bt.stepBudget, bt.exploreCap)
 	if h := bgKindHint(bt.task); h != "" {
 		b.WriteString(" " + h)
-	}
-	if bt.level == bgLean {
-		b.WriteString(" Final reply: at most 8 lines: what changed, the evidence (command and result), one line on what you skipped or did not verify.")
 	}
 	b.WriteString("</system-reminder>")
 	return b.String()
@@ -253,14 +316,16 @@ func bgKindHint(t bgTask) string {
 	var h string
 	switch t.Kind {
 	case "bugfix":
-		h = "Bugfix: reproduce the failure with a command first, fix the cause, re-run the same command; add a regression test where a test already exists nearby."
+		h = "Bug: reproduza com um comando, corrija a causa, rode o mesmo comando; teste perto ganha regressão."
 	case "greenfield":
-		h = "New code: the smallest thing that works; new branches or loops get a test."
+		h = "Código novo: o menor que funciona; ramo ou laço novo ganha teste."
 	case "refactor":
-		h = "Refactor: run the tests before and after; behaviour and the number of tests stay the same; touch only what the change needs."
+		h = "Refatoração: testes antes e depois, mesmo comportamento, mexa só no necessário."
+	case "ops", "chat", "question":
+		return "" // no code to aim at: a coding hint here is noise (a wifi request got "New code: …")
 	}
 	if t.Sensitive {
-		h = strings.TrimSpace(h + " High-stakes path (auth/money/data): validate inputs, handle errors, never weaken a check or a test.")
+		h = strings.TrimSpace(h + " Caminho sensível: valide entradas, trate erros, nunca afrouxe checagem nem teste.")
 	}
 	return h
 }
@@ -295,14 +360,14 @@ func (a *Agent) bgStepNote(step int) string {
 	case used*4 >= bt.stepBudget*5 && !bt.warnedLast:
 		bt.warnedLast, bt.warned100, bt.warned70 = true, true, true
 		dbg("budget", map[string]any{"steps_last_pass": used})
-		return "<system-reminder>You are well past budget: last pass — make no new edits, verify once and give the final answer.</system-reminder>"
+		return "<system-reminder>Bem acima do orçamento: última volta — sem edição nova, verifique uma vez e responda.</system-reminder>"
 	case used >= bt.stepBudget && !bt.warned100:
 		bt.warned100, bt.warned70 = true, true
 		dbg("budget", map[string]any{"steps_reached": used})
-		return fmt.Sprintf("<system-reminder>You have used the %d steps budgeted for this task. Stop exploring: verify what you have and give the final answer now; say what is left.</system-reminder>", bt.stepBudget)
+		return fmt.Sprintf("<system-reminder>Os %d passos do orçamento acabaram. Pare de explorar: verifique o que tem e responda agora, dizendo o que falta.</system-reminder>", bt.stepBudget)
 	case used*10 >= bt.stepBudget*7 && !bt.warned70:
 		bt.warned70 = true
-		return fmt.Sprintf("<system-reminder>You have used %d of about %d steps budgeted for this task. Start wrapping up: finish the change, verify it once, answer.</system-reminder>", used, bt.stepBudget)
+		return fmt.Sprintf("<system-reminder>Usou %d de uns %d passos do orçamento. Comece a fechar: termine a mudança, verifique uma vez e responda.</system-reminder>", used, bt.stepBudget)
 	}
 	return ""
 }
@@ -324,7 +389,8 @@ func (a *Agent) bgTurnState() *bgTurn {
 // ---------- tool hooks (called from Agent.execTool and the Run loop) ----------
 
 // bgPreTool runs before permissions. hit=true: out replaces the tool call
-// (reread pointer, write refused, exploration cap); the tool does not run.
+// (reread pointer, write refused); the tool does not run. Exploration is
+// never refused: past the cap there is one soft note (bgAfterTool).
 // It also records quality-gate pre-images of files about to change.
 func (a *Agent) bgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 	bt := a.bgTurnState()
@@ -365,14 +431,6 @@ func (a *Agent) bgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 					Display: Display{Summary: "recusado: use edit (arquivo quase igual)", Path: a.tools.rel(abs)}}, true
 			}
 		}
-	}
-	if bt.level == bgLean && !bt.edited && bt.exploreCap > 0 && bt.explore >= 2*bt.exploreCap && a.bgExplore(tc.Name, m) {
-		if !bt.warnedExpl {
-			bt.warnedExpl = true
-			a.ui.Warn(fmt.Sprintf("orçamento de exploração esgotado (%d leituras/buscas sem editar) — o modelo precisa editar ou perguntar", bt.explore))
-		}
-		return ToolOutput{IsErr: true, Text: fmt.Sprintf("TOOL_NOT_EXECUTED: exploration budget used up (%d read/search calls before any edit; budget %d for this size-%c task). You have enough context: make the edit now with what you know, or ask the user one concrete question.", bt.explore, bt.exploreCap, bt.task.Size),
-			Display: Display{Summary: "orçamento de exploração esgotado"}}, true
 	}
 	return out, false
 }
@@ -432,7 +490,7 @@ func (a *Agent) bgAfterTool(tc ToolCall, out ToolOutput) string {
 	if bt.explore >= bt.exploreCap && !bt.nudgedExpl {
 		bt.nudgedExpl = true
 		dbg("budget", map[string]any{"explore_reached": bt.explore})
-		return fmt.Sprintf("\n\n<system-reminder>That was read/search call %d without an edit (budget %d for this task). You have enough context: make the edit now, or ask the user one concrete question.</system-reminder>", bt.explore, bt.exploreCap)
+		return fmt.Sprintf("\n\n<system-reminder>Leitura/busca %d sem editar (orçamento %d). Se já sabe o bastante, faça a mudança; se falta algo, leia só o que falta.</system-reminder>", bt.explore, bt.exploreCap)
 	}
 	return ""
 }
@@ -444,7 +502,7 @@ func (a *Agent) bgOnReset() {
 	st := a.bg()
 	st.reads = map[string]bgRead{}
 	if bt := st.turn; bt != nil {
-		bt.explore, bt.nudgedExpl, bt.warnedExpl = 0, false, false
+		bt.explore, bt.nudgedExpl = 0, false
 	}
 }
 
