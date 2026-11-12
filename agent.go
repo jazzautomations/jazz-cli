@@ -49,6 +49,7 @@ type Agent struct {
 	allow       map[string]bool
 	recent      []string
 	badCalls    map[string]bool // calls refused by validation in this turn (argfix.go)
+	chatLane    bool            // this turn is small talk (chatlane.go)
 	steerMu     sync.Mutex
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
@@ -464,15 +465,21 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	if mode == "plan" && !a.sub {
 		input = planReminder + "\n" + input
 	}
+	chat := a.acChatLane(lt.input) // "oi"/"valeu" with nothing pending: no task machinery (chatlane.go)
+	a.chatLane = chat
 	turnModel, input = a.ojStartTurn(ctx, lt.input, turnModel, input) // omni judge: task type -> model, fusion/panel notes (judge.go)
 	if !a.sub {
-		a.tools.BeginTurn(len(a.Msgs))
-		OmniBeginTurn() // re-seed the weighted router once per turn, not per request
+		a.tools.beginTurn(len(a.Msgs), !chat) // chat: no checkpoint scan
+		OmniBeginTurn()                       // re-seed the weighted router once per turn, not per request
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
 	a.cbAttachNotice(turnModel) // a model without vision: say so and name one that sees (caps.go)
-	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input), Images: a.attach})
+	inject := ""
+	if !chat {
+		inject = a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input)
+	}
+	a.append(Message{Role: "user", Content: input + inject, Images: a.attach})
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
@@ -545,7 +552,11 @@ turnLoop:
 		if pre != nil {
 			resp, used = pre, turnModel
 		} else {
-			resp, used, err = a.chatWithFallback(ctx, turnModel, acChatOpt{noToolUse: atLimit, stream: true, boost: boost})
+			opt := acChatOpt{noToolUse: atLimit, stream: true, boost: boost}
+			if chat && !boost {
+				opt.maxOut = acChatOut // a conversation reply is short (chatlane.go)
+			}
+			resp, used, err = a.chatWithFallback(ctx, turnModel, opt)
 		}
 		if used != "" {
 			if used != a.Model && used != turnModel {

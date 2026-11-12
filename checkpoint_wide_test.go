@@ -29,9 +29,11 @@ func cpCountingGit(t *testing.T) string {
 	return log
 }
 
+// cpCalls counts the checkpoint store's git calls (they all carry its -c
+// core.bare=false prefix; gitRoot's rev-parse is not one of them).
 func cpCalls(log string) int {
 	b, _ := os.ReadFile(log)
-	return strings.Count(string(b), "\n")
+	return strings.Count(string(b), "core.bare=false")
 }
 
 // jazz started in $HOME: no git call at all, /undo says why.
