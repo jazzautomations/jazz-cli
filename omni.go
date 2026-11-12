@@ -114,7 +114,10 @@ func omniPresetsBase() map[string]*ProviderConf {
 			Free: true, Quirks: []string{"effort"},
 			Limits: pvLim(Limits{RPM: 30, RPD: 1000, TPM: 8000, TPD: 200000, MaxReq: 7500}), Signup: "https://console.groq.com/keys",
 			KeyHint: "começa com gsk_", KeyRE: `^gsk_`, Title: "Groq"},
-		"nvidia": {Type: "openai", BaseURL: "https://integrate.api.nvidia.com/v1", KeyEnv: "NVIDIA_API_KEY", DefaultModel: "z-ai/glm-5.3",
+		// z-ai/glm-5.3 reached end of life on 2026-10-28 (HTTP 410 in 14 runs);
+		// nemotron-3-ultra is listed by /v1/models (2026-11-12) and answers
+		// 98% over OpenRouter.
+		"nvidia": {Type: "openai", BaseURL: "https://integrate.api.nvidia.com/v1", KeyEnv: "NVIDIA_API_KEY", DefaultModel: "nvidia/nemotron-3-ultra-550b-a55b",
 			Free: true, Train: true, Probe: "chat1",
 			Limits: pvLim(Limits{RPM: 40, Scope: "key"}), Signup: "https://build.nvidia.com/settings/api-keys",
 			KeyHint: "começa com nvapi-", KeyRE: `^nvapi-`, Title: "NVIDIA API Catalog"},
@@ -159,13 +162,16 @@ func pvTiers(t ...string) []string { return t }
 
 // presetModels: Q is a prior (to be calibrated by an eval); tiers decide the aliases.
 var presetModels = []presetModel{
-	{"nvidia/z-ai/glm-5.3", ModelConf{Q: 86, Tiers: pvTiers("coder", "smart")}},
-	{"nvidia/moonshotai/kimi-k2.6", ModelConf{Q: 85, Tiers: pvTiers("coder", "smart")}},
-	{"gemini/gemini-3.8-flash", ModelConf{Q: 84, Context: 1048576, Tiers: pvTiers("smart", "coder", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
-	{"gemini/gemini-3.6-flash", ModelConf{Q: 80, Context: 1048576, Tiers: pvTiers("smart", "coder", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
+	// removed 2026-11: nvidia/z-ai/glm-5.3 (410 end of life 28/10),
+	// nvidia/moonshotai/kimi-k2.6 (9/9 404) and nvidia/deepseek-v4.1-flash (0/37 ok).
+	// gemini 3.x-flash left the coder tier: 20 requests/day is ~1 task.
+	{"gemini/gemini-3.8-flash", ModelConf{Q: 84, Context: 1048576, Tiers: pvTiers("smart", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
+	{"gemini/gemini-3.6-flash", ModelConf{Q: 80, Context: 1048576, Tiers: pvTiers("smart", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
 	{"gemini/gemini-2.5-pro", ModelConf{Q: 78, Context: 1048576, Tiers: pvTiers("smart"), Limits: pvLim(Limits{RPD: 50, Reset: "PT"})}},
 	{"gemini/gemini-3.5-flash-lite", ModelConf{Q: 65, Context: 1048576, Tiers: pvTiers("fast", "long", "free"), Limits: pvLim(Limits{RPD: 500, Reset: "PT"})}},
-	{"nvidia/deepseek-ai/deepseek-v4.1-flash", ModelConf{Q: 80, Tiers: pvTiers("coder", "smart", "fast")}},
+	// the NVIDIA route of the model that answers 98% via OpenRouter (122/124);
+	// listed by integrate.api.nvidia.com/v1/models on 2026-11-12
+	{"nvidia/nvidia/nemotron-3-ultra-550b-a55b", ModelConf{Q: 75, Context: 1000000, Tiers: pvTiers("smart", "coder", "long")}},
 	{"cloudflare/@cf/moonshotai/kimi-k2.5", ModelConf{Q: 80, Tiers: pvTiers("coder")}},
 	{"mistral/devstral-medium-latest", ModelConf{Q: 78, Tiers: pvTiers("coder")}},
 	{"openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", ModelConf{Q: 75, Context: 1000000, Tiers: pvTiers("smart", "coder", "free", "long")}},
