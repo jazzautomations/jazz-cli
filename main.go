@@ -1990,7 +1990,11 @@ func (a *App) command(line string) {
 			if a.tools.BashTracked() {
 				ui.Notice("nada pra desfazer")
 			} else {
-				ui.Notice("nada pra desfazer (mudanças feitas via bash não são rastreadas)")
+				msg := "nada pra desfazer (mudanças feitas via bash não são rastreadas"
+				if why := a.tools.CheckpointOff(); why != "" {
+					msg += ": " + why
+				}
+				ui.Notice(msg + ")")
 			}
 			return
 		}
