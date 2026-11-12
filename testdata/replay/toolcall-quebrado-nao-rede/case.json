@@ -1,0 +1,18 @@
+{
+  "name": "toolcall-quebrado-nao-rede",
+  "origin": "groq/openai/gpt-oss-120b, 'falha de rede: Failed to parse tool call' (regressão do #33)",
+  "why": "o provedor recusou a tool call que o próprio modelo gerou (JSON quebrado); isso é defeito do modelo, não 'rede', e não pode ligar o modo offline",
+  "entry": "agent",
+  "mode": "auto",
+  "headless": true,
+  "provider": {
+    "repeat": true,
+    "seq": [{"status": 400, "body": "{\"error\":{\"message\":\"Failed to parse tool call arguments as JSON\",\"type\":\"invalid_request_error\",\"code\":\"tool_use_failed\"}}"}]
+  },
+  "turns": ["lista os arquivos daqui"],
+  "expect": {
+    "err": "some",
+    "offline": false,
+    "err_absent": ["rede", "network", "offline"]
+  }
+}

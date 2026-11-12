@@ -1,0 +1,30 @@
+{
+  "name": "toolcall-quebrado-stream",
+  "origin": "groq/openai/gpt-oss-120b: o mesmo tool_use_failed chegando como evento de erro no meio do SSE (o 'HTTP 0')",
+  "why": "o erro de tool call no stream chega sem status HTTP; ainda é defeito do modelo e não 'rede' nem offline. Vermelho na v0.13.4: olIsOffline trata o status 0 do evento SSE como rede caída (é o '#33' voltando). Fecha com o classificador único (F1.1); se o conserto cair no olIsOffline (F3, sinergia §4), quem fechar tira o front",
+  "entry": "agent",
+  "mode": "auto",
+  "headless": true,
+  "provider": {
+    "repeat": true,
+    "seq": [
+      {
+        "err_chunk": "Failed to parse tool call arguments as JSON",
+        "err_code_str": "tool_use_failed"
+      }
+    ]
+  },
+  "turns": [
+    "lista os arquivos daqui"
+  ],
+  "expect": {
+    "err": "some",
+    "offline": false,
+    "err_absent": [
+      "rede",
+      "network",
+      "offline"
+    ]
+  },
+  "front": "F1"
+}

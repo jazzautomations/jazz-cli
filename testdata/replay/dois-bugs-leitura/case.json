@@ -1,0 +1,162 @@
+{
+  "name": "dois-bugs-leitura",
+  "origin": "macbookpro 261110-110658-b22e (eval 05-dois-bugs)",
+  "why": "o teto de exploração recusou ler acervo.py/calendario.py, justamente os arquivos a corrigir (TOOL_NOT_EXECUTED 5×); ler nunca pode ser bloqueado",
+  "front": "F4",
+  "entry": "agent",
+  "mode": "auto",
+  "files": {
+    "acervo.py": "def total(xs):\n    return sum(xs) - 1  # bug\n",
+    "calendario.py": "def dias(m):\n    return 30 if m == 2 else 31  # bug\n",
+    "lib/mod00.py": "X0 = 0\n",
+    "lib/mod01.py": "X1 = 1\n",
+    "lib/mod02.py": "X2 = 2\n",
+    "lib/mod03.py": "X3 = 3\n",
+    "lib/mod04.py": "X4 = 4\n",
+    "lib/mod05.py": "X5 = 5\n",
+    "lib/mod06.py": "X6 = 6\n",
+    "lib/mod07.py": "X7 = 7\n",
+    "lib/mod08.py": "X8 = 8\n",
+    "lib/mod09.py": "X9 = 9\n"
+  },
+  "provider": {
+    "seq": [
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "acervo.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "calendario.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod00.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod01.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod02.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod03.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod04.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod05.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod06.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod07.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod08.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "lib/mod09.py"
+            }
+          }
+        ]
+      },
+      {
+        "text": "achei os dois bugs: acervo.py subtrai 1 e calendario.py erra fevereiro."
+      }
+    ]
+  },
+  "turns": [
+    "tem dois bugs no acervo.py e no calendario.py, acha e conserta"
+  ],
+  "expect": {
+    "err": "none",
+    "tool_absent": [
+      "TOOL_NOT_EXECUTED"
+    ],
+    "tool_has": [
+      "return sum(xs) - 1",
+      "X9 = 9"
+    ]
+  }
+}

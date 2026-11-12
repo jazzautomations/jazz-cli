@@ -1,0 +1,24 @@
+{
+  "name": "m-respeitado",
+  "origin": "macbookpro 261110-191600-5c06",
+  "why": "24 sessões com -m gemini sem nenhum request ao gemini: o ref pedido saiu da lista por estar em cota e a cadeia grátis implícita respondeu sem aviso",
+  "front": "F1",
+  "entry": "agent",
+  "mode": "auto",
+  "headless": true,
+  "model": "gemini/gemini-3.8-flash",
+  "presets": ["gemini", "kilo", "openrouter"],
+  "env": {"GEMINI_API_KEY": "AIzaFAKE-replay-key-000000000000000000"},
+  "dead": [{"ref": "gemini/gemini-3.8-flash", "minutes": 60}],
+  "provider": {
+    "repeat": true,
+    "by_ref": {"gemini/gemini-3.8-flash": [{"status": 429, "body": "[{\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"status\":\"RESOURCE_EXHAUSTED\"}}]"}]}
+  },
+  "turns": ["responda apenas: ok"],
+  "expect": {
+    "err": "some",
+    "models_only": ["gemini/gemini-3.8-flash"],
+    "err_has": ["gemini"],
+    "err_absent": ["[{", "{\""]
+  }
+}

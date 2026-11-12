@@ -1,0 +1,22 @@
+{
+  "name": "oi-limpo",
+  "origin": "d610 261109-221930-4d1b",
+  "why": "um 'oi' em $HOME levou a lição do wifi (plano 'verificado' que falhou) e um pedaço de senha pra um provedor grátis; conversa não pode carregar lição nem plan cache",
+  "front": "F3",
+  "entry": "agent",
+  "mode": "auto",
+  "files": {"setup.sh": "#!/bin/sh\necho ok\n", "wifi.sh": "#!/bin/sh\nnmcli dev wifi\n"},
+  "seed": {"plans": [
+    {"id": "55031196017e", "time": 1762717539, "task": "porra arruma ae essa merda do wifi", "keys": ["arruma", "merda", "wifi"],
+     "steps": ["ls /etc/wpa_supplicant", "iwconfig"], "cmds": ["ls /etc/wpa_supplicant", "iwconfig wlan0"],
+     "verify": "ls /etc/wpa_supplicant", "hint": "a rede é CasaDoJazz, a senha começa com SENHAFAKE-oi-limpo",
+     "n_steps": 9, "wins": 3, "fails": 0, "kind": "M/change", "repo": ".sh", "session": "261109-164340-694a"}
+  ]},
+  "provider": {"seq": [{"text": "oi! em que posso ajudar?"}]},
+  "turns": ["oi"],
+  "expect": {
+    "err": "none",
+    "requests": 1,
+    "request_absent": ["Lesson", "Plan cache", "da última vez", "SENHAFAKE", "wpa_supplicant"]
+  }
+}
