@@ -23,18 +23,40 @@ func TestRunClockText(t *testing.T) {
 	}
 }
 
-// The clock is appended at most every rcClockEvery and never on the first step.
+// The clock rides on the last tool result (never a user message of its
+// own): every rcClockEvery with a deadline, after rcClockIdle without one.
 func TestRunClockCadence(t *testing.T) {
 	a := &Agent{}
 	t0 := time.Now()
+	a.RunDeadline = t0.Add(10 * time.Minute)
 	a.rcClock(t0)
+	a.Msgs = append(a.Msgs, Message{Role: "tool", ToolCallID: "c1", Content: "ok"})
 	a.rcClock(t0.Add(time.Minute))
-	if len(a.Msgs) != 0 {
-		t.Fatalf("too early: %d reminders", len(a.Msgs))
+	if a.Msgs[0].Content != "ok" {
+		t.Fatalf("too early: %q", a.Msgs[0].Content)
 	}
 	a.rcClock(t0.Add(3 * time.Minute))
 	a.rcClock(t0.Add(4 * time.Minute))
-	if len(a.Msgs) != 1 || !strings.Contains(a.Msgs[0].Content, "rodando há 3m") {
-		t.Fatalf("want one reminder at 3m, got %+v", a.Msgs)
+	if len(a.Msgs) != 1 || strings.Count(a.Msgs[0].Content, "rodando há 3m") != 1 || strings.Count(a.Msgs[0].Content, "relógio") != 1 {
+		t.Fatalf("want one clock note at 3m on the tool result, got %+v", a.Msgs)
+	}
+	// a user message last: no clock, no new message
+	a.Msgs = append(a.Msgs, Message{Role: "user", Content: "<system-reminder>x</system-reminder>"})
+	a.rcClock(t0.Add(8 * time.Minute))
+	if len(a.Msgs) != 2 || strings.Contains(a.Msgs[1].Content, "relógio") {
+		t.Fatalf("clock must not become or ride on a user message: %+v", a.Msgs)
+	}
+
+	// no deadline: nothing before 10 minutes
+	b := &Agent{}
+	b.rcClock(t0)
+	b.Msgs = append(b.Msgs, Message{Role: "tool", ToolCallID: "c1", Content: "ok"})
+	b.rcClock(t0.Add(5 * time.Minute))
+	if b.Msgs[0].Content != "ok" {
+		t.Fatalf("no deadline: no clock at 5m: %q", b.Msgs[0].Content)
+	}
+	b.rcClock(t0.Add(11 * time.Minute))
+	if !strings.Contains(b.Msgs[0].Content, "rodando há 11m") {
+		t.Fatalf("no deadline: clock after 10m: %q", b.Msgs[0].Content)
 	}
 }
