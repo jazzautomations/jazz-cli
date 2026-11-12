@@ -52,6 +52,7 @@ type Agent struct {
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
 	pendingNote []string
+	pcPrev      pcPrevTurn // plans injected in the last turn: a correction in the next one counts against them (plancache.go)
 
 	mq *MsgQueue // messages typed during the turn: steer / follow-up (queue.go); guarded by steerMu
 

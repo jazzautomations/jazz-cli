@@ -344,6 +344,7 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.ol = olState{} // the background probe found a provider (and said so)
 		a.olGen.Add(1)
 	}
+	a.syRejected(text) // "não, …" right after an offline answer: a negative label (synergy.go)
 	// a reply to a pending numbered menu runs the chosen action
 	if act, ok := a.olTakePick(text); ok {
 		a.olRun(ctx, act)

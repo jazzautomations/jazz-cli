@@ -193,6 +193,19 @@ func (a *App) syAttachLast(text string) string {
 	return text + "\n\n" + syDataBlock(l)
 }
 
+// syRejected: an explicit correction right after an offline answer
+// ("não, to falando da sessão do claude") is a negative label for the
+// reading that produced it — recorded as a "rejected" signal (the forge
+// trains only on "correction", so this never becomes a positive example).
+func (a *App) syRejected(text string) {
+	l := a.sy.last
+	if l == nil || l.source == "literal" || !syIsCorrection(text) || !sigEnabled() {
+		return
+	}
+	s := sigOf("rejected", l.req, Intent{Name: l.cmd}, map[string]string{"how": "next_msg", "source": l.source, "sess": a.sigSession()})
+	_ = sigAppend(s)
+}
+
 // syEscalate is Enter on an empty line (or /m): the last offline answer, or
 // the request kept while no model answered, goes to the model now — the
 // original request, with the result as data. false = nothing to send.

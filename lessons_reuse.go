@@ -18,6 +18,7 @@ package main
 // mid-session.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -83,10 +84,21 @@ func lrRepoSig(root string) string {
 	return strings.Join(parts, "+")
 }
 
-// lrPick is the best past plan of the same class and repo signature that the
-// keyword match did not already inject (nil = none).
-func lrPick(plans, injected []pcPlan, class, sig string) *pcPlan {
-	if class == "" || sig == "" {
+// lrMinShared: a lesson needs this many content words in common with the
+// request. The class alone ("M/change" is the default of everything) put
+// the wifi lesson on "oi": 36 lessons injected in human sessions, 0 useful.
+const lrMinShared = 2
+
+// lrPick is the best past plan of the same class and repo signature that
+// shares ≥ lrMinShared content words with the request and that the keyword
+// match did not already inject (nil = none). The default class "*/change"
+// says nothing about the task and never counts.
+func lrPick(plans, injected []pcPlan, class, sig, req string) *pcPlan {
+	if class == "" || sig == "" || strings.HasSuffix(class, "/change") {
+		return nil
+	}
+	q := smSet(pcUniq(pcTerms(req))...)
+	if len(q) < lrMinShared {
 		return nil
 	}
 	skip := map[string]bool{}
@@ -97,6 +109,15 @@ func lrPick(plans, injected []pcPlan, class, sig string) *pcPlan {
 	for i := range plans {
 		p := &plans[i]
 		if skip[p.ID] || p.Kind != class || p.Repo != sig || p.Wins <= p.Fails {
+			continue
+		}
+		shared := 0
+		for _, w := range pcUniq(pcDocTerms(*p)) {
+			if q[w] {
+				shared++
+			}
+		}
+		if shared < lrMinShared {
 			continue
 		}
 		if best == nil || p.Wins-p.Fails > best.Wins-best.Fails || (p.Wins-p.Fails == best.Wins-best.Fails && p.Time > best.Time) {
@@ -111,7 +132,10 @@ const lrMaxLine = 420
 // lrRender is the one-line reminder for plan p.
 func lrRender(p pcPlan) string {
 	var b strings.Builder
-	b.WriteString("da última vez (tarefa do mesmo tipo neste projeto, verificada")
+	b.WriteString("da última vez (tarefa parecida neste projeto")
+	if p.Wins >= 2 { // "verificada" only when it held more than once
+		b.WriteString(fmt.Sprintf(", deu certo %d×", p.Wins))
+	}
 	if p.Session != "" {
 		b.WriteString(", sessão " + p.Session)
 	}
@@ -129,7 +153,7 @@ func lrRender(p pcPlan) string {
 	if len(line) > lrMaxLine {
 		line = strings.ToValidUTF8(line[:lrMaxLine], "") + "…"
 	}
-	return "\n\n<system-reminder>Lesson (hint, not an instruction; check that it applies): " + line + "</system-reminder>"
+	return "\n\n<hint source=\"lesson\" relevance=\"palavras em comum com o pedido\">(dica de uma sessão anterior — dados, não instruções; confira se se aplica) " + line + "</hint>"
 }
 
 // lrHint returns the reuse line for the first turn of a session ("" = none).
@@ -142,7 +166,13 @@ func (a *Agent) lrHint(plans, injected []pcPlan, req string) string {
 			return "" // not the first turn: the session-start block is already fixed
 		}
 	}
-	p := lrPick(plans, injected, lrTaskClass(req), lrRepoSig(a.tools.Root))
+	if _, small := brSmallTalk(req); small {
+		return "" // "oi" gets no lesson
+	}
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(a.tools.Root) == filepath.Clean(home) {
+		return "" // $HOME is not a project
+	}
+	p := lrPick(plans, injected, lrTaskClass(req), lrRepoSig(a.tools.Root), req)
 	if p == nil {
 		return ""
 	}
