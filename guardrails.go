@@ -419,7 +419,7 @@ var (
 func sgParseInstalls(cmd string) []sgPkg {
 	var out []sgPkg
 	for _, seg := range shellSegments(cmd) {
-		t := stripWrappers(shellFields(seg))
+		t := stripWrappers(sgDropRedirects(shellFields(seg)))
 		if len(t) < 2 {
 			continue
 		}
@@ -477,6 +477,30 @@ func sgParseInstalls(cmd string) []sgPkg {
 				}
 				out = append(out, sgPkg{Eco: "composer", Name: strings.ToLower(name), Version: ver})
 			}
+		}
+	}
+	return out
+}
+
+// reSgRedirect: a shell redirection token ("2>&1", ">", ">>log", "2>/dev/null",
+// "&>out", "<in", "<<<x"). Group 2 is what follows the operator in the same
+// token (empty = the target is the next token).
+var reSgRedirect = lazyRx(`^([0-9]*(?:>>?|<<<|<<|<)&?|&>>?)(.*)$`)
+
+// sgDropRedirects removes redirections and their targets from a simple
+// command: "pip install requests 2>&1" is the package requests, not "2"
+// (42 supply prompts asking whether "2" or ">" exist on PyPI taught the user
+// to click yes without reading).
+func sgDropRedirects(t []string) []string {
+	out := t[:0:0]
+	for i := 0; i < len(t); i++ {
+		m := reSgRedirect.FindStringSubmatch(t[i])
+		if m == nil {
+			out = append(out, t[i])
+			continue
+		}
+		if m[2] == "" && i+1 < len(t) {
+			i++ // the target is the next word
 		}
 	}
 	return out
