@@ -701,6 +701,60 @@ func (a *Agent) obHandoff(stop StopReason, errText, checkpoint string) string {
 		b.WriteString(" (checkpoint " + obShort(checkpoint) + ")")
 	}
 	b.WriteString(". Continue exactly where it stopped; do not redo finished work. A result marked TOOL_NOT_STARTED did not run; one marked TOOL_OUTCOME_UNKNOWN may have run partly: check the state before repeating it.</system-reminder>\n\n")
+	hf := a.obHandoffFacts()
+	task, trail, lastText, lastVerify := hf.task, hf.trail, hf.lastText, hf.lastVerify
+	if task != "" {
+		b.WriteString("## Task\n" + acClip(task, 1200) + "\n\n")
+	}
+	if files := hf.files; len(files) > 0 {
+		b.WriteString("## Files changed in the last turn\n")
+		for _, f := range acClipList(files, 30) {
+			b.WriteString("- " + f + "\n")
+		}
+		b.WriteString("\n")
+	}
+	if len(trail) > 0 {
+		b.WriteString("## Last tool calls (oldest first)\n")
+		for i, t := range trail[max(0, len(trail)-8):] {
+			fmt.Fprintf(&b, "%d. %s\n", i+1, t)
+		}
+		b.WriteString("\n")
+	}
+	if lastVerify != "" {
+		b.WriteString("## Last verification\n" + lastVerify + "\n\n")
+	}
+	if lastText != "" {
+		b.WriteString("## Last thing the assistant said\n" + acClip(lastText, 600) + "\n\n")
+	}
+	open := a.openTodos()
+	if open != "" {
+		b.WriteString("## Open todo items\n" + acClip(open, 800) + "\n\n")
+	}
+	b.WriteString("## Next step\n")
+	switch {
+	case open != "":
+		b.WriteString("Continue with the open todo items above.")
+	case lastVerify != "":
+		b.WriteString("Re-run the last verification, fix what still fails, then give the final answer.")
+	default:
+		b.WriteString("Check the current state of the files, finish the task and verify it.")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// obHandoffFacts is what the handoff note is made of: the task, the files the
+// last turn changed, the last tool calls and how they ended, the last
+// verification and the last thing the assistant said. Shared by the note for
+// the model (obHandoff) and the summary for the user (obHandoffPT).
+type obHandoffFactsT struct {
+	task, lastText, lastVerify string
+	verifyCmd, verifyState     string
+	files, trail               []string
+}
+
+func (a *Agent) obHandoffFacts() obHandoffFactsT {
+	verifyCmd, verifyState := "", ""
 	task := ""
 	for _, m := range a.Msgs {
 		if m.Role == "user" && !strings.HasPrefix(m.Content, "<summary>") {
@@ -709,16 +763,6 @@ func (a *Agent) obHandoff(stop StopReason, errText, checkpoint string) string {
 				break
 			}
 		}
-	}
-	if task != "" {
-		b.WriteString("## Task\n" + acClip(task, 1200) + "\n\n")
-	}
-	if files := a.tools.rcTurnFiles(); len(files) > 0 {
-		b.WriteString("## Files changed in the last turn\n")
-		for _, f := range acClipList(files, 30) {
-			b.WriteString("- " + f + "\n")
-		}
-		b.WriteString("\n")
 	}
 	// the last tool calls and how they ended
 	var trail []string
@@ -751,39 +795,13 @@ func (a *Agent) obHandoff(stop StopReason, errText, checkpoint string) string {
 			line := fmt.Sprintf("%s %s → %s", tc.Name, oneLine(toolDetail(tc.Name, tc.Args), 120), state)
 			trail = append(trail, line)
 			if tc.Name == "bash" && rcIsVerifyCmd(rcArg(tc, "command")) {
+				verifyCmd, verifyState = oneLine(rcArg(tc, "command"), 160), state
 				lastVerify = fmt.Sprintf("$ %s → %s\n%s", oneLine(rcArg(tc, "command"), 160), state, truncateHeadTail(strings.TrimSpace(m.Content), 800))
 			}
 		}
 		_ = i
 	}
-	if len(trail) > 0 {
-		b.WriteString("## Last tool calls (oldest first)\n")
-		for i, t := range trail[max(0, len(trail)-8):] {
-			fmt.Fprintf(&b, "%d. %s\n", i+1, t)
-		}
-		b.WriteString("\n")
-	}
-	if lastVerify != "" {
-		b.WriteString("## Last verification\n" + lastVerify + "\n\n")
-	}
-	if lastText != "" {
-		b.WriteString("## Last thing the assistant said\n" + acClip(lastText, 600) + "\n\n")
-	}
-	open := a.openTodos()
-	if open != "" {
-		b.WriteString("## Open todo items\n" + acClip(open, 800) + "\n\n")
-	}
-	b.WriteString("## Next step\n")
-	switch {
-	case open != "":
-		b.WriteString("Continue with the open todo items above.")
-	case lastVerify != "":
-		b.WriteString("Re-run the last verification, fix what still fails, then give the final answer.")
-	default:
-		b.WriteString("Check the current state of the files, finish the task and verify it.")
-	}
-	b.WriteString("\n")
-	return b.String()
+	return obHandoffFactsT{task: task, lastText: lastText, lastVerify: lastVerify, verifyCmd: verifyCmd, verifyState: verifyState, files: a.tools.rcTurnFiles(), trail: trail}
 }
 
 // obFinishRun closes a headless run: on anything but a completed run it
@@ -1360,4 +1378,35 @@ func (a *Agent) obPartialText(resp *ChatResponse) string {
 		b.WriteString("\n\n[interrupted by the user]")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// obHandoffPT is the summary the USER sees when the provider fails in the
+// middle of a turn that already ran tools: the work is on disk and in the
+// session, not lost (v0.13: the user saw only the provider error). Same facts
+// as obHandoff, in Portuguese.
+func (a *Agent) obHandoffPT(err error) string {
+	hf := a.obHandoffFacts()
+	var b strings.Builder
+	b.WriteString("o provedor caiu no meio do trabalho, mas nada se perdeu")
+	if err != nil {
+		b.WriteString(" (motivo: " + oneLine(redactSecrets(friendlyErr(err)), 160) + ")")
+	}
+	b.WriteString(".")
+	if len(hf.files) > 0 {
+		b.WriteString("\n  arquivos alterados: " + strings.Join(acClipList(hf.files, 8), ", "))
+	}
+	if hf.verifyCmd != "" {
+		st := hf.verifyState
+		if st == "ok" {
+			st = "passou"
+		}
+		b.WriteString("\n  última verificação: $ " + hf.verifyCmd + " → " + st)
+	} else if len(hf.files) > 0 {
+		b.WriteString("\n  ainda não verificado depois da última mudança")
+	}
+	b.WriteString("\n  pra continuar de onde parou: mande \"continua\"")
+	if a.SessionID != "" {
+		b.WriteString(" (ou, de outro terminal: jazz -r " + a.SessionID + ")")
+	}
+	return b.String()
 }

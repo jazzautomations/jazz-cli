@@ -605,6 +605,9 @@ turnLoop:
 				a.append(Message{Role: "assistant", Content: ccPartialNote(r, err), Reasoning: r.Reasoning, PartialCalls: r.ToolCalls})
 				a.append(Message{Role: "user", Content: "<system-reminder>The previous response stream failed before it finished.</system-reminder>"})
 			}
+			if toolsRun > 0 && !a.sub { // work already done in this turn: say it is kept, in PT (obs.go)
+				a.ui.Notice(a.obHandoffPT(err))
+			}
 			stop = StopError
 			return stop, err
 		}
