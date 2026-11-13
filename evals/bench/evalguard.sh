@@ -18,7 +18,8 @@
 #   eg_preflight MODEL DIR OUT
 #                          1 pedido mínimo antes de queimar tarefas; volta 1 com "modelo
 #                          indisponível" (ou "modelo trocado") quando o modelo não responde
-#   eg_dead FILE           verdadeiro quando a tarefa terminou com 0 request OK (disjuntor)
+#   eg_dead FILE           verdadeiro quando as métricas da tarefa dizem 0 request OK (disjuntor);
+#                          sem arquivo de métricas (hang morto pelo vigilante) não dispara
 #   eg_manifest FILE [k=v ...]
 #                          manifest.json: versão, sha do binário, commit dos evals, host,
 #                          uname, python, modelo, modo de trava e as chaves JAZZ_* ativas
@@ -144,12 +145,15 @@ EOF
   return 0
 }
 
+# Only on evidence: metrics that say 0 OK requests. No metrics file (jazz
+# killed by the watchdog on a hang, or crashed) says nothing about the model's
+# quota, and tripping there would skip every remaining task for a jazz bug.
 eg_dead() {
   local ok
   read -r ok _ <<EOF
 $(eg_metrics "${1:-}")
 EOF
-  [ "$ok" = 0 ] || { [ ! -e "${1:-}" ] && eg_py; }
+  [ "$ok" = 0 ]
 }
 
 eg_manifest() {

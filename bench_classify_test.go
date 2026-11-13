@@ -412,3 +412,32 @@ func TestEvalGuardServedOther(t *testing.T) {
 		}
 	}
 }
+
+// eg_dead is the breaker: it trips only when the metrics say 0 OK requests.
+// A task with no metrics (a hang killed by the watchdog) is not evidence that
+// the model stopped answering and must not skip the rest of the round.
+func TestEvalGuardDead(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not installed")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("sem python3")
+	}
+	guard, _ := filepath.Abs(filepath.Join("evals", "bench", "evalguard.sh"))
+	data, _ := filepath.Abs(filepath.Join("evals", "bench", "testdata"))
+	for _, c := range []struct {
+		file string
+		dead bool
+	}{
+		{"metrics-nostart.json", true},
+		{"metrics-ok.json", false},
+		{"metrics-subst.json", false},
+		{"nao-existe.json", false},
+	} {
+		err := exec.Command(bash, "-c", `. "$1"; eg_dead "$2"`, "x", guard, filepath.Join(data, c.file)).Run()
+		if got := err == nil; got != c.dead {
+			t.Errorf("eg_dead %s = %v, want %v", c.file, got, c.dead)
+		}
+	}
+}
