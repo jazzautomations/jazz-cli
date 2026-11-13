@@ -88,6 +88,7 @@ type bgRead struct {
 type bgState struct {
 	reads     map[string]bgRead
 	turn      *bgTurn
+	lastRem   string // the budget reminder last put on a user message (not repeated verbatim)
 	netMu     sync.Mutex
 	netUp     int64 // unix nano of the last successful connectivity probe
 	netWaited int64 // total ns spent waiting out outages in this run (netwait.go)
@@ -292,7 +293,23 @@ func (a *Agent) bgBeginTurn(input string) string {
 	if bt.task.Kind == "question" || bt.task.Kind == "ops" || bt.task.Kind == "chat" || len(strings.TrimSpace(acStripReminders(input))) < 12 {
 		return input
 	}
-	return bgReminder(bt) + "\n" + input
+	rem := bgReminder(bt)
+	if rem == st.lastRem && a.bgNoteInHistory(rem) {
+		return input // the same note is still in the conversation, from the turn before
+	}
+	st.lastRem = rem
+	return rem + "\n" + input
+}
+
+// bgNoteInHistory: a user message still carries note (compaction or a
+// handoff may have dropped it).
+func (a *Agent) bgNoteInHistory(note string) bool {
+	for i := len(a.Msgs) - 1; i >= 0; i-- {
+		if a.Msgs[i].Role == "user" && strings.Contains(a.Msgs[i].Content, note) {
+			return true
+		}
+	}
+	return false
 }
 
 // bgReminder is the short per-turn budget note, in Portuguese like the user

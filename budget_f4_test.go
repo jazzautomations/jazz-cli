@@ -151,3 +151,28 @@ func TestBudgetChatHasNoBudget(t *testing.T) {
 		t.Errorf("ops turn: %+v", bt)
 	}
 }
+
+// The same budget note is not put on two user messages in a row.
+func TestBudgetReminderNotRepeated(t *testing.T) {
+	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
+	first := h.ag.bgBeginTurn("fix the bug in the parser module")
+	h.ag.Msgs = append(h.ag.Msgs, Message{Role: "user", Content: first})
+	second := h.ag.bgBeginTurn("fix the bug in the lexer module")
+	third := h.ag.bgBeginTurn("refactor the whole config loader and the cli flags")
+	if !strings.Contains(first, "Orçamento desta tarefa") {
+		t.Fatalf("first turn gets the note: %q", first)
+	}
+	if strings.Contains(second, "Orçamento desta tarefa") {
+		t.Errorf("identical note repeated: %q", second)
+	}
+	if !strings.Contains(third, "Orçamento desta tarefa") {
+		t.Errorf("a different task gets its own note: %q", third)
+	}
+	// history compacted away: the note comes back
+	h.ag.Msgs = nil
+	h.ag.bg().lastRem = ""
+	h.ag.bgBeginTurn("fix the bug in the parser module")
+	if again := h.ag.bgBeginTurn("fix the bug in the parser module"); !strings.Contains(again, "Orçamento desta tarefa") {
+		t.Errorf("note gone from the history must be sent again: %q", again)
+	}
+}
