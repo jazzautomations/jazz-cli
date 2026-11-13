@@ -149,8 +149,8 @@ func TestFriendlyErrNoRawJSON(t *testing.T) {
 
 func TestPvErrMessageShapes(t *testing.T) {
 	cases := map[string]string{
-		rcBodyGemKey: "API key not valid. Please pass a valid API key.",
-		rcBody410:    "Gone: The model 'z-ai/glm-5.3' has reached its end of life on 2026-10-28.",
+		rcBodyGemKey:            "API key not valid. Please pass a valid API key.",
+		rcBody410:               "Gone: The model 'z-ai/glm-5.3' has reached its end of life on 2026-10-28.",
 		`{"title":"Not Found"}`: "Not Found",
 		`{"error":"plain"}`:     "plain",
 	}

@@ -384,7 +384,7 @@ func (c *Config) CandidatesFor(n Need, refs ...string) []string {
 			add(x)
 		}
 	} else if !c.Omni.Enabled && len(c.Fallback) == 0 && primary != "" && !isOmniRef(primary) && c.pvIsFreeish(primary) {
-		for _, x := range c.implicitFreeChain() {
+		for _, x := range c.implicitFreeChain(n) {
 			add(x)
 		}
 	}
@@ -461,8 +461,10 @@ func (c *Config) pvIsFreeish(ref string) bool {
 }
 
 // implicitFreeChain (G4): kilo's keyless default and its fast free models, groq
-// when it has a key, reachable local servers.
-func (c *Config) implicitFreeChain() []string {
+// when it has a key, reachable local servers. Groq is left out of the main
+// agent's chain (gpt-oss-120b: 177/577 ok there, PROV-4) and of any request
+// that is over half its tokens-per-minute or while it cools down.
+func (c *Config) implicitFreeChain(n Need) []string {
 	var out []string
 	if pc := c.Providers["kilo"]; pc != nil && pc.DefaultModel != "" && !c.omniExcluded("kilo") {
 		out = append(out, "kilo/"+pc.DefaultModel)
@@ -472,8 +474,13 @@ func (c *Config) implicitFreeChain() []string {
 			}
 		}
 	}
-	if pc := c.Providers["groq"]; pc != nil && pc.DefaultModel != "" && c.HasCreds("groq") {
-		out = append(out, "groq/"+pc.DefaultModel)
+	if pc := c.Providers["groq"]; pc != nil && pc.DefaultModel != "" && c.HasCreds("groq") && n.Role != "main" && n.Role != "compact" {
+		r := "groq/" + pc.DefaultModel
+		lim, _ := c.pvEffLimits(r)
+		st := c.pvState(r, n.Tokens)
+		if (lim.TPM == 0 || n.Tokens < lim.TPM/2) && (st.Ready || st.Wait <= acSkipWait) && !st.Dead && !st.TooBig {
+			out = append(out, r)
+		}
 	}
 	for _, name := range c.ProviderNames() {
 		if pc := c.Providers[name]; pc != nil && pc.Local && pc.DefaultModel != "" && c.HasCreds(name) {

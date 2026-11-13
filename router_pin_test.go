@@ -443,3 +443,28 @@ func TestDropAnnouncedOncePerTurn(t *testing.T) {
 		t.Fatalf("%d requests, drop said %d times: %q", len(h.fs.requests()), n, h.ui.warns)
 	}
 }
+
+// PROV-4: groq/gpt-oss-120b (177/577 ok in the main loop) is not part of the
+// main agent's implicit chain; it stays for sub/fast while the request fits
+// half its tokens-per-minute.
+func TestImplicitChainGroqNotInMain(t *testing.T) {
+	c := pvTestCfg(t)
+	t.Setenv("GROQ_API_KEY", "gsk_x")
+	has := func(got []string) bool {
+		for _, r := range got {
+			if strings.HasPrefix(r, "groq/") {
+				return true
+			}
+		}
+		return false
+	}
+	if got := c.CandidatesFor(Need{Role: "main"}, "openrouter/foo:free"); has(got) {
+		t.Fatalf("main chain has groq: %v", got)
+	}
+	if got := c.CandidatesFor(Need{Role: "sub", Tokens: 2000}, "openrouter/foo:free"); !has(got) {
+		t.Fatalf("sub chain lost groq: %v", got)
+	}
+	if got := c.CandidatesFor(Need{Role: "sub", Tokens: 6000}, "openrouter/foo:free"); has(got) {
+		t.Fatalf("a request over half of groq's TPM (8000) must not go to groq: %v", got)
+	}
+}
