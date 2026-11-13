@@ -75,6 +75,9 @@ type bgTurn struct {
 	lastEdit int // seq of the last edit
 	lastTest int // seq of the last test run
 	qg       qgTurn
+	// bashStamp: tree stamps taken before writing bash calls (by call id), so
+	// files a heredoc, cp or sed -i changed reach the quality gate too
+	bashStamp map[string]map[string]ojStamp
 }
 
 // bgRead is one earlier full read of a file.
@@ -448,6 +451,16 @@ func (a *Agent) bgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 			a.qgRemember(bt, a.tools.abs(sp)) // json_edit: the gate sees it like an edit
 		}
 	}
+	if tc.Name == "bash" && a.qualityLevel() != qgOff {
+		// a writing command (heredoc, cp, sed -i…): stamp the tree so the
+		// gate sees what it changed (qgRegisterTree in bgAfterTool)
+		if cmd, _ := argStr(m, "command"); bgBashWrites(cmd) {
+			if bt.bashStamp == nil {
+				bt.bashStamp = map[string]map[string]ojStamp{}
+			}
+			bt.bashStamp[tc.ID] = ojStampTree(a.tools.Root)
+		}
+	}
 	if bt.level == bgOff {
 		return out, false
 	}
@@ -510,6 +523,16 @@ func (a *Agent) bgAfterTool(tc ToolCall, out ToolOutput) string {
 		}
 	case "bash":
 		cmd, _ := argStr(m, "command")
+		if before, ok := bt.bashStamp[tc.ID]; ok {
+			delete(bt.bashStamp, tc.ID)
+			changed, _ := a.qgRegisterTree(bt, before)
+			for _, rel := range changed {
+				abs := a.tools.abs(rel)
+				if p := bt.pre[abs]; p != nil && !p.existed {
+					a.hgNoteOwnTest(abs) // a test file the agent created (guard_honest.go)
+				}
+			}
+		}
 		if bgBashWrites(cmd) {
 			bt.edited = true
 			bt.seq++

@@ -190,6 +190,23 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   há preço (Claude, por exemplo) e "grátis" no modelo grátis; a saída sem mensagem não mostra sessão
   vazia; `!comando` mostra "código de saída N".
 
+### Guardas de teste (QA no Dell)
+
+- A checagem de qualidade enxerga arquivos criados ou mudados pelo bash (heredoc, `cp`, `sed -i`): teste
+  escrito com `cat > tests/test_x.py` conta, e trabalho certo não termina mais em `quality_failed` (exit 9).
+- Correção de bug cujo teste existente foi de vermelho a verde depois da edição (ou com `--until` de teste)
+  não é obrigada a criar arquivo de teste novo; o item agora pede "adicione ou estenda um teste, ou diga qual
+  teste existente cobre".
+- A revisão automática de uma passada recebe também os testes e o README mudados (código primeiro) e é
+  avisada dos arquivos que mudaram mas não couberam, em vez de apontá-los como faltando.
+- A suíte que o jazz roda sozinho no fim não deixa `__pycache__` nem `.pytest_cache` novos no projeto
+  (`PYTHONDONTWRITEBYTECODE=1` e limpeza do que a rodada criou).
+- Teste que o próprio jazz criou num turno anterior da mesma sessão (inclusive com `-c`) pode ser alterado
+  quando o pedido muda o comportamento; enfraquecer (skip, assert removido) continua recusado, e os testes
+  do usuário continuam protegidos. A lista fica na sessão, só em linhas assinadas.
+- Turno que termina com os testes ainda vermelhos depois do aviso não é mais sucesso: acaba como
+  `quality_failed` com aviso claro, a não ser que a resposta diga que a falha já existia e não tem relação.
+
 ### Testes e release
 
 - Suíte de replay: sessões reais viram casos determinísticos (`testdata/replay`), com provedor, sudo, rede
