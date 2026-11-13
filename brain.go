@@ -1630,7 +1630,11 @@ func (a *App) brShow(text string, r brResult) bool {
 	}
 	// what it answered reaches the model once, as data, only if the next
 	// online request is about it (synergy.go) — not as a pile of notes
-	a.sy.last = &syLast{req: text, source: "offline", cmd: r.Intent.Name, out: r.Text, at: time.Now()}
+	if sySecretIntents[r.Intent.Name] {
+		a.sy.last = nil // config values, .env, the environment: shown here, never carried to a provider
+	} else {
+		a.sy.last = &syLast{req: text, source: "offline", cmd: r.Intent.Name, out: r.Text, at: time.Now()}
+	}
 	return true
 }
 

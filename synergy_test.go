@@ -318,6 +318,20 @@ func TestOfflineForcedBrainStillOwnsTurn(t *testing.T) {
 	if n := len(h.fs.requests()); n != 0 {
 		t.Errorf("%d model requests while forced offline", n)
 	}
+	// Enter on an empty line while offline: there is no model to hand it
+	// to — re-sending would run the brain's last request (maybe a change)
+	// again. Kept, not re-run.
+	app.sy.last = &syLast{req: "apaga o tmp.log", source: "offline", cmd: "delete_file", at: time.Now()}
+	app.sy.pending = "refatora o parser"
+	if !app.syEscalate() {
+		t.Error("offline Enter must say why nothing was sent")
+	}
+	if app.sy.last == nil || app.sy.pending == "" {
+		t.Error("offline Enter must keep the result and the kept request")
+	}
+	if n := len(h.fs.requests()); n != 0 {
+		t.Errorf("%d model requests on an offline Enter", n)
+	}
 }
 
 // Offline too, a reading whose intent cannot be about the domain noun the

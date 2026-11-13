@@ -210,6 +210,15 @@ func (a *App) syRejected(text string) {
 // the request kept while no model answered, goes to the model now — the
 // original request, with the result as data. false = nothing to send.
 func (a *App) syEscalate() bool {
+	if a.ol.on || a.ol.forced {
+		// no model to hand it to: the re-send would go to the offline brain
+		// again and could repeat a change it just made
+		if a.sy.last != nil || a.sy.pending != "" {
+			a.ui.Notice("sem modelo agora — Enter vazio manda pro modelo quando um provedor voltar (ou /online, /model)")
+			return true
+		}
+		return false
+	}
 	switch {
 	case a.sy.last != nil:
 		l := a.sy.last
