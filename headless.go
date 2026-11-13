@@ -121,8 +121,52 @@ func (h *HeadlessUI) Approve(ctx context.Context, tool, detail, reason string) (
 			spec = fmt.Sprintf("Bash(%s:*)", prefix)
 		}
 	}
+	if !hlRuleCovers(tool, detail, reason) {
+		// a rule does not cover this risk (agent.permit): suggesting one
+		// would send the user to a flag that changes nothing
+		fmt.Fprintln(h.stderr(), msg+" — isso uma regra --allow-tools não libera: rode no modo interativo (jazz) pra aprovar, ou --yolo se você confia no comando")
+		return Deny, ""
+	}
 	fmt.Fprintln(h.stderr(), msg+" — use --allow-tools '"+spec+"' ou --yolo")
 	return Deny, ""
+}
+
+// hlRuleCovers: an allow rule naming this call would let it run (mirrors
+// agent.permit). A prompt with no risk of its own (untrusted folder, ask
+// mode) is covered; with a risk, only sudo of a benign command and a
+// CRITICAL system change are — a dangerous command, a secret read, egress,
+// the fence or an injection suspicion are confirmed every time.
+func hlRuleCovers(tool, detail, reason string) bool {
+	if reason == "" {
+		return true
+	}
+	if CanonicalTool(tool) != "bash" {
+		return false // the hint would name the whole tool, which never covers a risk
+	}
+	cmd := strings.TrimSpace(detail)
+	if cmd == "" {
+		return false
+	}
+	if nlSudoCmd(cmd) {
+		return DangerReason(nlStripSudo(cmd)) == "" && nlHostSecret(cmd) == ""
+	}
+	if DangerReason(cmd) != "" || SecretReason(cmd) != "" {
+		return false
+	}
+	if _, eg := EgressTarget(cmd); eg {
+		return false
+	}
+	for _, bad := range []string{"injection", "hook", "alvo de build", "fora da pasta", "dados do jazz"} {
+		if strings.Contains(reason, bad) {
+			return false
+		}
+	}
+	for _, seg := range shellSegments(cmd) {
+		if cbSegCritical(seg) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *HeadlessUI) SetMode(string) {}

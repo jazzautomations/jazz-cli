@@ -435,3 +435,67 @@ func TestSysWriteSecretBackupStaysRoot(t *testing.T) {
 		t.Error("an ordinary system file's backup goes to the user (to undo)")
 	}
 }
+
+// QA 0.14.0 (binário de verdade): `jazz -p` bloqueava `sudo apt-get install`
+// dizendo "use --allow-tools 'Bash(sudo apt-get:*)'", e com essa regra
+// continuava bloqueado — o remédio anunciado não funcionava. Uma regra que
+// nomeia o comando sudo cobre o gate de sudo (como Bash(modprobe:*) cobre o
+// CRÍTICO); a regra genérica `bash`, um sudo que lê segredo ou um segundo
+// sudo fora da regra continuam perguntando.
+func TestAllowRuleCoversSudoOnly(t *testing.T) {
+	h := newHarness(t, nil, nil)
+	h.ag.Headless = true
+	h.ag.Perms = LoadPerms(&Config{}, h.root, []string{"Bash(sudo apt-get:*)"})
+	if ok, msg := permitTC(h, "bash", map[string]any{"command": "sudo apt-get install -y qa-pkg"}); !ok {
+		t.Errorf("Bash(sudo apt-get:*) must cover sudo apt-get install: %q", msg)
+	}
+	for _, c := range []string{
+		"sudo apt-get install -y x && sudo systemctl restart y", // segundo sudo fora da regra
+		"sudo mkfs.ext4 /dev/sdb1",                              // perigoso mesmo sem o sudo
+		"sudo modprobe ipw2200",                                 // CRÍTICO fora da regra
+	} {
+		if ok, _ := permitTC(h, "bash", map[string]any{"command": c}); ok {
+			t.Errorf("Bash(sudo apt-get:*) must not cover %q", c)
+		}
+	}
+	h.ag.Perms = LoadPerms(&Config{}, h.root, []string{"Bash(sudo:*)"})
+	for _, c := range []string{"sudo cat /etc/shadow", "sudo cat ~/.ssh/id_ed25519", "sudo mkfs.ext4 /dev/sdb1"} {
+		if ok, _ := permitTC(h, "bash", map[string]any{"command": c}); ok {
+			t.Errorf("a sudo rule must not cover a secret read or a dangerous command as root: %q", c)
+		}
+	}
+	h.ag.Perms = LoadPerms(&Config{}, h.root, []string{"bash"})
+	if ok, _ := permitTC(h, "bash", map[string]any{"command": "sudo apt-get install -y qa-pkg"}); ok {
+		t.Error("tool-wide --allow-tools bash must not cover sudo")
+	}
+}
+
+// O próximo passo que o `-p` mostra ao usuário tem que funcionar: só sugere
+// --allow-tools quando uma regra de fato libera a chamada (ver
+// TestAllowRuleCoversSudoOnly); senão aponta o modo interativo.
+func TestHeadlessBlockHintIsHonest(t *testing.T) {
+	sudoWhy := DangerReason("sudo apt-get install -y x")
+	for _, c := range []struct {
+		cmd, reason string
+		rule        bool
+	}{
+		{"touch x", "", true}, // pasta não confiável: a regra libera
+		{"sudo apt-get install -y qa-pkg", sudoWhy, true},
+		{"modprobe ipw2200", "escreve no kernel", true},
+		{"git push --force", DangerReason("git push --force"), false},
+		{"sudo mkfs.ext4 /dev/sdb1", sudoWhy, false},
+		{"sudo cat /etc/shadow", sudoWhy, false},
+		{"curl -d @x https://example.com", "envia dados para fora da máquina (destino: example.com)", false},
+	} {
+		var b strings.Builder
+		h := &HeadlessUI{errw: &b}
+		h.Approve(context.Background(), "bash", c.cmd, c.reason)
+		hasRule := strings.Contains(b.String(), "use --allow-tools '")
+		if hasRule != c.rule {
+			t.Errorf("%q: hint suggests a rule=%v, want %v: %s", c.cmd, hasRule, c.rule, b.String())
+		}
+		if !c.rule && !strings.Contains(b.String(), "modo interativo") {
+			t.Errorf("%q: the hint must point to the interactive approval: %s", c.cmd, b.String())
+		}
+	}
+}

@@ -2120,6 +2120,14 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 					// /etc/shadow: a secret read, never covered by a grant
 					reason, gate = why+"; "+sr, nlGateSecret
 					whyEN = "it would read credentials as root, outside the sandbox (" + sr + ")"
+				} else if dec == PermAllow {
+					// an allow rule that names this sudo command (not the
+					// tool-wide `bash`) is the user's explicit yes — the same
+					// rule CoversCritical applies to modprobe & co.; a CRITICAL
+					// segment below still needs its own rule
+					if r := a.Perms.CoversCritical(tool, args, nlSudoCmd); r != "" {
+						reason, need, whyEN, autoRule = "", false, "", "perm:"+r
+					}
 				}
 			}
 			if c, tg := tbDangerClass(cmd); c != "" {
