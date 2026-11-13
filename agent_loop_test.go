@@ -418,7 +418,7 @@ func TestDeadlineWarnDoesNotReopen(t *testing.T) {
 			t.Fatalf("turn reopened: requests = %d, want 2", n)
 		}
 		last := h.fs.requests()[1]
-		if last.contains("user", "did not run anything") || last.contains("user", "unfinished items") {
+		if last.contains("user", "não rodou nada") || last.contains("user", "itens abertos") {
 			t.Errorf("warned turn must not nudge verify/todo")
 		}
 	})

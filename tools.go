@@ -393,7 +393,7 @@ func normalizeArgs(tool string, m map[string]any) map[string]any {
 		}
 		out[k] = v
 	}
-	return out
+	return afRepair(tool, out) // argv command, dirty key (argfix.go)
 }
 
 func argStr(m map[string]any, k string) (string, bool) {
@@ -445,7 +445,7 @@ func validationErr(tool, msg, raw string) ToolOutput {
 	if len(raw) > 600 {
 		raw = raw[:600] + "…"
 	}
-	return ToolOutput{IsErr: true, Text: fmt.Sprintf("Validation failed for tool %q: %s. Received arguments: %s", tool, msg, raw),
+	return ToolOutput{IsErr: true, Text: fmt.Sprintf("Validation failed for tool %q: %s. Received arguments: %s.", tool, msg, raw) + afExampleLine(tool),
 		Display: Display{Summary: "argumentos inválidos: " + msg}}
 }
 
@@ -565,8 +565,15 @@ func (t *Toolbox) wasRead(p string) bool {
 }
 
 // BeginTurn opens a new checkpoint for /undo and /rewind.
-func (t *Toolbox) BeginTurn(msgIndex int) {
-	tree := t.cpSnapshot()
+func (t *Toolbox) BeginTurn(msgIndex int) { t.beginTurn(msgIndex, true) }
+
+// beginTurn opens the turn; snap=false skips the shadow-git snapshot (a
+// conversation turn: write/edit keep their in-memory snapshots).
+func (t *Toolbox) beginTurn(msgIndex int, snap bool) {
+	tree := ""
+	if snap {
+		tree = t.cpSnapshot()
+	}
 	if tree != "" {
 		t.obCommit(t.checkpoints(), tree, "turn-start") // hand edits between turns (checkpoint_trace.go)
 	}

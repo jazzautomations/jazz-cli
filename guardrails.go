@@ -1567,12 +1567,13 @@ func acReplaceCommand(rawArgs, old, hardened string) string {
 	if err != nil || m == nil {
 		return rawArgs
 	}
-	for _, k := range []string{"command", "cmd", "script", "code", "shell", "commands"} {
-		if s, ok := m[k].(string); ok && s == old {
-			m[k] = hardened
-			if b, err := json.Marshal(m); err == nil {
-				return string(b)
-			}
+	// the same normalization the gate used (aliases, argv array → command
+	// line: argfix.go), so an argv-shaped install is hardened too
+	m = normalizeArgs("bash", m)
+	if s, ok := m["command"].(string); ok && s == old {
+		m["command"] = hardened
+		if b, err := json.Marshal(m); err == nil {
+			return string(b)
 		}
 	}
 	return rawArgs

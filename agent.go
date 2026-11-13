@@ -48,6 +48,8 @@ type Agent struct {
 	countedIdx  int // Msgs index already included in lastPrompt
 	allow       map[string]bool
 	recent      []string
+	badCalls    map[string]bool // calls refused by validation in this turn (argfix.go)
+	chatLane    bool            // this turn is small talk (chatlane.go)
 	steerMu     sync.Mutex
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
@@ -370,7 +372,7 @@ func (a *Agent) stepLimit() int {
 
 const planReminder = "<system-reminder>Plan mode is on: investigate with read-only tools (read, read-only bash such as rg/ls/git log, task), then reply with a concise numbered plan (files, changes, verification). Do not edit or write files and do not run commands that change anything.</system-reminder>"
 
-const stepLimitReminder = "<system-reminder>Step limit reached. Do not call any more tools. Give your final answer now: what was done, what is left.</system-reminder>"
+const stepLimitReminder = "<system-reminder>Limite de passos atingido. Não chame mais ferramentas: responda agora com o que foi feito e o que falta.</system-reminder>"
 
 const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
 
@@ -395,6 +397,7 @@ func (a *Agent) obDeadlineWarned() bool {
 // Run handles one user message until the model gives a final answer.
 func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err error) {
 	a.EnsureSystem()
+	a.langNote(input) // Portuguese in → "Responda em português do Brasil" at the end of the system prompt (lang.go)
 	mode := a.mode()
 	a.ui.SetMode(mode)
 	a.gr.injection, a.gr.startHit = a.gr.startHit, "" // the injection guard is per turn
@@ -470,15 +473,21 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	if mode == "plan" && !a.sub {
 		input = planReminder + "\n" + input
 	}
+	chat := a.acChatLane(lt.input) // "oi"/"valeu" with nothing pending: no task machinery (chatlane.go)
+	a.chatLane = chat
 	turnModel, input = a.ojStartTurn(ctx, lt.input, turnModel, input) // omni judge: task type -> model, fusion/panel notes (judge.go)
 	if !a.sub {
-		a.tools.BeginTurn(len(a.Msgs))
-		OmniBeginTurn() // re-seed the weighted router once per turn, not per request
+		a.tools.beginTurn(len(a.Msgs), !chat) // chat: no checkpoint scan
+		OmniBeginTurn()                       // re-seed the weighted router once per turn, not per request
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
 	a.cbAttachNotice(turnModel) // a model without vision: say so and name one that sees (caps.go)
-	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input), Images: a.attach})
+	inject := ""
+	if !chat {
+		inject = a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input)
+	}
+	a.append(Message{Role: "user", Content: input + inject, Images: a.attach})
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
@@ -487,7 +496,8 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
 	boostOut := false // the last reply was cut: the next request asks for more output (cutoff.go)
-	a.recent = nil
+	a.recent, a.badCalls = nil, nil
+	emptyRetried := false // one silent re-ask per turn for a `bash {}`-style call (argfix.go)
 	// lean budget: hard stop at 2x the step budget (budget.go)
 	maxSteps := a.bgStepLimit(a.stepLimit())
 	compactFailStep := -100 // a failed proactive compaction is retried 5 steps later, not every step
@@ -522,7 +532,7 @@ turnLoop:
 		}
 		if why := a.overBudget(); why != "" {
 			a.ui.Warn("limite do turno atingido: " + why)
-			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Stop now: give your final answer with what was done and what is left. Do not call any more tools.</system-reminder>"})
+			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Pare agora: responda com o que foi feito e o que falta, sem chamar mais ferramentas.</system-reminder>"})
 			stop = StopStepLimit
 			return stop, nil
 		}
@@ -550,7 +560,11 @@ turnLoop:
 		if pre != nil {
 			resp, used = pre, turnModel
 		} else {
-			resp, used, err = a.chatWithFallback(ctx, turnModel, acChatOpt{noToolUse: atLimit, stream: true, boost: boost})
+			opt := acChatOpt{noToolUse: atLimit, stream: true, boost: boost}
+			if chat && !boost {
+				opt.maxOut = acChatOut // a conversation reply is short (chatlane.go)
+			}
+			resp, used, err = a.chatWithFallback(ctx, turnModel, opt)
 		}
 		if used != "" {
 			if used != a.Model && used != turnModel {
@@ -610,6 +624,9 @@ turnLoop:
 				a.append(Message{Role: "assistant", Content: ccPartialNote(r, err), Reasoning: r.Reasoning, PartialCalls: r.ToolCalls})
 				a.append(Message{Role: "user", Content: "<system-reminder>The previous response stream failed before it finished.</system-reminder>"})
 			}
+			if toolsRun > 0 && !a.sub { // work already done in this turn: say it is kept, in PT (obs.go)
+				a.ui.Notice(a.obHandoffPT(err))
+			}
 			stop = StopError
 			return stop, err
 		}
@@ -630,6 +647,15 @@ turnLoop:
 			if !a.mcp.Has(calls[i].Name) {
 				calls[i].Name = CanonicalTool(calls[i].Name)
 			}
+		}
+		// `bash {}`: a built-in call with no argument at all. Re-ask once per
+		// turn without putting the empty call or an error in the history; it
+		// does not count as a step (argfix.go).
+		if !emptyRetried && !atLimit && len(calls) > 0 && !resp.Truncated() && afAllEmpty(calls) {
+			emptyRetried = true
+			dbg("repair", map[string]any{"empty_args_retry": calls[0].Name, "model": turnModel})
+			step--
+			continue
 		}
 		// A write/edit cut inside its content: ask for the rest and splice it
 		// instead of throwing the work away (cutoff.go).
@@ -719,7 +745,7 @@ turnLoop:
 			if text == "" && !nudgedEmpty {
 				nudgedEmpty = true
 				dbg("nudge", "empty")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your last reply was empty. Continue the task, or give your final answer.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Sua última resposta veio vazia. Continue a tarefa ou dê a resposta final.</system-reminder>"})
 				continue
 			}
 			// Anti-fake guard: a final answer claiming actions with no tool call
@@ -738,13 +764,13 @@ turnLoop:
 			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your todo list still has unfinished items:\n" + open + "\nContinue working on them, or update the list (mark items completed or remove ones that are no longer needed) and explain why.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>A lista de tarefas ainda tem itens abertos:\n" + open + "\nContinue neles, ou atualize a lista (marque como feito ou tire o que não precisa mais) dizendo por quê.</system-reminder>"})
 				continue
 			}
 			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
-				a.append(Message{Role: "user", Content: "<system-reminder>You changed code but did not run anything afterwards. If this project can be built, tested, linted or run, verify your change now with bash and fix any problem you caused. If verification isn't possible, say so in one line and finish.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Você mudou código e não rodou nada depois. Se dá para compilar, testar ou rodar, verifique agora com bash e corrija o que quebrou; se não dá, diga isso numa frase e termine.</system-reminder>"})
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
@@ -809,9 +835,14 @@ turnLoop:
 			fan = a.saFanoutAt(ctx, step, calls, i, fan)
 			out, ran, denied, pre := fan.take(tc.ID)
 			if !pre {
-				a.ptIdx = i
-				out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
-				a.ptIdx = -1
+				if o, short := a.acBadCallShort(tc); short { // identical call already refused by validation (argfix.go)
+					out = o
+				} else {
+					a.ptIdx = i
+					out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
+					a.ptIdx = -1
+					a.acBadCallSeen(tc, out)
+				}
 			}
 			if ran {
 				toolsRun++
@@ -878,14 +909,14 @@ turnLoop:
 					continue turnLoop // handed off to a clean context
 				}
 				a.ui.Warn("o modelo entrou em loop (mesma chamada 6×) — parei o turno")
-				a.append(Message{Role: "user", Content: "<system-reminder>You were stuck repeating the same tool call. The turn was stopped. Next time, change approach.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Você ficou repetindo a mesma chamada e o turno foi parado. Na próxima, mude de abordagem.</system-reminder>"})
 				stop = StopLoop
 				return stop, nil
 			}
 			if rep >= 3 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You have made this exact call %d times with the same result. Stop repeating it: change your approach, or give the final answer.</system-reminder>", rep)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Esta mesma chamada já foi feita %d vezes com o mesmo resultado. Pare de repetir: mude a abordagem ou dê a resposta final.</system-reminder>", rep)
 			} else if per > 1 && cyc >= 2 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You are repeating a cycle of %d tool calls (%d times in a row, same results). Stop looping: change your approach, or give the final answer.</system-reminder>", per, cyc)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Você está repetindo um ciclo de %d chamadas (%d vezes seguidas, mesmos resultados). Saia do laço: mude a abordagem ou dê a resposta final.</system-reminder>", per, cyc)
 			}
 			out.Text += a.acSteeringNote(tc, out)  // fileMatch steering, once per rule
 			out.Text += a.dcHintNote(tc, out)      // API error on a pinned library: point to the docs tool (docs.go)
@@ -971,6 +1002,11 @@ func argPath(raw string) string {
 		if s, ok := m[k].(string); ok {
 			return s
 		}
+	}
+	// a dirty key ("path Metall") the tool itself repairs (argfix.go): the
+	// subagent path lock and steering must see the same path it writes
+	if s, ok := afRepair("edit", m)["path"].(string); ok {
+		return s
 	}
 	return ""
 }

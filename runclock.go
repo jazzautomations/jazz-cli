@@ -1,29 +1,43 @@
 package main
 
 // Time awareness inside a run. The system prompt carries the session's start
-// (fixed, so the prompt cache survives); between steps the loop appends a
-// short clock reminder — local time, time elapsed, and how much of --timeout
-// is left — at most every rcClockEvery, and only once there is something to
-// say (the run is older than that interval or has a deadline). Appended, never
-// rewritten: earlier messages stay byte-identical.
+// (fixed, so the prompt cache survives); between steps the loop adds a short
+// clock note — local time, time elapsed, and how much of --timeout is left —
+// to the end of the last tool result, which has not been sent yet. It is
+// never a message of its own (v0.13: a user-role "relógio" every 2 minutes
+// read as the user talking, and weak models answered it). With --timeout it
+// comes at most every rcClockEvery; without a deadline only after
+// rcClockIdle, then at that pace.
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
-const rcClockEvery = 2 * time.Minute
+const (
+	rcClockEvery = 2 * time.Minute
+	rcClockIdle  = 10 * time.Minute
+)
 
 func (a *Agent) rcClock(now time.Time) {
 	if a.runStart.IsZero() {
 		a.runStart, a.clockAt = now, now
 		return
 	}
-	if now.Sub(a.clockAt) < rcClockEvery {
+	every := rcClockIdle
+	if !a.RunDeadline.IsZero() {
+		every = rcClockEvery
+	}
+	if now.Sub(a.clockAt) < every || len(a.Msgs) == 0 {
 		return
 	}
+	last := &a.Msgs[len(a.Msgs)-1]
+	if last.Role != "tool" || strings.Contains(last.Content, "<system-reminder>relógio:") {
+		return // only riding on a fresh tool result; tried again next step
+	}
 	a.clockAt = now
-	a.append(Message{Role: "user", Content: rcClockText(now, a.runStart, a.RunDeadline)})
+	last.Content += "\n\n" + rcClockText(now, a.runStart, a.RunDeadline)
 }
 
 // rcClockText is the reminder: "agora 20:31 · rodando há 7m · faltam 3m de 10m".

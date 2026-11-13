@@ -591,7 +591,7 @@ func (a *Agent) ojBeginTurn(input string) string {
 	st.input = strings.TrimSpace(acStripReminders(input))
 	st.task = rtClassify(input, *st.repo)
 	st.typed = true
-	if a.cfg.ojJudgeOn() && st.task.Ambiguous {
+	if a.cfg.ojJudgeOn() && st.task.Ambiguous && !a.chatLane { // small talk: no LLM call to route "oi" (chatlane.go)
 		if t := a.ojClassifyLLM(input); t != "" {
 			st.task.Type, st.task.Via = t, "llm"
 		}

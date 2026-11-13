@@ -55,9 +55,9 @@ func TestV04HandoffResetsExplorationBudget(t *testing.T) {
 	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
 	st := h.ag.bg()
 	st.reads["/x"] = bgRead{id: "r1"}
-	st.turn = &bgTurn{explore: 9, nudgedExpl: true, warnedExpl: true, stepBudget: 12}
+	st.turn = &bgTurn{explore: 9, nudgedExpl: true, stepBudget: 12}
 	h.ag.bgOnReset()
-	if len(st.reads) != 0 || st.turn.explore != 0 || st.turn.nudgedExpl || st.turn.warnedExpl || st.turn.stepBudget != 12 {
+	if len(st.reads) != 0 || st.turn.explore != 0 || st.turn.nudgedExpl || st.turn.stepBudget != 12 {
 		t.Errorf("after a handoff the exploration budget must restart (step budget kept): %+v reads=%d", st.turn, len(st.reads))
 	}
 }
