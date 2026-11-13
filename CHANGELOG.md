@@ -145,6 +145,9 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
 
 ### Achados do QA no binário (provedor falso)
 
+- Falha antiga na suíte, provada pelo modelo ("a falha é anterior à minha mudança", "já falha no HEAD"), não reprova mais
+  a tarefa com erro 9. No `-p`, bloqueio por credencial não sugere mais `--yolo`: nenhuma flag libera segredo.
+
 - Caixa de aprovação de comando: uma letra que aprova ("s", "y", "a", "1", "2") só vale se nenhuma outra tecla vier
   logo atrás — uma frase digitada que começa com "s" vira texto pro agente, nunca aprova um comando. Negar e
   instruir ("n", "e") seguem imediatos.

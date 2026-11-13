@@ -133,7 +133,7 @@ func vsIsFull(cmd, full string) bool {
 
 // vsPreexistingRE: the final answer says the remaining failure existed
 // before the change and is unrelated to it.
-var vsPreexistingRE = lazyRx(`(?i)pr[ée][- ]?existen|j[áa]\s+(falhava|estava\s+(falhando|quebrad)|quebrad|vinha\s+falhando)|(falha|falhava|quebrad\w*)\s+antes\s+d[aeo]s?\s+(minha\s+)?(mudan[çc]a|altera[çc][ãa]o|edi[çc][ãa]o)|existia\s+antes|n[ãa]o\s+(tem\s+)?relacionad|sem\s+rela[çc][ãa]o\s+com|n[ãa]o\s+tem\s+rela[çc][ãa]o|pre-?existing|already\s+(failing|failed|broken)|unrelated\s+to|failed\s+before\s+(my|the|this)\s+change`)
+var vsPreexistingRE = lazyRx(`(?i)pr[ée][- ]?existen|j[áa]\s+(falhava|estava\s+(falhando|quebrad)|quebrad|vinha\s+falhando)|(falha|falhava|quebrad\w*)\s+antes\s+d[aeo]s?\s+(minha\s+)?(mudan[çc]a|altera[çc][ãa]o|edi[çc][ãa]o)|existia\s+antes|n[ãa]o\s+(tem\s+)?relacionad|sem\s+rela[çc][ãa]o\s+com|n[ãa]o\s+tem\s+rela[çc][ãa]o|pre-?existing|already\s+(failing|failed|broken)|unrelated\s+to|failed\s+before\s+(my|the|this)\s+change|anterior\s+[àa]s?\s+(minha|minhas|essa|esta|nossa)?\s*(mudan[çc]a|altera[çc][ãa]o|edi[çc][ãa]o)|j[áa]\s+falha(va)?\s+(no|em|antes)|falha(va)?\s+no\s+(commit|c[óo]digo)\s+original|already\s+fail(s|ed|ing)?\s+(on|at|in)\s+(head|main|the\s+original)`)
 
 // vsSaidPreexisting: the model's latest answer (this turn) states the
 // failure is old and unrelated: the one honest way to stop with a red suite.

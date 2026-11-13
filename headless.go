@@ -156,6 +156,11 @@ func (h *HeadlessUI) Approve(ctx context.Context, tool, detail, reason string) (
 			spec = fmt.Sprintf("Bash(%s:*)", prefix)
 		}
 	}
+	if hlSecretReason(reason) {
+		// credentials: no flag is the answer; never point at --yolo for a secret
+		fmt.Fprintln(h.stderr(), msg+" — mexe em credenciais: nenhuma flag libera isso no -p; se precisar, abra o arquivo você mesmo")
+		return Deny, ""
+	}
 	if !hlRuleCovers(tool, detail, reason) {
 		// a rule does not cover this risk (agent.permit): suggesting one
 		// would send the user to a flag that changes nothing
@@ -264,4 +269,10 @@ func (h *HeadlessUI) TurnEnd(st TurnStats) {
 		line += " · " + rdTotalsText(st.Redacted)
 	}
 	h.logf("%s", line)
+}
+
+// hlSecretReason: the prompt is about credentials or sensitive config.
+func hlSecretReason(reason string) bool {
+	r := strings.ToLower(reason)
+	return strings.Contains(r, "credenc") || strings.Contains(r, "secret") || strings.Contains(r, "segredo") || strings.Contains(r, "chave privada")
 }

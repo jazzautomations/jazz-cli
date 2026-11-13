@@ -887,3 +887,18 @@ func TestOwnTestNeverClaimsUserTest(t *testing.T) {
 		t.Error("a test present at turn start must never become the agent's own")
 	}
 }
+
+func TestVsPreexistingPhrases(t *testing.T) {
+	for _, s := range []string{
+		"A falha é anterior à minha mudança: test_x já falha no commit original (HEAD).",
+		"esse teste já falhava no HEAD antes de eu mexer",
+		"the test already fails on HEAD",
+	} {
+		if !vsPreexistingRE.MatchString(s) {
+			t.Errorf("not recognised as pre-existing: %q", s)
+		}
+	}
+	if vsPreexistingRE.MatchString("tudo passando, fiz a mudança") {
+		t.Error("false positive")
+	}
+}
