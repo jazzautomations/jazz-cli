@@ -1832,6 +1832,8 @@ var slashCommands = []struct{ name, help string }{
 	{"/cost", "tokens e custo desta sessão"},
 	{"/expand", "mostra a saída inteira da última ferramenta (ctrl+o)"},
 	{"/init", "cria um AGENTS.md analisando o projeto"},
+	{"/remember", "guarda uma regra ou fato no AGENTS.md (projeto ou global): /remember sempre rode os testes com -v"},
+	{"/memory", "mostra os AGENTS.md carregados (global e do projeto)"},
 	{"/doctor", "diagnóstico"},
 	{"/exit", "sair"},
 }
@@ -2161,6 +2163,10 @@ func (a *App) command(line string) {
 		ui.Notice(msg)
 	case "/init":
 		a.send(initPrompt)
+	case "/remember": // main_memory.go
+		a.rememberCmd(argStr)
+	case "/memory":
+		a.memoryCmd()
 	case "/doctor":
 		cmdDoctor(a.cfg, a.root, nil, false)
 	default:

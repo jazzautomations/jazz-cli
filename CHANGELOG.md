@@ -183,6 +183,8 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
 
 ### Novo
 
+- `/remember <texto>` guarda uma regra ou fato no AGENTS.md do projeto ou no global (como o `#` do Claude Code) e já
+  vale na conversa; recusa texto com cara de segredo. `/memory` mostra os arquivos carregados.
 - `jazz eval real`: 89 pedidos do dia a dia com veredito por pedido e conferência do repositório depois;
   `--tasks ARQ` roda um conjunto externo; `jazz eval parse "pedido"` mostra a leitura sem agir.
 - `jazz eval real --variants`: corpus metamórfico. Cada pedido roda de novo sob oito variações de
