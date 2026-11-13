@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -84,6 +85,16 @@ type rateLimiter struct {
 }
 
 var omniRL = &rateLimiter{}
+
+// rlOKAt: when a model request last succeeded in this process (unix nanos;
+// 0 = none yet). The startup network probe checks it before warning.
+var rlOKAt atomic.Int64
+
+// rlOKSince reports whether a model request succeeded at or after t.
+func rlOKSince(t time.Time) bool {
+	n := rlOKAt.Load()
+	return n != 0 && n >= t.UnixNano()
+}
 
 // rlNow is the clock (tests replace it).
 var rlNow = time.Now
@@ -778,6 +789,7 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 			}
 		}
 		rl.lastOK = ref
+		rlOKAt.Store(now.UnixNano())
 		if lim.has() { // unlimited refs leave no state
 			rl.bucketLocked(prov).OKAt = ms
 			rl.dirty = true

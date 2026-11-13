@@ -33,6 +33,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -492,6 +493,37 @@ func pfInstructionsBlob(root string) []byte {
 		b = append(b, 0)
 	}
 	return b
+}
+
+// pfRetrustInstructions keeps the user's trust after jazz itself changed the
+// project's instruction files (/remember): pre is the instructions blob read
+// right before the write. Trust moves to the new content only in the scope
+// the user had given to pre (remembered, or this session only), and never
+// when pre was not trusted: a /remember must not approve somebody else's
+// earlier edits to AGENTS.md. With no instruction files before, the folder's
+// own trust decides (the new file holds only what jazz wrote).
+func pfRetrustInstructions(root string, pre []byte) error {
+	post := pfInstructionsBlob(root)
+	if len(post) == 0 || bytes.Equal(pre, post) {
+		return nil
+	}
+	kind, content := "instructions", pre
+	if len(pre) == 0 {
+		kind, content = "folder", pfFolderMark
+	}
+	pfTrustMu.Lock()
+	r, h := pfTrustRoot(root), pfHash(content)
+	sess := pfSessTrust[r+"\x00"+kind] == h
+	saved := pfLoadTrust()[r]
+	persisted := saved[kind] == h && saved["folder"] == pfHash(pfFolderMark)
+	if sess {
+		pfSessTrust[r+"\x00instructions"] = pfHash(post)
+	}
+	pfTrustMu.Unlock()
+	if persisted {
+		return Trust(root, "instructions", post)
+	}
+	return nil
 }
 
 // pfFolderTrusted reports whether the user trusted this folder and its

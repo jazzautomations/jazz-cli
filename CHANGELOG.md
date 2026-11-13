@@ -174,6 +174,22 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   não existe é dita pelo nome. Skill instalada pelo chat avisa o modelo que foi instalada agora, a pedido
   do usuário, e ele não diz mais que "já estava instalada".
 
+### Achados do QA na TUI (Dell)
+
+- Texto que você está digitando quando uma confirmação aparece não some mais: as letras viram texto
+  (nunca escolhem opção), aparecem na caixa como "digitando: …", e o Enter que termina a linha manda a
+  frase inteira pro agente em vez de responder. Nada fica colado na mensagem seguinte.
+- Ctrl+C (ou Ctrl+D) numa confirmação ou pergunta interrompe o turno inteiro, como Ctrl+C com ferramenta
+  rodando: o resto não roda e o modelo não é chamado de novo. Esc continua sendo "não" só pra aquela.
+- `/remember` no AGENTS.md do projeto não dispara mais o aviso de confiança na próxima abertura: a
+  confiança acompanha o texto que o próprio jazz escreveu, só se as instruções já eram confiadas (no
+  disco ou só nesta sessão) — edição de outra pessoa continua pedindo confiança. A pergunta de confiança
+  da abertura não aceita letra digitada às pressas como resposta.
+- O aviso "sem rede agora" só aparece se a sonda falhar duas vezes (a segunda com mais paciência) e
+  nenhuma resposta do modelo tiver chegado; `/cost` diz "custo não informado pelo provedor" quando não
+  há preço (Claude, por exemplo) e "grátis" no modelo grátis; a saída sem mensagem não mostra sessão
+  vazia; `!comando` mostra "código de saída N".
+
 ### Testes e release
 
 - Suíte de replay: sessões reais viram casos determinísticos (`testdata/replay`), com provedor, sudo, rede

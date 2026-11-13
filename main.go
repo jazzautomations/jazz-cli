@@ -1341,7 +1341,16 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 			app.send(line)
 		}
 	}
-	ui.print(ui.T.fg(cGray, 90) + "  até mais " + ui.T.G().dot + " sessão " + app.agent.SessionID + " (jazz -c continua)" + ui.T.sgr("0") + "\n")
+	ui.print(ui.T.fg(cGray, 90) + uiByeLine(ui.T.G().dot, app.agent.SessionID) + ui.T.sgr("0") + "\n")
+}
+
+// uiByeLine is the exit line: the session to continue, or just goodbye when
+// nothing was sent (no session was started, so there is no id to give).
+func uiByeLine(dot, id string) string {
+	if strings.TrimSpace(id) == "" {
+		return "  até mais"
+	}
+	return "  até mais " + dot + " sessão " + id + " (jazz -c continua)"
 }
 
 func mustProvider(ref string) string {
@@ -1740,7 +1749,11 @@ func (a *App) shellEscape(cmd string) {
 	if out != "" && !strings.HasSuffix(out, "\n") {
 		a.ui.print("\n")
 	}
-	a.ui.Notice(fmt.Sprintf("exit %d %s %s", r.ExitCode, a.ui.T.G().dot, strings.Trim(r.Note, "[]")))
+	exitMsg := fmt.Sprintf("código de saída %d", r.ExitCode)
+	if note := strings.TrimSpace(strings.Trim(r.Note, "[]")); note != "" {
+		exitMsg += " " + a.ui.T.G().dot + " " + note
+	}
+	a.ui.Notice(exitMsg)
 	a.agent.Note(fmt.Sprintf("<system-reminder>The user ran `%s` in the shell themselves (exit %d). Output:\n%s</system-reminder>", cmd, r.ExitCode, truncateHeadTail(redactSecrets(out), 8000)))
 	if r.ExitCode != 0 && (a.ol.on || a.ol.forced) {
 		a.olOffer("o comando falhou e estou sem modelo — quer:", olShellFailMenu(cmd, out, a.root, a.tools.hasRg))
@@ -2180,9 +2193,7 @@ func (a *App) command(line string) {
 	case "/cost", "/usage":
 		u := a.agent.Usage
 		msg := fmt.Sprintf("sessão: entrada %s · saída %s · cache lido %s · escrito %s", fmtK(u.In), fmtK(u.Out), fmtK(u.CacheRead), fmtK(u.CacheWrite))
-		if u.Cost > 0 {
-			msg += fmt.Sprintf(" · US$ %.4f", u.Cost)
-		}
+		msg += costNote(a.cfg, u, rlLastOK(), a.agent.Model)
 		ui.Notice(msg)
 	case "/init":
 		a.send(initPrompt)
