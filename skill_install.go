@@ -10,9 +10,11 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -93,15 +95,114 @@ func siGit(ctx context.Context, dir string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(scrubEnv(os.Environ()), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = append(scrubEnv(os.Environ()), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=", "SSH_ASKPASS=", "LC_ALL=C")
 	b, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("git %s: %w", args[0], ctx.Err())
+		}
 		return "", fmt.Errorf("git %s: %v: %s", args[0], err, oneLine(string(b), 200))
 	}
 	return strings.TrimSpace(string(b)), nil
 }
 
+type siProgressKey struct{}
+
+// siWithProgress: ctx whose installs report what they download through say
+// ("baixando github.com/x/y (subpasta z)").
+func siWithProgress(ctx context.Context, say func(string)) context.Context {
+	return context.WithValue(ctx, siProgressKey{}, say)
+}
+
+func siSay(ctx context.Context, msg string) {
+	if say, _ := ctx.Value(siProgressKey{}).(func(string)); say != nil {
+		say(msg)
+	}
+}
+
+// siShowURL: the clone URL as the user reads it (no scheme, no .git, no
+// credentials).
+func siShowURL(u string) string {
+	u = strings.TrimSuffix(u, ".git")
+	for _, p := range []string{"https://", "http://", "ssh://", "git://", "file://"} {
+		u = strings.TrimPrefix(u, p)
+	}
+	if at := strings.Index(u, "@"); at >= 0 && !strings.Contains(u[:at], "/") {
+		u = u[at+1:]
+	}
+	return u
+}
+
+// siGitErr turns git's clone errors into something the user can act on: a
+// typo'd or private repo makes git ask for a username (GIT_TERMINAL_PROMPT=0
+// then fails with "could not read Username"), which says nothing to them.
+func siGitErr(err error, src siSource) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) {
+		return errors.New("download da skill cancelado")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errors.New("download da skill demorou demais (mais de 3 min) e foi cancelado")
+	}
+	m := strings.ToLower(err.Error())
+	show := siShowURL(src.URL)
+	switch {
+	case src.Ref != "" && (strings.Contains(m, "remote branch") && strings.Contains(m, "not found") || strings.Contains(m, "couldn't find remote ref")):
+		return fmt.Errorf("o branch/tag %q não existe em %s", src.Ref, show)
+	case strings.Contains(m, "could not read username"), strings.Contains(m, "could not read password"),
+		strings.Contains(m, "repository not found"), strings.Contains(m, "authentication failed"),
+		strings.Contains(m, "terminal prompts disabled"), strings.Contains(m, "does not appear to be a git repository"),
+		strings.Contains(m, "could not read from remote repository"), strings.Contains(m, "permission denied"),
+		strings.Contains(m, "error: 404"), strings.Contains(m, "not found"):
+		return fmt.Errorf("repositório não encontrado ou privado: %s (confira a URL; repositório privado precisa de acesso configurado no git)", show)
+	case strings.Contains(m, "could not resolve host"), strings.Contains(m, "unable to access"), strings.Contains(m, "connection timed out"), strings.Contains(m, "network is unreachable"):
+		return fmt.Errorf("não consegui acessar %s (sem rede?): %s", show, oneLine(err.Error(), 160))
+	}
+	return err
+}
+
+// siTmpRoot: where clones go. Not os.TempDir(): on small boxes /tmp is a
+// RAM tmpfs (1 GB on the D610) and a repo full of videos fills it. jazz's data
+// dir is on disk; os.TempDir() only when it can't be created.
+func siTmpRoot() string {
+	d := filepath.Join(dataDir(), "tmp")
+	if err := os.MkdirAll(d, 0o700); err != nil {
+		return ""
+	}
+	// a clone left by a killed jazz (SIGKILL, power loss) is swept here
+	if ents, err := os.ReadDir(d); err == nil {
+		for _, e := range ents {
+			if !strings.HasPrefix(e.Name(), "jazz-skill-") {
+				continue
+			}
+			if fi, err := e.Info(); err == nil && time.Since(fi.ModTime()) > 6*time.Hour {
+				os.RemoveAll(filepath.Join(d, e.Name()))
+			}
+		}
+	}
+	return d
+}
+
+// siSubOK: a subfolder from a URL is a plain relative path (it becomes a
+// sparse-checkout pattern and a path under the clone).
+func siSubOK(sub string) bool {
+	if sub == "" || strings.HasPrefix(sub, "/") || strings.ContainsAny(sub, "\\*?[!#\n\r") {
+		return false
+	}
+	for _, p := range strings.Split(sub, "/") {
+		if p == "" || p == "." || p == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 // siFetch makes the source available locally; cleanup removes the clone.
+// With a subfolder (/tree/<ref>/<sub>) only that folder is downloaded: a
+// blobless partial clone plus a sparse checkout; a server or git that can't
+// do that gets the plain shallow clone.
 func siFetch(ctx context.Context, src siSource) (base, commit string, cleanup func(), err error) {
 	if src.Local != "" {
 		return src.Local, "", func() {}, nil
@@ -109,31 +210,84 @@ func siFetch(ctx context.Context, src siSource) (base, commit string, cleanup fu
 	if _, err := exec.LookPath("git"); err != nil {
 		return "", "", nil, errors.New("precisa do git instalado para baixar a skill")
 	}
-	tmp, err := os.MkdirTemp("", "jazz-skill-")
+	sub := strings.Trim(src.Sub, "/")
+	if sub != "" && !siSubOK(sub) {
+		return "", "", nil, fmt.Errorf("subpasta inválida: %q", src.Sub)
+	}
+	tmp, err := os.MkdirTemp(siTmpRoot(), "jazz-skill-")
 	if err != nil {
 		return "", "", nil, err
 	}
 	cleanup = func() { os.RemoveAll(tmp) }
-	args := []string{"clone", "--depth", "1", "--quiet"}
+	what := "baixando " + siShowURL(src.URL)
 	if src.Ref != "" {
-		args = append(args, "--branch", src.Ref)
+		what += " @" + src.Ref
 	}
-	args = append(args, "--", src.URL, filepath.Join(tmp, "repo"))
-	if _, err := siGit(ctx, tmp, args...); err != nil {
-		cleanup()
-		return "", "", nil, err
+	if sub != "" {
+		what += " (subpasta " + sub + ")"
 	}
+	siSay(ctx, what)
 	repo := filepath.Join(tmp, "repo")
+	clone := func(extra ...string) error {
+		args := append([]string{"clone", "--depth", "1", "--quiet"}, extra...)
+		if src.Ref != "" {
+			args = append(args, "--branch", src.Ref)
+		}
+		args = append(args, "--", src.URL, repo)
+		_, err := siGit(ctx, tmp, args...)
+		return err
+	}
+	done := false
+	if sub != "" {
+		err := clone("--filter=blob:none", "--sparse", "--no-checkout")
+		if err == nil {
+			if _, err = siGit(ctx, repo, "sparse-checkout", "set", "--no-cone", "/"+sub+"/"); err == nil {
+				_, err = siGit(ctx, repo, "checkout", "--quiet")
+			}
+			done = err == nil
+		}
+		if err != nil && (ctx.Err() != nil || siFatalClone(err)) {
+			cleanup()
+			return "", "", nil, siGitErr(err, src)
+		}
+		if !done {
+			os.RemoveAll(repo) // old git or a server without partial clone: full shallow clone
+		}
+	}
+	if !done {
+		if err := clone(); err != nil {
+			cleanup()
+			return "", "", nil, siGitErr(err, src)
+		}
+	}
 	commit, _ = siGit(ctx, repo, "rev-parse", "--short", "HEAD")
 	base = repo
-	if src.Sub != "" {
-		base = filepath.Join(repo, filepath.FromSlash(src.Sub))
+	if sub != "" {
+		base = filepath.Join(repo, filepath.FromSlash(sub))
 		if !pathIn(base, repo) {
 			cleanup()
 			return "", "", nil, errors.New("subpasta fora do repositório")
 		}
+		if fi, err := os.Stat(base); err != nil || !fi.IsDir() {
+			cleanup()
+			return "", "", nil, fmt.Errorf("a subpasta %s não existe em %s", sub, siShowURL(src.URL))
+		}
 	}
 	return base, commit, cleanup, nil
+}
+
+// siFatalClone: a clone error a retry without partial clone won't fix (the
+// repo or ref isn't there, no network): no second attempt.
+func siFatalClone(err error) bool {
+	m := strings.ToLower(err.Error())
+	for _, s := range []string{"could not read username", "repository not found", "authentication failed", "terminal prompts disabled",
+		"does not appear to be a git repository", "could not read from remote repository", "could not resolve host",
+		"remote branch", "couldn't find remote ref", "permission denied"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // siFind lists the skills under base: base itself, or every SKILL.md up to
@@ -397,7 +551,10 @@ func cmdSkill(root string, args []string, in io.Reader, out io.Writer) error {
 			pos = append(pos, a)
 		}
 	}
-	ctx := context.Background()
+	// Ctrl+C / kill / closed terminal cancel git and remove the temp clone
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stop()
+	ctx = siWithProgress(ctx, func(m string) { fmt.Fprintln(out, m+"…") })
 	switch args[0] {
 	case "install", "add", "i":
 		if len(pos) != 1 {
@@ -516,13 +673,19 @@ func siInstalledFrom(root, url string) string {
 	return ""
 }
 
-// siNote tells the model where installed skills live.
-func siNote(found []siFound) string {
+// siNote tells the model where installed skills live. fresh: jazz installed
+// them just now because the user asked, so the model must not tell the user
+// they "were already installed".
+func siNote(found []siFound, fresh bool) string {
 	var notes []string
 	for _, f := range found {
 		notes = append(notes, fmt.Sprintf("- %s: %s (read %s first; relative paths and <skill-dir> in it mean %s)", f.Name, oneLine(f.Desc, 160), filepath.Join(f.Dir, "SKILL.md"), f.Dir))
 	}
-	return "<system-reminder>These skills are installed for this request:\n" + strings.Join(notes, "\n") + "\nRead the SKILL.md and follow it exactly (its golden path, in order); run its scripts by their full path in that folder, from the project directory. Do not hand-write replacements for its tools.</system-reminder>"
+	head := "These skills are installed for this request:"
+	if fresh {
+		head = "jazz installed these skills just now, at the user's request in this message (they were NOT installed before; if you mention it, say it was installed now):"
+	}
+	return "<system-reminder>" + head + "\n" + strings.Join(notes, "\n") + "\nRead the SKILL.md and follow it exactly (its golden path, in order); run its scripts by their full path in that folder, from the project directory. Do not hand-write replacements for its tools.</system-reminder>"
 }
 
 // siHeadlessTurn: with -p, a request that explicitly says to install a skill
@@ -535,12 +698,15 @@ func siHeadlessTurn(root, prompt string, errw io.Writer) string {
 	}
 	if d := siInstalledFrom(root, url); d != "" {
 		name, desc := readFrontmatter(filepath.Join(d, "SKILL.md"))
-		return siNote([]siFound{{Name: name, Desc: desc, Dir: d}})
+		return siNote([]siFound{{Name: name, Desc: desc, Dir: d}}, false)
 	}
 	if !siInstallVRB.MatchString(acStripReminders(prompt)) {
 		return "<system-reminder>The user mentions the skill " + url + ", which is not installed. To install it the user runs `jazz skill install " + url + "` (jazz's skills folder is not writable for you). Meanwhile you may clone it into the project and follow its SKILL.md from there.</system-reminder>"
 	}
-	found, err := siInstall(context.Background(), url, siUserDir(), false, nil)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stop()
+	ctx = siWithProgress(ctx, func(m string) { fmt.Fprintln(errw, "jazz: "+m+"…") })
+	found, err := siInstall(ctx, url, siUserDir(), false, nil)
 	if err != nil {
 		fmt.Fprintln(errw, "jazz: skill não instalada:", err)
 		return ""
@@ -548,7 +714,7 @@ func siHeadlessTurn(root, prompt string, errw io.Writer) string {
 	for _, f := range found {
 		fmt.Fprintf(errw, "jazz: skill instalada: %s → %s\n", f.Name, f.Dir)
 	}
-	return siNote(found)
+	return siNote(found, true)
 }
 
 func siScriptRank(p string) int {

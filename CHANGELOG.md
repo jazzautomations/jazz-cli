@@ -166,6 +166,13 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   não com `--yolo` nem com `--allow-tools`.
 - `--debug` não deixa mais um `<ts>.fatal.txt` vazio ao lado de cada log: some na saída normal, e os
   vazios de execuções que já acabaram são limpos; só fica o que tem um erro fatal.
+- `jazz skill install …/tree/<ref>/<pasta>` baixa só aquela pasta (clone parcial + sparse checkout; git ou
+  servidor sem suporte cai no clone raso inteiro) e clona na pasta de dados do jazz, não no `/tmp` (no D610
+  é tmpfs de 1 GB na RAM). Mostra "baixando github.com/dono/repo (subpasta …)"; Ctrl+C, SIGTERM ou
+  terminal fechado cancelam o git e apagam o clone; sobra de um jazz morto é varrida depois. Repo errado
+  ou privado diz "repositório não encontrado ou privado: …" em vez do erro de usuário do git; branch que
+  não existe é dita pelo nome. Skill instalada pelo chat avisa o modelo que foi instalada agora, a pedido
+  do usuário, e ele não diz mais que "já estava instalada".
 
 ### Testes e release
 
