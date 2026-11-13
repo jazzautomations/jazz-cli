@@ -1,23 +1,25 @@
 {
   "name": "dois-bugs-leitura",
   "origin": "macbookpro 261110-110658-b22e (eval 05-dois-bugs)",
-  "why": "o teto de exploração recusou ler acervo.py/calendario.py, justamente os arquivos a corrigir (TOOL_NOT_EXECUTED 5×); ler nunca pode ser bloqueado",
+  "why": "S/bugfix tem teto de exploração 4 e a partir da 9ª leitura sem editar o jazz recusou ler acervo.py/calendario.py, justamente os arquivos a corrigir (TOOL_NOT_EXECUTED 5×); ler nunca pode ser bloqueado",
   "front": "F4",
   "entry": "agent",
   "mode": "auto",
   "files": {
-    "acervo.py": "def total(xs):\n    return sum(xs) - 1  # bug\n",
-    "calendario.py": "def dias(m):\n    return 30 if m == 2 else 31  # bug\n",
-    "lib/mod00.py": "X0 = 0\n",
-    "lib/mod01.py": "X1 = 1\n",
-    "lib/mod02.py": "X2 = 2\n",
-    "lib/mod03.py": "X3 = 3\n",
-    "lib/mod04.py": "X4 = 4\n",
-    "lib/mod05.py": "X5 = 5\n",
-    "lib/mod06.py": "X6 = 6\n",
-    "lib/mod07.py": "X7 = 7\n",
-    "lib/mod08.py": "X8 = 8\n",
-    "lib/mod09.py": "X9 = 9\n"
+    "run_tests.py": "import unittest\nunittest.main(module=None, argv=['x','discover','tests'])\n",
+    "biblioteca/__init__.py": "",
+    "biblioteca/acervo.py": "def total(xs):\n    return sum(xs) - 1  # bug\n",
+    "biblioteca/calendario.py": "def dias(m):\n    return 30 if m == 2 else 31  # bug\n",
+    "biblioteca/mod00.py": "X0 = 0\n",
+    "biblioteca/mod01.py": "X1 = 1\n",
+    "biblioteca/mod02.py": "X2 = 2\n",
+    "biblioteca/mod03.py": "X3 = 3\n",
+    "biblioteca/mod04.py": "X4 = 4\n",
+    "biblioteca/mod05.py": "X5 = 5\n",
+    "biblioteca/mod06.py": "X6 = 6\n",
+    "biblioteca/mod07.py": "X7 = 7\n",
+    "biblioteca/mod08.py": "X8 = 8\n",
+    "biblioteca/mod09.py": "X9 = 9\n"
   },
   "provider": {
     "seq": [
@@ -26,7 +28,7 @@
           {
             "name": "read",
             "args": {
-              "path": "acervo.py"
+              "path": "biblioteca/mod00.py"
             }
           }
         ]
@@ -36,7 +38,7 @@
           {
             "name": "read",
             "args": {
-              "path": "calendario.py"
+              "path": "biblioteca/mod01.py"
             }
           }
         ]
@@ -46,7 +48,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod00.py"
+              "path": "biblioteca/mod02.py"
             }
           }
         ]
@@ -56,7 +58,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod01.py"
+              "path": "biblioteca/mod03.py"
             }
           }
         ]
@@ -66,7 +68,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod02.py"
+              "path": "biblioteca/mod04.py"
             }
           }
         ]
@@ -76,7 +78,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod03.py"
+              "path": "biblioteca/mod05.py"
             }
           }
         ]
@@ -86,7 +88,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod04.py"
+              "path": "biblioteca/mod06.py"
             }
           }
         ]
@@ -96,7 +98,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod05.py"
+              "path": "biblioteca/mod07.py"
             }
           }
         ]
@@ -106,7 +108,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod06.py"
+              "path": "biblioteca/mod08.py"
             }
           }
         ]
@@ -116,7 +118,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod07.py"
+              "path": "biblioteca/mod09.py"
             }
           }
         ]
@@ -126,7 +128,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod08.py"
+              "path": "biblioteca/acervo.py"
             }
           }
         ]
@@ -136,7 +138,7 @@
           {
             "name": "read",
             "args": {
-              "path": "lib/mod09.py"
+              "path": "biblioteca/calendario.py"
             }
           }
         ]
@@ -147,7 +149,7 @@
     ]
   },
   "turns": [
-    "tem dois bugs no acervo.py e no calendario.py, acha e conserta"
+    "A suíte de testes está vermelha. Rode python3 run_tests.py e corrija o código até ela passar inteira. Os testes estão certos: não altere tests/ nem run_tests.py."
   ],
   "expect": {
     "err": "none",
@@ -156,7 +158,7 @@
     ],
     "tool_has": [
       "return sum(xs) - 1",
-      "X9 = 9"
+      "return 30 if m == 2"
     ]
   }
 }

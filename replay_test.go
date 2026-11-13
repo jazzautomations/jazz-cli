@@ -187,22 +187,36 @@ func TestReplay(t *testing.T) {
 		t.Run(c.Name, func(t *testing.T) {
 			if len(c.Each) > 0 {
 				for _, phrase := range c.Each {
-					t.Run(rpSubName(phrase), func(t *testing.T) {
-						front := c.Front
-						if f, ok := c.FrontBy[phrase]; ok {
-							front = f
-						}
+					front := c.Front
+					if f, ok := c.FrontBy[phrase]; ok {
+						front = f
+					}
+					ok := t.Run(rpSubName(phrase), func(t *testing.T) {
 						rpSkip(t, front)
 						cc := c
 						cc.Turns = []string{phrase}
 						rpRun(t, cc)
 					})
+					rpStale(t, front, phrase, ok)
 				}
 				return
 			}
-			rpSkip(t, c.Front)
-			rpRun(t, c)
+			ok := t.Run("run", func(t *testing.T) {
+				rpSkip(t, c.Front)
+				rpRun(t, c)
+			})
+			rpStale(t, c.Front, c.Name, ok)
 		})
+	}
+}
+
+// rpStale: with JAZZ_REPLAY_ALL=1 a case still marked with a front that
+// already passes is reported — the front closed (or the case does not
+// reproduce the bug): drop the front so it becomes part of the gate.
+func rpStale(t *testing.T, front, what string, passed bool) {
+	t.Helper()
+	if rpAll() && front != "" && passed {
+		t.Logf("JÁ PASSA com front %s: %q — tire o front (ou o caso não reproduz o defeito)", front, what)
 	}
 }
 
