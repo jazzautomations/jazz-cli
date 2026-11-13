@@ -142,7 +142,7 @@ func TestNameTieListsBoth(t *testing.T) {
 }
 
 func TestNameInjectIsUserSideAndKeepsText(t *testing.T) {
-	r := niFixture(t, map[string]string{"parser.go": ""})
+	r := niFixture(t, map[string]string{"parser.go": "", "go.mod": "module x\n"}) // a project: $HOME/loose folders get no note
 	a := &Agent{tools: &Toolbox{Root: r}}
 	inj := a.niInject("conserta o parsr.go")
 	if !strings.HasPrefix(inj, "\n\n<system-reminder>\nnomes aproximados") || !strings.HasSuffix(inj, "</system-reminder>") {
@@ -150,6 +150,33 @@ func TestNameInjectIsUserSideAndKeepsText(t *testing.T) {
 	}
 	if (&Agent{sub: true, tools: &Toolbox{Root: r}}).niInject("conserta o parsr.go") != "" {
 		t.Error("subagents get no note")
+	}
+}
+
+// Guesses that are not typos are not offered (field cases, d610/mac):
+// "volta" → WhatsApp/CONTA.mp3, "1w_token" → gt_token.py, a path about to
+// be created, and nothing at all outside a project.
+func TestNameNoteOnlyRealTypos(t *testing.T) {
+	r := niFixture(t, map[string]string{
+		"go.mod": "module x\n", "config.go": "", "gt_token.py": "", "produto.go": "",
+		"WhatsApp Documents/CONTA.mp3": "", "Downloads/produto.pdf": "", "evals/v2/storybord.json": "",
+	})
+	niNone(t, r, "volta pros testes")
+	niNone(t, r, "cria ./storyboard.json")
+	niNone(t, r, "1w_token")
+	niNone(t, r, "o que tem no produto.pdf")
+	niWant(t, r, "abre o confg.go", "`config.go`")
+	a := &Agent{tools: &Toolbox{Root: r}}
+	if a.niInject("abre o confg.go") == "" {
+		t.Fatal("a real typo in a project gets the note")
+	}
+	a.Msgs = append(a.Msgs, Message{Role: "user", Content: "abre o confg.go" + a.niInject("abre o confg.go")})
+	if n := a.niInject("abre o confg.go de novo"); n != "" {
+		t.Errorf("the same note twice in a session: %q", n)
+	}
+	loose := niFixture(t, map[string]string{"config.go": ""})
+	if n := (&Agent{tools: &Toolbox{Root: loose}}).niInject("abre o confg.go"); n != "" {
+		t.Errorf("no project marker, still a note: %q", n)
 	}
 }
 

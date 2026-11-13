@@ -17,22 +17,35 @@ func TestLessonReuseRepoSigAndPick(t *testing.T) {
 	if lrRepoSig(a) == "" || lrRepoSig(a) != lrRepoSig(b) || lrRepoSig(a) == lrRepoSig(c) {
 		t.Fatalf("signatures: %q %q %q", lrRepoSig(a), lrRepoSig(b), lrRepoSig(c))
 	}
-	class := lrTaskClass("corrija o bug no cálculo de desconto em pedidos.py")
+	req := "corrija o bug no cálculo de desconto em pedidos.py"
+	class := lrTaskClass(req)
+	keys := pcUniq(pcTerms("bug no desconto dos pedidos"))
 	plans := []pcPlan{
-		{ID: "p1", Task: "old", Kind: class, Repo: lrRepoSig(a), Wins: 1, Time: 1},
-		{ID: "p2", Task: "newer", Kind: class, Repo: lrRepoSig(a), Wins: 1, Time: 2, Hint: "o desconto fica em PedidoA.calcular"},
-		{ID: "p3", Task: "failing", Kind: class, Repo: lrRepoSig(a), Wins: 1, Fails: 1, Time: 3},
-		{ID: "p4", Task: "go", Kind: class, Repo: lrRepoSig(c), Wins: 3, Time: 4},
+		{ID: "p1", Task: "old", Keys: keys, Kind: class, Repo: lrRepoSig(a), Wins: 1, Time: 1},
+		{ID: "p2", Task: "newer", Keys: keys, Kind: class, Repo: lrRepoSig(a), Wins: 1, Time: 2, Hint: "o desconto fica em PedidoA.calcular"},
+		{ID: "p3", Task: "failing", Keys: keys, Kind: class, Repo: lrRepoSig(a), Wins: 1, Fails: 1, Time: 3},
+		{ID: "p4", Task: "go", Keys: keys, Kind: class, Repo: lrRepoSig(c), Wins: 3, Time: 4},
+		{ID: "p5", Task: "wifi", Keys: pcUniq(pcTerms("arruma o wifi do notebook")), Kind: class, Repo: lrRepoSig(a), Wins: 9, Time: 5},
 	}
-	p := lrPick(plans, nil, class, lrRepoSig(b))
+	p := lrPick(plans, nil, class, lrRepoSig(b), req)
 	if p == nil || p.ID != "p2" {
 		t.Fatalf("pick: %+v", p)
 	}
-	if p := lrPick(plans, []pcPlan{plans[1]}, class, lrRepoSig(b)); p == nil || p.ID != "p1" {
+	if p := lrPick(plans, []pcPlan{plans[1]}, class, lrRepoSig(b), req); p == nil || p.ID != "p1" {
 		t.Fatal("a plan the keyword match already injected is not repeated")
 	}
-	if lrPick(plans, nil, "S/question", lrRepoSig(b)) != nil {
+	if lrPick(plans, nil, "S/question", lrRepoSig(b), req) != nil {
 		t.Fatal("other task class")
+	}
+	// same class and repo but nothing in common with the request: the wifi
+	// lesson went into "oi" and unrelated turns before 0.14
+	for _, q := range []string{"oi", "porra", "corrija o layout da tela de login"} {
+		if p := lrPick(plans, nil, class, lrRepoSig(b), q); p != nil {
+			t.Errorf("%q: unrelated lesson %s", q, p.ID)
+		}
+	}
+	if lrPick(plans, nil, "M/change", lrRepoSig(b), req) != nil {
+		t.Fatal("the default class says nothing about the task")
 	}
 	r := lrRender(*p)
 	if !strings.Contains(r, "da última vez") || !strings.Contains(r, "PedidoA.calcular") || strings.Count(r, "\n") > 2 {
@@ -47,7 +60,7 @@ func TestLessonReuseFirstTurnOnly(t *testing.T) {
 	h := newHarness(t, func(i int, r recReq) fakeResp { return fakeResp{Text: "feito"} }, nil)
 	os.WriteFile(filepath.Join(h.root, "pedidos.py"), []byte("x = 1\n"), 0o644)
 	req := "corrija o bug no cálculo de desconto em pedidos.py"
-	plan := pcPlan{ID: "abc123", Time: 1, Task: "corrigir frete do PedidoB", Keys: []string{"frete"}, Kind: lrTaskClass(req), Repo: lrRepoSig(h.root),
+	plan := pcPlan{ID: "abc123", Time: 1, Task: "corrigir desconto do PedidoB", Keys: pcUniq(pcTerms("ajustar desconto dos pedidos")), Kind: lrTaskClass(req), Repo: lrRepoSig(h.root),
 		Steps: []string{"edit pedidos.py", "bash python3 -m unittest (exit 0)"}, Verify: "python3 -m unittest", Wins: 2, Session: "261020-000000-aaaa"}
 	if err := pcSave(h.root, []pcPlan{plan}); err != nil {
 		t.Fatal(err)

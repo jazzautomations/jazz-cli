@@ -735,7 +735,10 @@ func niNote(root, text string) string {
 	}
 	var parts []string
 	for _, tk := range toks {
-		c := ix.resolve(tk)
+		if niNoteSkipTok(tk) {
+			continue
+		}
+		c := niTop(niNoteCands(ix.resolveAll(tk)))
 		if len(c) == 0 {
 			continue
 		}
@@ -748,6 +751,44 @@ func niNote(root, text string) string {
 		return ""
 	}
 	return "nomes aproximados (deduzi de erros de digitação; confira e discorde se estiver errado): " + strings.Join(parts, "; ")
+}
+
+// niNoteMaxD: the note proposes a name only one edit away over the whole
+// stem — "1w_token" → gt_token.py (two edits) and "volta" → CONTA.mp3 were
+// guesses, not typos.
+const niNoteMaxD = fzEdit
+
+// niNoteSkipDirs: backups, phone media and eval fixtures are never what a
+// request means by a name.
+var niNoteSkipRE = lazyRx(`(?i)(^|/)(whatsapp[^/]*|sdcard|downloads|backups?|evals?|testdata|fixtures?|node_modules|vendor|\.venv|venv|site-packages)(/|$)`)
+
+// niMediaExt are files a code request does not mean.
+var niMediaExt = map[string]bool{".mp3": true, ".mp4": true, ".m4a": true, ".ogg": true, ".opus": true, ".wav": true,
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".heic": true, ".pdf": true, ".zip": true,
+	".mov": true, ".avi": true, ".mkv": true, ".docx": true, ".xlsx": true, ".pptx": true}
+
+// niNoteSkipTok: an explicit path that does not exist is probably about to
+// be created ("cria ./storyboard.json"): never rewrite it.
+func niNoteSkipTok(tk niTok) bool {
+	switch tk.Verb {
+	case "create", "write":
+		return true
+	case "open", "run", "test", "search", "fix", "edit":
+		return false // reading or changing what exists: a typo in its path is a typo
+	}
+	return strings.HasPrefix(tk.Raw, "./") // "./novo.json" names a file to be, not a typo
+}
+
+// niNoteCands keeps the candidates the note may propose.
+func niNoteCands(c []niCand) []niCand {
+	var out []niCand
+	for _, x := range c {
+		if x.d > niNoteMaxD || niNoteSkipRE.MatchString(x.Rel) || niMediaExt[strings.ToLower(filepath.Ext(x.Rel))] {
+			continue
+		}
+		out = append(out, x)
+	}
+	return out
 }
 
 func niFormat(tk niTok, c []niCand, ix *niIndex) string {
@@ -896,8 +937,11 @@ func (a *Agent) niInject(input string) string {
 	if a.sub || a.tools == nil {
 		return ""
 	}
+	if !amIsProject(a.tools.Root) { // $HOME is not a project: no name guessing over it
+		return ""
+	}
 	n := niNote(a.tools.Root, input)
-	if n == "" {
+	if n == "" || a.dcHinted(n) { // the same note at most once per session
 		return ""
 	}
 	return "\n\n<system-reminder>\n" + n + "\n</system-reminder>"

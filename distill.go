@@ -2429,8 +2429,16 @@ func dsEligible(p pcPlan) string {
 	if p.Wins < dsMinWins {
 		return fmt.Sprintf("só %d sucesso(s) verificado(s) — precisa ≥%d", max(p.Wins, 0), dsMinWins)
 	}
+	if p.Fails > 0 {
+		return fmt.Sprintf("o reuso já falhou ou foi corrigido pelo usuário %d vez(es)", p.Fails)
+	}
 	if len(p.Cmds) == 0 {
 		return "sem comandos gravados (plano anterior à ponte)"
+	}
+	for _, c := range p.Cmds {
+		if strings.Contains(c, pcLitMark) {
+			return "comando com literal omitido (podia ter segredo): não dá pra reproduzir"
+		}
 	}
 	if len(p.Cmds) > dsMaxSteps {
 		return "trajetória longa demais pra destilar"

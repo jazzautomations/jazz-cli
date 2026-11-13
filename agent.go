@@ -52,6 +52,7 @@ type Agent struct {
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
 	pendingNote []string
+	pcPrev      pcPrevTurn // plans injected in the last turn: a correction in the next one counts against them (plancache.go)
 
 	mq *MsgQueue // messages typed during the turn: steer / follow-up (queue.go); guarded by steerMu
 
@@ -1800,6 +1801,8 @@ func (a *Agent) execBody(ctx context.Context, tc ToolCall) (ToolCall, ToolOutput
 		out = a.runTask(ctx, tc)
 	case tc.Name == "ask_user" && !isMCP:
 		out = a.runAskUser(ctx, tc)
+	case tc.Name == factToolName && !isMCP:
+		out = a.runFact(ctx, tc) // the offline brain as a read-only tool (brain_tool.go)
 	case tc.Name == ojSidekickTool && !isMCP && a.ojFusionActive():
 		out = a.ojRunSidekick(ctx, tc)
 	case isMCP:
