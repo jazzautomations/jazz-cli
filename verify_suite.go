@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -36,13 +35,13 @@ const (
 var (
 	// vsRedRE: failure markers that survive a pipe hiding the exit code
 	// (`go test | tail`, `pytest | head`).
-	vsRedRE = regexp.MustCompile(`(?m)^FAILED \(|^--- FAIL|^FAIL\s|\b\d+ failed\b|^Tests:.*\b\d+ failed|^ERROR: test|^FAIL: test|\btest result: FAILED`)
+	vsRedRE = lazyRx(`(?m)^FAILED \(|^--- FAIL|^FAIL\s|\b\d+ failed\b|^Tests:.*\b\d+ failed|^ERROR: test|^FAIL: test|\btest result: FAILED`)
 	// vsNoTestsRE: the runner found nothing to run — not a verdict.
-	vsNoTestsRE = regexp.MustCompile(`(?i)\bRan 0 tests\b|NO TESTS RAN|no tests ran|no test files|collected 0 items|No tests found`)
+	vsNoTestsRE = lazyRx(`(?i)\bRan 0 tests\b|NO TESTS RAN|no tests ran|no test files|collected 0 items|No tests found`)
 )
 
 // vsInfraErrRE: the test command never started (shell or interpreter error).
-var vsInfraErrRE = regexp.MustCompile(`(?i)can't cd|cannot cd|cd: .*(no such|permission|not a directory)|command not found|not found: (python|go|npm|cargo|make)|operation not permitted|no module named (unittest|pytest)\b`)
+var vsInfraErrRE = lazyRx(`(?i)can't cd|cannot cd|cd: .*(no such|permission|not a directory)|command not found|not found: (python|go|npm|cargo|make)|operation not permitted|no module named (unittest|pytest)\b`)
 
 // vsInfraErr: the output says the runner did not run, with no test verdict.
 func vsInfraErr(text string) bool {
