@@ -83,6 +83,7 @@ def replay(path):
     if path == "null":
         return None
     res = {}
+    pkg_fail = False
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
@@ -90,6 +91,9 @@ def replay(path):
             except ValueError:
                 continue
             t = e.get("Test", "")
+            if not t and e.get("Action") == "fail":
+                pkg_fail = True  # build error, panic, timeout: not every case got to say
+                continue
             if not t.startswith("TestReplay/") or e.get("Action") not in ("pass", "fail", "skip"):
                 continue
             res[t] = e["Action"]
@@ -98,6 +102,9 @@ def replay(path):
     for a in leaves.values():
         c[a] += 1
     failed = sorted(t[len("TestReplay/"):] for t, a in leaves.items() if a == "fail")
+    if pkg_fail and not failed:
+        c["fail"] += 1
+        failed = ["(o go test falhou fora dos casos: build, panic ou timeout)"]
     return {"passed": c["pass"], "failed": c["fail"], "skipped": c["skip"], "failed_cases": failed[:50]}
 
 

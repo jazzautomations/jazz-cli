@@ -193,4 +193,38 @@ func TestGateScript(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "modelos diferentes") {
 		t.Errorf("v2 com modelos diferentes passou: %v\n%s", err, out)
 	}
+
+	// the replay part reads go test -json: a package that failed outside the
+	// cases (panic, build error, timeout) is red even if every case it got to
+	// report passed. A fake go prints the events; its "build" makes an offline
+	// eval that passes (the offline part only runs on Linux).
+	for _, c := range []struct {
+		name, events string
+		ok           bool
+		failed       int
+	}{
+		{"verde", `{"Action":"pass","Test":"TestReplay/a/run"}` + "\n" + `{"Action":"pass","Test":"TestReplay/a"}` + "\n" + `{"Action":"pass","Test":"TestReplay"}` + "\n" + `{"Action":"pass"}`, true, 0},
+		{"panic", `{"Action":"pass","Test":"TestReplay/a/run"}` + "\n" + `{"Action":"pass","Test":"TestReplay/a"}` + "\n" + `{"Action":"output","Output":"panic: x"}` + "\n" + `{"Action":"fail"}`, false, 1},
+		{"build", `{"Action":"output","Output":"syntax error"}` + "\n" + `{"Action":"fail"}`, false, 1},
+	} {
+		ev := filepath.Join(t.TempDir(), "events.json")
+		os.WriteFile(ev, []byte(c.events+"\n"), 0o644)
+		fakeGo := filepath.Join(t.TempDir(), "go")
+		os.WriteFile(fakeGo, []byte("#!/bin/sh\ncase $1 in\n test) cat "+ev+" ;;\n build) while [ $# -gt 0 ]; do [ \"$1\" = -o ] && { printf '#!/bin/sh\\nexit 0\\n' > \"$2\"; chmod +x \"$2\"; }; shift; done ;;\nesac\n"), 0o755)
+		cmd = exec.Command(bash, filepath.Join(work, "scripts", "gate.sh"), "0.14.0")
+		cmd.Env = append(os.Environ(), "GO="+fakeGo)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s: gate.sh: %v\n%s", c.name, err, out)
+		}
+		b, _ := os.ReadFile(filepath.Join(work, "results", "gate-0.14.0.json"))
+		var r struct {
+			Replay struct {
+				OK     bool `json:"ok"`
+				Failed int  `json:"failed"`
+			}
+		}
+		if err := json.Unmarshal(b, &r); err != nil || r.Replay.OK != c.ok || r.Replay.Failed != c.failed {
+			t.Errorf("%s: replay = %+v (err %v), want ok=%v failed=%d\n%s", c.name, r.Replay, err, c.ok, c.failed, b)
+		}
+	}
 }
