@@ -194,3 +194,14 @@ func TestReplaceCommandArgv(t *testing.T) {
 		}
 	}
 }
+
+// argPath (subagent path lock, steering, obs) sees the path a dirty key
+// carries, the same one the tool writes after normalizeArgs.
+func TestArgPathSeesDirtyKey(t *testing.T) {
+	if p := argPath(`{"path Metall":"a.go","content":"x"}`); p != "a.go" {
+		t.Errorf("argPath = %q, want a.go", p)
+	}
+	if p := argPath(`{"paths":["a.go"]}`); p != "" {
+		t.Errorf("paths is not path: %q", p)
+	}
+}

@@ -995,6 +995,11 @@ func argPath(raw string) string {
 			return s
 		}
 	}
+	// a dirty key ("path Metall") the tool itself repairs (argfix.go): the
+	// subagent path lock and steering must see the same path it writes
+	if s, ok := afRepair("edit", m)["path"].(string); ok {
+		return s
+	}
 	return ""
 }
 
