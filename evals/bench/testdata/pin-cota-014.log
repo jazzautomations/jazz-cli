@@ -1,0 +1,5 @@
+· sessão 261112-101500-a1b2 · kilo/cohere/north-mini-code:free
+! north-mini-code: a cota grátis do provedor acabou (volta em ~15m)
+jazz: o modelo que você escolheu (kilo/cohere/north-mini-code:free) falhou: a cota grátis anônima do Kilo acabou (vale pra todos os modelos grátis dele) — volta em ~15m. Pra seguir agora: crie uma conta grátis e salve a chave com /key openrouter ou /key kilo (fora do jazz: jazz key openrouter), ou troque de modelo (/model) — não troquei de modelo sozinho. Nenhum outro modelo está disponível agora: tente mais tarde ou salve outra chave (jazz key openrouter)
+jazz: execução incompleta (model_unavailable) — trabalho salvo: checkpoint 0a1b2c3d4e5f · nota sessions/x.handoff.md
+jazz: retome com: jazz -p -r 261112-101500-a1b2   (ou jazz -p --resume-last-in work/03)

@@ -93,3 +93,22 @@ func pvMarkQuota(ae *APIError, now time.Time) {
 		ae.RetryAfter = pvQuotaDefault
 	}
 }
+
+// pvQuotaAdvice is the final message for a free quota used up: who ran out,
+// when it comes back (when the provider said) and what fixes it right now —
+// a free account's key, which has its own quota. Never the provider's English
+// "Sign up for free…" verbatim.
+func pvQuotaAdvice(ae *APIError) string {
+	who := "a cota grátis desse provedor acabou"
+	if strings.Contains(ae.Body, "PROMOTION_") {
+		// kilo's keyless gateway: one quota per IP for every :free model
+		who = "a cota grátis anônima do Kilo acabou (vale pra todos os modelos grátis dele)"
+	}
+	if ae.RetryAfter > 0 {
+		who += " — volta em ~" + rcDur(ae.RetryAfter)
+	}
+	// /key alone does not move the session off a keyless model whose provider
+	// is cooling (the /key flow only switches when the current provider has
+	// no credentials): the advice names both steps, so it actually works
+	return who + ". Pra seguir agora: crie uma conta grátis na OpenRouter, salve a chave com /key openrouter e escolha um modelo dela em /model (fora do jazz: jazz key openrouter, depois -m openrouter/…); ou troque de modelo (/model)"
+}

@@ -60,6 +60,7 @@ type rlBucket struct {
 	HdrReset  int64      `json:"hdr_reset,omitempty"`  // when HdrReq resets (unix ms)
 	LRPD      int        `json:"lrpd,omitempty"`       // learned daily request limit (OpenRouter /key)
 	AuthBad   string     `json:"auth_bad,omitempty"`   // fingerprint of a refused key
+	Gone      int64      `json:"gone,omitempty"`       // model retired/removed by the provider (unix ms; no expiry)
 	MaxReq    int        `json:"max_req,omitempty"`    // learned from 413 "Limit N"
 	LastErr   string     `json:"last_err,omitempty"`
 	LastAt    int64      `json:"last_at,omitempty"`
@@ -203,7 +204,7 @@ func (rl *rateLimiter) writeLocked() error {
 func rlEmpty(b *rlBucket, now int64) bool {
 	today := time.UnixMilli(now).UTC().Format("2006-01-02")
 	return len(b.Recent) == 0 && len(b.RecentTok) == 0 && b.CoolUntil <= now && b.DeadUntil <= now &&
-		b.AuthBad == "" && b.MaxReq == 0 && b.Life == 0 && b.MReq == 0 && b.LRPD == 0 &&
+		b.AuthBad == "" && b.Gone == 0 && b.MaxReq == 0 && b.Life == 0 && b.MReq == 0 && b.LRPD == 0 &&
 		(b.Req == 0 || b.Day < today) && b.Strikes == 0 && b.LastErr == "" && b.OKAt < now-7*24*3600_000
 }
 
@@ -244,6 +245,7 @@ func rlMerge(m, t *rlBucket) {
 	m.CoolUntil, m.DeadUntil = max(m.CoolUntil, t.CoolUntil), max(m.DeadUntil, t.DeadUntil)
 	m.MaxReq = max(m.MaxReq, t.MaxReq)
 	m.LRPD = max(m.LRPD, t.LRPD)
+	m.Gone = max(m.Gone, t.Gone) // never cleared by a merge: revival is read from the catalog (rlGoneRevived)
 	if m.AuthBad == "" {
 		m.AuthBad = t.AuthBad
 	}
@@ -429,6 +431,11 @@ func (rl *rateLimiter) stateLocked(ref, prov, key, fp string, lim Limits, tokens
 	if pb := rl.B[prov]; pb != nil && pb.AuthBad != "" && fp != "" && pb.AuthBad == fp {
 		return rlState{Dead: true, Until: now.Add(100 * 365 * 24 * time.Hour), Why: "credencial recusada — rode /omni add " + prov}
 	}
+	if mb := rl.B[ref]; mb != nil && mb.Gone > 0 && !rlGoneRevived(ref, mb.Gone) {
+		// retired/removed (410, "end of life", 404): no expiry — only the
+		// provider's catalog listing it again, or `jazz omni reset`, revives it
+		return rlState{Dead: true, Until: now.Add(100 * 365 * 24 * time.Hour), Why: "modelo aposentado/removido pelo provedor"}
+	}
 	var cool int64
 	for _, k := range rlKeys(ref, prov, key) {
 		b := rl.B[k]
@@ -539,6 +546,20 @@ func (rl *rateLimiter) stateLocked(ref, prov, key, fp string, lim Limits, tokens
 	return st
 }
 
+// rlGoneRevived reports whether the provider's catalog (models-cache.json,
+// fetched from /models of kilo and OpenRouter) listed ref again after it was
+// marked gone at goneAt (unix ms). Providers without a catalog never revive
+// on their own: `jazz omni reset <provedor>` clears the mark.
+var rlGoneRevived = func(ref string, goneAt int64) bool {
+	prov, _ := SplitModel(ref)
+	listed := pvListedAt(prov)
+	if listed.IsZero() || listed.UnixMilli() <= goneAt {
+		return false
+	}
+	m, ok := pvCachedRefs(prov)[ref]
+	return ok && m.At >= listed.Unix()
+}
+
 // rlKeys lists the buckets whose Dead/Cool apply to ref.
 func rlKeys(ref, prov, key string) []string {
 	ks := []string{ref}
@@ -639,10 +660,21 @@ func (c *Config) rlEnd(ref string, tokens int, u Usage, err error) {
 }
 
 var (
-	pvTooBigRE  = lazyRx(`(?i)request too large|limit (\d+), requested (\d+)`)
-	pvLimitNRE  = lazyRx(`(?i)limit:?\s*(\d+),?\s*requested:?\s*(\d+)`)
-	pvGoneRE    = lazyRx(`(?i)model.{0,80}(not found|does not exist|decommission|not available|no longer|is not supported|invalid model)|no endpoints found(?: for| matching)`)
-	pvNoToolsRE = lazyRx(`(?i)(tool|function.?call)[^.]{0,80}(not supported|unsupported|does not support|not available)|does not support (tools|function)|no endpoints found that support tool use`)
+	pvTooBigRE = lazyRx(`(?i)request too large|limit (\d+), requested (\d+)`)
+	pvLimitNRE = lazyRx(`(?i)limit:?\s*(\d+),?\s*requested:?\s*(\d+)`)
+	// pvEOLRE: a model the provider retired (NVIDIA answers HTTP 410 "reached
+	// its end of life on 2026-10-28"); it never comes back by waiting.
+	pvEOLRE = lazyRx(`(?i)end[ -]of[ -]life|has been retired|\bretired\b|no longer available|deprecated and removed`)
+	// pvBadKeyRE: a refused key answered with HTTP 400 (Gemini: "API key not
+	// valid. Please pass a valid API key." / API_KEY_INVALID).
+	// Only a key being refused counts — a 400 that merely mentions "API key"
+	// (BYOK hints, docs links) must not kill every model behind the key.
+	pvBadKeyRE = lazyRx(`(?i)api[ _-]?key[^.]{0,40}\b(not valid|invalid|expired|incorrect|revoked|missing|required)|\b(valid|invalid|incorrect|expired|revoked|missing|bad)[ _-]api[ _-]?key|API_KEY_INVALID|unauthenticated`)
+	// pvTooManyToolsRE: the request carried more tools than the provider takes
+	// (Groq: "maximum number of items is 128").
+	pvTooManyToolsRE = lazyRx(`(?i)maximum number of items is (\d+)`)
+	pvGoneRE         = lazyRx(`(?i)model.{0,80}(not found|does not exist|decommission|not available|no longer|is not supported|invalid model)|no endpoints found(?: for| matching)`)
+	pvNoToolsRE      = lazyRx(`(?i)(tool|function.?call)[^.]{0,80}(not supported|unsupported|does not support|not available)|does not support (tools|function)|no endpoints found that support tool use`)
 	// pvToolCallRE marks provider rejections of the model's own generated tool
 	// call (invented name, undecodable arguments): Groq's tool_use_failed and
 	// equivalent errors from OpenAI-compatible servers, often delivered as a
@@ -669,7 +701,10 @@ func pvToolCallName(err error) string {
 }
 
 // pvClassify names the error kind: rate, daily, toobig, credit, auth, freetier,
-// gone, notools, toolcall, overflow, transient, cancel or other.
+// gone, notools, toomanytools, toolcall, overflow, transient, cancel or other.
+// It is the one classifier: the agent's fallback loop, the limiter state
+// (classifyLocked), the final message (friendlyErr) and `jazz omni health`
+// (omniHealthKind) all read it.
 func pvClassify(err error) string {
 	if err == nil {
 		return ""
@@ -699,6 +734,13 @@ func pvClassify(err error) string {
 		return "credit"
 	case ae.Status == 401 || ae.Status == 403:
 		return "auth"
+	case ae.Status == 400 && pvBadKeyRE.MatchString(b):
+		// before "gone": a bad key must never tombstone a live model
+		return "auth"
+	case ae.Status == 410 || ((ae.Status == 400 || ae.Status == 404 || ae.Status == 422) && pvEOLRE.MatchString(b)):
+		return "gone"
+	case ae.Status == 400 && pvTooManyToolsRE.MatchString(b):
+		return "toomanytools"
 	case (ae.Status == 400 || ae.Status == 404 || ae.Status == 422) && pvNoToolsRE.MatchString(b):
 		return "notools"
 	case pvToolCallRE.MatchString(b):
@@ -843,11 +885,25 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		note(b)
 		return true
 	case "gone":
+		// persistent tombstone (no 24h expiry: laguna 404'd on 31/10, 02/11,
+		// 04/11 and 12/11 under the old one); rlGoneRevived lifts it
 		b := rl.bucketLocked(ref)
-		b.DeadUntil = max(b.DeadUntil, now.Add(24*time.Hour).UnixMilli())
+		if c != nil && c.Providers[prov] != nil && c.Providers[prov].Local {
+			// a local server's 404 is "not pulled yet" (ollama pull fixes it in
+			// a minute): never a tombstone, just out of the chain for a while
+			b.DeadUntil = max(b.DeadUntil, now.Add(10*time.Minute).UnixMilli())
+			note(b)
+			return true
+		}
+		b.Gone = ms
 		note(b)
 		pvCacheInvalidate(prov)
 		return true
+	case "toomanytools":
+		// telemetry only: the request shape (MCP tool count) is the problem,
+		// not the model's health
+		note(rl.bucketLocked(ref))
+		return false
 	case "notools":
 		if c != nil {
 			c.MarkTextTools(ref)
@@ -1075,7 +1131,7 @@ func ResetRateLimits(prov string) {
 // a rejected tool call (the caller's reminder retry handles that case first).
 func RetryDelay(err error, attempt int) time.Duration {
 	switch pvClassify(err) {
-	case "daily", "toobig", "auth", "freetier", "gone", "notools", "credit", "overflow", "toolcall":
+	case "daily", "toobig", "auth", "freetier", "gone", "notools", "toomanytools", "credit", "overflow", "toolcall":
 		return 0
 	}
 	var ae *APIError
@@ -1116,6 +1172,9 @@ func ExhaustedUntil(ref string) (time.Time, bool) {
 	defer rl.mu.Unlock()
 	rl.loadLocked()
 	now := rlNow().UnixMilli()
+	if b := rl.B[ref]; b != nil && b.Gone > 0 && !rlGoneRevived(ref, b.Gone) {
+		return rlNow().Add(100 * 365 * 24 * time.Hour), true
+	}
 	var until int64
 	for _, k := range keys {
 		if b := rl.B[k]; b != nil && b.DeadUntil > now {
@@ -1156,3 +1215,21 @@ func pvFlock(path string, timeout time.Duration) (func(), error) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// rlLimiter is the Limiter backed by the limiter state (PROV-3): Allow says no
+// to a ref the state calls dead (quota, refused key, retired model, provider
+// cooled by a quota 429). Report is a no-op: the providers record every
+// outcome through rlEnd.
+type rlLimiter struct{ c *Config }
+
+func (l rlLimiter) Allow(ref string) (bool, time.Duration) {
+	if l.c == nil || isOmniRef(ref) {
+		return true, 0
+	}
+	if st := l.c.pvState(ref, 0); st.Dead {
+		return false, st.Wait
+	}
+	return true, 0
+}
+
+func (rlLimiter) Report(string, error) {}

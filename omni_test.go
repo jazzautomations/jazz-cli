@@ -432,9 +432,17 @@ func TestOmniRankFreeFirst(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-x")
 	t.Setenv("DEEPSEEK_API_KEY", "sk-x")
 	got := c.CandidatesFor(Need{Tools: true}, "omni/coder")
-	if len(got) == 0 || got[0] != "nvidia/z-ai/glm-5.3" {
+	// the retired presets (glm-5.3 410, kimi-k2.6 404, deepseek-v4.1-flash
+	// 0/37) never come back through the pool
+	for _, r := range got {
+		if r == "nvidia/z-ai/glm-5.3" || r == "nvidia/moonshotai/kimi-k2.6" || r == "nvidia/deepseek-ai/deepseek-v4.1-flash" {
+			t.Fatalf("retired preset in the pool: %v", got)
+		}
+	}
+	if len(got) == 0 || !c.pvIsFreeish(got[0]) && !c.isFreeRef(got[0]) {
 		t.Fatalf("best free coder first: %v", got)
 	}
+	best := got[0]
 	idx := map[string]int{}
 	for i, r := range got {
 		idx[r] = i
@@ -477,11 +485,14 @@ func TestOmniRankFreeFirst(t *testing.T) {
 	}
 	c.Omni.Exclude = nil
 	// a dead free candidate drops out; a cooling one goes behind the ready ones
-	MarkExhausted("nvidia/z-ai/glm-5.3", time.Now().Add(time.Hour))
+	MarkExhausted(best, time.Now().Add(time.Hour))
 	got = c.CandidatesFor(Need{}, "omni/coder")
-	if got[0] == "nvidia/z-ai/glm-5.3" || got[0] != "nvidia/moonshotai/kimi-k2.6" {
-		t.Fatalf("dead not skipped: %v", got)
+	for _, r := range got {
+		if r == best {
+			t.Fatalf("dead not skipped: %v", got)
+		}
 	}
+	last := got[len(got)-1]
 	// big request: models with a small window are filtered out
 	for _, r := range c.CandidatesFor(Need{Tokens: 300000}, "omni/long") {
 		if w, _ := c.Limits(r); w < 300000 {
@@ -489,9 +500,9 @@ func TestOmniRankFreeFirst(t *testing.T) {
 		}
 	}
 	// sticky preference
-	got = c.CandidatesFor(Need{Prefer: "nvidia/deepseek-ai/deepseek-v4.1-flash"}, "omni/coder")
-	if got[0] != "nvidia/deepseek-ai/deepseek-v4.1-flash" {
-		t.Fatalf("prefer bonus: %v", got)
+	got = c.CandidatesFor(Need{Prefer: "nvidia/nvidia/nemotron-3-ultra-550b-a55b"}, "omni/coder")
+	if got[0] != "nvidia/nvidia/nemotron-3-ultra-550b-a55b" {
+		t.Fatalf("prefer bonus: %v (last before: %s)", got, last)
 	}
 }
 
@@ -744,7 +755,7 @@ func TestOmniConfigSaveSkipsPresetsAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c2.EffMode() != "auto" || c2.Providers["kilo"] == nil || c2.Models["nvidia/z-ai/glm-5.3"] == nil || c2.Models["mine/m"].Context != 32768 {
+	if c2.EffMode() != "auto" || c2.Providers["kilo"] == nil || c2.Models["nvidia/nvidia/nemotron-3-ultra-550b-a55b"] == nil || c2.Models["mine/m"].Context != 32768 {
 		t.Fatalf("reload: mode %s", c2.EffMode())
 	}
 	c2.SetMode("plan")

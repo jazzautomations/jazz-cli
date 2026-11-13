@@ -54,6 +54,9 @@ func TestBenchClassifyInfra(t *testing.T) {
 		// deliver): not the agent's failure. v2 on 0.13.4, 2026-11-10: 8 of 11 tasks died like this.
 		{"cota-esgotada", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA?", "", "", ""},
 		{"toolcall-invalida", "toolcall-invalida.log", "1", "600", "FAIL", "547", "INFRA?", "", "", ""},
+		// 0.14 phrasings: the chosen model unavailable (exit 75, no hidden swap) and a retired model
+		{"pin-cota-014", "pin-cota-014.log", "75", "600", "FAIL", "12", "INFRA?", "", "", ""},
+		{"aposentado-014", "aposentado-014.log", "1", "600", "FAIL", "3", "INFRA?", "", "", ""},
 		// provider overloaded (5xx) and model that never answered, both with the fallbacks dead too
 		{"provedor-503", "provedor-503.log", "1", "600", "FAIL", "32", "INFRA?", "", "", ""},
 		{"modelo-mudo", "modelo-mudo.log", "1", "600", "FAIL", "29", "INFRA?", "", "", ""},

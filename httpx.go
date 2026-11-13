@@ -512,16 +512,28 @@ func pvPostJSON(ctx context.Context, url string, headers map[string]string, body
 
 // pvErrMessage pulls the human message out of a provider error body:
 // Anthropic {"type":"error","error":{"type":…,"message":…}}, OpenAI-style
-// {"error":{"message":…}} or {"error":"…"}, or {"message":…}. Anything else
-// comes back trimmed.
+// {"error":{"message":…}} or {"error":"…"}, {"message":…}, Gemini's array
+// [{"error":{…}}] and RFC 7807 {"title":…,"detail":…}. Anything else comes
+// back trimmed.
 func pvErrMessage(body string) string {
 	body = strings.TrimSpace(body)
+	if strings.HasPrefix(body, "[") { // Gemini wraps the error object in an array
+		var arr []json.RawMessage
+		if json.Unmarshal([]byte(body), &arr) == nil && len(arr) > 0 {
+			if m := pvErrMessage(string(arr[0])); m != "" && m[0] != '{' {
+				return m
+			}
+		}
+		return body
+	}
 	if body == "" || body[0] != '{' {
 		return body
 	}
 	var e struct {
 		Error   json.RawMessage `json:"error"`
 		Message string          `json:"message"`
+		Title   string          `json:"title"`
+		Detail  string          `json:"detail"`
 	}
 	if json.Unmarshal([]byte(body), &e) != nil {
 		return body
@@ -541,6 +553,34 @@ func pvErrMessage(body string) string {
 		return s
 	case e.Message != "":
 		return e.Message
+	case e.Detail != "":
+		if e.Title != "" && !strings.Contains(e.Detail, e.Title) {
+			return e.Title + ": " + e.Detail
+		}
+		return e.Detail
+	case e.Title != "":
+		return e.Title
 	}
 	return body
+}
+
+// pvPlainErr is the provider's message as one short line a person can read:
+// pvErrMessage, then the first sentence, and never raw JSON — whatever is
+// left from the first '{' (or '[{') on is cut ("sem detalhe legível" when that
+// is all there was). Every message shown to the user goes through it.
+func pvPlainErr(body string) string {
+	m := oneLine(firstSentence(pvErrMessage(body)), 160)
+	cut := strings.Index(m, "{")
+	for _, k := range []string{"[{", `["`} {
+		if i := strings.Index(m, k); i >= 0 && (cut < 0 || i < cut) {
+			cut = i
+		}
+	}
+	if cut >= 0 {
+		m = strings.TrimRight(strings.TrimSpace(m[:cut]), ":;,-— ")
+	}
+	if m == "" {
+		return "sem detalhe legível"
+	}
+	return m
 }

@@ -28,7 +28,8 @@
 #          "a rede voltou depois de Xs" + "não voltou em Xs — desisti" (espera
 #          final) chega a 50% do LIMIT: a rede comeu o prazo, não é o modelo.
 #   INFRA? também quando o agente saiu com erro (RC≠0, sem prazo) e a última linha de erro do jazz é do
-#          provedor: cota ("limite de requisições atingido"), crédito, credencial, pedido recusado ou
+#          provedor: cota ("limite de requisições atingido", "cota grátis"), crédito, credencial, pedido
+#          recusado, modelo aposentado, modelo escolhido indisponível (0.14: -m não troca sozinho) ou
 #          falha de rede. Rodada v2 de 10/11/2026 na 0.13.4: 8 de 11 tarefas morreram assim e
 #          entraram como FAIL válido (2/11 publicado seria 2/3).
 #   HANG?  se RC=124 sem o "tempo esgotado" do próprio jazz no log (o 124 veio
@@ -123,7 +124,7 @@ classify_infra() {
     lastjazz=$(grep -a '^jazz: ' "$log" 2>/dev/null | grep -a -v -E 'execução incompleta|retome com|pasta não confiável|^jazz: aviso' | tail -n 1)
   fi
   if [ "$rc" != 0 ] && [ "$rc" != 124 ] &&
-     printf '%s' "$lastjazz" | grep -a -q -E 'limite de requisições atingido|cota diária esgotada|sem crédito nesse provedor|credencial recusada pelo provedor|o provedor recusou o pedido|falha de rede:|nenhuma conexão|: HTTP 5[0-9][0-9]|o modelo parou de responder|reserva\(s\) também falharam'; then
+     printf '%s' "$lastjazz" | grep -a -q -E 'limite de requisições atingido|cota diária esgotada|cota grátis|sem crédito nesse provedor|credencial recusada pelo provedor|o provedor recusou o pedido|o provedor falhou \(HTTP|aposentado/removido pelo provedor|falha de rede:|nenhuma conexão|: HTTP 5[0-9][0-9]|o modelo parou de responder|reserva\(s\) também falharam|o modelo que você escolheu'; then
     provdead=1
   fi
   if printf '%s' "$lastjazz" | grep -a -q -i -E 'limite de requisições|cota|crédito|sign up|/key|omni add|HTTP 429'; then quota=1; fi

@@ -362,7 +362,7 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 	}{
 		{401, `{"error":{"message":"bad key"}}`, "recusou a credencial (401)"},
 		{403, `{"error":{"message":"forbidden"}}`, "recusou a credencial (403)"},
-		{404, `{"error":{"message":"no such model"}}`, "fake/m1"},
+		{404, `{"error":{"message":"no such model"}}`, "m1 foi aposentado/removido"},
 		{400, `{"error":{"message":"invalid parameter foo"}}`, "fake/m1"},
 	}
 	for _, tc := range cases {
@@ -372,7 +372,12 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 					return fakeResp{Status: tc.status, Body: tc.body}
 				}
 				return fakeResp{Text: "from m2"}
-			}, func(c *Config) { c.Fallback = []string{"fake/m2"} })
+			}, func(c *Config) {
+				// m2 on another provider: a refused credential (401/403)
+				// takes the whole provider out of the chain (PROV-3)
+				c.Providers["fake2"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true}
+				c.Fallback = []string{"fake2/m2"}
+			})
 			t0 := time.Now()
 			if err := h.run(t, "go"); err != nil {
 				t.Fatalf("Run: %v", err)
@@ -396,7 +401,10 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 func TestAgentAllCandidatesFailReturnsError(t *testing.T) {
 	h := newHarness(t, func(n int, r recReq) fakeResp {
 		return fakeResp{Status: 401, Body: `{"error":"nope"}`}
-	}, func(c *Config) { c.Fallback = []string{"fake/m2", "missing/x"} })
+	}, func(c *Config) {
+		c.Providers["fake2"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true}
+		c.Fallback = []string{"fake2/m2", "missing/x"}
+	})
 	err := h.run(t, "go")
 	var ae *APIError
 	if err == nil || (!errors.As(err, &ae) && !strings.Contains(err.Error(), "missing")) {

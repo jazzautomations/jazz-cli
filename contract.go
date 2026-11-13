@@ -77,6 +77,9 @@ const (
 	StopUntilFailed StopReason = "until_failed" // --until command still failing after the last round (agent_loop.go)
 	// StopQualityFailed: the quality checklist still fails after its one feedback round (quality.go).
 	StopQualityFailed StopReason = "quality_failed"
+	// StopModelUnavailable: the model the user chose (and its configured
+	// fallback) failed and nothing switched in silence (router_pin.go).
+	StopModelUnavailable StopReason = "model_unavailable"
 )
 
 // ExitCode maps a stop reason to the headless process exit code.
@@ -100,6 +103,8 @@ func (r StopReason) ExitCode() int {
 		return 8
 	case StopQualityFailed:
 		return 9
+	case StopModelUnavailable:
+		return 75 // EX_TEMPFAIL: try again later, or choose another model
 	case StopTimeout:
 		return 124
 	case StopInterrupted:

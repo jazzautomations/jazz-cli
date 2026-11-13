@@ -77,6 +77,8 @@ opções:
   --turbo | --yolo | --ask | --smart  modo de permissão só nesta sessão (padrão: auto — pede confirmação em comando perigoso;
                          turbo/--full-auto: com sandbox do sistema, só pergunta o realmente necessário)
   --ack-no-sandbox                  confirma YOLO headless sem sandbox do sistema; não cria isolamento
+  --strict-model         só o modelo do -m, nem o "fallback" do config (eval: mede o modelo pedido);
+                         também JAZZ_STRICT_MODEL=1. Com modelo escolhido, falha sai com código 75
   -v                     (com -p) mostra o progresso no stderr
   --output-format F      (com -p) text (padrão) · json (só o resultado final) · stream-json (um evento por linha)
   --max-steps N          limite de passos do modelo por turno
@@ -213,6 +215,7 @@ func main() {
 	yolo := fs.Bool("yolo", false, "")
 	fresh := fs.Bool("fresh", false, "") // janela de contexto sem memória (fresh.go)
 	ackNoSandbox := fs.Bool("ack-no-sandbox", false, "")
+	strictModel := fs.Bool("strict-model", false, "") // only the -m model, not even the configured fallback (evals)
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
 	turbo := fs.Bool("turbo", false, "")
@@ -575,6 +578,12 @@ func main() {
 	o.loop = LoopOpts{Until: *untilFlag, UntilRounds: *untilRounds, Review: *reviewFlag, Budget: *budgetFlag, Quality: *qualityFlag, Guards: *guardsFlag, Recover: *recoverFlag}
 	o.scripts, o.fastPath, o.offline = *scriptsFlag, *fastPathFlag, *offlineFlag
 	o.modelPinned = *model != "" || (cfg.Model != "" && cfg.Model != "kilo/"+kiloDefaultModel)
+	// the user's choice is a contract: no hidden swap (router_pin.go)
+	cfg.Pinned = o.modelPinned && !isOmniRef(ref)
+	cfg.StrictModel = *strictModel || os.Getenv("JAZZ_STRICT_MODEL") == "1"
+	if cfg.StrictModel && !cfg.Pinned {
+		pfUsageErr("--strict-model precisa de um modelo escolhido (-m provedor/modelo)")
+	}
 	o.askStdin = *askStdinFlag
 	lowPowerFlag.apply()
 	o.uiLint = *uiLintFlag
@@ -866,7 +875,8 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	if fp == nil {
 		early.Restore()                           // the model loop is long-lived: GC back on (internal/early)
 		stop, err = ag.qRunHeadless(ctx, mprompt) // + --follow-up turns, JAZZ_STEER_FILE (queue.go)
-		if err != nil && ctx.Err() == nil {
+		var pe *acPinError
+		if err != nil && ctx.Err() == nil && !errors.As(err, &pe) { // a failed pin is the answer, exit 75
 			fp = olHeadlessFallback(ctx, ag, tools, ui, err, prompt)
 		}
 	}
@@ -883,6 +893,10 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	res := RunResult{Status: stop, Usage: ag.Usage, Cost: ag.Usage.Cost, Duration: time.Since(t0), SessionID: ag.SessionID, Model: ag.TurnModel(), Recover: ag.LastRecovery()}
 	if err != nil && stop != StopInterrupted {
 		res.Status, res.Err = StopError, friendlyErr(err)
+		var pe *acPinError
+		if errors.As(err, &pe) {
+			res.Status = StopModelUnavailable
+		}
 	}
 	if fp != nil && ctx.Err() == nil {
 		fp.SessionID, fp.Duration = ag.SessionID, time.Since(t0)
@@ -998,6 +1012,10 @@ func pfTimeoutMsg(d time.Duration) string {
 }
 
 func friendlyErr(err error) string {
+	var pe *acPinError
+	if errors.As(err, &pe) {
+		return pinErrText(pe)
+	}
 	var re *RefusalError
 	if errors.As(err, &re) {
 		return re.Error() + " — reformule o pedido ou troque de modelo (/model)"
@@ -1033,31 +1051,41 @@ func friendlyErr(err error) string {
 	}
 	var ae *APIError
 	if errors.As(err, &ae) {
+		// one classifier (pvClassify) and never raw JSON (pvPlainErr)
+		kind := pvClassify(ae)
 		switch {
-		case pvClassify(ae) == "toolcall":
-			// belt and suspenders for a rejection that never met the retry
-			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
-		case ae.Status == 401 || ae.Status == 403:
-			return "credencial recusada pelo provedor (" + firstSentence(ae.Body) + ") — use /key ou /login"
-		case ae.Status == 402 || pvClassify(ae) == "credit":
-			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
-		case ae.Status == 429:
-			msg := "limite de requisições atingido (" + firstSentence(pvErrMessage(ae.Body)) + ")"
-			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
-				msg += ". Na OpenRouter grátis o limite é baixo"
-			}
-			return msg + "; espere ou troque de modelo (/model)"
 		case ae == errNoNet:
 			if p := pvProxyFor(); p != "" {
 				return "o proxy " + p + " (HTTPS_PROXY) não responde"
 			}
 			return "nenhuma conexão: nem o provedor nem 1.1.1.1 responderam"
+		case kind == "toolcall":
+			// belt and suspenders for a rejection that never met the retry
+			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
+		case kind == "auth":
+			return "credencial recusada pelo provedor (" + pvPlainErr(ae.Body) + ") — use /key ou /login"
+		case kind == "gone":
+			return "o modelo foi aposentado/removido pelo provedor (" + pvPlainErr(ae.Body) + ") — escolha outro com /model"
+		case ae.Status == 402 || kind == "credit":
+			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
+		case ae.Quota || pvIsQuotaBody(ae.Status, ae.Body):
+			return pvQuotaAdvice(ae)
+		case ae.Status == 429:
+			msg := "limite de requisições atingido (" + pvPlainErr(ae.Body) + ")"
+			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
+				msg += ". Na OpenRouter grátis o limite é baixo"
+			}
+			return msg + "; espere ou troque de modelo (/model)"
+		case kind == "toobig":
+			return "o pedido ficou grande demais para esse modelo (" + pvPlainErr(ae.Body) + ") — /compact ou troque de modelo (/model)"
+		case kind == "toomanytools":
+			return "ferramentas demais para esse provedor (" + pvPlainErr(ae.Body) + ") — desligue servidores MCP que não usa ou troque de modelo (/model)"
 		case ae.Status == 0:
-			return "falha de rede: " + firstSentence(ae.Body)
+			return "falha de rede: " + pvPlainErr(ae.Body)
 		case ae.Status >= 400 && ae.Status < 500:
-			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, firstSentence(pvErrMessage(ae.Body)))
+			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, pvPlainErr(ae.Body))
 		}
-		return ae.Error()
+		return fmt.Sprintf("o provedor falhou (HTTP %d: %s) — tente de novo ou troque de modelo (/model)", ae.Status, pvPlainErr(ae.Body))
 	}
 	if errors.Is(err, errStreamIdle) {
 		return err.Error() + " — tente de novo ou troque de modelo"
@@ -1160,6 +1188,7 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	pfSetupAgent(app.agent, cfg, root, o)
 	app.agent.PrivacyCheck = true
 	app.agent.NetOffline = true                     // a person is waiting: no network = offline mode now (netfast.go)
+	app.agent.Interactive = true                    // a failed pinned model asks before switching (router_pin.go)
 	app.agent.FastFirst = !o.modelPinned            // interactive: the fastest acceptable free model first
 	pfOnCrash(func() { obCrash(app.agent, tools) }) // checkpoint + handoff (obs.go)
 	auConfigStart(cfg, root, ref, pfSandboxStatus(), pfAuditFields(app.agent, o, false))

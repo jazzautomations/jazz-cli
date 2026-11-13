@@ -91,7 +91,11 @@ type Agent struct {
 	// or --yolo, otherwise they are refused.
 	UntrustedBash bool
 	// Headless: no interactive user (the privacy notice is a stderr line, F4).
-	Headless     bool
+	Headless bool
+	// Interactive: a person can answer a question now (the TUI). A pinned
+	// model that fails asks before switching; headless fails clearly instead.
+	Interactive  bool
+	rt           acRoute         // pin, announced swaps, served models (router_pin.go)
 	PrivacyCheck bool            // main turns on the privacy notice (security.go)
 	privacyRef   map[string]bool // Train providers already announced this session
 
@@ -328,7 +332,9 @@ func (a *Agent) compactThreshold() int {
 		w, out := a.limitsOf(a.TurnModel())
 		return acThreshold(w, out)
 	}
-	refs := a.cfg.Candidates(a.TurnModel(), a.Model)
+	// pinned, only the pin and the configured fallback can answer: a smaller
+	// window in the implicit chain must not compact the pin's history early
+	refs := a.cfg.CandidatesFor(Need{Pin: a.acPin("main")}, a.TurnModel(), a.Model)
 	if len(refs) == 0 {
 		refs = []string{a.TurnModel()}
 	}
@@ -1030,13 +1036,17 @@ type acChatOpt struct {
 	maxOut    int       // cap on MaxTokens (0 = model limit)
 	boost     bool      // after a cutoff: raise MaxTokens toward the provider limit (cutoff.go)
 	quiet     bool      // no "usando X" notices (compaction)
+	avoid     string    // a ref the chain must skip (the pin the user just declined)
 	label     string    // spinner label
 	role      string    // router role: main | compact | sub (omni)
 }
 
+// limiter is the rate-limit policy of every request this agent makes: the
+// limiter state of the config (ratelimit.go) unless a test replaced
+// DefaultLimiter.
 func (a *Agent) limiter() Limiter {
 	if DefaultLimiter == nil {
-		return noopLimiter{}
+		return rlLimiter{a.cfg}
 	}
 	return DefaultLimiter
 }
@@ -1163,26 +1173,57 @@ const acInteractiveFirstByte = 20 * time.Second
 
 // chatWithFallback sends one request with retries and the model fallback chain
 // (G4). It returns the model actually used, which stays sticky for the turn.
+// A pinned model that fails (with its configured fallback) is never swapped
+// in silence: interactive asks, headless returns acPinError (router_pin.go).
 func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt) (*ChatResponse, string, error) {
-	role := o.role
-	if role == "" {
-		role = "main"
-		if a.sub {
-			role = "sub"
-		}
+	resp, used, err := a.acChain(ctx, model, o)
+	if err == nil || ctx.Err() != nil {
+		return resp, used, err
 	}
+	if pin := a.acPin(a.acRole(o)); pin != "" && acPinSwappable(resp, err) {
+		return a.acPinFailed(ctx, pin, o, used, err)
+	}
+	return resp, used, err
+}
+
+// acRole is the router role of a request (main | compact | sub | …).
+func (a *Agent) acRole(o acChatOpt) string {
+	if o.role != "" {
+		return o.role
+	}
+	if a.sub {
+		return "sub"
+	}
+	return "main"
+}
+
+// acChain walks the candidate chain once: the state of every candidate is
+// read again right before it is tried (a quota 429 cools the whole provider
+// mid-chain), and the requested model never leaves the chain unannounced.
+func (a *Agent) acChain(ctx context.Context, model string, o acChatOpt) (*ChatResponse, string, error) {
+	role := a.acRole(o)
+	pin := a.acPin(role)
 	maxOut := a.outCap(model, o)
-	need := Need{Tokens: a.estTokens() + maxOut, Tools: !a.textMode(model), Role: role, Prefer: model}
+	need := Need{Tokens: a.estTokens() + maxOut, Tools: !a.textMode(model), Role: role, Prefer: model, Pin: pin}
 	refs := []string{model, a.Model}
 	if role == "compact" && (a.cfg.Omni.Enabled || isOmniRef(a.Model)) {
 		refs = append(refs, "omni/long")
 	}
-	cands := a.acDemoteStalled(a.ojOrder(role, a.bgOrderCands(a.cfg.CandidatesFor(need, refs...))))
-	if a.FastFirst && role == "main" && model == a.Model {
-		cands = a.acFastFirst(cands)
+	var cands []string
+	if pin != "" {
+		// the user's choice: no reordering by scores, judge or speed
+		cands = a.cfg.CandidatesFor(need, refs...)
+	} else {
+		cands = a.acDemoteStalled(a.ojOrder(role, a.bgOrderCands(a.cfg.CandidatesFor(need, refs...))))
+		if a.FastFirst && role == "main" && model == a.Model {
+			cands = a.acFastFirst(cands)
+		}
 	}
 	if len(cands) == 0 {
 		cands = []string{model}
+	}
+	if pin == "" && !o.quiet {
+		a.acAnnounceDrop(model, cands, need)
 	}
 	lim := a.limiter()
 	label := o.label
@@ -1225,11 +1266,37 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 	}
 	var lastPartial *ChatResponse // output of a stream that failed, kept if nothing better comes (cutoff.go)
 	why := ""                     // why the previous candidate was left (shown with the next one)
+	sent := false                 // a request already went out in this chain
+	waitBudget := acWaitBudget(a.Interactive || a.NetOffline)
+chain:
 	for ci, ref := range cands {
-		if ok, wait := lim.Allow(ref); !ok && ci+1 < len(cands) {
-			lastErr, lastRef = fmt.Errorf("%s: limite de uso (libera em %s)", ref, wait.Round(time.Second)), ref
-			noteFail(ref, lastErr)
+		if ref == o.avoid {
 			continue
+		}
+		// PROV-3: state read again per candidate, with the real size
+		st := a.cfg.pvState(ref, need.Tokens)
+		limOK, _ := lim.Allow(ref)
+		if ref == pin {
+			if st.Dead || st.TooBig {
+				a.acPinStateWarn(ref, st, o.quiet) // never dropped: said, then tried
+			}
+		} else if !limOK || acCandDown(st) {
+			switch {
+			case a.acUsableAfter(cands[ci+1:], need, lim, o.avoid):
+				dbg("route", map[string]any{"skip": ref, "why": st.Why, "dead": st.Dead, "toobig": st.TooBig, "wait_s": st.Wait.Seconds()})
+				if why == "" {
+					why = uiShortModel(ref) + ": " + acStateWhy(st) // said with the next one
+				}
+				continue
+			case sent:
+				// everything left is down too: no request per dead ref
+				if !o.quiet {
+					a.ui.Warn("os outros modelos da fila também estão indisponíveis (" + uiShortModel(ref) + ": " + acStateWhy(st) + ") — parei aqui pra não gastar pedido à toa; mais opções: /key openrouter ou jazz omni setup")
+				}
+				break chain
+			case acEarliest(cands[ci:], need, a.cfg, o.avoid) != 0:
+				continue // all down: only the one that frees up first gets a request
+			}
 		}
 		pname, mid := SplitModel(ref)
 		prov, err := a.cfg.NewProvider(pname)
@@ -1255,9 +1322,18 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 			}
 			cctx = WithFirstByte(ctx, fb)
 		}
-		if ph, ok := a.ui.(uiPhaser); ok && !o.quiet {
+		{
 			r := ref
-			cctx = WithPhase(cctx, func(p string) { ph.Phase(r, p) })
+			ph, phOK := a.ui.(uiPhaser)
+			phOK = phOK && !o.quiet
+			cctx = WithPhase(cctx, func(p string) {
+				if p == "gerando" {
+					a.obFirstByte() // first_byte_ms of request.end (obs.go)
+				}
+				if phOK {
+					ph.Phase(r, p)
+				}
+			})
 		}
 		if ci > 0 && !o.quiet {
 			// say why the model changed and to what (honest fallback)
@@ -1271,8 +1347,9 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		triedText, netWaits := false, 0
 		toolRetried := false // the one rejected-tool-call retry this ref gets
 		var repairNote string
+		var waited time.Duration // PROV-5: backoff spent on this ref
 	attempts:
-		for attempt := 0; attempt < 6; attempt++ {
+		for attempt := 0; attempt < acMaxAttempts; attempt++ {
 			req := a.buildRequest(ref, mid, o)
 			if repairNote != "" { // rejected tool call: retry once with the exact names
 				req.Messages = append(append([]Message(nil), req.Messages...), Message{Role: "user", Content: repairNote})
@@ -1298,7 +1375,8 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 				}
 			}
 			tReq := time.Now()
-			a.obReqStart(ref, ci, attempt) // obs.go
+			sent = true
+			a.obReqStart(ref, ci, attempt, model, pin != "") // obs.go
 			resp, err := prov.Chat(cctx, req, fn)
 			a.obReqEnd(ref, ci, attempt, resp, err)
 			a.rdNotice() // first redacted secret: one-time notice (redact.go)
@@ -1319,8 +1397,17 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 					return nil, ref, &RefusalError{Ref: ref, Reason: why}
 				}
 				a.priceUsage(ref, &resp.Usage)
-				if ci > 0 && !o.quiet {
-					a.ui.Notice(fmt.Sprintf("usando %s por enquanto (o modelo principal volta a ser tentado em %s)", ref, acStickyTTL.Round(time.Second)))
+				a.rtServe(ref)
+				if !o.quiet && role == "main" && ref != a.Model {
+					// served != requested: always said (H2, UX-5) — a failure
+					// once per turn, a reorder (fast first, sticky) once per
+					// session, so a working route is not a line on every turn
+					pair := "served:" + a.Model + ">" + ref
+					if ci > 0 && a.rtOnce(pair) {
+						a.ui.Notice(fmt.Sprintf("usando %s por enquanto (o modelo principal volta a ser tentado em %s)", ref, acStickyTTL.Round(time.Second)))
+					} else if ci == 0 && !a.rtOnceTurnSaid(pair) && a.rtOnceSession(pair) {
+						a.ui.Notice(fmt.Sprintf("respondendo com %s (seu modelo: %s)", uiShortModel(ref), uiShortModel(a.Model)))
+					}
 				}
 				return resp, ref, nil
 			}
@@ -1389,24 +1476,44 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 					a.ui.Notice(ref + " não aceita tools nativas — usando tools em modo texto")
 					continue
 				}
-				if ae.Daily {
-					MarkExhausted(ref, acResetTime(ae))
-					a.ui.Warn(fmt.Sprintf("%s: cota diária esgotada", ref))
+				switch kind := pvClassify(err); kind {
+				case "gone", "auth", "toomanytools":
+					// waiting never fixes these on this ref (retired model,
+					// refused key, too many tools for the provider): the
+					// limiter recorded it (gone/auth persist) — next candidate
+					msg := acKindWarn(ref, kind, ae)
+					if ci+1 < len(cands) {
+						why = msg
+					} else if !o.quiet {
+						a.ui.Warn(msg)
+					}
 					break attempts
 				}
-				if ae.Status == 401 || ae.Status == 403 {
-					a.ui.Warn(fmt.Sprintf("%s recusou a credencial (%d)", pname, ae.Status))
-					break attempts // next candidate
+				if ae.Daily {
+					MarkExhausted(ref, acResetTime(ae))
+					msg := uiShortModel(ref) + ": cota diária esgotada"
+					if ae.Quota {
+						msg = uiShortModel(ref) + ": a cota grátis do provedor acabou"
+						if ae.RetryAfter > 0 {
+							msg += " (volta em ~" + rcDur(ae.RetryAfter) + ")"
+						}
+					}
+					if ci+1 < len(cands) {
+						why = msg
+					} else if !o.quiet {
+						a.ui.Warn(msg)
+					}
+					break attempts
 				}
 				if ae.Status == 400 || ae.Status == 404 || ae.Status == 402 || ae.Status == 422 {
-					a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+					a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 					break attempts
 				}
 				if !ae.Retryable() {
 					// classified as "try another model" (413 too big, model gone,
 					// no tool support …): RetryDelay 0 means next candidate now
 					if ci+1 < len(cands) && a.retryWait(err, attempt) == 0 {
-						a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+						a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 						break attempts
 					}
 					return acPartialOnly(resp), ref, wrapFail(ref, err)
@@ -1455,7 +1562,18 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 			if wait > 20*time.Second && ci+1 < len(cands) {
 				break // a long wait: try the next model now
 			}
-			a.ui.Notice(fmt.Sprintf("%s: %s — tentando de novo em %s", ref, firstSentence(err.Error()), wait.Round(time.Second)))
+			if waited+wait > waitBudget {
+				// PROV-5: the wait budget of this ref is spent (the limiter
+				// already cooled it): next candidate, or the error — never
+				// minutes of silent backoff
+				dbg("route", map[string]any{"budget": ref, "waited_s": waited.Seconds(), "next_s": wait.Seconds()})
+				if ci+1 < len(cands) {
+					why = uiShortModel(ref) + ": " + acRetryWhy(err) + " — desisti de esperar"
+				}
+				break
+			}
+			waited += wait
+			a.ui.Notice(fmt.Sprintf("%s: %s — tentando de novo em %s (%d/%d)", uiShortModel(ref), acRetryWhy(err), wait.Round(time.Second), attempt+2, acMaxAttempts))
 			select {
 			case <-ctx.Done():
 				return nil, ref, ctx.Err()
@@ -1467,6 +1585,36 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		lastErr = errors.New("nenhum modelo disponível — configure uma chave (/key) ou faça login (/login)")
 	}
 	return lastPartial, model, wrapFail(lastRef, lastErr)
+}
+
+// acMaxAttempts bounds the requests to one ref in one chain.
+const acMaxAttempts = 6
+
+// acEOLDateRE pulls the retirement date out of a 410 ("reached its end of
+// life on 2026-10-28").
+var acEOLDateRE = lazyRx(`(?i)end[ -]of[ -]life (?:on|at) (\d{4})-(\d\d)-(\d\d)`)
+
+// acKindWarn says in PT-BR why ref left the chain for a class that waiting
+// never fixes (pvClassify: gone, auth, toomanytools).
+func acKindWarn(ref, kind string, ae *APIError) string {
+	short := uiShortModel(ref)
+	switch kind {
+	case "gone":
+		if m := acEOLDateRE.FindStringSubmatch(ae.Body); m != nil {
+			return fmt.Sprintf("%s foi aposentado pelo provedor em %s/%s — tirei do rodízio", short, m[3], m[2])
+		}
+		return short + " foi aposentado/removido pelo provedor — tirei do rodízio"
+	case "auth":
+		prov, _ := SplitModel(ref)
+		return fmt.Sprintf("%s recusou a credencial (%d) — %s; confira com /key %s", prov, ae.Status, pvPlainErr(ae.Body), prov)
+	case "toomanytools":
+		n := ""
+		if m := pvTooManyToolsRE.FindStringSubmatch(ae.Body); m != nil {
+			n = " (máx. " + m[1] + ")"
+		}
+		return short + " não aceita tantas ferramentas num pedido" + n
+	}
+	return fmt.Sprintf("%s: HTTP %d: %s", short, ae.Status, pvPlainErr(ae.Body))
 }
 
 // acPartialOnly keeps a reply that failed mid-stream (text and cut tool calls
@@ -2507,7 +2655,8 @@ func (a *Agent) TokenEstimate() int { return a.estTokens() }
 // SetModel switches the primary model and records it in the session.
 func (a *Agent) SetModel(ref string) {
 	a.Model, a.turnModel = ref, ""
-	a.FastFirst = false // the user chose: no reordering
+	a.FastFirst = false            // the user chose: no reordering
+	a.cfg.Pinned = !isOmniRef(ref) // …and that choice is a contract (router_pin.go)
 	a.sess.Model(ref)
 }
 
