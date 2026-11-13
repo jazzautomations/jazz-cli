@@ -75,7 +75,7 @@ func ListModels(ctx context.Context, cfg *Config, provider string) ([]ModelInfo,
 			} `json:"models"`
 		}
 		h := map[string]string{"Authorization": "Bearer " + cr.Access, "ChatGPT-Account-ID": cr.AccountID, "originator": originator}
-		if err := getJSON(ctx, base+"/models?client_version="+version, h, &r); err != nil {
+		if err := getJSON(ctx, base+"/models?client_version="+codexClientVersion, h, &r); err != nil {
 			return nil, err
 		}
 		var out []ModelInfo

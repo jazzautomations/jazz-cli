@@ -43,7 +43,12 @@ var (
 	cpMaxFileSize int64 = 1 << 20
 	cpGitBin            = "git"
 	cpTimeout           = 60 * time.Second
-	cpIndexMaxAge       = 48 * time.Hour
+	// cpWalkTimeout bounds the untracked-file walk. On heavy roots (home
+	// dirs, trees without ignore rules) `ls-files --others` can take longer
+	// than the feature is worth; a walk this slow means per-turn snapshots
+	// are hopeless anyway, so fail fast instead of stalling the request.
+	cpWalkTimeout = 10 * time.Second
+	cpIndexMaxAge = 48 * time.Hour
 )
 
 var errCPTooMany = errors.New("too many files")
@@ -211,8 +216,8 @@ func (c *cpStore) cmd(ctx context.Context, stdin []byte, args ...string) ([]byte
 
 // listZ streams NUL-separated paths from git, stopping (errCPTooMany) once
 // more than limit paths came out, so a huge tree is never walked to the end.
-func (c *cpStore) listZ(limit int, args ...string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cpTimeout)
+func (c *cpStore) listZ(timeout time.Duration, limit int, args ...string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := c.gitCmd(ctx, args...)
 	var stderr bytes.Buffer
@@ -273,11 +278,11 @@ func (c *cpStore) Snapshot() (string, error) {
 }
 
 func (c *cpStore) snapshotLocked() (string, error) {
-	cached, err := c.listZ(cpMaxFiles, "ls-files", "-z", "--cached")
+	cached, err := c.listZ(cpTimeout, cpMaxFiles, "ls-files", "-z", "--cached")
 	if err != nil {
 		return "", err
 	}
-	others, err := c.listZ(cpMaxFiles-len(cached), "ls-files", "-z", "--others", "--exclude-standard")
+	others, err := c.listZ(cpWalkTimeout, cpMaxFiles-len(cached), "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return "", err
 	}
