@@ -145,6 +145,7 @@ func olTestApp(t *testing.T) (*App, *harness) {
 }
 
 func TestOfflineInteractiveStateMachine(t *testing.T) {
+	t.Setenv("JAZZ_BRAIN", "on") // this test exercises the online level-0 gate
 	app, _ := olTestApp(t)
 	ctx := context.Background()
 	old := olDial
@@ -241,10 +242,12 @@ func TestOfflineBannerMentionsTools(t *testing.T) {
 	}
 }
 
-// Online + interactive: a clearly understood read-only intent is answered
-// by the deterministic brain without a model call; everything else goes to
-// the model untouched; a declined fast path is respected.
+// Online + interactive with JAZZ_BRAIN=on: a clearly understood read-only
+// intent is answered by the deterministic brain without a model call;
+// everything else goes to the model untouched; a declined fast path is
+// respected.
 func TestOnlineInteractiveBrainLevel0(t *testing.T) {
+	t.Setenv("JAZZ_BRAIN", "on")
 	app, h := olTestApp(t)
 	app.cfg.FastPaths = "off"
 	ctx := context.Background()
@@ -270,5 +273,36 @@ func TestOnlineInteractiveBrainLevel0(t *testing.T) {
 	t.Setenv("JAZZ_BRAIN", "off")
 	if handled, _ := app.olBefore(ctx, "quem é você"); handled {
 		t.Error("JAZZ_BRAIN=off must send everything to the model")
+	}
+}
+
+// Online + interactive, JAZZ_BRAIN unset (the default): even a clearly
+// understood read-only intent reaches the model — the brain only records a
+// "passthrough" signal, which is how it keeps learning online coverage.
+func TestOnlineInteractiveBrainPassthroughDefault(t *testing.T) {
+	ledger := sigTestLedger(t)
+	app, h := olTestApp(t)
+	app.cfg.FastPaths = "off"
+	ctx := context.Background()
+	if handled, text := app.olBefore(ctx, "quem é você"); handled || text != "quem é você" {
+		t.Fatalf("default online must reach the model: handled=%v text=%q", handled, text)
+	}
+	for _, n := range h.ag.pendingNote {
+		if strings.Contains(n, "deterministic brain handled") {
+			t.Errorf("no interception note by default: %v", h.ag.pendingNote)
+		}
+	}
+	got, err := sigRead(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, s := range got {
+		if s.Kind == "passthrough" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the parse should reach %s as passthrough (the brain keeps learning)", ledger)
 	}
 }

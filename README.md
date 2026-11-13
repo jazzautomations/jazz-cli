@@ -759,9 +759,10 @@ observável (`recover.go`: nome não encontrado, comando inexistente, teste falh
 plano impossível…) e três olhadas seguidas sem fato novo param e perguntam. No `-p`, as perguntas
 saem com o menu numerado e a execução termina "preciso de uma resposta" (exit 1), a não ser com
 `--ask-stdin`. Mesmo com modelo, no `-p`, um pedido claro só de leitura ("abre o README.md",
-"git status", "como está o ambiente", "tenho o docker?", confiança ≥ 0,85) é respondido pelo cérebro
-sem nenhuma requisição; se o método não termina, o pedido vai pro modelo como antes
-(`JAZZ_BRAIN=off` desliga).
+"git status", "como está o ambiente", "tenho o docker?", confiança ≥ 0,85) pode ser respondido pelo
+cérebro sem nenhuma requisição; se o método não termina, o pedido vai pro modelo como antes.
+Desligado por padrão — `JAZZ_BRAIN=on` liga; mesmo desligado o cérebro registra no signals.jsonl o
+que teria respondido, e é assim que ele aprende a cobertura online.
 
 **Perfil do ambiente** (`jazz env [--json] [--refresh]`, só leitura): SO/arquitetura, núcleos, RAM,
 Termux/WSL/contêiner, ferramentas e versões, binários do PATH, hosts do `~/.ssh/config`, máquinas do

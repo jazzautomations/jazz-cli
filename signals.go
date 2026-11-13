@@ -25,7 +25,7 @@ import (
 // ou foi corrigida, com o contexto necessário para a forja aprender com ele.
 type Signal struct {
 	Ts       int64             `json:"ts"`                 // unix segundos; preenchido no append se zero
-	Kind     string            `json:"kind"`               // miss|correction|cmd_fixed|verifier_missing|unknown_intent|new_method
+	Kind     string            `json:"kind"`               // miss|correction|cmd_fixed|verifier_missing|unknown_intent|new_method|passthrough
 	Class    string            `json:"class"`              // classe da tarefa (edit, cmd, nav, ...)
 	RepoSig  string            `json:"repo_sig,omitempty"` // assinatura do repo (opcional)
 	Text     string            `json:"text"`               // o pedido do usuário, como veio

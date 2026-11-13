@@ -450,8 +450,10 @@ func TestBrainFarTypoIsConfirmed(t *testing.T) {
 	}
 }
 
-// Level 0: with a model available, "abre o README.md" and "git status" are
-// answered with no request (the Dell baseline of 0.8.1 sent both to the model).
+// Level 0 with JAZZ_BRAIN=on: with a model available, "abre o README.md"
+// and "git status" are answered with no request (the Dell baseline of
+// 0.8.1 sent both to the model). Off by default — brain_test.go has the
+// passthrough case.
 func TestBrainLevel0NoModelCall(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
@@ -464,6 +466,7 @@ func TestBrainLevel0NoModelCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("JAZZ_ENV_NO_NET", "1")
+	t.Setenv("JAZZ_BRAIN", "on")
 	defer epSetForTest(nil)()
 	ui := &HeadlessUI{}
 	for _, q := range []string{"abre o README.md", "git status"} {
