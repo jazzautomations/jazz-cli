@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -81,8 +82,8 @@ type rpSeed struct {
 
 type rpStubs struct {
 	Bins       []string `json:"bins"`        // binários falsos no PATH: registram a chamada e saem 0
-	SudoProbe  string   `json:"sudo_probe"`  // "" (real: nunca usado em teste) | ok | fail
-	SudoRunner bool     `json:"sudo_runner"` // troca nlSudoRun por um que só registra
+	SudoProbe  string   `json:"sudo_probe"`  // ok | "" ou fail (sudo pede senha); a sonda real nunca roda em teste
+	SudoRunner bool     `json:"sudo_runner"` // documenta que o caso usa o runner elevado; ele é sempre o falso que só registra
 	Sandbox    bool     `json:"sandbox"`     // sandbox falso ativo: o wrapper registra e roda; sudo falso lá dentro falha como no bwrap
 }
 
@@ -172,6 +173,9 @@ func rpLoad(t *testing.T) []rpCase {
 		}
 		if c.Origin == "" || c.Why == "" {
 			t.Fatalf("%s: origin e why são obrigatórios (de onde veio o caso e o que ele prova)", p)
+		}
+		if sp := c.Stubs.SudoProbe; sp != "" && sp != "ok" && sp != "fail" {
+			t.Fatalf("%s: stubs.sudo_probe %q (use ok ou fail)", p, sp)
 		}
 		if len(c.Turns) == 0 && len(c.Each) == 0 {
 			t.Fatalf("%s: sem turns nem each", p)
@@ -346,6 +350,22 @@ func rpNetGuard(t *testing.T) (logPath string) {
 	return logPath
 }
 
+// rpPrivBins elevate privilege. rpPrivGuard puts a failing stub of each first
+// in PATH: no replay ever runs anything as root on the machine running it.
+var rpPrivBins = []string{"sudo", "doas", "su", "pkexec"}
+
+func rpPrivGuard(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, n := range rpPrivBins {
+		sh := fmt.Sprintf("#!/bin/sh\necho '%s: replay: elevação bloqueada (nada roda como root em teste)' >&2\nexit 1\n", n)
+		if err := os.WriteFile(filepath.Join(dir, n), []byte(sh), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 // rpSandbox installs a fake bwrap as the active sandbox: it logs its argv,
 // marks the environment (JAZZ_FAKE_SANDBOX=1) and runs the wrapped command
 // unconfined, so the persistent shell works and only what the real sandbox
@@ -386,13 +406,19 @@ func rpRun(t *testing.T, c rpCase) {
 		t.Setenv(k, v)
 	}
 	r.netLog = rpNetGuard(t)
+	// a failing sudo/doas/su/pkexec first in PATH, so the shell never reaches
+	// the real one (a case's own fake sudo in stubs.bins goes in after: it wins)
+	rpPrivGuard(t)
 	if c.Entry == "app" {
 		r.stdout = uiTestStdout(t)
 	}
 	if len(c.Stubs.Bins) > 0 {
 		_, r.binsLog = rpBins(t, c.Stubs.Bins)
 	}
-	if c.Stubs.SudoProbe != "" || c.Stubs.SudoRunner {
+	// Privilege is always faked, whatever the case declares: on a dev machine
+	// with a fresh sudo timestamp (or a CI runner with NOPASSWD) the real
+	// probe passes and the real runner would run the model's command as root.
+	{
 		oldP, oldR := nlSudoProbe, nlSudoRun
 		t.Cleanup(func() { nlSudoProbe, nlSudoRun = oldP, oldR })
 		probeOK := c.Stubs.SudoProbe == "ok"
@@ -730,4 +756,41 @@ func rpContent(m map[string]any) string {
 		b.Write(j)
 	}
 	return b.String()
+}
+
+// TestReplayNeverElevates: no replay reaches the real sudo, whatever the case
+// declares. The PATH guard shadows every elevation binary, and a model that
+// asks for `sudo id` in yolo without any stub never gets uid 0 (a dev machine
+// with a fresh sudo timestamp, or a NOPASSWD CI runner, would give it).
+func TestReplayNeverElevates(t *testing.T) {
+	rpPrivGuard(t)
+	for _, n := range rpPrivBins {
+		p, err := exec.LookPath(n)
+		if err != nil {
+			t.Fatalf("%s: %v", n, err)
+		}
+		out, err := exec.Command(p, "-n", "id", "-u").CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "elevação bloqueada") {
+			t.Errorf("%s (%s) devia falhar bloqueado: err=%v out=%q", n, p, err, out)
+		}
+	}
+	for _, probe := range []string{"", "ok"} {
+		t.Run("probe="+probe, func(t *testing.T) {
+			c := rpCase{
+				Name: "sem-sudo-real", Entry: "agent", Mode: "yolo", Headless: true,
+				Stubs: rpStubs{SudoProbe: probe},
+				Provider: rpProvider{Seq: []rpResp{
+					{Calls: []rpCall{{Name: "bash", Args: json.RawMessage(`{"command":"sudo -n id -u; sudo -n id"}`)}}},
+					{Text: "pronto."},
+				}},
+				Turns:  []string{"roda sudo id"},
+				Expect: rpExpect{ToolAbsent: []string{"uid=0"}},
+			}
+			if probe == "ok" {
+				// "passwordless": the persistent shell runs it and meets the guard
+				c.Expect.ToolHas = []string{"elevação bloqueada"}
+			}
+			rpRun(t, c)
+		})
+	}
 }
