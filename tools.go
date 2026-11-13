@@ -170,6 +170,7 @@ func buildToolSpecs(hasRg, web bool) []ToolSpec {
 				"command":    str("The command to run"),
 				"timeout":    integer("Timeout in seconds (default 120, max 600)"),
 				"background": map[string]any{"type": "boolean", "description": "Start as a detached background job and return immediately"},
+				"sandbox":    map[string]any{"type": "boolean", "description": "false = run this one command outside the OS sandbox. Only after the same command failed BECAUSE of the sandbox (a headless browser such as Chrome/Remotion/Puppeteer that will not start, 'Operation not permitted' writing a cache under ~). jazz asks the user every time."},
 				"job":        str("Job id (from a background run) to act on instead of running a command"),
 				"action":     map[string]any{"type": "string", "enum": []string{"output", "kill", "list"}, "description": "With job: output = new log lines since last check, kill = stop it, list = all jobs"},
 			})},
@@ -1221,6 +1222,10 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 		if t.Window == nil {
 			window = nil
 		}
+	} else if usWanted("bash", m) {
+		r = t.runHost(ctx, sh, cmd, time.Duration(to)*time.Second) // approved escape (unsandboxed.go)
+		t.cpAfterBash(cmd)
+		cwd = sh.Cwd
 	} else {
 		r = sh.Run(ctx, cmd, time.Duration(to)*time.Second, onOut)
 		t.cpAfterBash(cmd)

@@ -216,6 +216,7 @@ func main() {
 	yolo := fs.Bool("yolo", false, "")
 	fresh := fs.Bool("fresh", false, "") // janela de contexto sem memória (fresh.go)
 	ackNoSandbox := fs.Bool("ack-no-sandbox", false, "")
+	allowUnsandboxed := fs.Bool("allow-unsandboxed", false, "")
 	strictModel := fs.Bool("strict-model", false, "") // only the -m model, not even the configured fallback (evals)
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
@@ -380,6 +381,9 @@ func main() {
 		} else {
 			fmt.Fprintln(os.Stderr, "jazz: nenhuma sessão anterior em", d, "— começando uma nova")
 		}
+	}
+	if *allowUnsandboxed {
+		usAllow = true // bash sandbox:false runs without a question (unsandboxed.go)
 	}
 	rest := fs.Args()
 	if wtOn && (len(rest) == 0 || !pfSubcommands[rest[0]]) {

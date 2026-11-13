@@ -206,6 +206,10 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
   duro em 1,5x: pipeline de skill é longo por natureza (`--max-steps` continua valendo).
 - Mudar uma skill instalada (`~/.config/jazz-cli/skills`, `~/.claude/skills`, `~/.agents/skills`) sempre
   pergunta, até no yolo: skill roda em toda sessão; bug de skill se avisa ao dono, não se remenda calado.
+- `bash` com `sandbox: false` roda um comando fora do sandbox do sistema, como no Claude Code: para quando o
+  sandbox quebrou o comando (Chrome headless do Remotion/Puppeteer que não sobe, cache em `~/.cache` sem
+  permissão). Pergunta toda vez, até no yolo, e nunca fica lembrado; no `-p` só com `--allow-unsandboxed` ou
+  `JAZZ_ALLOW_UNSANDBOXED=1`. O render da video-forge travou aqui em 13/11.
 - No limite de passos, uma resposta final que vem como chamada de ferramenta escrita em texto não aparece
   mais crua: o jazz diz que parou no limite, qual era o próximo passo e como continuar (`jazz -c`).
 - Bloqueio de segurança agora pede ao modelo que diga claramente o que foi bloqueado e nunca descreva a

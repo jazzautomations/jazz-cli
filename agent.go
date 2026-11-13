@@ -2196,6 +2196,16 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// bypasses the fence (outside-root targets) and HIGH build-target findings.
 	// What still gates: prompt-injection suspicion and sensitive egress —
 	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
+	usWhy := ""
+	if !isMCP && usWanted(tool, args) {
+		if a.sub {
+			return false, "A subagent may not leave the OS sandbox. Report what should be run instead.", false
+		}
+		if !usAllow {
+			// outside the sandbox: a question every time, also in yolo (unsandboxed.go)
+			usWhy, repoAsk = "roda FORA do sandbox do sistema, sem isolamento (lê e escreve onde o seu usuário pode)", true
+		}
+	}
 	skillWhy := ""
 	if !isMCP && !a.sub {
 		if p := a.urSkillWrite(tool, args, cmd); p != "" {
@@ -2417,6 +2427,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		if r := a.nlConsentRule(gate, tool, args, cmd, isMCP); r != "" {
 			need, autoRule = false, r
 		}
+	}
+	if usWhy != "" {
+		if reason != "" {
+			reason = usWhy + "; " + reason
+		} else {
+			reason = usWhy
+		}
+		gate, whyEN = nlGateHigh, "it runs outside the OS sandbox (unisolated); in a -p run the user opts in with --allow-unsandboxed or JAZZ_ALLOW_UNSANDBOXED=1"
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
 	}
 	if skillWhy != "" {
 		if reason != "" && !strings.Contains(reason, skillWhy) {
