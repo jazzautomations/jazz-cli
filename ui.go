@@ -1478,7 +1478,7 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 		border = t.fg(cRed, 31)
 	}
 	canAlways := reason == "" || offer != ""
-	question := map[string]string{"bash": "Rodar este comando?", "write": "Escrever este arquivo?", "edit": "Aplicar esta edição?"}[tool]
+	question := map[string]string{"bash": "Rodar este comando?", "write": "Escrever este arquivo?", "edit": "Aplicar esta edição?", "modelo": "Trocar de modelo?"}[tool]
 	if question == "" {
 		question = "Usar " + uiToolLabel(tool) + "?"
 	}

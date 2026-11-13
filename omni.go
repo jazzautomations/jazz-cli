@@ -55,6 +55,10 @@ type Need struct {
 	Tools  bool   // the request carries native tool specs
 	Role   string // main | compact | fast | sub
 	Prefer string // sticky ref (last pick) for prompt-cache affinity
+	// Pin: the model the user chose (router_pin.go). The chain is the pin +
+	// cfg.Fallback (consent), never the implicit free chain or omni/free, and
+	// the pin is never dropped for being dead.
+	Pin string
 }
 
 // ---------- presets ----------
@@ -342,6 +346,9 @@ func (c *Config) Candidates(refs ...string) []string {
 // omni/free chain is appended; without omni, a free primary with no fallback gets
 // the implicit free chain (kilo, groq when keyed, reachable local servers).
 func (c *Config) CandidatesFor(n Need, refs ...string) []string {
+	if n.Pin != "" {
+		return c.pinnedCandidates(n, refs...)
+	}
 	var out []string
 	seen := map[string]bool{}
 	add := func(r string) {
@@ -392,6 +399,60 @@ func (c *Config) CandidatesFor(n Need, refs ...string) []string {
 		return live
 	}
 	return out
+}
+
+// pinnedCandidates is the chain of a pinned model (PROV-1): the pin, then
+// cfg.Fallback (configured = consent; omni aliases in it expand). refs only
+// count when they are one of those — the turn's sticky fallback goes first so
+// a pin that just failed is not asked again on every step. StrictModel: the
+// pin alone. Dead fallbacks drop out; the pin never does (the caller warns).
+func (c *Config) pinnedCandidates(n Need, refs ...string) []string {
+	if c.StrictModel {
+		return []string{n.Pin}
+	}
+	var fb []string
+	for _, r := range c.Fallback {
+		if r == "" {
+			continue
+		}
+		if isOmniRef(r) {
+			_, tier := SplitModel(r)
+			if tier == "" {
+				tier = "coder"
+			}
+			fb = append(fb, c.omniRank(tier, n)...)
+			continue
+		}
+		fb = append(fb, r)
+	}
+	allowed := map[string]bool{n.Pin: true}
+	for _, r := range fb {
+		allowed[r] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(r string) {
+		if r != "" && allowed[r] && !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	for _, r := range refs {
+		if r != n.Pin {
+			add(r) // sticky fallback of this turn
+		}
+	}
+	add(n.Pin)
+	for _, r := range fb {
+		add(r)
+	}
+	live := out[:0:0]
+	for _, r := range out {
+		if r == n.Pin || !c.pvState(r, 0).Dead {
+			live = append(live, r)
+		}
+	}
+	return live
 }
 
 func (c *Config) pvIsFreeish(ref string) bool {

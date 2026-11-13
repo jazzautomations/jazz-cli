@@ -1206,3 +1206,21 @@ func pvFlock(path string, timeout time.Duration) (func(), error) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// rlLimiter is the Limiter backed by the limiter state (PROV-3): Allow says no
+// to a ref the state calls dead (quota, refused key, retired model, provider
+// cooled by a quota 429). Report is a no-op: the providers record every
+// outcome through rlEnd.
+type rlLimiter struct{ c *Config }
+
+func (l rlLimiter) Allow(ref string) (bool, time.Duration) {
+	if l.c == nil || isOmniRef(ref) {
+		return true, 0
+	}
+	if st := l.c.pvState(ref, 0); st.Dead {
+		return false, st.Wait
+	}
+	return true, 0
+}
+
+func (rlLimiter) Report(string, error) {}

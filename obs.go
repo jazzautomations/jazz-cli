@@ -267,6 +267,7 @@ type obState struct {
 	soft      atomic.Bool  // deadline grace reached: no new request starts
 	softWhy   string
 	reqT0     time.Time
+	reqFB     time.Duration // time to the first streamed byte of the request in flight (0 = none yet)
 }
 
 // obs returns the agent's observability state (created on first use).
@@ -376,13 +377,30 @@ func obEndsWithQuestion(msgs []Message) bool {
 	return false
 }
 
-func (a *Agent) obReqStart(ref string, cand, attempt int) {
+// requested is the model the chain was asked for and pinned whether that was
+// the user's choice (router_pin.go): request.start says when another one is
+// being tried.
+func (a *Agent) obReqStart(ref string, cand, attempt int, requested string, pinned bool) {
 	st := a.obs()
 	st.mu.Lock()
-	st.reqT0 = time.Now()
+	st.reqT0, st.reqFB = time.Now(), 0
 	st.mu.Unlock()
 	p, _ := SplitModel(ref)
-	a.obEv("request.start", map[string]any{"model": ref, "provider": p, "cand": cand, "attempt": attempt, "msgs": len(a.Msgs), "est_tokens": a.estTokens()})
+	f := map[string]any{"model": ref, "provider": p, "cand": cand, "attempt": attempt, "msgs": len(a.Msgs), "est_tokens": a.estTokens(), "requested": requested}
+	if pinned {
+		f["pinned"] = true
+	}
+	a.obEv("request.start", f)
+}
+
+// obFirstByte marks the first streamed byte of the request in flight.
+func (a *Agent) obFirstByte() {
+	st := a.obs()
+	st.mu.Lock()
+	if st.reqFB == 0 && !st.reqT0.IsZero() {
+		st.reqFB = max(time.Since(st.reqT0), time.Millisecond)
+	}
+	st.mu.Unlock()
 }
 
 // obReqEnd records the end of one provider request (err != nil = failed attempt).
@@ -390,15 +408,20 @@ func (a *Agent) obReqEnd(ref string, cand, attempt int, resp *ChatResponse, err 
 	st := a.obs()
 	st.mu.Lock()
 	lat := time.Since(st.reqT0).Milliseconds()
+	fb := st.reqFB
 	st.mu.Unlock()
 	p, _ := SplitModel(ref)
 	f := map[string]any{"model": ref, "provider": p, "cand": cand, "attempt": attempt, "latency_ms": lat}
+	if fb > 0 {
+		f["first_byte_ms"] = fb.Milliseconds()
+	}
 	if resp != nil {
 		f["in"], f["out"], f["cache_read"], f["cache_write"], f["cost"] = resp.Usage.In, resp.Usage.Out, resp.Usage.CacheRead, resp.Usage.CacheWrite, resp.Usage.Cost
 		f["finish"], f["tool_calls"], f["text_bytes"] = resp.Stop, len(resp.ToolCalls), len(resp.Text)
 	}
 	if err != nil {
 		f["error"] = oneLine(err.Error(), 300)
+		f["class"] = pvClassify(err) // the one classifier (ratelimit.go)
 		var ae *APIError
 		if errors.As(err, &ae) {
 			f["status"], f["daily"] = ae.Status, ae.Daily
@@ -685,6 +708,11 @@ func obStopWhy(s StopReason, errText string) string {
 		return "the --until check was still failing"
 	case StopQualityFailed:
 		return "the quality check was still failing"
+	case StopModelUnavailable:
+		if errText != "" {
+			return "the model the user chose was unavailable and was not switched (" + oneLine(errText, 200) + ")"
+		}
+		return "the model the user chose was unavailable and was not switched"
 	case "crash":
 		return "jazz crashed (internal error)"
 	}
@@ -806,6 +834,16 @@ func obFinishRun(ag *Agent, tools *Toolbox, res RunResult, exit int) obRunEnd {
 	ag.sess.End(sessEnd{Status: string(res.Status), Outcome: r.Outcome, Checkpoint: r.Checkpoint, Handoff: r.Handoff, Note: redactSecrets(r.Note)})
 	f := map[string]any{"status": string(res.Status), "outcome": r.Outcome, "exit": exit, "dur_ms": res.Duration.Milliseconds(),
 		"in": res.Usage.In, "out": res.Usage.Out, "cache_read": res.Usage.CacheRead, "cost": res.Cost, "model": res.Model}
+	// requested vs served (PROV-1): an eval reports who answered, not who was asked
+	if served := ag.rtServed(); len(served) > 0 || ag.Model != "" {
+		f["requested"] = ag.Model
+		f["served"] = served
+		swapped := false
+		for r := range served {
+			swapped = swapped || r != ag.Model
+		}
+		f["swapped"] = swapped
+	}
 	if r.Checkpoint != "" {
 		f["checkpoint"] = r.Checkpoint
 	}

@@ -115,8 +115,18 @@ func uiOpt(env, conf string) bool {
 }
 
 type Config struct {
-	Model         string                   `json:"model"`          // "provider/model-id"
-	Fallback      []string                 `json:"fallback"`       // tried in order on retryable errors
+	Model    string   `json:"model"`    // "provider/model-id"
+	Fallback []string `json:"fallback"` // tried in order on retryable errors
+	// FallbackOnPinned: when the model the user chose (and the configured
+	// fallback) fails — "ask" (default: interactive asks, headless exits 75),
+	// "auto" (switch on its own, always announced) or "off" (never switch).
+	FallbackOnPinned string `json:"fallback_on_pinned,omitempty"`
+	// Pinned (runtime): the model was chosen explicitly (-m, /model or "model"
+	// in the config): the chain is that model + Fallback, never a hidden swap.
+	Pinned bool `json:"-"`
+	// StrictModel (runtime, --strict-model / JAZZ_STRICT_MODEL=1): only the
+	// pinned model, not even Fallback (evals measure the model asked for).
+	StrictModel   bool                     `json:"-"`
 	Mode          string                   `json:"mode,omitempty"` // auto | turbo | smart | ask | yolo (persisted; plan is never saved; "" = DefaultMode)
 	ModeOverride  string                   `json:"-"`              // session-only mode (flags, Shift+Tab, plan); wins over Mode
 	DefaultMode   string                   `json:"-"`              // mode when config sets none (interactive: turbo with an isolating sandbox)
