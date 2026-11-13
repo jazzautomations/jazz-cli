@@ -148,7 +148,7 @@ func (a *Agent) arAutoReview(ctx context.Context, lt *acTurnLoop) bool {
 		report = strings.ReplaceAll(report, filepath.ToSlash(mustRel(a.tools.Root, preDir))+"/", "(antes) ")
 	}
 	a.ui.Notice("revisão automática apontou itens do pedido — o modelo vai conferir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your change against the request, requirement by requirement, and reported:\n" + acClip(report, 4000) + "\nFor each point: check it against the request text and the code. Fix the real ones, add or adjust a test that pins the behavior, re-run the tests, then give your final answer. If a point is wrong, say why in one line. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your change against the request, requirement by requirement, and reported:\n" + acClip(report, 4000) + "\nFor each point: check it against the request text and the code. Fix the real ones, add or adjust a test that pins the behavior, re-run the tests, then give your final answer. If a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true
 }
 
@@ -224,7 +224,7 @@ func (a *Agent) arOneShot(ctx context.Context, req string, files []qgFile, budge
 		return false, true
 	}
 	a.ui.Notice("revisão automática apontou itens do pedido — o modelo vai conferir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your change against the request, requirement by requirement, and reported:\n" + acClip(text, 4000) + "\nFor each point: check it against the request text and the code. Fix the real ones, add or adjust a test that pins the behavior, re-run the tests, then give your final answer. If a point is wrong, say why in one line. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your change against the request, requirement by requirement, and reported:\n" + acClip(text, 4000) + "\nFor each point: check it against the request text and the code. Fix the real ones, add or adjust a test that pins the behavior, re-run the tests, then give your final answer. If a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true, true
 }
 

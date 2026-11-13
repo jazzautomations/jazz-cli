@@ -198,6 +198,7 @@ var pfHardExitGrace = 15 * time.Second
 
 func main() {
 	pfProfileStart() // JAZZ_CPUPROFILE=path (cpuprofile.go)
+	defer pfDebugEnd()
 	defer pfProfileStop()
 	defer pfCrashGuard()
 	pfCleanOldExe()
@@ -772,7 +773,10 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	default:
 		ui = &HeadlessUI{Verbose: o.verbose}
 	}
-	pfTrustGateWith(root, true, false, nil, os.Stderr)
+	// the "bash bloqueado" warning only when it is true: not with --yolo
+	// (UntrustedBash off below) nor with --allow-tools (the user set the rules;
+	// a call still blocked says so itself, with the exact rule)
+	pfTrustGateBash(root, true, false, pfHeadlessBashGated(cfg, o), nil, os.Stderr)
 	tools := NewToolbox(root)
 	tools.Web = cfg.Web
 	tools.MaxJobs = cfg.MaxJobs

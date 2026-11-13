@@ -709,6 +709,20 @@ func pfTrustGate(root string, interactive bool, in io.Reader, w io.Writer) bool 
 
 // pfTrustGateWith is pfTrustGate; folder also covers folder trust (F1).
 func pfTrustGateWith(root string, folder, interactive bool, in io.Reader, w io.Writer) bool {
+	return pfTrustGateBash(root, folder, interactive, true, in, w)
+}
+
+// pfHeadlessBashGated: in -p, does an untrusted folder block bash that is not
+// read-only with no rule from the user? Not with --yolo, not with --allow-tools.
+func pfHeadlessBashGated(cfg *Config, o pfOpts) bool {
+	return cfg.EffMode() != "yolo" && len(o.allowTools) == 0
+}
+
+// pfTrustGateBash is pfTrustGateWith; bashGated=false (headless --yolo or
+// --allow-tools: the untrusted folder does not block bash by itself, or the
+// user already chose the rules) drops the "bash bloqueado" warning, which
+// would be false there. The ignored-config warning stays.
+func pfTrustGateBash(root string, folder, interactive, bashGated bool, in io.Reader, w io.Writer) bool {
 	st := pfTrustCollect(root, folder)
 	if len(st.kinds) == 0 {
 		return true
@@ -726,7 +740,7 @@ func pfTrustGateWith(root string, folder, interactive bool, in io.Reader, w io.W
 		if len(cfgKinds) > 0 {
 			fmt.Fprintf(w, "jazz: aviso: configuração do projeto não confiável ignorada (%s). Para confiar: jazz trust\n", strings.Join(cfgKinds, ", "))
 		}
-		if folderUntrusted {
+		if folderUntrusted && bashGated {
 			fmt.Fprintln(w, "jazz: aviso: pasta não confiável: comandos bash que não são só leitura ficam bloqueados (use --allow-tools, --yolo ou jazz trust --yes)")
 		}
 		return false

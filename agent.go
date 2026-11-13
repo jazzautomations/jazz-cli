@@ -828,6 +828,7 @@ turnLoop:
 				if !nudgedFake {
 					nudgedFake = true
 					dbg("nudge", "fake_action")
+					a.acKeepAnswer(text) // -p keeps the answer the nudge reopens (answer.go)
 					a.append(Message{Role: "user", Content: "<system-reminder>" + fakeActionNudge + "</system-reminder>"})
 					continue
 				}
@@ -841,19 +842,22 @@ turnLoop:
 			if stallNudges < 2 && a.cfg.ModelSettings(turnModel).Tools != "none" && acAnnouncesAction(text) && !a.obDeadlineWarned() {
 				stallNudges++
 				dbg("nudge", "stall")
+				a.acKeepAnswer(text)
 				a.append(Message{Role: "user", Content: "<system-reminder>" + stallNudge + "</system-reminder>"})
 				continue
 			}
 			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
-				a.append(Message{Role: "user", Content: "<system-reminder>A lista de tarefas ainda tem itens abertos:\n" + open + "\nContinue neles, ou atualize a lista (marque como feito ou tire o que não precisa mais) dizendo por quê.</system-reminder>"})
+				a.acKeepAnswer(text)
+				a.append(Message{Role: "user", Content: "<system-reminder>A lista de tarefas ainda tem itens abertos:\n" + open + "\nContinue neles, ou atualize a lista (marque como feito ou tire o que não precisa mais) dizendo por quê. " + acGateAnswerNote + "</system-reminder>"})
 				continue
 			}
 			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
-				a.append(Message{Role: "user", Content: "<system-reminder>Você mudou código e não rodou nada depois. Se dá para compilar, testar ou rodar, verifique agora com bash e corrija o que quebrou; se não dá, diga isso numa frase e termine.</system-reminder>"})
+				a.acKeepAnswer(text)
+				a.append(Message{Role: "user", Content: "<system-reminder>Você mudou código e não rodou nada depois. Se dá para compilar, testar ou rodar, verifique agora com bash e corrija o que quebrou; se não dá, diga isso numa frase e termine. " + acGateAnswerNote + "</system-reminder>"})
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
@@ -869,12 +873,14 @@ turnLoop:
 				if hr.Block && strings.TrimSpace(hr.Reason) != "" {
 					stopHooks++
 					a.ui.Notice("hook pediu pra continuar: " + oneLine(hr.Reason, 120))
+					a.acKeepAnswer(text)
 					a.append(Message{Role: "user", Content: "<system-reminder>A Stop hook asked you to continue:\n" + hr.Reason + "</system-reminder>"})
 					continue
 				}
 			}
 			if !lastDenied { // --until / --review (agent_loop.go)
 				if again, why := a.acStopGate(ctx, lt); again {
+					a.acKeepAnswer(text) // quality checklist, auto-review, --until, --verifier (answer.go)
 					continue
 				} else if why != "" {
 					stop = why

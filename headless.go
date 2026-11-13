@@ -18,8 +18,9 @@ type HeadlessUI struct {
 
 	mu    sync.Mutex
 	cur   strings.Builder
-	steps int // model requests, from TurnStats
-	tools int // tool calls, from TurnStats
+	kept  string // final answer saved before a harness gate reopened the turn
+	steps int    // model requests, from TurnStats
+	tools int    // tool calls, from TurnStats
 	errw  io.Writer
 	outw  io.Writer
 }
@@ -53,6 +54,26 @@ func (h *HeadlessUI) StreamText(s string) {
 func (h *HeadlessUI) StreamReasoning(s string) {}
 func (h *HeadlessUI) Thinking(string)          {}
 func (h *HeadlessUI) StopThinking()            {}
+
+// KeepAnswer: a harness gate (quality checklist, auto-review, todo/verify/
+// fake-action/stall nudge, Stop hook) reopens the turn after the model's
+// final answer. That answer is kept, so stdout does not end up with only the
+// reply to the gate (answer.go).
+func (h *HeadlessUI) KeepAnswer() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.flushText()
+	h.kept = acMergeAnswer(h.kept, h.Last)
+	h.Last = ""
+}
+
+// endAnswer folds the kept answer into Last at the end of a turn (h.mu held).
+func (h *HeadlessUI) endAnswer() {
+	if h.kept != "" {
+		h.Last = acMergeAnswer(h.kept, h.Last)
+		h.kept = ""
+	}
+}
 
 // flushText ends the current assistant message (h.mu held).
 func (h *HeadlessUI) flushText() {
@@ -187,6 +208,7 @@ func (h *HeadlessUI) Finish(res RunResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.flushText()
+	h.endAnswer()
 	text := res.Text
 	if text == "" {
 		text = h.Last
@@ -217,6 +239,7 @@ func (h *HeadlessUI) TurnEnd(st TurnStats) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.flushText()
+	h.endAnswer()
 	h.steps += st.Steps
 	h.tools += st.Tools
 	line := fmt.Sprintf("✓ %s · %d ferramentas · in %d out %d", st.Dur.Round(time.Second), st.Tools, st.Usage.In, st.Usage.Out)

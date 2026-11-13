@@ -283,7 +283,7 @@ func (a *Agent) ojVerifyGate(ctx context.Context) bool {
 		return false
 	}
 	a.ui.Notice("verificador (" + ref + ") apontou problemas — o modelo vai conferir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A second model (" + ref + ") reviewed your changes against the request and reported these possible defects:\n" + acClip(report, 4000) + "\nCheck each one against the code. Fix the real ones and re-run the tests; if a point is wrong, say why in one line. Then give your final answer. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A second model (" + ref + ") reviewed your changes against the request and reported these possible defects:\n" + acClip(report, 4000) + "\nCheck each one against the code. Fix the real ones and re-run the tests; if a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true
 }
 

@@ -154,6 +154,18 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   outro modelo está disponível"; cota que volta amanhã aparece como "amanhã 21:00"; no `-p` o remédio é
   `-m provedor/modelo`, não `/model`.
 - Busca de links no macOS: o nome do link não vira o nome do alvo quando a pasta passa por `/var`.
+- `-p` não perde mais a resposta final quando uma verificação reabre o turno depois dela (checklist de
+  qualidade, revisão automática, `--verifier`, `--until`, lembrete de todo/verificação/ação inventada/
+  parada no meio, hook Stop): a resposta original sai no stdout (e no `text` do json), seguida da réplica
+  sob "Depois da verificação final:" quando ela acrescenta algo; esses lembretes pedem ao modelo uma
+  resposta final completa ao pedido do usuário, não ao revisor.
+- Pedido de resumo sem "?" ("me fala o que vc corrigiu", "resume o que mudou", "lista o que você fez")
+  depois de trabalho com ferramentas não dispara mais o lembrete de ação inventada; pedido que manda
+  fazer algo ("corrige o que vc fez") continua cobrado.
+- O aviso "pasta não confiável: comandos bash ... ficam bloqueados" do `-p` só aparece quando é verdade:
+  não com `--yolo` nem com `--allow-tools`.
+- `--debug` não deixa mais um `<ts>.fatal.txt` vazio ao lado de cada log: some na saída normal, e os
+  vazios de execuções que já acabaram são limpos; só fica o que tem um erro fatal.
 
 ### Testes e release
 

@@ -35,6 +35,7 @@ type JSONUI struct {
 	mu     sync.Mutex // guards w and the fields below
 	cur    strings.Builder
 	last   string
+	kept   string // final answer saved before a harness gate reopened the turn
 	steps  int
 	tools  int
 	// Extra: fields added to the result object (outcome, checkpoint,
@@ -86,6 +87,24 @@ func (j *JSONUI) StopThinking() {
 	j.event(map[string]any{"type": "status", "state": "idle"})
 }
 
+// KeepAnswer: a harness gate reopened the turn after the final answer; the
+// result "text" keeps that answer (answer.go). Stream events are unchanged.
+func (j *JSONUI) KeepAnswer() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.flushText()
+	j.kept = acMergeAnswer(j.kept, j.last)
+	j.last = ""
+}
+
+// endAnswer folds the kept answer into last at the end of a turn (j.mu held).
+func (j *JSONUI) endAnswer() {
+	if j.kept != "" {
+		j.last = acMergeAnswer(j.kept, j.last)
+		j.kept = ""
+	}
+}
+
 // flushText ends the current assistant message (j.mu held).
 func (j *JSONUI) flushText() {
 	if t := strings.TrimSpace(j.cur.String()); t != "" {
@@ -130,6 +149,7 @@ func (j *JSONUI) TurnEnd(st TurnStats) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.flushText()
+	j.endAnswer()
 	j.steps += st.Steps
 	j.tools += st.Tools
 }
@@ -152,6 +172,7 @@ func (j *JSONUI) Finish(res RunResult) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.flushText()
+	j.endAnswer()
 	text := res.Text
 	if text == "" {
 		text = j.last
