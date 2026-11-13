@@ -497,8 +497,9 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
+	stallNudges := 0  // "announced an action and stopped" reminders (max 2 per turn)
 	emptyResends := 0 // silent resends of a request that came back empty (max acEmptyResends)
-	callsIssued := 0 // tool calls the model made in this turn (run or not)
+	callsIssued := 0  // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
@@ -529,6 +530,7 @@ turnLoop:
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
 			nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake = false, false, false, false
 			emptyResends = 0
+			stallNudges = 0
 			lastDenied, textConts, callTruncs, compactFailStep = false, 0, 0, -100
 			a.bgOnReset() // fresh context: exploration cap and reread index start over (budget.go)
 		}
@@ -796,6 +798,15 @@ turnLoop:
 				a.ui.Warn(unverifiedWarning)
 				stop = StopUnverified
 				return stop, nil
+			}
+			// Stall guard (ported from Hermes Agent): a short reply that ends by
+			// announcing the next action ("agora vou rodar os testes.") with no
+			// call is the model stopping mid-task, not a final answer.
+			if stallNudges < 2 && a.cfg.ModelSettings(turnModel).Tools != "none" && acAnnouncesAction(text) && !a.obDeadlineWarned() {
+				stallNudges++
+				dbg("nudge", "stall")
+				a.append(Message{Role: "user", Content: "<system-reminder>" + stallNudge + "</system-reminder>"})
+				continue
 			}
 			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true

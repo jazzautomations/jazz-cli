@@ -113,6 +113,13 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   novo conta como cópia.
 - Extract que junta cópias que eram diferentes (um módulo arredondava de um jeito, outro de outro): o modelo
   vê as versões antigas lado a lado e tem que manter o comportamento de cada módulo.
+- Ideias portadas do Hermes Agent:
+  - teste atrás de pipe (`go test | tail`) não conta mais como verde: o exit 0 é do `tail`, e o resultado
+    do bash diz isso ao modelo;
+  - o resultado do bash explica o exit code quando importa: `grep`/`diff` com 1 não é erro, 137 é falta de
+    memória, 127 é comando inexistente (`python` → `python3`), módulo ausente, permissão;
+  - resposta que termina anunciando o próximo passo ("agora vou rodar os testes.") sem chamar ferramenta
+    volta pro modelo fazer (até 2 vezes por turno).
 - A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
   diz exatamente como resolver.
 - Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida duas vezes em silêncio (pausa de 3 s e 12 s); se continuar

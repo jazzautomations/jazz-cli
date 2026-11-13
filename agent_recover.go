@@ -314,7 +314,8 @@ func (a *Agent) rcObserve(lt *acTurnLoop, tc ToolCall, out ToolOutput, denied bo
 		if cmd != "" && rcIsVerifyCmd(cmd) && e.exit >= 0 {
 			e.verify = true
 			strong := rcIsBuildTest(cmd)
-			rc.verifyOK, rc.verifyCmd = e.exit == 0 && (strong || rcProbeOK(rc, cmd)), cmd
+			// a test behind a pipe reports tail's status, not its own (bash_hints.go)
+			rc.verifyOK, rc.verifyCmd = e.exit == 0 && !bhPipedTest(cmd) && (strong || rcProbeOK(rc, cmd)), cmd
 		}
 		if e.mut && e.exit == 0 && !e.verify {
 			rc.mutPaths = append(rc.mutPaths, rcPathWords(cmd)...)

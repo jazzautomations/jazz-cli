@@ -1221,6 +1221,9 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	}
 	if !r.Reset {
 		fmt.Fprintf(&b, "[exit code %d]", r.ExitCode)
+		if h := bhExitHint(cmd, r.ExitCode, r.Output); h != "" { // what the status means (bash_hints.go)
+			b.WriteString(" " + h)
+		}
 	}
 	if r.Note != "" {
 		b.WriteString(r.Note)

@@ -7,6 +7,9 @@ import (
 // fakeActionNudge is sent when a final answer claims work that no tool did.
 const fakeActionNudge = "You did not call any tool in this turn. Do the work with the tools now; never claim actions you did not perform."
 
+// stallNudge is sent when the reply ends announcing an action it did not take.
+const stallNudge = "Your reply ends by announcing a next step, but you made no tool call, so nothing happened. Do it now with the tools. If the task is actually finished, give the final answer instead (what was done and how it was verified)."
+
 // unverifiedWarning is shown when the model insists on a claim without tools.
 const unverifiedWarning = "resposta não verificada: o modelo não executou nenhuma ferramenta"
 
@@ -44,4 +47,17 @@ func acRecap(input string, msgs []Message) bool {
 		}
 	}
 	return false
+}
+
+// acAnnounceRE: the tail of a reply announcing the assistant's next action
+// (PT/EN), e.g. "Agora vou rodar os testes.", "Let me check the logs:".
+var acAnnounceRE = lazyRx(`(?i)(?:^|[.!?:\n]\s*)(?:agora\s+|em seguida\s+|então\s+|entao\s+|primeiro\s+|vou\s+agora\s+)?(?:vou|irei|vamos)\s+(?:agora\s+|então\s+)?(?:rodar|executar|criar|editar|verificar|checar|testar|ler|abrir|olhar|corrigir|ajustar|implementar|adicionar|instalar|atualizar|escrever|procurar|buscar|conferir|investigar|analisar|aplicar|fazer|mudar|alterar|remover|compilar)\b[^.!?\n]{0,160}[.:!…]?\s*$|(?:^|[.!?:\n]\s*)(?:let me|i'll|i will|now i'll|next,? i'll|now let me|i'm going to)\s+(?:now\s+)?(?:run|execute|create|edit|check|verify|test|read|open|look|fix|update|implement|add|install|write|search|apply|make|change|remove|build|investigate|inspect)\b[^.!?\n]{0,160}[.:!…]?\s*$`)
+
+// acAnnouncesAction: a short reply whose last sentence announces an action.
+func acAnnouncesAction(text string) bool {
+	t := strings.TrimSpace(text)
+	if t == "" || len(t) > 700 || strings.HasSuffix(t, "?") {
+		return false
+	}
+	return acAnnounceRE.MatchString(t)
 }

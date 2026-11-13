@@ -61,7 +61,7 @@ func vsRecord(st *hgState, cmd string, out ToolOutput) {
 	st.lastTestRed = vsRed(out)
 	st.lastTestCmd = cmd
 	st.lastTestOut = truncateHeadTail(redactSecrets(out.Text), vsMaxOut)
-	if !st.lastTestRed && vsIsFull(cmd, hgTestCommand(st.root)) {
+	if !st.lastTestRed && !bhPipedTest(cmd) && vsIsFull(cmd, hgTestCommand(st.root)) {
 		st.suiteRan = true // the model ran the whole suite green: nothing to add
 	}
 }
