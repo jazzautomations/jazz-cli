@@ -39,3 +39,18 @@ func TestBashServerGoesBackground(t *testing.T) {
 		t.Errorf("tool result: %q", res)
 	}
 }
+
+// The same bash call with the same big output: the second result is a stub.
+func TestRepeatedBigResultStubbed(t *testing.T) {
+	cmd := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"seq 1 400"}`}
+	cmd2 := fakeCall{ID: "b2", Name: "bash", Args: `{"command":"seq 1 400"}`}
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{cmd}}, fakeResp{Calls: []fakeCall{cmd2}}, fakeResp{Text: "ok"}), nil)
+	if err := h.run(t, "conta"); err != nil {
+		t.Fatal(err)
+	}
+	r1 := h.fs.requests()[1].toolResults()["b1"]
+	r2 := h.fs.requests()[2].toolResults()["b2"]
+	if !strings.Contains(r1, "\n200\n") || !strings.Contains(r2, "byte-for-byte unchanged") || strings.Contains(r2, "\n200\n") {
+		t.Errorf("first result must be full, second a stub:\n%.200s\n---\n%.300s", r1, r2)
+	}
+}

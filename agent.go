@@ -985,6 +985,11 @@ turnLoop:
 				stop = StopLoop
 				return stop, nil
 			}
+			// a byte-identical big result already in context is not repeated
+			// (Hermes tool_guardrails): a short reference saves the window
+			if rep >= 2 && len(out.Text) >= acStubMin && tc.Name != "read" {
+				out.Text = acStubResult(tc, out.Text)
+			}
 			if rep >= 3 {
 				out.Text += fmt.Sprintf("\n\n<system-reminder>Esta mesma chamada já foi feita %d vezes com o mesmo resultado. Pare de repetir: mude a abordagem ou dê a resposta final.</system-reminder>", rep)
 			} else if per > 1 && cyc >= 2 {
@@ -1088,6 +1093,18 @@ var codeExt = map[string]bool{".go": true, ".py": true, ".js": true, ".ts": true
 	".cs": true, ".scala": true, ".zig": true, ".ex": true, ".exs": true, ".mjs": true, ".cjs": true, ".vue": true, ".svelte": true, ".dart": true, ".pl": true}
 
 func isCodeFile(p string) bool { return codeExt[strings.ToLower(filepath.Ext(p))] }
+
+// acStubMin: results at least this big are replaced by a reference when the
+// same call returned the same bytes before.
+const acStubMin = 512
+
+// acStubResult keeps the first and last line (the exit code lives there) and
+// points at the earlier identical result.
+func acStubResult(tc ToolCall, text string) string {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	first, last := oneLine(lines[0], 160), oneLine(lines[len(lines)-1], 160)
+	return fmt.Sprintf("[Same result as your previous identical call (%s %s): %d chars, byte-for-byte unchanged, so it is not repeated here — read it above.]\nfirst line: %s\nlast line: %s", tc.Name, oneLine(toolDetail(tc.Name, tc.Args), 80), len(text), first, last)
+}
 
 func hashCall(name, args, result string) string {
 	h := sha256.Sum256([]byte(name + "\x00" + args + "\x00" + result))

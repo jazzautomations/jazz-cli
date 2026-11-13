@@ -132,6 +132,8 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   - servidor rodado em primeiro plano (`python3 -m http.server`, `npm run dev`, `uvicorn`, `docker compose up`
     sem `-d`) vira job em segundo plano na hora, em vez de travar o shell até o timeout; `ping` sem `-c`,
     `tail -f`, `journalctl -f` e `watch` voltam pro modelo com a forma que termina;
+  - a mesma chamada com o mesmo resultado grande (≥ 512 caracteres) não repete a saída: vai uma referência
+    curta com a primeira e a última linha, poupando a janela;
   - edit que não acha o texto por causa da indentação (espaços onde o arquivo tem tab, outro nível de
     aninhamento) casa linha a linha ignorando a indentação, se o trecho for único, e reindenta a troca no
     padrão do arquivo, avisando o modelo.
