@@ -74,5 +74,6 @@ func pfProfileStop() {
 // pfQuit is os.Exit for main: it flushes the CPU profile first.
 func pfQuit(code int) {
 	pfProfileStop()
+	pfDebugEnd() // no empty .fatal.txt left behind (debug.go)
 	os.Exit(code)
 }

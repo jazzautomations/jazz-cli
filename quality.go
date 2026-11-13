@@ -216,7 +216,7 @@ func qgFeedback(issues []qgIssue) string {
 		}
 		fmt.Fprintf(&b, "%d. %s\n", i+1, is.String())
 	}
-	b.WriteString("Fix the real ones, re-run the tests, then give your final answer. If an item is a false positive, say why in one line. This check reports only once.</system-reminder>")
+	b.WriteString("Fix the real ones, re-run the tests, then give your final answer. If an item is a false positive, say why in one line. This check reports only once. " + acGateAnswerNote + "</system-reminder>")
 	return b.String()
 }
 

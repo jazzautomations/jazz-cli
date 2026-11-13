@@ -35,10 +35,31 @@ func acClaimsAction(text string) bool {
 	return acClaimEN.MatchString(text)
 }
 
-// acRecap: the user asks a question about earlier work ("o que você fez?") and
-// tools already ran in this session, so a past-tense recap is legitimate.
+// Recap requests without a '?' ("me fala o que vc corrigiu", "resume o que
+// mudou", "lista o que você fez"): an ask cue plus a reference to past work.
+// A request that also orders new work ("corrige o que vc fez e me fala") is
+// not a recap: claims there must still come from tools.
+var (
+	acRecapAskRE  = lazyRx(`(?i)(^|[^\p{L}])(resum\p{L}*|recap\p{L}*|summar\p{L}*|list[ae]r?|explic\p{L}*|mostr[ae]|cont[ae]|fal[ae]|diz|diga|tell me|list|show me|walk me through|what did|what have)([^\p{L}]|$)`)
+	acRecapPastRE = lazyRx(`(?i)(^|[^\p{L}])(fez|fizemos|feito|fizeram|mudou|mudamos|mudan[çc]as?|corrigiu|corrigimos|corre[çc][õo]es|arrumou|arrumamos|alterou|altera[çc][õo]es|consertou|implementou|criou|rodou|testou|did|done|changed|changes|fixed|made)([^\p{L}]|$)`)
+	acRecapDoRE   = lazyRx(`(?i)(^|[^\p{L}])(corrig[ae]|corrij[ae]|consert[ae]|arrum[ae]|faz|fa[çc]a|cri[ae]|rod[ae]|implement[ae]|adicion[ae]|mud[ae]|alter[ae]|apag[ae]|remov[ae]|instal[ae]|edit[ae]|escrev[ae]|atualiz[ae])([^\p{L}]|$)|^\s*(please\s+)?(fix|run|create|add|implement|delete|install|write|edit|update)\b`)
+)
+
+// acRecapAsk: the request (reminders stripped) asks about earlier work.
+func acRecapAsk(input string) bool {
+	q := strings.TrimSpace(acStripReminders(input)) // skill/plan reminders are appended after the request
+	if strings.HasSuffix(q, "?") {
+		return true
+	}
+	return acRecapAskRE.MatchString(q) && acRecapPastRE.MatchString(q) && !acRecapDoRE.MatchString(q)
+}
+
+// acRecap: the user asks about earlier work ("o que você fez?", "me fala o que
+// vc corrigiu") and tools already ran in an earlier turn of this session, so a
+// past-tense recap is legitimate. The anti-fake guard only asks when this turn
+// made no call, so any tool message in msgs belongs to an earlier turn.
 func acRecap(input string, msgs []Message) bool {
-	if !strings.HasSuffix(strings.TrimSpace(acStripReminders(input)), "?") { // skill/plan reminders are appended after the request
+	if !acRecapAsk(input) {
 		return false
 	}
 	for _, m := range msgs {

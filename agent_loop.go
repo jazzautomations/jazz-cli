@@ -357,7 +357,7 @@ func (a *Agent) acReview(ctx context.Context, lt *acTurnLoop) bool {
 		return false
 	}
 	a.ui.Notice("revisão apontou problemas — o modelo vai corrigir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your changes (git diff) and reported these possible defects:\n" + report + "\nFix the ones that are real and verify the fix. If a point is wrong, say why in one line. Then give your final answer. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your changes (git diff) and reported these possible defects:\n" + report + "\nFix the ones that are real and verify the fix. If a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true
 }
 
