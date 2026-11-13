@@ -388,3 +388,21 @@ func TestOnlineLiteralSecretNotCarried(t *testing.T) {
 		t.Errorf("secret carried to the model:\n%s", text)
 	}
 }
+
+// QA 0.14.0 (binário): `jazz --offline -p whoami` respondia com o perfil da
+// máquina (cérebro) enquanto online rodava `whoami`. A linha de comando
+// literal da lista fechada é o mesmo pedido nos dois modos.
+func TestOfflineLiteralSameAsOnline(t *testing.T) {
+	root := t.TempDir()
+	for in, want := range map[string]string{"whoami": "sys_whoami", "pwd": "sys_pwd", "df -h": "sys_df", "uptime": "sys_uptime", "tailscale status": "sys_tailscale"} {
+		m, ok := fpIntents(root).Match(in, fpDetect(root), false)
+		if !ok || m.Intent != want {
+			t.Errorf("offline Match(%q) = %q ok=%v, want %s", in, m.Intent, ok, want)
+		}
+	}
+	for _, in := range []string{"quem sou eu no sistema", "tu é quem?", "uptime da maquina ta alto?"} {
+		if m, ok := fpIntents(root).Match(in, fpDetect(root), false); ok && strings.HasPrefix(m.Intent, "sys_") {
+			t.Errorf("offline Match(%q) = %s: only the bare command line is a literal", in, m.Intent)
+		}
+	}
+}

@@ -420,6 +420,12 @@ func (set *fpSet) Match(input string, p fpProject, hasRg bool) (fpMatch, bool) {
 	if m, ok := set.matchNorm(n, p, hasRg, nil); ok {
 		return m, true
 	}
+	// a literal command line of the closed list ("whoami", "df -h") is the
+	// same request offline: without this, --offline answered "whoami" with
+	// the machine profile while online it ran whoami
+	if m, ok := set.MatchLiteral(input, p, hasRg); ok {
+		return m, true
+	}
 	// typos: "git stauts", "procra X no codgio", "roda os tesets" (fuzzy.go).
 	// Words of the request that are not in the pattern vocabulary are moved to
 	// the nearest vocabulary word; a captured symbol must stay as typed.
