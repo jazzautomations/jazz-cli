@@ -246,6 +246,55 @@ func (p *PermSet) Check(tool string, args map[string]any) (d PermDecision, rule 
 	return PermDefault, ""
 }
 
+// CoversCritical returns the allow rule that names this critical call
+// specifically ("" = none): every critical bash segment (crit) must match an
+// allow rule with a command or path spec — `Bash(modprobe:*)`,
+// `Edit(/etc/modprobe.d/**)`. A tool-wide rule (`bash`, `Bash(*)`, the
+// --allow-tools bash of evals) never covers menor intervenção.
+func (p *PermSet) CoversCritical(tool string, args map[string]any, crit func(seg string) bool) string {
+	if p == nil {
+		return ""
+	}
+	p.mu.Lock()
+	rules := append([]PermRule(nil), p.rules...)
+	p.mu.Unlock()
+	tool = CanonicalTool(tool)
+	specific := func(r PermRule) bool {
+		_, spec, has := strings.Cut(r.Rule, "(")
+		spec = strings.TrimSpace(strings.TrimSuffix(spec, ")"))
+		return r.Kind == "allow" && has && spec != "" && spec != "*" && spec != ":*" && spec != "**" && spec != "/**"
+	}
+	if tool != "bash" {
+		for _, r := range rules {
+			if specific(r) && p.matches(r, tool, args, "") {
+				return r.Rule
+			}
+		}
+		return ""
+	}
+	cmd, _ := argStr(args, "command")
+	first := ""
+	for _, s := range shellSegments(cmd) {
+		if !crit(s) {
+			continue
+		}
+		hit := ""
+		for _, r := range rules {
+			if specific(r) && (p.matches(r, tool, args, s) || p.matches(r, tool, args, normSegment(s, false))) {
+				hit = r.Rule
+				break
+			}
+		}
+		if hit == "" {
+			return ""
+		}
+		if first == "" {
+			first = hit
+		}
+	}
+	return first
+}
+
 // matches tests one rule against a call. seg is the bash segment being checked.
 func (p *PermSet) matches(r PermRule, tool string, args map[string]any, seg string) bool {
 	name, spec, hasSpec := strings.Cut(r.Rule, "(")

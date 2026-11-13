@@ -93,6 +93,9 @@ func auditRec(kind string, data map[string]any) {
 	auState.mu.Lock()
 	sid, step := auState.sid, auState.step
 	auState.mu.Unlock()
+	if d, ok := nlRedactAny(data).(map[string]any); ok {
+		data = d // a sudo password typed this session never reaches the chain (consent.go)
+	}
 	if err := auAppend(auRec{Kind: kind, SID: sid, Step: step, PID: os.Getpid(), Data: data}); err != nil {
 		auWarnOnce(err)
 	}

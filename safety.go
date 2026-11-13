@@ -356,7 +356,7 @@ func segmentDanger(t []string) string {
 				return r
 			}
 		}
-		return "sudo/privilégio — sem TTY a senha trava; peça aprovação, ou sudo -S com a senha via stdin, ou o usuário pode rodar com --yolo/mode yolo"
+		return "sudo/privilégio — roda como root no sistema, fora do sandbox, depois da aprovação (se precisar de senha, o jazz pede mascarada)"
 	case "su":
 		return "troca de usuário (su)"
 	case "rm":
@@ -1440,6 +1440,7 @@ func redactSecrets(s string) string {
 	if s == "" {
 		return s
 	}
+	s = nlRedactKnown(s) // sudo password typed this session (consent.go)
 	secretMu.Lock()
 	vals := secretValues
 	secretMu.Unlock()

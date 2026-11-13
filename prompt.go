@@ -230,6 +230,11 @@ func envBlock(root string) string {
 		}
 	}
 	fmt.Fprintf(&b, "available: %s\n", strings.Join(tools, " "))
+	if sb := sbCurrent(); sb.Isolates() {
+		// without this the model read "no new privileges"/nobody-owned /etc as
+		// "this machine has no root" and told the user to do it (d610, wifi)
+		b.WriteString("sandbox: your commands run in an OS sandbox (" + sb.Backend + "): / is read-only and root shows as nobody inside it. A command that needs root runs with `sudo …` — jazz executes it as root on the real system, outside the sandbox, after the user approves (jazz asks for the password itself, masked).\n")
+	}
 	if runtime.GOOS == "windows" {
 		b.WriteString(windowsShellNote(detectShell()) + "\n")
 	}

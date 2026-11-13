@@ -84,6 +84,10 @@ type Toolbox struct {
 	Scripts bool
 	// UILint runs ui_lint after each write/edit of a UI file (uilint.go).
 	UILint bool
+	// SysWrite writes an approved system file (/etc …) as root when the
+	// plain write gets EACCES: backup, then sudo on the host (consent.go,
+	// nlSysWrite). It returns a note for the model. nil = no elevation.
+	SysWrite func(p string, data []byte, mode os.FileMode) (string, error)
 
 	mu         sync.Mutex
 	readState  map[string]fileStamp
@@ -980,6 +984,24 @@ func isProseFile(p string) bool {
 	return false
 }
 
+// sysWritable: err is a permission error on a system path that SysWrite can
+// write as root.
+func (t *Toolbox) sysWritable(p string, err error) bool {
+	return err != nil && t.SysWrite != nil && os.IsPermission(err) && cbSysPath(p) != ""
+}
+
+// writeFileSys is os.WriteFile, falling back to the elevated SysWrite for an
+// approved system file the user cannot write (the call already went through
+// permit: menor intervenção asked, or yolo). In-process root writes are never
+// attempted.
+func (t *Toolbox) writeFileSys(p string, data []byte, mode os.FileMode) (string, error) {
+	err := os.WriteFile(p, data, mode)
+	if !t.sysWritable(p, err) {
+		return "", err
+	}
+	return t.SysWrite(p, data, mode)
+}
+
 func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 	ps, ok := argStr(m, "path")
 	if !ok || strings.TrimSpace(ps) == "" {
@@ -1017,16 +1039,18 @@ func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 			return ToolOutput{IsErr: true, Text: fmt.Sprintf("Refused: the content contains the placeholder %q, which would replace real code with a comment. Write the complete content; for a long file, write it in parts (write a skeleton, then edit).", mk), Display: Display{Summary: "bloqueado: placeholder no lugar de código", Path: t.rel(p)}}
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil && !t.sysWritable(p, err) {
 		return ToolOutput{IsErr: true, Text: "Cannot create directory: " + errText(err)}
 	}
 	if t.TurnWritten()+int64(len(content)) > defTurnWriteMB<<20 {
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("Refused: this write would exceed the per-turn disk-write cap of %d MB (max_turn_write_mb). Write less, or split the work across turns.", defTurnWriteMB), Display: Display{Summary: "bloqueado: limite de escrita do turno", Path: t.rel(p)}}
 	}
 	t.snap(p)
-	if err := os.WriteFile(p, []byte(content), mode); err != nil {
+	sysNote, err := t.writeFileSys(p, []byte(content), mode)
+	if err != nil {
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("Cannot write %s: %v", ps, errText(err))}
 	}
+	simNote += sysNote
 	t.addWritten(int64(len(content)))
 	t.stampData(p, []byte(content))
 	n := strings.Count(content, "\n")
@@ -1092,7 +1116,8 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 		out = "\uFEFF" + out
 	}
 	t.snap(p)
-	if err := os.WriteFile(p, []byte(out), fi.Mode().Perm()); err != nil {
+	sysNote, err := t.writeFileSys(p, []byte(out), fi.Mode().Perm())
+	if err != nil {
 		return ToolOutput{IsErr: true, Text: "Cannot write file: " + errText(err)}
 	}
 	t.stampData(p, []byte(out))
@@ -1102,6 +1127,7 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 		b.WriteString("s")
 	}
 	b.WriteString(").")
+	b.WriteString(sysNote)
 	if res.Fuzzy {
 		b.WriteString(" Note: matched after normalizing whitespace/Unicode quotes; the touched lines were rewritten.")
 	}

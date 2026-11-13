@@ -143,7 +143,7 @@ func (l *obLog) emit(kind string, f map[string]any, redact bool) {
 	}
 	ev := make(map[string]any, len(f)+5)
 	for k, v := range f {
-		ev[k] = v
+		ev[k] = nlRedactAny(v) // a sudo password typed this session (consent.go)
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
