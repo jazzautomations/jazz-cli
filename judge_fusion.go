@@ -68,9 +68,9 @@ func (a *Agent) ojIsSidekick() bool { return a.oj != nil && a.oj.sideFor != nil 
 // ojTaskSpecs: the delegation tools of the main agent.
 func (a *Agent) ojTaskSpecs() []ToolSpec {
 	if a.ojFusionActive() {
-		return []ToolSpec{taskSpec, askUserSpec, ojSidekickSpec}
+		return []ToolSpec{taskSpec, askUserSpec, ojSidekickSpec, factSpec()}
 	}
-	return []ToolSpec{taskSpec, askUserSpec}
+	return []ToolSpec{taskSpec, askUserSpec, factSpec()} // fact: the offline brain as a tool (brain_tool.go)
 }
 
 // ojTurnInput runs after the judge picked the model: the fusion lead note and,

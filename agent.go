@@ -1652,6 +1652,8 @@ func (a *Agent) execBody(ctx context.Context, tc ToolCall) (ToolCall, ToolOutput
 		out = a.runTask(ctx, tc)
 	case tc.Name == "ask_user" && !isMCP:
 		out = a.runAskUser(ctx, tc)
+	case tc.Name == factToolName && !isMCP:
+		out = a.runFact(ctx, tc) // the offline brain as a read-only tool (brain_tool.go)
 	case tc.Name == ojSidekickTool && !isMCP && a.ojFusionActive():
 		out = a.ojRunSidekick(ctx, tc)
 	case isMCP:
