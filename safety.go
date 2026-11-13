@@ -973,6 +973,9 @@ func secretReasonSh(cmd string) string {
 	if reProcEnviron.MatchString(cmd) {
 		return "lê o ambiente de um processo (chaves)"
 	}
+	if reKeychainRead.MatchString(cmd) {
+		return "lê senha ou chave do chaveiro do sistema"
+	}
 	// raw pieces too: shellParse drops a bare `env` (it is a wrapper there)
 	for _, seg := range append(reSplit.Split(cmd, -1), shellSegments(cmd)...) {
 		if envDumpSeg(shellFields(seg)) {
@@ -1039,6 +1042,11 @@ func envDumpSeg(t []string) bool {
 var reEnvKeyish = lazyRx(`(?i)(KEY|TOKEN|SECRET|PASS|PASSWD|PASSWORD|CREDENTIAL|AUTH|_DSN|COOKIE)`)
 
 var reProcEnviron = lazyRx(`/proc/[^/\s]+/environ`)
+
+// reKeychainRead: a command that prints a password or private key from the
+// OS keychain / a password manager. Inside the sandbox the keychain service
+// is denied; outside it (bash sandbox:false, sudo) it answers.
+var reKeychainRead = lazyRx(`\bsecurity\s+(find-generic-password|find-internet-password|dump-keychain|export)\b|\bsecret-tool\s+(lookup|search)\b|\bkwallet-query\b|\bgpg2?\b[^|;&]*--export-secret-(sub)?keys\b|\bpass\s+show\b|\bop\s+(read|item\s+get)\b|\bbw\s+get\b`)
 
 var (
 	reUploadFlag = lazyRx(`(^|\s)(-d|--data|--data-\S+|-F|--form|-T|--upload-file|--post-file)(\s|=|$)`)

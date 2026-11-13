@@ -2083,7 +2083,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 				a.blockWhy = why
 				return false, a.nlDenied(nlGatePrivate, blockMsg(what, why)), true
 			}
-			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+". Use Jazz's built-in configuration or session features instead."), true
+			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+"; no flag unlocks it (not --allow-unsandboxed or --yolo). Use Jazz's built-in configuration or session features instead."), true
 		}
 	}
 	if tool == "bash" && !isMCP && cmd != "" {
@@ -2208,6 +2208,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
 	usWhy := ""
 	if !isMCP && usWanted(tool, args) {
+		if sr := usSecretRead(cmd); sr != "" {
+			// hard gate, every mode: outside the sandbox nothing hides the
+			// secret (unsandboxed.go)
+			a.blockWhy = usSecretBlockPT(sr)
+			if a.blockUX() {
+				return false, a.nlDenied(nlGatePrivate, blockMsg(what, usSecretBlockEN(sr))), true
+			}
+			return false, a.nlDenied(nlGatePrivate, "Blocked: "+usSecretBlockEN(sr)+"."), true
+		}
 		if a.sub {
 			return false, "A subagent may not leave the OS sandbox. Report what should be run instead.", false
 		}
