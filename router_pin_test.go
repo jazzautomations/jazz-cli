@@ -512,3 +512,32 @@ func TestPinnedCompactThresholdFollowsPin(t *testing.T) {
 		t.Fatalf("control: unpinned threshold %d should follow the 32k model (pinned %d)", un, pinned)
 	}
 }
+
+// Unpinned, a reorder (fast model first) that keeps working is said once per
+// session, not on every turn; a failure swap is still said every turn.
+func TestReorderServedNoticeOncePerSession(t *testing.T) {
+	h := newHarness(t, func(n int, r recReq) fakeResp { return fakeResp{Text: "de " + r.Model} }, func(c *Config) {
+		c.Model = "fake/a"
+		c.Fallback = []string{"fake/b"}
+	})
+	h.ag.Model = "fake/a"
+	stall := map[string]time.Time{"fake/a": time.Now()} // a stalled: demoted behind b
+	for i, in := range []string{"oi", "de novo", "mais uma"} {
+		h.ag.stalled = stall
+		if err := h.run(t, in); err != nil {
+			t.Fatalf("turn %d: %v", i, err)
+		}
+	}
+	if h.fs.countModel("b") != 3 {
+		t.Fatalf("b served %d of 3 turns (a demoted: %d)", h.fs.countModel("b"), h.fs.countModel("a"))
+	}
+	n := 0
+	for _, m := range h.ui.notices {
+		if strings.Contains(m, "respondendo com b") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("reorder said %d times in 3 turns, want 1: %q", n, h.ui.notices)
+	}
+}

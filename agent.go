@@ -1398,11 +1398,14 @@ chain:
 				}
 				a.priceUsage(ref, &resp.Usage)
 				a.rtServe(ref)
-				if !o.quiet && role == "main" && ref != a.Model && a.rtOnce("served:"+a.Model+">"+ref) {
-					// served != requested: always said, once per pair (H2, UX-5)
-					if ci > 0 {
+				if !o.quiet && role == "main" && ref != a.Model {
+					// served != requested: always said (H2, UX-5) — a failure
+					// once per turn, a reorder (fast first, sticky) once per
+					// session, so a working route is not a line on every turn
+					pair := "served:" + a.Model + ">" + ref
+					if ci > 0 && a.rtOnce(pair) {
 						a.ui.Notice(fmt.Sprintf("usando %s por enquanto (o modelo principal volta a ser tentado em %s)", ref, acStickyTTL.Round(time.Second)))
-					} else {
+					} else if ci == 0 && !a.rtOnceTurnSaid(pair) && a.rtOnceSession(pair) {
 						a.ui.Notice(fmt.Sprintf("respondendo com %s (seu modelo: %s)", uiShortModel(ref), uiShortModel(a.Model)))
 					}
 				}

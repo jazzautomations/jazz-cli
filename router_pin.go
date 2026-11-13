@@ -28,6 +28,7 @@ type acRoute struct {
 	mu     sync.Mutex
 	swapOK bool            // this turn: the user accepted another model after the pin failed
 	once   map[string]bool // announcements already made this turn (served pairs, dropped refs, pin state)
+	said   map[string]bool // announcements made once per session (a reorder, not a failure)
 	served map[string]int  // successful requests per ref (run.end telemetry)
 }
 
@@ -73,6 +74,27 @@ func (a *Agent) rtOnce(key string) bool {
 		a.rt.once = map[string]bool{}
 	}
 	a.rt.once[key] = true
+	return true
+}
+
+// rtOnceTurnSaid reports whether key was already said this turn (records nothing).
+func (a *Agent) rtOnceTurnSaid(key string) bool {
+	a.rt.mu.Lock()
+	defer a.rt.mu.Unlock()
+	return a.rt.once[key]
+}
+
+// rtOnceSession reports whether key is new in this session (and records it).
+func (a *Agent) rtOnceSession(key string) bool {
+	a.rt.mu.Lock()
+	defer a.rt.mu.Unlock()
+	if a.rt.said[key] {
+		return false
+	}
+	if a.rt.said == nil {
+		a.rt.said = map[string]bool{}
+	}
+	a.rt.said[key] = true
 	return true
 }
 
