@@ -8,7 +8,7 @@
   "model": "gemini/gemini-3.8-flash",
   "fallback": ["kilo/cohere/north-mini-code:free"],
   "presets": ["gemini", "kilo"],
-  "env": {"GEMINI_API_KEY": "AIzaFAKE-replay-key-000000000000000000"},
+  "env": {"GEMINI_API_KEY": "AIzaTESTE-replay"},
   "dead": [{"ref": "gemini/gemini-3.8-flash", "minutes": 60}],
   "provider": {
     "repeat": true,
