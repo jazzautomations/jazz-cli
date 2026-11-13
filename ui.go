@@ -1558,9 +1558,9 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	hint += " " + g.dot + " n/esc não " + g.dot + " e instruir " + g.dot + " v ver tudo"
 	sp := mnSpec{Tag: uiToolLabel(tool), Body: body, Title: question, Items: items, Color: border, Keys: hint,
 		Alt: map[rune]int{'n': apMenuNo}, Guard: true, Since: lastKey}
-	if typed != "" {
-		sp.Above = "  " + dim + g.arrow + " na fila: " + reset + oneLine(typed, 200)
-	}
+	// the unfinished line typed before the box: still being typed, not queued
+	// (it is sent only by its Enter); what is typed in the box continues it
+	sp.Pending = typed
 	sp.View = func() string {
 		var b strings.Builder
 		for _, l := range uiWrap(full, max(w-6, 10)) {

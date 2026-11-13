@@ -94,7 +94,9 @@ func (e *Editor) boxFrame(buf []rune, pos, w int) (lines []string, curLine, curC
 	mark := t.fg(cAccent, 36) + t.sgr("1") + g.prompt + reset
 	if len(buf) > 0 && buf[0] == '!' {
 		border = t.fg(cGold, 33)
-		mark = t.fg(cGold, 33) + t.sgr("1") + "!" + reset
+		// the "!" is already the first character of the text: the mark is
+		// the prompt in gold, not a second "!" ("! !ls")
+		mark = t.fg(cGold, 33) + t.sgr("1") + g.prompt + reset
 	}
 	rows, crow, ccol := edLayout(edDisplay(buf), pos, cw)
 	top := 0

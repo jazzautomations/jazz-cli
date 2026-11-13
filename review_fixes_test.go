@@ -573,7 +573,7 @@ func TestUiApproveIgnoresLettersOfSteeringText(t *testing.T) {
 		t.Fatalf("typed text answered the prompt: %+v", r)
 	}
 	cancel0()
-	if out := stripANSI(read()); !strings.Contains(out, "na fila: usa") {
+	if out := stripANSI(read()); !strings.Contains(out, "digitando: usa") {
 		t.Errorf("queued text not shown above the approval: %q", out)
 	}
 	res = uiApproveAsync(u, context.Background(), "bash", "npm install", "")

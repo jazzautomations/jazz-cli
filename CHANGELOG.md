@@ -173,6 +173,18 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   ou privado diz "repositório não encontrado ou privado: …" em vez do erro de usuário do git; branch que
   não existe é dita pelo nome. Skill instalada pelo chat avisa o modelo que foi instalada agora, a pedido
   do usuário, e ele não diz mais que "já estava instalada".
+- **Recusar a confiança da pasta agora põe a sessão em ask de verdade.** "3. Não, modo ask" ou Esc
+  dizia modo ask, mas a sessão seguia no modo da configuração (yolo) e rodava comandos sem perguntar.
+  Agora a recusa vale como ask nesta sessão, também por cima de um yolo da configuração global ou da
+  flag, e o rodapé mostra ask; `/trust` depois devolve o modo de antes.
+- **A pergunta de confiança da abertura não pega mais a primeira letra de uma mensagem.** "sim oi"
+  digitado depois de uma pausa escolhia "Sim, confiar" pelo "s" e mandava "im oi" pro agente. Agora
+  uma letra só responde se nenhuma tecla vier logo depois; o texto digitado fica inteiro no editor,
+  sem ser enviado ("↳ no editor: …" acima da caixa).
+- Texto digitado antes de uma confirmação aparecer é mostrado como "digitando", numa linha só com o
+  resto digitado na caixa (antes dizia "na fila" sem estar na fila); na caixa de confiança a dica diz
+  "vai pro editor, sem enviar" em vez de "enter manda pro agente"; o modo shell (`!cmd`) não mostra
+  mais "! !" na caixa de entrada.
 
 ### Achados do QA na TUI (Dell)
 

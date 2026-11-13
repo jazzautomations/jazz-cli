@@ -1161,8 +1161,9 @@ type App struct {
 	olBack     atomic.Bool  // the background probe found a provider
 	olNext     atomic.Int64 // when the background probe runs next (unix ns)
 
-	untrusted    bool // the folder is not trusted (F1, /trust)
-	untrustedAsk bool // ModeOverride "ask" was set because of that
+	untrusted     bool   // the folder is not trusted (F1, /trust)
+	untrustedAsk  bool   // ModeOverride "ask" was set because of that
+	untrustedPrev string // ModeOverride before that (restored by /trust)
 }
 
 func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
@@ -1197,13 +1198,13 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 		}
 	}
 	// the trust question (a menu) runs before anything project-level starts
-	pfTrustGateUI(root, cfg, ui)
+	declined := !pfTrustGateUI(root, cfg, ui)
 	untrusted := !pfFolderTrusted(root)
-	untrustedAsk := false
+	untrustedAsk, untrustedPrev := false, ""
 	if untrusted {
-		if m := pfUntrustedMode(cfg); m != "" {
-			cfg.ModeOverride, untrustedAsk = m, true // F1: ask until the folder is trusted
-		}
+		// F1: ask until the folder is trusted; "Não" on the menu means ask
+		// even over a yolo from the global config or a flag
+		untrustedPrev, untrustedAsk = pfStartUntrustedMode(cfg, declined)
 	}
 	tools := NewToolbox(root)
 	tools.Web = cfg.Web
@@ -1215,7 +1216,7 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	pfOnCrash(mcp.pfKillAll)
 	pfOnCrash(tools.Shell.killGroup)
 	tools.MaxJobs = cfg.MaxJobs
-	app := &App{cfg: cfg, ui: ui, tools: tools, mcp: mcp, root: root, opts: o, untrusted: untrusted, untrustedAsk: untrustedAsk}
+	app := &App{cfg: cfg, ui: ui, tools: tools, mcp: mcp, root: root, opts: o, untrusted: untrusted, untrustedAsk: untrustedAsk, untrustedPrev: untrustedPrev}
 	app.agent = NewAgent(cfg, ui, tools, mcp, ref)
 	pfSetupAgent(app.agent, cfg, root, o)
 	app.agent.PrivacyCheck = true
