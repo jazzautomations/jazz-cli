@@ -111,6 +111,8 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   `JAZZ_REVIEW_GUARD=off` desliga.
 - Extract que esqueceu uma função auxiliar: função com o mesmo nome em 2+ módulos que já importam do módulo
   novo conta como cópia.
+- Extract que junta cópias que eram diferentes (um módulo arredondava de um jeito, outro de outro): o modelo
+  vê as versões antigas lado a lado e tem que manter o comportamento de cada módulo.
 - A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
   diz exatamente como resolver.
 - Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida duas vezes em silêncio (pausa de 3 s e 12 s); se continuar

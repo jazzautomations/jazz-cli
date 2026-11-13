@@ -99,6 +99,7 @@ type hgState struct {
 	hard        []hgHard // hardcode findings
 	nudgedTests bool
 	nudgedDone  int            // completion reminders sent this turn (max hgDoneRounds)
+	nudgedDiv   bool           // the "copies differed before the extract" reminder fired
 	edits       map[string]int // single edits per file (batch tip)
 	tipped      map[string]bool
 
@@ -1453,6 +1454,15 @@ func (a *Agent) hgDoneGate(ctx context.Context) (again bool, why StopReason) {
 		}
 		a.ui.Warn("guarda de conclusão ainda falha: " + oneLine(issues[0], 140))
 		return false, StopQualityFailed
+	}
+	// Extract that merged copies which differed: once, with both versions.
+	if a.hgOn("done") && st.extract != "" && !st.nudgedDiv {
+		if div := a.hgDivergedCopies(); len(div) > 0 {
+			st.nudgedDiv = true
+			a.ui.Notice(fmt.Sprintf("guarda de conclusão: %d %s eram diferentes entre os módulos antes do extract — devolvendo ao modelo", len(div), uiPl(len(div), "função", "funções")))
+			a.append(Message{Role: "user", Content: "<system-reminder>Before accepting the answer: the copies you merged were not identical.\n" + strings.Join(div, "\n\n") + "\nOne shared version cannot silently replace both: each module must keep its exact old behavior (return values, rounding, errors, messages). Make the shared function reproduce every version (e.g. a parameter with each module's old behavior as its argument), then prove it: run a quick script that calls the old and new code on the inputs where the versions disagree and on edge cases. Re-run the tests, then give your final answer.</system-reminder>"})
+			return true, ""
+		}
 	}
 	// The tests ran after the edits but the last run was red, or the model
 	// ran only a narrow slice: one reminder / one full run (verify_suite.go).

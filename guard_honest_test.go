@@ -815,3 +815,33 @@ func TestHgImportsModule(t *testing.T) {
 		}
 	}
 }
+
+// Extract that merged copies which differed before (pix rounded one way,
+// boleto another): the model hears it once, with both old versions.
+func TestGuardExtractDivergedCopies(t *testing.T) {
+	boleto := "def fmt(v):\n    return '%.2f' % round(v, 2)\n\n\ndef gerar(v):\n    return fmt(v)\n"
+	pix := "def fmt(v):\n    \"\"\"doc\"\"\"\n    return '%.2f' % v  # sem round\n\n\ndef cobrar(v):\n    return fmt(v)\n"
+	h := newGuardHarness(t, map[string]string{"pag/__init__.py": "", "pag/boleto.py": boleto, "pag/pix.py": pix},
+		fakeResp{Calls: []fakeCall{
+			writeCall("w1", "pag/comum.py", "def fmt(v):\n    return '%.2f' % round(v, 2)\n"),
+			editCall("e1", "pag/boleto.py", "def fmt(v):\n    return '%.2f' % round(v, 2)\n\n\n", "from .comum import fmt\n\n\n"),
+			editCall("e2", "pag/pix.py", "def fmt(v):\n    \"\"\"doc\"\"\"\n    return '%.2f' % v  # sem round\n\n\n", "from .comum import fmt\n\n\n"),
+		}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto, mantive as duas versões"})
+	if _, err := h.ag.Run(context.Background(), "Extraia as funções auxiliares para um módulo novo pag/comum.py e faça os módulos usarem de lá, sem deixar cópias."); err != nil {
+		t.Fatal(err)
+	}
+	r := h.fs.requests()[2]
+	if !r.contains("user", "fmt was NOT the same in every module before your change (2 different versions)") || !r.contains("user", "sem round") {
+		t.Errorf("diverged copies must be reported with the old versions")
+	}
+}
+
+func TestHgNormBodySameCode(t *testing.T) {
+	a := hgNormBody("def f(x):\n    \"\"\"Doc.\"\"\"\n    # c\n    return x  # n\n")
+	b := hgNormBody("def f(x):\n\n        return x\n")
+	if a != b {
+		t.Errorf("formatting/comments must not count: %q vs %q", a, b)
+	}
+}
