@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // cpNewBox returns a Toolbox with shadow-git checkpoints on, in a temp
@@ -293,6 +294,36 @@ func TestCheckpointOffByDefault(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dataDir(), "checkpoints")); !os.IsNotExist(err) {
 		t.Fatalf("no shadow repo expected, stat err=%v (root %s)", err, root)
+	}
+}
+
+// A home dir or a tree without ignore rules makes `ls-files --others` crawl
+// for over a minute; the snapshot must give up fast (cpWalkTimeout) and turn
+// checkpoints off instead of stalling the request (TestCheckpointSlowWalk).
+func TestCheckpointSlowWalkDisables(t *testing.T) {
+	tb, _ := cpNewBox(t)
+	stub := filepath.Join(t.TempDir(), "git")
+	// answers `version` and `init`, lists nothing, hangs on --others
+	sh := "#!/bin/sh\nfor a in \"$@\"; do\n" +
+		"  case \"$a\" in\n" +
+		"    --others) exec sleep 30 ;;\n" +
+		"    version) echo 'git version 2.40.0'; exit 0 ;;\n" +
+		"  esac\n" +
+		"done\nexit 0\n"
+	if err := os.WriteFile(stub, []byte(sh), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldBin, oldWalk := cpGitBin, cpWalkTimeout
+	cpGitBin, cpWalkTimeout = stub, 300*time.Millisecond
+	t.Cleanup(func() { cpGitBin, cpWalkTimeout = oldBin, oldWalk })
+
+	start := time.Now()
+	tb.BeginTurn(0)
+	if el := time.Since(start); el > 10*time.Second {
+		t.Fatalf("slow walk stalled BeginTurn for %v", el)
+	}
+	if tb.BashTracked() || tb.cp.off == "" {
+		t.Fatalf("checkpoints must be off after a slow walk (off=%q)", tb.cp.off)
 	}
 }
 
