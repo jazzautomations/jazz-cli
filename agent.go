@@ -491,6 +491,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
+	retriedEmpty := false // one silent resend of a request that came back empty
 	callsIssued := 0 // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
@@ -521,6 +522,7 @@ turnLoop:
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
 			nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake = false, false, false, false
+			retriedEmpty = false
 			lastDenied, textConts, callTruncs, compactFailStep = false, 0, 0, -100
 			a.bgOnReset() // fresh context: exploration cap and reread index start over (budget.go)
 		}
@@ -673,6 +675,17 @@ turnLoop:
 		// it; it is dropped, and the next request is not given more room to
 		// think (cutoff.go).
 		thinkCut := resp.Truncated() && len(calls) == 0 && text == "" && strings.TrimSpace(resp.Reasoning) != "" && a.ccEnabled()
+		// No text, no call, not cut: the provider streamed reasoning and then
+		// nothing (NVIDIA nemotron on the d610, 13/11: minutes of reasoning,
+		// empty content, the same request answers "ok" a minute later). Send
+		// the same request once more before nudging — the empty turn is not
+		// recorded, so the model does not see its own silence.
+		if !thinkCut && !retriedEmpty && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
+			retriedEmpty = true
+			dbg("empty", map[string]any{"retry": true, "reasoning": len(resp.Reasoning)})
+			a.ui.Notice("o provedor devolveu resposta vazia — repetindo o pedido")
+			continue
+		}
 		if thinkCut {
 			dbg("cutoff", map[string]any{"reasoning_only": len(resp.Reasoning)})
 			a.append(Message{Role: "assistant", Content: ""})

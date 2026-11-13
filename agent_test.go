@@ -540,18 +540,21 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 }
 
 func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
-	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
-	// two empty replies and no tool call: an error in PT, never a silent "done"
+	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	// empty: one silent resend, then one nudge, then an error in PT — never a silent "done"
 	err := h.run(t, "go")
 	if err == nil || !strings.Contains(err.Error(), "resposta vazia duas vezes") {
 		t.Fatalf("want the empty-reply error, got %v", err)
 	}
 	reqs := h.fs.requests()
-	if len(reqs) != 2 {
-		t.Fatalf("empty reply nudged exactly once => 2 requests, got %d", len(reqs))
+	if len(reqs) != 3 {
+		t.Fatalf("resend + one nudge => 3 requests, got %d", len(reqs))
 	}
-	if !reqs[1].contains("user", "última resposta veio vazia") {
-		t.Errorf("nudge missing from 2nd request")
+	if reqs[1].contains("user", "última resposta veio vazia") || len(reqs[1].Messages) != len(reqs[0].Messages) {
+		t.Errorf("the resend must be the same request (the empty turn is not recorded)")
+	}
+	if !reqs[2].contains("user", "última resposta veio vazia") {
+		t.Errorf("nudge missing from 3rd request")
 	}
 	n := 0
 	for _, m := range h.ag.Msgs {
@@ -565,9 +568,24 @@ func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 }
 
 // Work done, then the model goes empty twice: the turn keeps the work and says so in PT.
+func TestAgentEmptyReplyResendRecovers(t *testing.T) {
+	h := newHarness(t, seq(fakeResp{}, fakeResp{Text: "ok"}), nil)
+	if err := h.run(t, "responda apenas: ok"); err != nil {
+		t.Fatal(err)
+	}
+	if lm := lastMsg(h.ag.Msgs); lm.Content != "ok" {
+		t.Errorf("final = %+v", lm)
+	}
+	for _, m := range h.ag.Msgs {
+		if m.Role == "assistant" && m.Content == "" && len(m.ToolCalls) == 0 {
+			t.Errorf("the empty reply must not stay in the history")
+		}
+	}
+}
+
 func TestAgentEmptyAfterWorkKeepsTurn(t *testing.T) {
 	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"echo oi"}`}
-	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
 	if err := h.run(t, "go"); err != nil {
 		t.Fatalf("work was done: want no error, got %v", err)
 	}
