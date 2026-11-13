@@ -493,3 +493,22 @@ func TestPinnedHedgedSummaryOff(t *testing.T) {
 		t.Fatalf("unpinned: hedge ok=%v, requests %d", ok, len(h.fs.requests()))
 	}
 }
+
+// Pinned, the compaction threshold follows the pin (and its fallback), not
+// a small-window model of the implicit chain that will never answer.
+func TestPinnedCompactThresholdFollowsPin(t *testing.T) {
+	h := rpPinHarness(t, func(c *Config) {
+		c.Models = map[string]*ModelConf{
+			"fake/a:free": {Context: 1000000},
+			"kilo/kfree":  {Context: 32000},
+		}
+	})
+	pinned := h.ag.compactThreshold()
+	if w := acThreshold(1000000, 0); pinned < w/2 {
+		t.Fatalf("pinned threshold %d: the 32k implicit model leaked in", pinned)
+	}
+	h.cfg.Pinned = false
+	if un := h.ag.compactThreshold(); un >= pinned {
+		t.Fatalf("control: unpinned threshold %d should follow the 32k model (pinned %d)", un, pinned)
+	}
+}

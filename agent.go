@@ -332,7 +332,9 @@ func (a *Agent) compactThreshold() int {
 		w, out := a.limitsOf(a.TurnModel())
 		return acThreshold(w, out)
 	}
-	refs := a.cfg.Candidates(a.TurnModel(), a.Model)
+	// pinned, only the pin and the configured fallback can answer: a smaller
+	// window in the implicit chain must not compact the pin's history early
+	refs := a.cfg.CandidatesFor(Need{Pin: a.acPin("main")}, a.TurnModel(), a.Model)
 	if len(refs) == 0 {
 		refs = []string{a.TurnModel()}
 	}
