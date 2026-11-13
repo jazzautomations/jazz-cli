@@ -129,8 +129,9 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
     padrão do arquivo, avisando o modelo.
 - A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
   diz exatamente como resolver.
-- Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida duas vezes em silêncio (pausa de 3 s e 12 s); se continuar
-  vazia, o modelo é lembrado uma vez e, sem nada feito, vira erro claro em vez de "pronto" mudo.
+- Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida três vezes em silêncio (pausa de 3 s, 12 s e 27 s); se continuar
+  vazia, o modelo é lembrado uma vez e, sem nada feito, vira erro claro em vez de "pronto" mudo. Pedido de
+  mudança que só leu arquivos e ficou mudo também é erro ("parou no meio"), não "done".
 
 ### Achados do QA no binário (provedor falso)
 

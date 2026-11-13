@@ -374,9 +374,18 @@ const planReminder = "<system-reminder>Plan mode is on: investigate with read-on
 
 const stepLimitReminder = "<system-reminder>Limite de passos atingido. Não chame mais ferramentas: responda agora com o que foi feito e o que falta.</system-reminder>"
 
+// acChangeKind: a task kind that must change files to be done.
+func acChangeKind(k string) bool {
+	switch k {
+	case "bugfix", "greenfield", "refactor":
+		return true
+	}
+	return false
+}
+
 // acEmptyResends: silent resends of an empty reply before the nudge; the
 // pause grows (acEmptyWait × n²) so a provider hiccup has time to pass.
-const acEmptyResends = 2
+const acEmptyResends = 3
 
 var acEmptyWait = 3 * time.Second
 
@@ -690,7 +699,7 @@ turnLoop:
 		// recorded, so the model does not see its own silence.
 		if !thinkCut && emptyResends < acEmptyResends && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
 			emptyResends++
-			wait := acEmptyWait * time.Duration(emptyResends*emptyResends) // 3 s, 12 s
+			wait := acEmptyWait * time.Duration(emptyResends*emptyResends) // 3 s, 12 s, 27 s
 			dbg("empty", map[string]any{"retry": emptyResends, "reasoning": len(resp.Reasoning)})
 			a.ui.Notice(fmt.Sprintf("o provedor devolveu resposta vazia — repetindo o pedido em %s (%d/%d)", wait, emptyResends, acEmptyResends))
 			select {
@@ -790,6 +799,13 @@ turnLoop:
 				if callsIssued == 0 {
 					stop = StopError
 					return stop, fmt.Errorf("o modelo %s devolveu resposta vazia duas vezes seguidas e não fez nada — tente de novo ou escolha outro modelo (-m)", turnModel)
+				}
+				// a change request that went silent before changing anything
+				// is not done (eval 02 on the d610, 13/11: 9 reads, then empty
+				// x4, reported "done")
+				if bt := a.bgTurnState(); bt != nil && !bt.edited && acChangeKind(bt.task.Kind) {
+					stop = StopError
+					return stop, fmt.Errorf("o modelo %s parou no meio: depois de %d %s devolveu só respostas vazias e não mudou nada — tente de novo (jazz -p -c continua daqui) ou escolha outro modelo (-m)", turnModel, callsIssued, uiPl(callsIssued, "ferramenta", "ferramentas"))
 				}
 				if !a.sub {
 					a.ui.Notice("o modelo parou sem resumo final — o que ele fez neste turno está acima")

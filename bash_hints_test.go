@@ -101,3 +101,15 @@ func TestEnvBlockTestCommand(t *testing.T) {
 		t.Errorf("no project, no test command line")
 	}
 }
+
+// A change request that only read files and then went silent is not "done".
+func TestAgentEmptyMidChangeIsError(t *testing.T) {
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	rd := fakeCall{ID: "r1", Name: "bash", Args: `{"command":"ls"}`}
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{rd}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	err := h.run(t, "Adicione uma função dobro(x) em calc.py que devolve 2*x, com teste.")
+	if err == nil || !strings.Contains(err.Error(), "parou no meio") {
+		t.Fatalf("want the honest mid-change error, got %v", err)
+	}
+}

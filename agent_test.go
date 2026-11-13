@@ -542,21 +542,21 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
 	acEmptyWait = time.Millisecond
-	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
-	// empty: two silent resends, then one nudge, then an error in PT — never a silent "done"
+	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	// empty: three silent resends, then one nudge, then an error in PT — never a silent "done"
 	err := h.run(t, "go")
 	if err == nil || !strings.Contains(err.Error(), "resposta vazia duas vezes") {
 		t.Fatalf("want the empty-reply error, got %v", err)
 	}
 	reqs := h.fs.requests()
-	if len(reqs) != 4 {
-		t.Fatalf("2 resends + one nudge => 4 requests, got %d", len(reqs))
+	if len(reqs) != 5 {
+		t.Fatalf("3 resends + one nudge => 5 requests, got %d", len(reqs))
 	}
-	if reqs[2].contains("user", "última resposta veio vazia") || len(reqs[2].Messages) != len(reqs[0].Messages) {
+	if reqs[3].contains("user", "última resposta veio vazia") || len(reqs[3].Messages) != len(reqs[0].Messages) {
 		t.Errorf("the resends must be the same request (the empty turn is not recorded)")
 	}
-	if !reqs[3].contains("user", "última resposta veio vazia") {
-		t.Errorf("nudge missing from 4th request")
+	if !reqs[4].contains("user", "última resposta veio vazia") {
+		t.Errorf("nudge missing from 5th request")
 	}
 	n := 0
 	for _, m := range h.ag.Msgs {
@@ -591,7 +591,7 @@ func TestAgentEmptyAfterWorkKeepsTurn(t *testing.T) {
 	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"echo oi"}`}
 	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
 	acEmptyWait = time.Millisecond
-	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
 	if err := h.run(t, "go"); err != nil {
 		t.Fatalf("work was done: want no error, got %v", err)
 	}
