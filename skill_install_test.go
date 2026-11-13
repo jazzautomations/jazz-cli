@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,5 +160,162 @@ func TestSiHeadlessInstall(t *testing.T) {
 	n = siHeadlessTurn(t.TempDir(), "olha a skill https://github.com/y/other", &errw)
 	if !strings.Contains(n, "jazz skill install https://github.com/y/other") {
 		t.Errorf("not installed, no install verb: %q", n)
+	}
+}
+
+// siBareRepo: a bare repo (served via file://) with skills/pdf and a big
+// unrelated folder; returns its file:// URL.
+func siBareRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	work, bare := t.TempDir(), filepath.Join(t.TempDir(), "r.git")
+	siMkSkill(t, filepath.Join(work, "skills", "pdf"), "pdf", "Work with PDFs")
+	if err := os.MkdirAll(filepath.Join(work, "media"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "media", "big.bin"), bytes.Repeat([]byte("x"), 1<<16), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(dir string, a ...string) {
+		c := exec.Command("git", a...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", a, err, out)
+		}
+	}
+	run(work, "init", "-q")
+	run(work, "checkout", "-q", "-b", "main")
+	run(work, "add", "-A")
+	run(work, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x")
+	run(work, "clone", "-q", "--bare", work, bare)
+	run(bare, "config", "uploadpack.allowFilter", "true")
+	return "file://" + bare
+}
+
+// /tree/<ref>/<sub>: only the subfolder lands on disk (sparse checkout), the
+// clone lives under jazz's data dir (not a tmpfs /tmp), progress says what is
+// downloaded, and the temp clone is gone afterwards.
+func TestSiFetchSparseSubfolder(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	url := siBareRepo(t)
+	var said []string
+	ctx := siWithProgress(t.Context(), func(m string) { said = append(said, m) })
+	base, commit, cleanup, err := siFetch(ctx, siSource{URL: url, Ref: "main", Sub: "skills/pdf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Dir(filepath.Dir(base))
+	if _, err := os.Stat(filepath.Join(base, "SKILL.md")); err != nil {
+		t.Errorf("subfolder not checked out: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "media")); err == nil {
+		t.Error("sparse checkout wrote the unrelated folder")
+	}
+	if commit == "" {
+		t.Error("commit not recorded")
+	}
+	if !pathIn(base, filepath.Join(dataDir(), "tmp")) {
+		t.Errorf("clone must live under the data dir, got %s", base)
+	}
+	if len(said) != 1 || !strings.Contains(said[0], "baixando") || !strings.Contains(said[0], "(subpasta skills/pdf)") || strings.Contains(said[0], "file://") {
+		t.Errorf("progress = %q", said)
+	}
+	cleanup()
+	if ents, _ := os.ReadDir(filepath.Join(dataDir(), "tmp")); len(ents) != 0 {
+		t.Errorf("temp clone left behind: %v", ents)
+	}
+	// a subfolder that isn't there: clear error, nothing left
+	if _, _, _, err := siFetch(t.Context(), siSource{URL: url, Sub: "skills/nope"}); err == nil || !strings.Contains(err.Error(), "não existe") {
+		t.Errorf("missing subfolder: %v", err)
+	}
+	if _, _, _, err := siFetch(t.Context(), siSource{URL: url, Sub: "../x"}); err == nil {
+		t.Error("a subfolder with .. must be refused")
+	}
+	if ents, _ := os.ReadDir(filepath.Join(dataDir(), "tmp")); len(ents) != 0 {
+		t.Errorf("temp clone left behind after errors: %v", ents)
+	}
+}
+
+// a sparse fetch is what siFind and the install see
+func TestSiInstallSparseFind(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	url := siBareRepo(t)
+	base, commit, cleanup, err := siFetch(t.Context(), siSource{URL: url, Sub: "skills/pdf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	found, err := siFind(base)
+	if err != nil || len(found) != 1 || found[0].Name != "pdf" || commit == "" {
+		t.Fatalf("found %+v %v", found, err)
+	}
+}
+
+// a cancelled context (Ctrl+C in `jazz skill install`) stops git and leaves
+// no temp clone
+func TestSiFetchCancelledCleansUp(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	url := siBareRepo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _, _, err := siFetch(ctx, siSource{URL: url, Sub: "skills/pdf"})
+	if err == nil || !strings.Contains(err.Error(), "cancelado") {
+		t.Errorf("cancelled fetch: %v", err)
+	}
+	if ents, _ := os.ReadDir(filepath.Join(dataDir(), "tmp")); len(ents) != 0 {
+		t.Errorf("temp clone left behind: %v", ents)
+	}
+}
+
+// a bad repo is "não encontrado ou privado", not git's username prompt error
+func TestSiBadRepoMessage(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	missing := "file://" + filepath.Join(t.TempDir(), "nope.git")
+	for _, sub := range []string{"", "skills/pdf"} {
+		_, _, _, err := siFetch(t.Context(), siSource{URL: missing, Sub: sub})
+		if err == nil || !strings.Contains(err.Error(), "repositório não encontrado ou privado") {
+			t.Errorf("sub %q: %v", sub, err)
+		}
+	}
+	src := siSource{URL: "https://github.com/x/nao-existe.git"}
+	raw := errors.New("git clone: exit status 128: fatal: could not read Username for 'https://github.com': terminal prompts disabled")
+	if got := siGitErr(raw, src).Error(); !strings.Contains(got, "repositório não encontrado ou privado: github.com/x/nao-existe") || strings.Contains(got, "Username") {
+		t.Errorf("translated = %q", got)
+	}
+	raw = errors.New("git clone: exit status 128: warning: Could not find remote branch dev to clone. fatal: Remote branch dev not found in upstream origin")
+	if got := siGitErr(raw, siSource{URL: src.URL, Ref: "dev"}).Error(); !strings.Contains(got, `"dev" não existe`) {
+		t.Errorf("missing ref = %q", got)
+	}
+	if !siFatalClone(raw) {
+		t.Error("a missing ref must not retry with a full clone")
+	}
+}
+
+// a skill jazz installed now is not "already installed" for the model
+func TestSiNoteFresh(t *testing.T) {
+	f := []siFound{{Name: "video", Desc: "videos", Dir: "/x/video"}}
+	if n := siNote(f, true); !strings.Contains(n, "just now, at the user's request") || !strings.Contains(n, "NOT installed before") {
+		t.Errorf("fresh note = %q", n)
+	}
+	if n := siNote(f, false); strings.Contains(n, "just now") {
+		t.Errorf("already-installed note = %q", n)
+	}
+}
+
+// jazz skill install prints what it downloads
+func TestCmdSkillInstallProgress(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	url := siBareRepo(t)
+	var out bytes.Buffer
+	if err := cmdSkill(t.TempDir(), []string{"install", url, "--yes"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "baixando ") || !strings.Contains(out.String(), "instalada: pdf") {
+		t.Errorf("out = %q", out.String())
 	}
 }

@@ -72,7 +72,8 @@ func (a *App) skillInstallInteractive(arg string) bool {
 		return false
 	}
 	a.ui.Thinking("baixando a skill")
-	found, err := siInstall(context.Background(), src[0], siDest(a.root, project), false, func(sum string) bool {
+	ctx := siWithProgress(context.Background(), func(m string) { a.ui.Thinking(m) })
+	found, err := siInstall(ctx, src[0], siDest(a.root, project), false, func(sum string) bool {
 		a.ui.StopThinking()
 		a.ui.Notice(sum)
 		return a.ui.Choose("Instalar?", yesNo("Sim, instalar", "Não"), 0) == 0
@@ -86,7 +87,7 @@ func (a *App) skillInstallInteractive(arg string) bool {
 	for _, f := range found {
 		names = append(names, f.Name)
 	}
-	a.agent.Note(siNote(found))
+	a.agent.Note(siNote(found, true))
 	a.ui.Notice("skill instalada: " + strings.Join(names, ", "))
 	return true
 }
@@ -100,7 +101,7 @@ func (a *App) skillOffer(text string) {
 	}
 	if d := siInstalledFrom(a.root, url); d != "" {
 		name, desc := readFrontmatter(filepath.Join(d, "SKILL.md"))
-		a.agent.Note(siNote([]siFound{{Name: name, Desc: desc, Dir: d}}))
+		a.agent.Note(siNote([]siFound{{Name: name, Desc: desc, Dir: d}}, false))
 		return
 	}
 	a.ui.Notice("a mensagem cita a skill " + url + " — vou mostrar o que ela traz antes de instalar")
