@@ -105,6 +105,10 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
 - **Teste antigo reescrito não passa batido.** Se o modelo mudou um teste que já existia, o jazz roda a versão
   original dele contra o código novo, numa cópia do projeto, e devolve o que quebrou: comportamento que o
   teste antigo garante continua valendo, a não ser que o pedido mude isso.
+- **Revisão automática de pedido em lista.** Pedido com 3 ou mais requisitos (itens com `-` ou numerados) que
+  mexeu em código ganha, antes do "pronto", um revisor de contexto limpo que confere item por item (entrada
+  inválida, padrão, ordem, formato), com ou sem git. Achados voltam pro modelo uma vez.
+  `JAZZ_REVIEW_GUARD=off` desliga.
 - A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
   diz exatamente como resolver.
 - Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida uma vez em silêncio; se continuar

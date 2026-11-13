@@ -186,6 +186,8 @@ func (a *Agent) acStopGate(ctx context.Context, lt *acTurnLoop) (again bool, why
 		if a.acReview(ctx, lt) {
 			return true, ""
 		}
+	} else if !qFailed && a.arAutoReview(ctx, lt) { // a request listing requirements (autoreview.go)
+		return true, ""
 	}
 	if qFailed {
 		return false, StopQualityFailed

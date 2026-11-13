@@ -721,3 +721,58 @@ func TestVsInfraErr(t *testing.T) {
 		}
 	}
 }
+
+func TestArSpecHeavy(t *testing.T) {
+	if !arSpecHeavy("Adicione prioridade.\n- add aceita --prioridade\n- novo comando prioridade\n- list filtra") {
+		t.Error("three bullets are a spec")
+	}
+	if arSpecHeavy("corrige o bug do parser e roda os testes") {
+		t.Error("a one-liner is not a spec")
+	}
+}
+
+// A request listing requirements: after the model says done, a fresh-context
+// reviewer checks it item by item (no git needed) and its findings go back.
+func TestAutoReviewSpecRequest(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "1. \"- mul(a, b) multiplica\": calc.py does not define mul."},
+		fakeResp{Text: "faltou mul; anotado"})
+	req := "Adicione em calc.py:\n- sub(a, b) subtrai\n- mul(a, b) multiplica\n- div(a, b) divide"
+	if _, err := h.ag.Run(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	var sub, fed bool
+	for _, r := range reqs {
+		if r.contains("user", "Go through the request requirement by requirement") && r.contains("user", "calc.py (before: .jazz/review-pre-") {
+			sub = true
+		}
+		if r.contains("user", "checked your change against the request, requirement by requirement") && r.contains("user", "does not define mul") {
+			fed = true
+		}
+	}
+	if !sub || !fed {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.200v", i, m["role"], m["content"])
+		}
+		t.Fatalf("reviewer ran=%v, findings fed back=%v", sub, fed)
+	}
+	if m, _ := filepath.Glob(filepath.Join(h.root, ".jazz", "review-pre-*")); len(m) != 0 {
+		t.Errorf("pre-images left behind: %v", m)
+	}
+	// JAZZ_REVIEW_GUARD=off: no review
+	t.Setenv("JAZZ_REVIEW_GUARD", "off")
+	h = newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"})
+	if err := h.run(t, req); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("review guard off: requests=%d", n)
+	}
+}

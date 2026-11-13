@@ -120,7 +120,7 @@ type hgHard struct {
 
 // ---------- settings ----------
 
-var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD", "jobs": "JAZZ_JOB_GUARD", "suite": "JAZZ_SUITE_GUARD"}
+var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD", "jobs": "JAZZ_JOB_GUARD", "suite": "JAZZ_SUITE_GUARD", "review": "JAZZ_REVIEW_GUARD"}
 
 // hgOn: whether guard name (tests | hardcode | done | eval | jobs) is on.
 func (a *Agent) hgOn(name string) bool {
