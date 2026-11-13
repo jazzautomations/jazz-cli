@@ -433,7 +433,8 @@ func TestAgentCompactOverflowShrinksPrefix(t *testing.T) {
 	}
 }
 
-func TestAgentCompactOverflowFallsBackToDropNote(t *testing.T) {
+// The history never fits: a deterministic digest instead of dropping it blind.
+func TestAgentCompactOverflowFallsBackToDigest(t *testing.T) {
 	h := newHarness(t, func(n int, r recReq) fakeResp {
 		return fakeResp{Status: 400, Body: `{"error":{"code":"context_length_exceeded"}}`}
 	}, nil)
@@ -442,8 +443,12 @@ func TestAgentCompactOverflowFallsBackToDropNote(t *testing.T) {
 	if err := h.ag.Compact(context.Background(), ""); err != nil {
 		t.Fatalf("Compact: %v", err)
 	}
-	if !strings.Contains(h.ag.Msgs[0].Content, "no longer fit") {
-		t.Errorf("drop note missing: %q", h.ag.Msgs[0].Content)
+	c := h.ag.Msgs[0].Content
+	if !strings.Contains(c, "automatic digest") || !strings.Contains(c, "- a\n- c") || !strings.Contains(c, "tools remain fully available") {
+		t.Errorf("digest missing: %q", c)
+	}
+	if strings.Count(c, "> a") != 0 {
+		t.Errorf("a digest already lists the requests; no verbatim block twice: %q", c)
 	}
 }
 

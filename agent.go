@@ -2609,10 +2609,10 @@ Decisions taken and why.
 Ordered, concrete.
 ## Critical Context
 Exact file paths, function names, commands, error messages, values and URLs needed to continue.
+## Unverified
+Assumptions and hypotheses not yet confirmed by a command or a test.
 
 Preserve exact file paths, function names and error messages. Be dense; no filler.%s</system-reminder>`
-
-const droppedHistoryNote = "(The earlier part of this conversation no longer fit in the context window and was dropped without a summary. If something important seems to be missing, ask the user.)"
 
 // Compact summarizes older messages, keeping roughly the last 20k tokens verbatim.
 // The summary request reuses the live prefix byte-for-byte so it hits the prompt
@@ -2655,7 +2655,8 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 	}
 	dbg("compact", map[string]any{"cut": cut, "msgs": len(a.Msgs), "model": a.TurnModel()})
 	ask := Message{Role: "user", Content: fmt.Sprintf(compactPrompt, extra)}
-	head := a.Msgs[:cut]
+	orig := a.Msgs[:cut]
+	head := chPrune(orig) // old tool output to head+tail first: a smaller, cheaper summary call (compact_harden.go)
 	var summary string
 	for round := 0; ; round++ {
 		prefix := append(append([]Message{}, head...), ask)
@@ -2678,12 +2679,14 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 		// The prefix itself overflows (bug 36): shrink it and try again.
 		head = acShrinkHistory(head, round)
 		if head == nil || round >= 3 {
-			summary = droppedHistoryNote
-			a.ui.Warn("não deu pra resumir o histórico antigo (estouro de contexto) — ele foi descartado")
+			// never drop the history blind: a deterministic digest instead
+			summary = acDigestHistory(orig)
+			a.ui.Warn("o histórico antigo não coube pra resumir — fica um resumo automático (pedidos, arquivos e comandos)")
 			break
 		}
 	}
-	kept := append([]Message{{Role: "user", Content: "<summary>\n" + summary + "\n</summary>\n<system-reminder>The earlier part of this conversation was compacted into the summary above. Continue from where it left off.</system-reminder>"}}, a.Msgs[cut:]...)
+	summary += chAnchors(orig, strings.HasPrefix(summary, "(No model summary")) // the user's own words and the touched files, never left to the model
+	kept := append([]Message{{Role: "user", Content: "<summary>\n" + summary + "\n</summary>\n" + chAfterNote}}, a.Msgs[cut:]...)
 	offset := cut - 1 // Msgs[cut] lands at index 1
 	if len(kept) > 1 && kept[1].Role == "user" {
 		offset = cut // merged into the summary message

@@ -124,6 +124,10 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
     cadeia responde;
   - o ambiente que o modelo recebe já diz o comando de teste do projeto, então ele não gasta passos
     descobrindo;
+  - compactação mais robusta: saída antiga de ferramenta é podada antes do resumo (chamada menor e mais
+    barata); as mensagens do usuário (literais) e os arquivos mexidos entram no resumo sem depender do
+    modelo; estouro de contexto vira resumo automático em vez de descartar o histórico; depois de compactar,
+    o lembrete diz que as ferramentas continuam ativas;
   - edit que não acha o texto por causa da indentação (espaços onde o arquivo tem tab, outro nível de
     aninhamento) casa linha a linha ignorando a indentação, se o trecho for único, e reindenta a troca no
     padrão do arquivo, avisando o modelo.
