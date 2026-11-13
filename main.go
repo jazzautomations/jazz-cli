@@ -895,7 +895,7 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	}
 	res := RunResult{Status: stop, Usage: ag.Usage, Cost: ag.Usage.Cost, Duration: time.Since(t0), SessionID: ag.SessionID, Model: ag.TurnModel(), Recover: ag.LastRecovery()}
 	if err != nil && stop != StopInterrupted {
-		res.Status, res.Err = StopError, friendlyErr(err)
+		res.Status, res.Err = StopError, pfHeadlessRemedy(friendlyErr(err))
 		var pe *acPinError
 		if errors.As(err, &pe) {
 			res.Status = StopModelUnavailable
@@ -1012,6 +1012,12 @@ func pfDeadline(d time.Duration, onTimeout func()) (timedOut func() bool, stop f
 
 func pfTimeoutMsg(d time.Duration) string {
 	return fmt.Sprintf("tempo esgotado: a execução passou de --timeout %s", d)
+}
+
+// pfHeadlessRemedy: in -p there is no /model to type — the remedy is the
+// flag. friendlyErr is shared with the TUI, so -p rewrites only the hint.
+func pfHeadlessRemedy(msg string) string {
+	return strings.ReplaceAll(msg, "troque de modelo (/model)", "troque de modelo (-m provedor/modelo)")
 }
 
 func friendlyErr(err error) string {

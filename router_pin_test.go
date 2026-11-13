@@ -592,3 +592,11 @@ func TestUIClockAt(t *testing.T) {
 		}
 	}
 }
+
+// No -p não existe /model: o remédio do erro é a flag.
+func TestHeadlessRemedyNamesFlag(t *testing.T) {
+	msg := pfHeadlessRemedy(friendlyErr(&APIError{Status: 429, Body: "rate limit"}))
+	if strings.Contains(msg, "(/model)") || !strings.Contains(msg, "-m provedor/modelo") {
+		t.Errorf("headless remedy = %q", msg)
+	}
+}
