@@ -787,12 +787,12 @@ func TestToolsIsReadOnlyAllow(t *testing.T) {
 func TestToolsIsReadOnlyDeny(t *testing.T) {
 	for _, c := range []string{
 		"rm x", "touch x", "mkdir d", "mv a b", "cp a b", "go build", "go test ./...", "make", "npm install",
-		"echo hi > f", "echo hi >> f", "ls 2>/dev/null", "cat a > b",
+		"echo hi > f", "echo hi >> f", "ls 2>/dev/nullx", "cat a > b",
 		"find . -delete", "find . -name x -delete", "find . -exec rm {} \\;", "find . -execdir rm {} +",
 		"ls | xargs rm", "ls && rm x", "ls; rm x", "ls || rm x",
 		"echo $(rm x)", "echo `rm x`", "cat $HOME/x",
 		"git commit -m x", "git push", "git checkout main", "git reset --hard",
-		"python3 x.py", "bash -c ls", "sh x.sh", "lsblk",
+		"python3 x.py", "bash -c ls", "sh x.sh", "lsblk > out.txt",
 		"sed -i s/a/b/ f", "awk '{print}' f",
 	} {
 		if IsReadOnly(c) {

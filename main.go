@@ -402,6 +402,9 @@ func main() {
 			pfUsageErr(err.Error())
 		}
 	}
+	// the private temp dir goes with the process (it was never removed: only
+	// the prune of the next jazz cleaned it, by age)
+	defer func() { sbCurrent().Close() }()
 	if len(rest) > 0 {
 		switch rest[0] {
 		case "login":

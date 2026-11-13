@@ -78,24 +78,37 @@ func TestCapsDisproportionateForContainerTask(t *testing.T) {
 	}
 }
 
-// CRITICAL gates every mode that did not opt in: turbo and auto cannot
-// auto-approve it. yolo is the user's explicit low-level opt-in and runs it.
+// CRITICAL is a question in every mode that did not opt in: turbo and auto
+// never auto-approve it, but the user's explicit yes runs it (it used to be a
+// dead end even with Allow: 16 consents vs 535 approvals in the sessions —
+// the button is what users use). Without a terminal it is refused. yolo is
+// the user's explicit low-level opt-in and runs it.
 func TestCapsCriticalBlocksInYoloAndTurbo(t *testing.T) {
 	for _, mode := range []string{"yolo", "turbo", "auto"} {
 		h := newHarness(t, nil, func(c *Config) { c.Mode = mode })
 		h.ui.answer = Allow
-		ok, why, _ := h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo tee /etc/containers/registries.conf"})}, "", false, acHookVerdict{})
+		ok, why, _ := h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo tee /etc/modprobe.d/ipw2200.conf"})}, "", false, acHookVerdict{})
 		if mode == "yolo" {
-			if !ok {
-				t.Fatalf("yolo: low-level system write refused (%q) — yolo is the user's opt-in", why)
+			if !ok || len(h.ui.approvals) != 0 {
+				t.Fatalf("yolo: low-level system write refused or asked (%q) — yolo is the user's opt-in", why)
 			}
 		} else {
-			if ok {
-				t.Fatalf("%s: a write to /etc/containers ran", mode)
+			if !ok {
+				t.Fatalf("%s: the user said yes to a critical write and it was still refused: %q", mode, why)
 			}
-			if !strings.Contains(why, "menor intervenção") && !strings.Contains(why, "CRÍTICO") {
-				t.Errorf("%s: reason %q", mode, why)
+			if len(h.ui.approvals) != 1 || !strings.Contains(h.ui.approvals[0].Reason, "CRÍTICO") {
+				t.Fatalf("%s: a critical write must be asked, with the reason: %+v", mode, h.ui.approvals)
 			}
+			h.ui.answer = Deny
+			if ok, _, _ := h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo tee /etc/modprobe.d/ipw2200.conf"})}, "", false, acHookVerdict{}); ok {
+				t.Fatalf("%s: the user said no and it ran", mode)
+			}
+			h.ag.Headless = true
+			if ok, why, _ := h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo tee /etc/modprobe.d/ipw2200.conf"})}, "", false, acHookVerdict{}); ok || !strings.Contains(why, "CRÍTICO") {
+				t.Fatalf("%s: headless must keep refusing a critical write: %v %q", mode, ok, why)
+			}
+			h.ag.Headless = false
+			h.ui.answer = Allow
 		}
 		ok, _, _ = h.ag.permit(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "cat /etc/os-release"})}, "", false, acHookVerdict{})
 		if !ok {

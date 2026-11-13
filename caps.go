@@ -496,6 +496,127 @@ func cbSegCritical(seg string) string {
 	return ""
 }
 
+// cbCritTarget is what "a" (sempre) remembers for a critical call: the
+// binary for a kernel/service command (modprobe, sysctl), the directory glob
+// for a file write (/etc/modprobe.d/**) — never the whole system class, so
+// approving modprobe does not let sysctl -w through. "" = nothing to
+// remember (several critical targets in one call).
+func cbCritTarget(tool string, args map[string]any, cmd string) (target, label string) {
+	switch tool {
+	case "write", "edit":
+		p, _ := argStr(args, "path")
+		if p == "" || cbSysPath(p) == "" {
+			return "", ""
+		}
+		glob := cbCritGlob(p)
+		name := "Edit"
+		if tool == "write" {
+			name = "Write"
+		}
+		return "path:" + glob, name + "(" + glob + ")"
+	case "bash":
+	default:
+		return "", ""
+	}
+	for _, seg := range shellSegments(cmd) {
+		if cbSegCritical(seg) == "" {
+			continue
+		}
+		t := stripWrappers(shellFields(seg))
+		for len(t) > 0 && (t[0] == "sudo" || t[0] == "doas" || t[0] == "pkexec") {
+			t = stripWrappers(t[1:])
+			for len(t) > 0 && strings.HasPrefix(t[0], "-") {
+				t = t[1:]
+			}
+		}
+		if len(t) == 0 {
+			return "", ""
+		}
+		w := filepath.Base(t[0])
+		tg, lb := "bin:"+w, "Bash("+w+":*)"
+		// a write to a system path is remembered with its directory
+		for i, a := range t[1:] {
+			if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "of=") {
+				continue
+			}
+			if j := strings.IndexByte(a, '>'); j >= 0 {
+				a = strings.TrimLeft(a[j:], ">&")
+				if a == "" && i+2 < len(t) {
+					a = t[i+2]
+				}
+			}
+			a = strings.TrimPrefix(a, "of=")
+			if cbSysPath(a) != "" && strings.HasPrefix(filepath.Clean(expandTilde(a)), "/") {
+				glob := cbCritGlob(a)
+				tg, lb = "bin:"+w+"@"+glob, "Bash("+w+" "+glob+")"
+				break
+			}
+		}
+		if target != "" && target != tg {
+			return "", "" // two different critical targets: remember neither
+		}
+		target, label = tg, lb
+	}
+	return target, label
+}
+
+// cbCritBroadDirs are system roots whose "<dir>/**" would be the whole
+// system class again (/etc/** covers sudoers, passwd, fstab): a file right
+// under one of them is remembered exactly.
+var cbCritBroadDirs = map[string]bool{"/": true, "/etc": true, "/boot": true, "/usr": true, "/usr/bin": true, "/usr/sbin": true,
+	"/usr/lib": true, "/usr/local": true, "/usr/local/bin": true, "/usr/local/sbin": true, "/bin": true, "/sbin": true, "/lib": true,
+	"/lib64": true, "/lib32": true, "/var": true, "/opt": true, "/private/etc": true, "/Library": true, "/System": true}
+
+// cbCritGlob is what "a" remembers for a critical write to p: its directory
+// glob (/etc/modprobe.d/**), or p itself when the directory is a system root.
+func cbCritGlob(p string) string {
+	c := filepath.ToSlash(filepath.Clean(expandTilde(p)))
+	dir := filepath.ToSlash(filepath.Dir(c))
+	if cbCritBroadDirs[dir] {
+		return c
+	}
+	return dir + "/**"
+}
+
+// cbUndoHint is the "como desfazer" of a critical call, for the prompt.
+func cbUndoHint(tool string, args map[string]any, cmd string) string {
+	if tool == "write" || tool == "edit" {
+		return "desfaz: o jazz guarda uma cópia do arquivo antes de escrever"
+	}
+	for _, seg := range shellSegments(cmd) {
+		t := stripWrappers(shellFields(seg))
+		for len(t) > 0 && (t[0] == "sudo" || t[0] == "doas") {
+			t = t[1:]
+		}
+		if len(t) < 2 {
+			continue
+		}
+		var mods []string
+		for _, a := range t[1:] {
+			if !strings.HasPrefix(a, "-") {
+				mods = append(mods, a)
+			}
+		}
+		switch filepath.Base(t[0]) {
+		case "modprobe", "insmod":
+			if len(mods) > 0 && !sgHasFlag(t[1:], "-r", "--remove") {
+				return "desfaz: modprobe -r " + strings.TrimSuffix(filepath.Base(mods[0]), ".ko")
+			}
+		case "rmmod":
+			if len(mods) > 0 {
+				return "desfaz: modprobe " + mods[0]
+			}
+		case "sysctl":
+			for _, a := range t[1:] {
+				if strings.Contains(a, "=") {
+					return "desfaz: volta sozinho no próximo boot (sysctl -w não grava em /etc)"
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // cbContainerGoal: the request is about running a container.
 func cbContainerGoal(goal string) bool {
 	g := fzFold(goal)

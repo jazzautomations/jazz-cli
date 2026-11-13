@@ -159,7 +159,8 @@ func (a *Agent) acDemoteStalled(cands []string) []string {
 func NewAgent(cfg *Config, ui UI, tools *Toolbox, mcp *MCPManager, model string) *Agent {
 	a := &Agent{cfg: cfg, ui: ui, tools: tools, mcp: mcp, Model: model, allow: map[string]bool{}, ptIdx: -1}
 	if tools != nil {
-		tools.Window = a.window // bash output budget follows the model in use (outshape.go)
+		tools.Window = a.window       // bash output budget follows the model in use (outshape.go)
+		tools.SysWrite = a.nlSysWrite // approved /etc writes go as root, with backup (consent.go)
 	}
 	return a
 }
@@ -1933,6 +1934,18 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+". Use Jazz's built-in configuration or session features instead."), true
 		}
 	}
+	if tool == "bash" && !isMCP && cmd != "" {
+		// a password inside the command (sudo -S, askpass, piped su) would sit
+		// in the transcript, the approval and the audit: jazz asks for it
+		// masked instead (consent.go nlElevate). Hard gate, every mode.
+		if why := nlPasswordInCommand(cmd); why != "" {
+			a.blockWhy = "senha dentro do comando (" + why + "): use sudo puro, o jazz pede a senha mascarada"
+			if a.blockUX() {
+				return false, a.nlDenied(nlGateCredCmd, blockMsg(what, "it hands a password to sudo/su inside the command ("+why+"), which would put it in the transcript and the audit log")), true
+			}
+			return false, a.nlDenied(nlGateCredCmd, "Blocked: the command hands a password to sudo/su inside it ("+why+")."), true
+		}
+	}
 	dec, rule := a.Perms.Check(tool, args)
 	if dec == PermDeny {
 		if a.blockUX() {
@@ -1978,22 +1991,29 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	mode := a.mode()
 	autoRule := "" // why a call that some mode would confirm runs without a prompt (audit)
 	// menor intervenção (caps.go): writing /etc, the kernel, system binaries or
-	// container-engine/WSL configuration is CRITICAL — except in yolo, where the
-	// user already opted into low-level system work explicitly, or under an
-	// audited session grant of the system-ops class (consent.go)
+	// container-engine/WSL configuration is CRITICAL. It is a question to the
+	// user (applied after the other checks below), not a dead end: the user's
+	// explicit yes, an allow rule naming the command or path, an audited
+	// session grant of system-ops (consent.go) or "a" remembered for this
+	// binary/directory covers it. yolo is the user's opt-in and skips it. A
+	// disproportionate action for a container task (the Podman reinstall that
+	// cost the first external user his setup) always asks and is never
+	// remembered nor covered by a grant.
+	critReason, critGate, critRule := "", "", ""
 	if !isMCP && mode != "yolo" {
 		goal := ""
 		if a.oj != nil {
 			goal = a.oj.input
 		}
 		if crit := cbMinimalIntervention(tool, args, cmd, goal); crit != "" {
-			if r := a.nlConsentRule(nlGateSysOps, tool, args, cmd, isMCP); r != "" {
-				autoRule = r
-			} else if a.blockUX() {
-				a.blockWhy = crit
-				return false, a.nlDenied(nlGateSysOps, blockMsg(what, crit)), true
-			} else {
-				return false, a.nlDenied(nlGateSysOps, "Blocked: "+crit+". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves."), true
+			critReason, critGate = crit, nlGateSysOps
+			if tool == "bash" && cbDisproportionate(goal, cmd) != "" || cbContainerGoal(goal) {
+				critGate = nlGateDisprop
+			} else if dec == PermAllow {
+				critRule = a.Perms.CoversCritical(tool, args, func(seg string) bool { return cbSegCritical(seg) != "" })
+			}
+			if u := cbUndoHint(tool, args, cmd); u != "" && critGate == nlGateSysOps {
+				critReason += "; " + u
 			}
 		}
 	}
@@ -2056,6 +2076,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			whyEN = "it is a destructive or dangerous command (" + why + ")"
 			if nlSudoCmd(cmd) && DangerReason(nlStripSudo(cmd)) == "" {
 				gate = nlGateSudo // sudo é o único risco: o que roda como root é benigno
+				if sr := nlHostSecret(cmd); sr != "" {
+					// as root on the host the sandbox no longer hides ~/.ssh or
+					// /etc/shadow: a secret read, never covered by a grant
+					reason, gate = why+"; "+sr, nlGateSecret
+					whyEN = "it would read credentials as root, outside the sandbox (" + sr + ")"
+				}
 			}
 			if c, tg := tbDangerClass(cmd); c != "" {
 				apClass, apTarget, apLabel = c, tg, c+": "+tg
@@ -2120,6 +2146,29 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		need, gate = isMCP && mode == "ask", nlGatePrompt
 		whyEN = "ask mode needs the user's approval"
 	}
+	if critReason != "" {
+		switch {
+		case critGate == nlGateDisprop:
+			if reason != "" {
+				critReason += "; " + reason
+			}
+			reason, need, gate = critReason, true, nlGateDisprop
+			whyEN = "it is out of proportion for the user's container task (" + critReason + ")"
+			apClass = ""
+		case critRule != "" && (reason == "" || gate == nlGateSudo || gate == nlGateSysOps):
+			reason, need, autoRule = "", false, "perm:"+critRule // the user named this command/path in a rule
+		case reason == "" || gate == nlGateSudo || gate == nlGateSysOps:
+			reason, need, gate = critReason, true, nlGateSysOps
+			whyEN = "it changes the system outside the project, as root (" + critReason + ")"
+			apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+			if tg, lb := cbCritTarget(tool, args, cmd); tg != "" {
+				apClass, apTarget, apLabel = "sysops", tg, lb
+			}
+		default:
+			reason = critReason + "; " + reason // two risks in one call: the other gate stays, nothing is remembered
+			need, apClass = true, ""
+		}
+	}
 	if sensitiveEgress {
 		// Sensitive input egress always gets a fresh, scoped confirmation. Never
 		// inherit yolo, a permission rule, or an earlier remembered approval.
@@ -2147,7 +2196,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			apClass, apTarget, apLabel = "fence", target, "alvo exato fora do projeto: "+target
 		}
 	} else if fenceReason != "" {
-		apClass = "" // two risks in one call: remembering one must not skip the other
+		// two risks in one call: remembering one must not skip the other —
+		// except a system path outside the project, where the fence and the
+		// critical write are the same target ("a" remembers it by directory)
+		if out := a.fenceCheck(tool, args, cmd, isMCP); apClass != "sysops" || fencePriv || cbSysPath(out) == "" {
+			apClass = ""
+		}
 	}
 	if injReason != "" || hook.ask {
 		apClass = "" // a suspected injection or a hook that asks: never answered from the store
@@ -2313,7 +2367,7 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 		if a.blockWhy == "" {
 			switch {
 			case a.UntrustedBash && tool == "bash":
-				a.blockWhy = "pasta não confiável: só comandos de leitura rodam sem confirmação"
+				a.blockWhy = "pasta não confiável: só comandos de leitura rodam sem confirmação (rode `jazz trust` nesta pasta, ou passe --allow-tools)"
 			case a.Headless:
 				a.blockWhy = "precisa de confirmação e o modo -p não pergunta"
 			default:

@@ -31,8 +31,8 @@ func TestNLCredentialNeverLeavesMemory(t *testing.T) {
 		if err := h.run(t, in); err != nil {
 			t.Fatalf("%q: %v", in, err)
 		}
-		if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-			t.Fatalf("%q: a credencial tem que continuar capturada na memória: %+v", in, c)
+		if h.ag.nl.cred != nil {
+			t.Fatalf("%q: senha colada no chat não vira credencial (o jazz pede mascarada): %+v", in, h.ag.nl.cred)
 		}
 		if len(sent) == 0 {
 			t.Fatalf("%q: o provedor falso não recebeu nada", in)
@@ -71,13 +71,15 @@ func TestNLCredentialScrubbedInSteerAndQueue(t *testing.T) {
 	if got := h.ag.nlScanConsent("a senha do sudo é " + pw); strings.Contains(got, pw) || !strings.Contains(got, nlCredMark) {
 		t.Errorf("nlScanConsent tem que devolver o texto sem a senha: %q", got)
 	}
-	if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-		t.Fatalf("credencial não capturada: %+v", c)
+	if h.ag.nl.cred != nil {
+		t.Fatalf("senha do chat não vira credencial: %+v", h.ag.nl.cred)
 	}
-	// escanear de novo o texto já limpo não troca a credencial pelo marcador
+	// escanear de novo o texto já limpo não registra o marcador como senha
 	h.ag.nlScanConsent(h.ag.nlScanConsent("a senha do sudo é " + pw))
-	if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-		t.Errorf("o marcador não pode virar credencial: %+v", c)
+	for _, v := range nlKnownCreds() {
+		if strings.Contains(v, "credencial") {
+			t.Errorf("o marcador não pode virar valor de redação: %q", v)
+		}
 	}
 	if p := qPreview("root ana " + pw); strings.Contains(p, pw) {
 		t.Errorf("prévia da fila com senha: %q", p)

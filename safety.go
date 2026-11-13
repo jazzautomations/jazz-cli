@@ -356,7 +356,7 @@ func segmentDanger(t []string) string {
 				return r
 			}
 		}
-		return "sudo/privilégio — sem TTY a senha trava; peça aprovação, ou sudo -S com a senha via stdin, ou o usuário pode rodar com --yolo/mode yolo"
+		return "sudo/privilégio — roda como root no sistema, fora do sandbox, depois da aprovação (se precisar de senha, o jazz pede mascarada)"
 	case "su":
 		return "troca de usuário (su)"
 	case "rm":
@@ -582,21 +582,43 @@ var (
 // isReadOnlySh is a conservative check: true only for plainly read-only
 // commands (POSIX shell syntax). IsReadOnly (winsafety.go) wraps it.
 func isReadOnlySh(cmd string) bool {
+	// "2>/dev/null", ">/dev/null 2>&1", ">&2": discarding or merging output
+	// writes nothing (334 of 5.451 real commands were not read-only only
+	// because of that). Any other ">" still rejects below.
+	cmd = roDropSafeRedirects(cmd)
+	// metacharacters inside single quotes (and inside double quotes, except
+	// $ ` \ which still expand there) are text, not syntax: `grep 'a|b' f`
+	// is one command. The checks below run on the masked line; the parts
+	// handed to the per-command checks are cut from the real one.
+	m, ok := roMaskQuoted(cmd)
+	if !ok {
+		return false
+	}
 	// bare ( ) are subshells/functions — reject; but \( \) are find's escaped
 	// grouping literals, harmless and read-only (find -delete/-exec stays
 	// guarded below)
-	if shUnescaped(cmd, "()") || strings.ContainsAny(cmd, "\n\r{}`$>") || strings.Contains(cmd, "<<") || strings.Contains(cmd, "<(") {
+	if shUnescaped(m, "()") || strings.ContainsAny(m, "\n\r{}`$>") || strings.Contains(m, "<<") || strings.Contains(m, "<(") {
 		return false
 	}
 	if readOnlyBadArg.MatchString(cmd) || reSortOutFile.MatchString(cmd) {
 		return false
 	}
-	for _, part := range reSplit.Split(cmd, -1) {
-		p := strings.TrimSpace(part)
+	from := 0
+	cuts := append(reSplit.FindAllStringIndex(m, -1), []int{len(m), len(m)})
+	for _, cut := range cuts {
+		p := strings.TrimSpace(cmd[from:cut[0]])
+		from = cut[1]
 		if p == "" {
 			continue
 		}
-		if !readOnlyCmd.MatchString(p) {
+		if !readOnlyCmd.MatchString(p) && !roDiagnostic(shellFields(p)) {
+			return false
+		}
+		// quotes do not hide an action flag from the program: `find . '-exec'
+		// rm x ';'` is find -exec. The flag checks also run on the unquoted
+		// words (the quote mask above let ';' and '{}' through).
+		if d := strings.Join(shellFields(p), " "); readOnlyBadArg.MatchString(d) || reSortOutFile.MatchString(d) ||
+			strings.HasPrefix(d, "git ") && reGitMutFlag.MatchString(d) || reUniqTreeOut.MatchString(d) {
 			return false
 		}
 		// git subcommands with mutating flags
@@ -616,6 +638,171 @@ func isReadOnlySh(cmd string) bool {
 		}
 	}
 	return true
+}
+
+// roMaskQuoted returns cmd with the inside of quotes replaced by 'a' (same
+// length): single quotes hide everything, double quotes everything except
+// $ ` and \ (they still expand or escape there). ok=false on an unterminated
+// quote.
+func roMaskQuoted(cmd string) (string, bool) {
+	if !strings.ContainsAny(cmd, `'"`) {
+		return cmd, true
+	}
+	b := []byte(cmd)
+	for i := 0; i < len(b); i++ {
+		switch b[i] {
+		case '\\':
+			i++ // an escaped quote outside quotes is a literal
+		case '\'':
+			j := strings.IndexByte(cmd[i+1:], '\'')
+			if j < 0 {
+				return "", false
+			}
+			for k := i + 1; k <= i+j; k++ {
+				b[k] = 'a'
+			}
+			i += j + 1
+		case '"':
+			k := i + 1
+			for ; k < len(b) && b[k] != '"'; k++ {
+				switch b[k] {
+				case '\\':
+					k++ // \" does not close; the escape itself is kept
+				case '$', '`':
+				default:
+					b[k] = 'a'
+				}
+			}
+			if k >= len(b) {
+				return "", false
+			}
+			i = k
+		}
+	}
+	return string(b), true
+}
+
+// reRoSafeRedir: an unquoted redirection that writes nothing: to /dev/null,
+// or duplicating/closing a descriptor (2>&1, >&2, 2>&-).
+var reRoSafeRedir = lazyRx(`(^|[\s;|&])(?:[0-9]?>>?[ \t]*/dev/null|&>>?[ \t]*/dev/null|[0-9]?>&[0-9-])(?:[\s;|&)]|$)`)
+
+// roDropSafeRedirects removes the redirections of reRoSafeRedir that are
+// outside quotes.
+func roDropSafeRedirects(cmd string) string {
+	if !strings.Contains(cmd, ">") {
+		return cmd
+	}
+	m, ok := roMaskQuoted(cmd)
+	if !ok {
+		return cmd
+	}
+	for n := 0; n < 8; n++ {
+		loc := reRoSafeRedir.FindStringSubmatchIndex(m)
+		if loc == nil {
+			break
+		}
+		lo, hi := loc[3], loc[1] // keep the separator before, drop the redirection
+		if hi > lo && hi <= len(m) && hi > 0 && strings.ContainsRune(" \t;|&)", rune(m[hi-1])) {
+			hi-- // the separator after stays
+		}
+		cmd = cmd[:lo] + " " + cmd[hi:]
+		m = m[:lo] + " " + m[hi:]
+	}
+	return cmd
+}
+
+// roDiagnostic: system diagnostics that only read (the wifi/driver/service
+// sessions ran these by the dozen and each one counted as a change). Every
+// command is filtered by subcommand/flag: `ip link set`, `dmesg -C`,
+// `journalctl --vacuum-*`, `systemctl restart`, `ss -K` stay changes.
+func roDiagnostic(t []string) bool {
+	if len(t) == 0 {
+		return false
+	}
+	args := t[1:]
+	var words []string // non-flag arguments
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			words = append(words, a)
+		}
+	}
+	short := func(bad string) bool { // a short-option cluster has one of bad
+		for _, a := range args {
+			if len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(a[1:], bad) {
+				return true
+			}
+		}
+		return false
+	}
+	long := func(bad ...string) bool {
+		for _, a := range args {
+			for _, p := range bad {
+				if strings.HasPrefix(a, p) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	switch t[0] {
+	case "lspci", "lsusb", "lsmod", "modinfo", "lsblk", "findmnt", "lscpu", "lshw", "hostname", "arch":
+		return t[0] != "hostname" || len(words) == 0
+	case "dmesg":
+		return !short("cCDEn") && !long("--clear", "--read-clear", "--console")
+	case "ss":
+		return !short("KD") && !long("--kill", "--diag")
+	case "iwconfig":
+		return len(words) <= 1
+	case "rfkill":
+		return len(words) == 0 || words[0] == "list"
+	case "journalctl":
+		return !long("--vacuum", "--rotate", "--flush", "--sync", "--relinquish", "--smart-relinquish", "--setup-keys", "--update-catalog", "--cursor-file")
+	case "systemctl":
+		if short("HM") || long("--host", "--machine") {
+			return false // another machine/container
+		}
+		if len(words) == 0 {
+			return true // the unit list
+		}
+		switch words[0] {
+		case "status", "show", "cat", "is-active", "is-enabled", "is-failed", "is-system-running", "list-units", "list-unit-files",
+			"list-timers", "list-sockets", "list-dependencies", "list-jobs", "get-default":
+			return true
+		}
+	case "ip":
+		for _, a := range args {
+			if strings.HasPrefix(a, "-") {
+				switch strings.TrimLeft(a, "-") {
+				case "br", "brief", "4", "6", "s", "stats", "statistics", "d", "details", "c", "color", "j", "json", "p", "pretty", "o", "oneline", "h", "human":
+					continue
+				}
+				return false // -b batch files, -n netns, -force …
+			}
+		}
+		if len(words) == 0 {
+			return false
+		}
+		switch words[0] {
+		case "a", "addr", "address", "l", "link", "r", "ro", "route", "n", "neigh", "neighbor", "neighbour", "ru", "rule", "maddr", "maddress":
+		default:
+			return false
+		}
+		return len(words) == 1 || words[1] == "show" || words[1] == "list" || words[1] == "ls" || words[1] == "sh" || words[1] == "get" && words[0][0] == 'r' && words[0] != "rule" && words[0] != "ru"
+	case "iw":
+		switch {
+		case len(words) == 1 && (words[0] == "dev" || words[0] == "list" || words[0] == "phy"):
+			return true
+		case len(words) == 2 && words[0] == "reg" && words[1] == "get":
+			return true
+		case len(words) == 3 && words[0] == "dev" && (words[2] == "link" || words[2] == "info"):
+			return true
+		case len(words) == 4 && words[0] == "dev" && words[3] == "dump" && (words[2] == "station" || words[2] == "survey" || words[2] == "scan"):
+			return true
+		case len(words) == 3 && words[0] == "phy" && words[2] == "info":
+			return true
+		}
+	}
+	return false
 }
 
 // shUnescaped reports whether any of chars appears not preceded by a
@@ -786,8 +973,70 @@ func secretReasonSh(cmd string) string {
 	if reProcEnviron.MatchString(cmd) {
 		return "lê o ambiente de um processo (chaves)"
 	}
+	// raw pieces too: shellParse drops a bare `env` (it is a wrapper there)
+	for _, seg := range append(reSplit.Split(cmd, -1), shellSegments(cmd)...) {
+		if envDumpSeg(shellFields(seg)) {
+			return "despeja o ambiente (chaves de API vão junto)"
+		}
+	}
 	return ""
 }
+
+// envDumpSeg: the simple command prints the environment, keys included:
+// env/printenv with nothing to run, printenv of a key-like name, bare
+// export/set/declare -x listings. These are never read-only — the output
+// would go to the provider with every API key of the process.
+func envDumpSeg(t []string) bool {
+	for len(t) > 0 && strings.Contains(t[0], "=") && !strings.HasPrefix(t[0], "-") && !strings.HasPrefix(t[0], "=") {
+		t = t[1:] // FOO=bar cmd
+	}
+	for len(t) > 0 && shKeyword[t[0]] {
+		t = t[1:]
+	}
+	if len(t) == 0 {
+		return false
+	}
+	args := t[1:]
+	switch filepath.Base(t[0]) {
+	case "env":
+		for i := 0; i < len(args); i++ {
+			a := args[i]
+			switch {
+			case a == "-u" || a == "--unset" || a == "-C" || a == "--chdir" || a == "-S" || a == "--split-string":
+				i++
+			case strings.HasPrefix(a, "-") || strings.Contains(a, "="):
+			default:
+				return false // env … cmd: runs a program (stripWrappers' business)
+			}
+		}
+		return true
+	case "printenv":
+		names := 0
+		for _, a := range args {
+			if strings.HasPrefix(a, "-") {
+				continue
+			}
+			names++
+			if pfIsKeyEnv(a) || reEnvKeyish.MatchString(a) {
+				return true
+			}
+		}
+		return names == 0
+	case "export", "declare", "typeset":
+		for _, a := range args {
+			if !strings.HasPrefix(a, "-") {
+				return false // export FOO=bar / declare x
+			}
+		}
+		return true
+	case "set":
+		return len(args) == 0
+	}
+	return false
+}
+
+// reEnvKeyish: an environment name that holds a credential.
+var reEnvKeyish = lazyRx(`(?i)(KEY|TOKEN|SECRET|PASS|PASSWD|PASSWORD|CREDENTIAL|AUTH|_DSN|COOKIE)`)
 
 var reProcEnviron = lazyRx(`/proc/[^/\s]+/environ`)
 
@@ -1198,6 +1447,7 @@ func redactSecrets(s string) string {
 	if s == "" {
 		return s
 	}
+	s = nlRedactKnown(s) // sudo password typed this session (consent.go)
 	secretMu.Lock()
 	vals := secretValues
 	secretMu.Unlock()

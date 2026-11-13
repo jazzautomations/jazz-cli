@@ -16,8 +16,9 @@ import (
 
 func wantSteer(t *testing.T, label, msg string) {
 	t.Helper()
-	if !strings.HasPrefix(msg, "BLOCKED: ") || !strings.HasSuffix(msg, blockSteer) || strings.Contains(msg, "\n") {
-		t.Errorf("%s: block message must be one line: BLOCKED … %q, got %q", label, blockSteer, msg)
+	steered := strings.HasSuffix(msg, blockSteer) || strings.HasSuffix(msg, nlConsentSteer) || strings.HasSuffix(msg, nlHeadlessSteer)
+	if !strings.HasPrefix(msg, "BLOCKED: ") || !steered || strings.Contains(msg, "\n") {
+		t.Errorf("%s: block message must be one line: BLOCKED … <steer>, got %q", label, msg)
 	}
 }
 
