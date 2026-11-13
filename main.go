@@ -201,6 +201,7 @@ func main() {
 	defer pfProfileStop()
 	defer pfCrashGuard()
 	pfCleanOldExe()
+	spFixPath() // /sbin e /usr/sbin fora do PATH no antiX/Debian (sbinpath.go)
 	fs := flag.NewFlagSet("jazz", flag.ContinueOnError)
 	fs.Usage = usage
 	pr := fs.Bool("p", false, "")

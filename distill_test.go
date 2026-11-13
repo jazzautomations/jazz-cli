@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -1265,6 +1266,9 @@ func TestBrPermOp(t *testing.T) {
 // ---------- jazz distill: ponta a ponta ----------
 
 func TestDsRunEndToEnd(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("o replay do plano roda `go version`: sem go no PATH")
+	}
 	overlay := dsTestHome(t)
 	root := t.TempDir()
 	p := dsPlan("ab12cd34", "zzq frobnicate the wossname plugh", 3,
@@ -1315,6 +1319,9 @@ func TestDsRunEndToEnd(t *testing.T) {
 // TestDsVariantAliases: testemunhas do mesmo shape viram exemplos e
 // atalhos da intenção aprendida — cada variante conhecida lê direto nela.
 func TestDsVariantAliases(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("o replay do plano roda `go version`: sem go no PATH")
+	}
 	overlay := dsTestHome(t)
 	root := t.TempDir()
 	p := dsPlan("ab12cd34", "zzq frobnicate the wossname plugh", 3,
