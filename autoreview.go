@@ -83,6 +83,9 @@ func (a *Agent) arAutoReview(ctx context.Context, lt *acTurnLoop) bool {
 		return false
 	}
 	lt.reviewed = true
+	if again, done := a.arOneShot(ctx, req, files, budget); done {
+		return again
+	}
 
 	// pre-images inside the project (the sandbox hides a private /tmp)
 	preDir, _ := os.MkdirTemp(filepath.Join(a.tools.Root, ".jazz"), "review-pre-")
@@ -155,4 +158,82 @@ func mustRel(root, p string) string {
 		return p
 	}
 	return r
+}
+
+// arOneShotMax: total bytes of changed code files the one-shot review takes
+// inline; bigger changes go to the read-only subagent.
+const arOneShotMax = 16 << 10
+
+const arOneShotPrompt = `Check this change against the user's request; you did not write it. You have no tools: everything you need is below.
+
+The user's request was:
+<request>
+%s
+</request>
+
+The changed code files, as they are now:
+%s
+Go through the request requirement by requirement. For each one, find the code that implements it and check it the way a strict test would: invalid input and its exact error path and exit status (a "usage error like the other arguments" means the same mechanism the other arguments use), defaults, ordering and tie-breaks, filters combined, output format character by character, old data still loading. Report only concrete defects. No style comments.
+
+If every requirement holds, reply with exactly: LGTM
+Otherwise reply with a short numbered list; each item quotes the requirement, names the file and line, and says what is wrong.`
+
+// arOneShot reviews small changes in one request with the files inline (a
+// subagent reading file by file did not finish under a 40 req/min limit:
+// eval 02 on the d610). done=false: too big, use the subagent.
+func (a *Agent) arOneShot(ctx context.Context, req string, files []qgFile, budget time.Duration) (again, done bool) {
+	var b strings.Builder
+	n := 0
+	for _, f := range files {
+		if f.Test || !f.Code {
+			continue
+		}
+		n++
+		fmt.Fprintf(&b, "<file path=%q>\n%s\n</file>\n", filepath.ToSlash(f.Rel), numberLines(f.New))
+		if b.Len() > arOneShotMax {
+			return false, false
+		}
+	}
+	if n == 0 {
+		return false, false
+	}
+	prompt := fmt.Sprintf(arOneShotPrompt, acClip(req, 3000), b.String())
+	a.ui.ToolStart("autoreview", "review", "revisão automática: pedido item por item")
+	t0 := time.Now()
+	rctx, cancel := context.WithTimeout(ctx, budget)
+	resp, _, err := a.chatWithFallback(rctx, a.TurnModel(), acChatOpt{msgs: []Message{{Role: "user", Content: prompt}}, noToolUse: true, maxOut: 3000, quiet: true, label: "revisão automática", role: "main"})
+	cancel()
+	text := ""
+	if err == nil {
+		a.addUsage(resp.Usage)
+		text = strings.TrimSpace(resp.Text)
+	}
+	sum := "LGTM"
+	if err != nil || text == "" {
+		sum = "sem resposta"
+	} else if !acReviewLGTM(text) {
+		sum = "apontou problemas"
+	}
+	a.ui.ToolEnd("autoreview", "review", ToolOutput{Text: text, Display: Display{Summary: sum}}, time.Since(t0))
+	dbg("autoreview", map[string]any{"oneshot": true, "files": n, "lgtm": sum == "LGTM", "err": err != nil})
+	switch {
+	case ctx.Err() != nil || err != nil || text == "":
+		return false, true // a failed review never blocks the answer
+	case acReviewLGTM(text):
+		a.ui.Notice("revisão automática: todos os itens do pedido conferem")
+		return false, true
+	}
+	a.ui.Notice("revisão automática apontou itens do pedido — o modelo vai conferir")
+	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your change against the request, requirement by requirement, and reported:\n" + acClip(text, 4000) + "\nFor each point: check it against the request text and the code. Fix the real ones, add or adjust a test that pins the behavior, re-run the tests, then give your final answer. If a point is wrong, say why in one line. This review runs only once.</system-reminder>"})
+	return true, true
+}
+
+// numberLines prefixes each line with its 1-based number (for "file:line").
+func numberLines(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	var b strings.Builder
+	for i, l := range lines {
+		fmt.Fprintf(&b, "%4d  %s\n", i+1, l)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

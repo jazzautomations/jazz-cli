@@ -747,8 +747,8 @@ func TestAutoReviewSpecRequest(t *testing.T) {
 	reqs := h.fs.requests()
 	var sub, fed bool
 	for _, r := range reqs {
-		if r.contains("user", "Go through the request requirement by requirement") && r.contains("user", "calc.py (before: .jazz/review-pre-") {
-			sub = true
+		if r.contains("user", "You have no tools: everything you need is below") && r.contains("user", `<file path="calc.py">`) && r.contains("user", "   5  def sub(a, b):") {
+			sub = true // one-shot review with the file inline
 		}
 		if r.contains("user", "checked your change against the request, requirement by requirement") && r.contains("user", "does not define mul") {
 			fed = true
@@ -843,5 +843,28 @@ func TestHgNormBodySameCode(t *testing.T) {
 	b := hgNormBody("def f(x):\n\n        return x\n")
 	if a != b {
 		t.Errorf("formatting/comments must not count: %q vs %q", a, b)
+	}
+}
+
+// A change too big to inline goes to the read-only subagent (pre-images for diff).
+func TestAutoReviewBigChangeUsesSubagent(t *testing.T) {
+	big := "def soma(a, b):\n    return a + b\n" + strings.Repeat("# filler line for size\n", 900)
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": big}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "LGTM"},
+		fakeResp{Text: "pronto"})
+	if _, err := h.ag.Run(context.Background(), "Adicione em calc.py:\n- sub(a, b) subtrai\n- mul(a, b) multiplica\n- div(a, b) divide"); err != nil {
+		t.Fatal(err)
+	}
+	var sub bool
+	for _, r := range h.fs.requests() {
+		if r.contains("user", "Go through the request requirement by requirement") && r.contains("user", "calc.py (before: .jazz/review-pre-") {
+			sub = true
+		}
+	}
+	if !sub {
+		t.Error("a big change must be reviewed by the subagent")
 	}
 }

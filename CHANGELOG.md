@@ -107,7 +107,8 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   teste antigo garante continua valendo, a não ser que o pedido mude isso.
 - **Revisão automática de pedido em lista.** Pedido com 3 ou mais requisitos (itens com `-` ou numerados) que
   mexeu em código ganha, antes do "pronto", um revisor de contexto limpo que confere item por item (entrada
-  inválida, padrão, ordem, formato), com ou sem git. Achados voltam pro modelo uma vez.
+  inválida, padrão, ordem, formato), com ou sem git. Mudança pequena (até 16 KB de código) é revisada numa
+  chamada só, com os arquivos no pedido; maior vai pra um subagente. Achados voltam pro modelo uma vez.
   `JAZZ_REVIEW_GUARD=off` desliga.
 - Extract que esqueceu uma função auxiliar: função com o mesmo nome em 2+ módulos que já importam do módulo
   novo conta como cópia.
