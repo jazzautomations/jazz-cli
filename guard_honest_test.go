@@ -708,3 +708,16 @@ func TestGuardSuiteOriginalTestsOnlyWhenChanged(t *testing.T) {
 		t.Errorf("no reminder when old tests are untouched, requests=%d", n)
 	}
 }
+
+func TestVsInfraErr(t *testing.T) {
+	for _, s := range []string{"sh: 1: cd: can't cd to /tmp/jazz-origtests-1", "bash: python3: command not found", "/usr/bin/python3: No module named pytest"} {
+		if !vsInfraErr(s) {
+			t.Errorf("infra error not detected: %q", s)
+		}
+	}
+	for _, s := range []string{"FAIL: test_x (t.T)\nFAILED (failures=1)", "Ran 3 tests\nOK", "--- FAIL: TestX"} {
+		if vsInfraErr(s) {
+			t.Errorf("a test verdict is not an infra error: %q", s)
+		}
+	}
+}

@@ -41,6 +41,14 @@ var (
 	vsNoTestsRE = regexp.MustCompile(`(?i)\bRan 0 tests\b|NO TESTS RAN|no tests ran|no test files|collected 0 items|No tests found`)
 )
 
+// vsInfraErrRE: the test command never started (shell or interpreter error).
+var vsInfraErrRE = regexp.MustCompile(`(?i)can't cd|cannot cd|cd: .*(no such|permission|not a directory)|command not found|not found: (python|go|npm|cargo|make)|operation not permitted|no module named (unittest|pytest)\b`)
+
+// vsInfraErr: the output says the runner did not run, with no test verdict.
+func vsInfraErr(text string) bool {
+	return vsInfraErrRE.MatchString(text) && !vsRedRE.MatchString(text) && !strings.Contains(text, "Ran ") && !strings.Contains(text, "passed")
+}
+
 // vsRed: the run failed (exit code, or a failure marker when piped).
 func vsRed(out ToolOutput) bool {
 	if vsNoTestsRE.MatchString(out.Text) && !vsRedRE.MatchString(out.Text) {
@@ -173,6 +181,9 @@ func (a *Agent) vsRunSuite(ctx context.Context, st *hgState, full string, timeou
 	if !r.Reset && vsNoTestsRE.MatchString(text) && !vsRedRE.MatchString(text) {
 		sum, red = "nenhum teste encontrado", false
 	}
+	if red && vsInfraErr(text) {
+		red, sum = false, "sem veredito: "+oneLine(text, 100)
+	}
 	lines := nonEmptyLines(text)
 	prev := lines
 	if len(prev) > 4 {
@@ -275,7 +286,13 @@ func (a *Agent) vsOriginalTests(ctx context.Context, st *hgState, full string, t
 	if len(changed) == 0 {
 		return false
 	}
-	tmp, err := os.MkdirTemp("", "jazz-origtests-")
+	// inside the project: the Linux sandbox (bwrap) mounts a private tmpfs
+	// on /tmp, so a copy there does not exist for the shell (d610, 13/11)
+	base := filepath.Join(a.tools.Root, ".jazz")
+	if os.MkdirAll(base, 0o755) != nil {
+		return false
+	}
+	tmp, err := os.MkdirTemp(base, "origtests-")
 	if err != nil {
 		return false
 	}
@@ -302,6 +319,11 @@ func (a *Agent) vsOriginalTests(ctx context.Context, st *hgState, full string, t
 	sum := fmt.Sprintf("exit %d · %s", r.ExitCode, label)
 	if r.Reset {
 		sum = "sem veredito: " + firstSentence(strings.Trim(r.Note, "[]"))
+	}
+	if red && vsInfraErr(text) {
+		// the runner never ran (cd, missing interpreter): the harness's
+		// problem, never the model's
+		red, sum = false, "sem veredito: "+oneLine(text, 100)
 	}
 	a.ui.ToolEnd("verify-orig", "verify", ToolOutput{Text: text, IsErr: red, Display: Display{Summary: oneLine(sum, 160)}}, r.Duration)
 	dbg("suite", map[string]any{"orig": changed, "exit": r.ExitCode, "red": red})
