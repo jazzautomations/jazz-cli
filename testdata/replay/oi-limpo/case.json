@@ -2,7 +2,6 @@
   "name": "oi-limpo",
   "origin": "d610 261109-221930-4d1b",
   "why": "um 'oi' em $HOME levou a lição do wifi (plano 'verificado' que falhou) e um pedaço de senha pra um provedor grátis; conversa não pode carregar lição nem plan cache",
-  "front": "F3",
   "entry": "agent",
   "mode": "auto",
   "files": {"setup.sh": "#!/bin/sh\necho ok\n", "wifi.sh": "#!/bin/sh\nnmcli dev wifi\n"},

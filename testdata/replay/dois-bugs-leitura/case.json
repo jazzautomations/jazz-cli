@@ -2,7 +2,6 @@
   "name": "dois-bugs-leitura",
   "origin": "macbookpro 261110-110658-b22e (eval 05-dois-bugs)",
   "why": "S/bugfix tem teto de exploração 4 e a partir da 9ª leitura sem editar o jazz recusou ler acervo.py/calendario.py, justamente os arquivos a corrigir (TOOL_NOT_EXECUTED 5×); ler nunca pode ser bloqueado",
-  "front": "F4",
   "entry": "agent",
   "mode": "auto",
   "files": {

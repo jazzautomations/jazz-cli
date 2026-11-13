@@ -2,7 +2,6 @@
   "name": "gone-410",
   "origin": "eventos nvidia/z-ai/glm-5.3, 14 runs entre 02/11 e 10/11",
   "why": "410 'end of life' cai em 'other', não é Retryable e a run morre com a reserva configurada na fila",
-  "front": "F1",
   "entry": "agent",
   "mode": "auto",
   "headless": true,

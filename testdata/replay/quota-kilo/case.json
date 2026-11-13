@@ -2,7 +2,6 @@
   "name": "quota-kilo",
   "origin": "macbookpro 261111-100735-4515 (corpo do 429 reconstruído do evento request.end, sem conta/IP)",
   "why": "PROMOTION no 1º modelo do kilo e a cascata gastou mais requests no mesmo kilo (406 casos); a mensagem final repassou 'Sign up for free' em inglês",
-  "front": "F1",
   "entry": "agent",
   "mode": "auto",
   "headless": true,

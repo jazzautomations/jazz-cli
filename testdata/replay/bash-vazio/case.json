@@ -2,7 +2,6 @@
   "name": "bash-vazio",
   "origin": "north-mini (openrouter), 13 chamadas 'bash {}' nas sessões da 0.13",
   "why": "args vazios em ferramenta com campo obrigatório voltam como erro seco que entra no histórico e gasta passo; F4.3: refazer no máximo 1 vez por turno sem tool result no histórico",
-  "front": "F4",
   "entry": "agent",
   "mode": "auto",
   "files": {"main.py": "print(1)\n"},

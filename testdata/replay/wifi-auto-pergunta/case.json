@@ -2,7 +2,6 @@
   "name": "wifi-auto-pergunta",
   "origin": "d610 261109-164340-694a",
   "why": "em auto o comando de sistema caiu em CRÍTICO e foi bloqueado sem perguntar; o dono queria que o jazz fizesse, com consentimento",
-  "front": "F2",
   "entry": "agent",
   "mode": "auto",
   "stubs": {"bins": ["modprobe"]},

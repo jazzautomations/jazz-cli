@@ -2,7 +2,6 @@
   "name": "troca-avisada",
   "origin": "macbookpro 261110-191600-5c06 + rodada 03/11 ('11/11 gpt-oss' servida por outro modelo)",
   "why": "com -m e reserva configurada pelo usuário (consentimento), o pin em cota não pode sumir da lista em silêncio: tenta o pin primeiro, avisa, e a reserva só entra avisada",
-  "front": "F1",
   "entry": "agent",
   "mode": "auto",
   "model": "gemini/gemini-3.8-flash",

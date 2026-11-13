@@ -2,7 +2,6 @@
   "name": "m-respeitado",
   "origin": "macbookpro 261110-191600-5c06",
   "why": "24 sessões com -m gemini sem nenhum request ao gemini: o ref pedido saiu da lista por estar em cota e a cadeia grátis implícita respondeu sem aviso",
-  "front": "F1",
   "entry": "agent",
   "mode": "auto",
   "headless": true,
