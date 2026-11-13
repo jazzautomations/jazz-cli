@@ -120,6 +120,8 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
     memória, 127 é comando inexistente (`python` → `python3`), módulo ausente, permissão;
   - resposta que termina anunciando o próximo passo ("agora vou rodar os testes.") sem chamar ferramenta
     volta pro modelo fazer (até 2 vezes por turno).
+  - sem modelo fixado, um modelo que continua vazio depois das repetições sai da frente e o próximo da
+    cadeia responde;
   - edit que não acha o texto por causa da indentação (espaços onde o arquivo tem tab, outro nível de
     aninhamento) casa linha a linha ignorando a indentação, se o trecho for único, e reindenta a troca no
     padrão do arquivo, avisando o modelo.

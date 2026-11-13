@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBhPipedTest(t *testing.T) {
@@ -58,5 +59,30 @@ func TestAcAnnouncesAction(t *testing.T) {
 		if acAnnouncesAction(s) {
 			t.Errorf("false positive: %q", s)
 		}
+	}
+}
+
+// Unpinned: the model goes empty through the resends; the nudge goes to the
+// next candidate instead of ending the turn with an error.
+func TestAgentEmptyMovesToNextCandidateUnpinned(t *testing.T) {
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, func(n int, r recReq) fakeResp {
+		if r.Model == "m1" {
+			return fakeResp{}
+		}
+		return fakeResp{Text: "from m2"}
+	}, func(c *Config) {
+		c.Providers["fake2"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true}
+		c.Fallback = []string{"fake2/m2"}
+	})
+	if h.ag.acPin("main") != "" {
+		t.Skip("harness pins the model")
+	}
+	if err := h.run(t, "go"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if lm := lastMsg(h.ag.Msgs); lm.Content != "from m2" {
+		t.Errorf("final = %+v", lm)
 	}
 }

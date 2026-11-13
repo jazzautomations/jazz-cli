@@ -771,6 +771,15 @@ turnLoop:
 			if text == "" && !nudgedEmpty {
 				nudgedEmpty = true
 				dbg("nudge", "empty")
+				// the same model went empty after the resends: without a pin the
+				// router tries the next candidate for the nudge (Hermes:
+				// deterministic empties go to the fallback)
+				if a.acPin("main") == "" {
+					if a.stalled == nil {
+						a.stalled = map[string]time.Time{}
+					}
+					a.stalled[turnModel] = time.Now()
+				}
 				a.append(Message{Role: "user", Content: "<system-reminder>Sua última resposta veio vazia. Continue a tarefa ou dê a resposta final.</system-reminder>"})
 				continue
 			}
