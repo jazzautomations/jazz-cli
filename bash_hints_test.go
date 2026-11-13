@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -84,5 +86,18 @@ func TestAgentEmptyMovesToNextCandidateUnpinned(t *testing.T) {
 	}
 	if lm := lastMsg(h.ag.Msgs); lm.Content != "from m2" {
 		t.Errorf("final = %+v", lm)
+	}
+}
+
+func TestEnvBlockTestCommand(t *testing.T) {
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b := envBlock(d); !strings.Contains(b, "test command (detected): go test ./...") {
+		t.Errorf("env block misses the test command:\n%s", b)
+	}
+	if b := envBlock(t.TempDir()); strings.Contains(b, "test command") {
+		t.Errorf("no project, no test command line")
 	}
 }

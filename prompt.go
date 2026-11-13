@@ -277,6 +277,14 @@ func envBlock(root string) string {
 		}
 		fmt.Fprintf(&b, "top-level entries: %s\n", strings.Join(names, " "))
 	}
+	// the project's test command, so a weak model does not spend its first
+	// steps discovering it (Meta-Harness TB2 lesson: environment snapshot
+	// before the first call); never for $HOME or / (no project, long walk)
+	if home, _ := os.UserHomeDir(); root != "/" && filepath.Clean(root) != filepath.Clean(home) {
+		if tc := hgTestCommand(root); tc != "" {
+			fmt.Fprintf(&b, "test command (detected): %s\n", tc)
+		}
+	}
 	return b.String()
 }
 
