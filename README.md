@@ -553,6 +553,8 @@ com `-p`), `--output-format text|json|stream-json`, `--max-steps N`, `--timeout 
 | `/todo` · `/jobs [kill]` · `/mcp` · `/cost` · `/expand` | estado · saída inteira da última ferramenta |
 | `/goal [objetivo\|off]` · `/until [comando\|off]` · `/review [on\|off]` | objetivo fixo · só termina quando o comando passar · revisão do diff por subagente |
 | `/init` | cria um `AGENTS.md` analisando o projeto |
+| `/remember <texto>` · `/memory` | guarda uma regra no `AGENTS.md` do projeto ou global (como o `#` do Claude Code) · mostra os arquivos carregados |
+| `/btw <pergunta>` | pergunta paralela sobre a conversa, sem ferramentas e sem entrar no histórico |
 | `/script [nome] [json]` | lista os scripts prontos ou roda um (`/script git_state`) |
 | `/offline` · `/online` | força o modo offline · volta a tentar os provedores agora |
 | `/doctor` · `/exit` | diagnóstico · sair |
