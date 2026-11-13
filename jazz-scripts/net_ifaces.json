@@ -1,5 +1,5 @@
 {"name": "net_ifaces", "version": 1, "run": "python3", "effect": "read",
- "description": "Network interfaces from /sys and /proc (no ip/ifconfig): kind (wifi/ethernet/vpn, from /sys, not the name), state, MAC, IPv4/IPv6, rx/tx, default route",
+ "description": "Network interfaces from /sys and /proc: kind (wifi/ethernet/vpn), state, MAC, IPv4/IPv6, rx/tx, default route",
  "args": {"type": "object", "additionalProperties": false,
    "properties": {
      "name": {"type": "string", "description": "only this interface (exact name, else substring match)"},
