@@ -359,3 +359,28 @@ func TestSbGitPointerDirs(t *testing.T) {
 		t.Fatalf("ponteiro forjado => %v, quero nil", got)
 	}
 }
+
+// An installed skill gets ~/.cache/<skill> writable, and nothing else of ~/.cache.
+func TestSandboxSkillCacheWritable(t *testing.T) {
+	jh := t.TempDir()
+	t.Setenv("JAZZ_HOME", jh)
+	if err := os.MkdirAll(filepath.Join(jh, "skills", "video-lite"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sb := sbNew("auto", sbBwrap, "/usr/bin/bwrap", false, []string{t.TempDir()})
+	want := sbReal(filepath.Join(home, ".cache", "video-lite"))
+	found := false
+	for _, d := range sb.CacheRW {
+		if d == want {
+			found = true
+		}
+		if d == sbReal(filepath.Join(home, ".cache")) {
+			t.Errorf("the whole ~/.cache must not be writable")
+		}
+	}
+	if !found {
+		t.Errorf("skill cache %s not writable: %v", want, sb.CacheRW)
+	}
+}

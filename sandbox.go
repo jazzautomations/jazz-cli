@@ -302,6 +302,22 @@ func sbNew(mode, backend, bin string, net bool, roots []string) *Sandbox {
 			}
 		}
 	}
+	// an installed skill keeps its own cache in ~/.cache/<skill> (video-lite:
+	// voice and SFX WAVs); only that folder, created here so the bind exists
+	if mode != "strict" && sb.Home != "" {
+		if ents, err := os.ReadDir(filepath.Join(configDir(), "skills")); err == nil {
+			for _, e := range ents {
+				n := e.Name()
+				if !e.IsDir() || strings.HasPrefix(n, ".") || strings.ContainsAny(n, "/\\") || strings.HasSuffix(n, ".installing") || strings.HasSuffix(n, ".old") {
+					continue
+				}
+				d := filepath.Join(sb.Home, ".cache", n)
+				if os.MkdirAll(d, 0o755) == nil {
+					sb.CacheRW = append(sb.CacheRW, sbReal(d))
+				}
+			}
+		}
+	}
 	// worktree/submodule roots keep .git as a file ("gitdir: <abs>") pointing
 	// into the real metadata — usually under $HOME or /tmp, which the sandbox
 	// masks with tmpfs. Bind the resolved gitdir read-only so git plumbing

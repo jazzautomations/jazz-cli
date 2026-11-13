@@ -296,6 +296,8 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
   duro em 1,5x: pipeline de skill é longo por natureza (`--max-steps` continua valendo).
 - Mudar uma skill instalada (`~/.config/jazz-cli/skills`, `~/.claude/skills`, `~/.agents/skills`) sempre
   pergunta, até no yolo: skill roda em toda sessão; bug de skill se avisa ao dono, não se remenda calado.
+- Cada skill instalada ganha o seu `~/.cache/<nome>` gravável dentro do sandbox (e só ele): a video-lite guarda ali
+  a voz e os efeitos já gerados.
 - Sandbox: `~/.local/opt` (ferramentas instaladas sem root, como o espeak-ng) e as fontes do usuário ficam
   legíveis; `~/.cache/huggingface` entra nos caches graváveis. O resto da home continua escondido (os `.env` de
   outros projetos, configs com token…), e o modelo é avisado de que `ls`/`du` na home veem uma visão parcial e
