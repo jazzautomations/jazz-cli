@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -116,7 +121,7 @@ func (a *Agent) vsGate(ctx context.Context, st *hgState) bool {
 		a.append(Message{Role: "user", Content: fmt.Sprintf("<system-reminder>Your last test run after the edits FAILED:\n$ %s\n%s\nDo not report success. Fix the cause and re-run. If a failure existed before your change and is unrelated, say so explicitly in the final answer.</system-reminder>", cmd, st.lastTestOut)})
 		return true
 	}
-	if st.suiteRan || a.obDeadlineWarned() {
+	if (st.suiteRan && st.origRan) || a.obDeadlineWarned() {
 		return false
 	}
 	full := hgTestCommand(a.tools.Root)
@@ -131,6 +136,21 @@ func (a *Agent) vsGate(ctx context.Context, st *hgState) bool {
 		}
 		timeout = min(timeout, left)
 	}
+	if !st.suiteRan {
+		if red, ran := a.vsRunSuite(ctx, st, full, timeout); red || !ran {
+			return red
+		}
+	}
+	if st.origRan || ctx.Err() != nil {
+		return false
+	}
+	st.origRan = true
+	return a.vsOriginalTests(ctx, st, full, timeout)
+}
+
+// vsRunSuite runs the full suite at the project root. red: the failures went
+// back to the model; ran=false: no verdict (interrupted).
+func (a *Agent) vsRunSuite(ctx context.Context, st *hgState, full string, timeout time.Duration) (red, ran bool) {
 	st.suiteRan = true
 	a.ui.ToolStart("verify-suite", "verify", full)
 	a.ui.Thinking("rodando a suíte completa")
@@ -139,11 +159,11 @@ func (a *Agent) vsGate(ctx context.Context, st *hgState) bool {
 	a.ui.StopThinking()
 	if ctx.Err() != nil {
 		a.ui.ToolEnd("verify-suite", "verify", ToolOutput{Text: "interrompido", IsErr: true, Display: Display{Summary: "interrompido"}}, r.Duration)
-		return false
+		return false, false
 	}
 	text := strings.TrimSpace(redactSecrets(r.Output))
 	out := ToolOutput{Text: text, IsErr: r.ExitCode != 0}
-	red := vsRed(out)
+	red = vsRed(out)
 	sum := fmt.Sprintf("exit %d · suíte completa", r.ExitCode)
 	if r.Reset {
 		// timed out or the shell died: no verdict, never blame the model
@@ -162,9 +182,133 @@ func (a *Agent) vsGate(ctx context.Context, st *hgState) bool {
 	dbg("suite", map[string]any{"cmd": full, "exit": r.ExitCode, "red": red, "reset": r.Reset})
 	bgScoreRecord(a.TurnModel(), "suite", !red)
 	if !red {
-		return false
+		return false, !r.Reset
 	}
 	a.ui.Notice("guarda de conclusão: a suíte completa falhou — devolvendo ao modelo")
 	a.append(Message{Role: "user", Content: fmt.Sprintf("<system-reminder>Before accepting your answer the harness ran the project's full test suite, and it FAILS:\n$ %s\n%s\nDo not report success. Fix what your change broke (existing tests included) and re-run. Do not edit or weaken existing tests to make them pass. If a failure existed before your change and is unrelated, say so explicitly in the final answer.</system-reminder>", full, truncateHeadTail(text, vsMaxOut))})
+	return true, true
+}
+
+// ---------- the original tests against the new code ----------
+
+const (
+	vsCopyMaxFiles = 3000
+	vsCopyMaxBytes = 64 << 20
+)
+
+// vsChangedTests: test files that existed when the turn began and were
+// changed or deleted since (relative paths, sorted by walk order).
+func vsChangedTests(st *hgState) []string {
+	var out []string
+	for abs, sn := range st.snap {
+		if sn == nil {
+			continue
+		}
+		rel, err := filepath.Rel(st.root, abs)
+		if err != nil || hgKind(rel) != "test" {
+			continue
+		}
+		cur, ok := hgReadFile(abs)
+		if !ok || cur != sn.data {
+			out = append(out, filepath.ToSlash(rel))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// vsCopyProject copies root into dst for a throwaway run: regular files only,
+// heavy dependency dirs (node_modules, vendor, venvs) linked instead of copied,
+// VCS and caches left out. false = too big or unreadable: skip the check.
+func vsCopyProject(root, dst string) bool {
+	files, bytes := 0, int64(0)
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, p)
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			if p == root {
+				return nil
+			}
+			switch d.Name() {
+			case ".git", ".hg", ".svn", ".jazz", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache", ".idea", ".vscode", ".tox", ".nox":
+				return filepath.SkipDir
+			case "node_modules", "vendor", ".venv", "venv", "env", "target", "dist", "build", ".next":
+				if err := os.Symlink(p, target); err != nil {
+					return err
+				}
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(target, 0o755)
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
+		files++
+		bytes += fi.Size()
+		if files > vsCopyMaxFiles || bytes > vsCopyMaxBytes {
+			return errVsTooBig
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, b, fi.Mode().Perm())
+	})
+	return err == nil
+}
+
+var errVsTooBig = errors.New("projeto grande demais para copiar")
+
+// vsOriginalTests runs the turn-start version of the tests the model changed
+// against the new code, in a copy of the project. A model that "updates the
+// tests" by rewriting the old assertions to fit a regression passes its own
+// suite; the old tests catch it. again=true: a reminder was appended.
+func (a *Agent) vsOriginalTests(ctx context.Context, st *hgState, full string, timeout time.Duration) bool {
+	changed := vsChangedTests(st)
+	if len(changed) == 0 {
+		return false
+	}
+	tmp, err := os.MkdirTemp("", "jazz-origtests-")
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(tmp)
+	if !vsCopyProject(a.tools.Root, tmp) {
+		dbg("suite", map[string]any{"orig": "skip-copy"})
+		return false
+	}
+	for _, rel := range changed {
+		sn := st.snap[filepath.Join(st.root, filepath.FromSlash(rel))]
+		dst := filepath.Join(tmp, filepath.FromSlash(rel))
+		_ = os.MkdirAll(filepath.Dir(dst), 0o755)
+		if os.WriteFile(dst, []byte(sn.data), sn.mode|0o200) != nil {
+			return false
+		}
+	}
+	label := "testes originais: " + strings.Join(changed, ", ")
+	a.ui.ToolStart("verify-orig", "verify", label)
+	a.ui.Thinking("rodando os testes originais contra o código novo")
+	r := a.tools.Shell.Run(ctx, a.tools.Shell.Dialect().subshellAt(tmp, full), timeout, nil)
+	a.ui.StopThinking()
+	text := strings.TrimSpace(strings.ReplaceAll(redactSecrets(r.Output), tmp, "."))
+	red := !r.Reset && ctx.Err() == nil && vsRed(ToolOutput{Text: text, IsErr: r.ExitCode != 0})
+	sum := fmt.Sprintf("exit %d · %s", r.ExitCode, label)
+	if r.Reset {
+		sum = "sem veredito: " + firstSentence(strings.Trim(r.Note, "[]"))
+	}
+	a.ui.ToolEnd("verify-orig", "verify", ToolOutput{Text: text, IsErr: red, Display: Display{Summary: oneLine(sum, 160)}}, r.Duration)
+	dbg("suite", map[string]any{"orig": changed, "exit": r.ExitCode, "red": red})
+	if !red {
+		return false
+	}
+	a.ui.Notice("guarda de conclusão: os testes originais quebram com o código novo — devolvendo ao modelo")
+	a.append(Message{Role: "user", Content: fmt.Sprintf("<system-reminder>You changed existing tests (%s). The harness ran their ORIGINAL version (from before this turn) against your new code, and they FAIL:\n$ %s\n%s\nBehavior the old tests pin must keep working unless the request explicitly changes it. Fix the code, not the old assertions; keep your new tests as additions. If the request really changes one of those behaviors, quote the assertion and the sentence of the request that changes it in your final answer.</system-reminder>", strings.Join(changed, ", "), full, truncateHeadTail(text, vsMaxOut))})
 	return true
 }

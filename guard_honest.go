@@ -66,7 +66,10 @@ func (p hgPolicy) String() string {
 const (
 	hgMaxVisit = 6000
 	hgMaxSnap  = 600
-	hgMaxDepth = 8
+	// hgDoneRounds: completion reminders per turn before the stop is accepted
+	// as StopQualityFailed (the 2nd one spells out the fix)
+	hgDoneRounds = 2
+	hgMaxDepth   = 8
 )
 
 // hgSnap is one protected file as it was when the turn started.
@@ -95,7 +98,7 @@ type hgState struct {
 
 	hard        []hgHard // hardcode findings
 	nudgedTests bool
-	nudgedDone  bool
+	nudgedDone  int            // completion reminders sent this turn (max hgDoneRounds)
 	edits       map[string]int // single edits per file (batch tip)
 	tipped      map[string]bool
 
@@ -104,6 +107,7 @@ type hgState struct {
 	lastTestOut string // its output tail (redacted)
 	nudgedRed   bool   // the "your last test run failed" reminder fired
 	suiteRan    bool   // the harness ran the full suite at stop this turn
+	origRan     bool   // the harness ran the original versions of changed tests
 
 	keepJobs    bool            // the request asks to leave background jobs running
 	jobsAtStart map[string]bool // live job ids when the turn began (older jobs are not this turn's to nag)
@@ -1395,13 +1399,18 @@ func (a *Agent) hgDoneGate(ctx context.Context) (again bool, why StopReason) {
 		}
 	}
 	if len(issues) > 0 {
-		if !st.nudgedDone {
-			st.nudgedDone = true
+		if st.nudgedDone < hgDoneRounds {
+			st.nudgedDone++
 			a.ui.Notice(fmt.Sprintf("guarda de conclusão: %d %s — devolvendo ao modelo", len(issues), uiPl(len(issues), "pendência", "pendências")))
 			var b strings.Builder
 			b.WriteString("<system-reminder>The task is not done yet (deterministic check):\n")
 			for i, is := range issues {
 				fmt.Fprintf(&b, "%d. %s\n", i+1, is)
+			}
+			if st.nudgedDone > 1 {
+				// second round: the model kept the copy (often a same-name
+				// wrapper with other parameters) — say exactly how to remove it
+				b.WriteString("This is the second time. Delete each listed definition from that file (a wrapper with the same name counts as a copy). Where the module needs different arguments, call the shared function with those arguments at each call site, or add an optional parameter with the old default to the shared function. Keep public behavior identical.\n")
 			}
 			b.WriteString("Fix these, re-run the tests, then give your final answer.</system-reminder>")
 			a.append(Message{Role: "user", Content: b.String()})

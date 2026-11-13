@@ -353,6 +353,9 @@ func TestGuardExtractionLeavesNoCopies(t *testing.T) {
 	if !reqs[2].contains("user", "pagamentos/boleto.py:4 still defines validar_valor") {
 		t.Errorf("the leftover copy must be reported")
 	}
+	if len(reqs) < 4 || !reqs[3].contains("user", "This is the second time. Delete each listed definition") {
+		t.Errorf("the second round must spell out the fix (requests=%d)", len(reqs))
+	}
 	if stop != StopQualityFailed {
 		t.Errorf("stop=%s", stop)
 	}
@@ -653,5 +656,55 @@ func TestGuardSuiteLastRunRed(t *testing.T) {
 	reqs := h.fs.requests()
 	if len(reqs) < 3 || !reqs[2].contains("user", "Your last test run after the edits FAILED") {
 		t.Fatalf("want the red-run reminder, requests=%d", len(reqs))
+	}
+}
+
+// The model "updates" an old assertion to fit a regression and its own suite
+// is green: the original test, run against the new code, catches it.
+func TestGuardSuiteOriginalTestsCatchRewrite(t *testing.T) {
+	files := map[string]string{
+		"tests/__init__.py":  "",
+		"tests/test_calc.py": gTest,
+		"calc.py":            "def soma(a, b):\n    return a + b\n\n\ndef dobro(a):\n    return 2 * a\n",
+	}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{
+			editCall("e1", "calc.py", "    return a + b", "    return a + b + (1 if a == 2 else 0)"),
+			editCall("e2", "tests/test_calc.py", "soma(2, 3), 5", "soma(2, 3), 6"),
+			bashCall("b1", "python3 -m unittest -q"),
+		}},
+		fakeResp{Text: "pronto, testes atualizados e passando"},
+		fakeResp{Text: "a mudança quebrava soma(2, 3) == 5; não mexo nisso"})
+	if _, err := h.ag.Run(context.Background(), "Adicione um teste para dobro em tests/ e atualize os testes que precisar."); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) != 3 || !reqs[2].contains("user", "ran their ORIGINAL version") || !reqs[2].contains("user", "tests/test_calc.py") {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.300v", i, m["role"], m["content"])
+		}
+		t.Fatalf("want the original-tests reminder, requests=%d", len(reqs))
+	}
+	// the copy is gone and the project is untouched by the check
+	if b, _ := os.ReadFile(filepath.Join(h.root, "tests/test_calc.py")); !strings.Contains(string(b), "soma(2, 3), 6") {
+		t.Errorf("the check must not restore files in the project")
+	}
+}
+
+// Adding new tests only (old ones untouched): no extra run.
+func TestGuardSuiteOriginalTestsOnlyWhenChanged(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{
+			writeCall("w1", "tests/test_novo.py", "import unittest\nfrom calc import soma\n\nclass N(unittest.TestCase):\n    def test_zero(self):\n        self.assertEqual(soma(0, 0), 0)\n"),
+			bashCall("b1", "python3 -m unittest -q"),
+		}},
+		fakeResp{Text: "pronto"})
+	if err := h.run(t, "Adicione um teste para soma(0, 0) em tests/."); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("no reminder when old tests are untouched, requests=%d", n)
 	}
 }

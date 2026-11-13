@@ -102,6 +102,11 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   o jazz roda a suíte completa do projeto antes de aceitar (teto de 3 min, nunca perto do `--timeout`) e
   devolve as falhas. Falha que já existia antes pode ficar, mas tem que ser dita. `JAZZ_SUITE_GUARD=off`
   desliga.
+- **Teste antigo reescrito não passa batido.** Se o modelo mudou um teste que já existia, o jazz roda a versão
+  original dele contra o código novo, numa cópia do projeto, e devolve o que quebrou: comportamento que o
+  teste antigo garante continua valendo, a não ser que o pedido mude isso.
+- A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
+  diz exatamente como resolver.
 - Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida uma vez em silêncio; se continuar
   vazia, o modelo é lembrado uma vez e, sem nada feito, vira erro claro em vez de "pronto" mudo.
 
