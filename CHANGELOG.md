@@ -17,6 +17,8 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   `fallback` ou `fallback_on_pinned: auto`. Config apontando para um modelo aposentado passa a falhar com
   essa mensagem em vez de trocar calado.
 - Sem pin, quando o modelo pedido sai da cadeia ou outro modelo responde no lugar, o jazz diz.
+- Chave recusada (401/403) não joga o jazz no modo offline: a rede está de pé, ele passa para o próximo
+  candidato e diz `/key`. 403 sem cara de chave inválida (plano, região) tira só aquele modelo por 6 h.
 - Um classificador só para erro de provedor. Modelo aposentado (410, "end of life") sai do rodízio até o
   provedor voltar a listá-lo (ou `jazz omni reset`); chave recusada vale para aquela chave; tool call que o
   provedor recusou nunca é "falha de rede", nem quando chega no meio do stream.
@@ -90,6 +92,12 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
 - "oi" sem tarefa pendente vai pela pista curta.
 - Checkpoint não varre `$HOME` nem `/`; "arquivos demais" fica lembrado por 48 h e o `/undo` diz o motivo.
 - O relógio da execução vai no fim do último resultado de ferramenta, não como mensagem do usuário.
+- **Não aceita "pronto" com teste vermelho.** Se o último teste depois da edição falhou (mesmo com o exit
+  escondido por `| tail`), o modelo ouve isso uma vez antes de responder. Se ele só rodou um teste estreito,
+  o jazz roda a suíte completa do projeto antes de aceitar (teto de 3 min, nunca perto do `--timeout`) e
+  devolve as falhas. Falha que já existia antes pode ficar, mas tem que ser dita. `JAZZ_SUITE_GUARD=off`
+  desliga.
+- Resposta vazia duas vezes seguidas sem nada feito vira erro claro em vez de "pronto" mudo.
 
 ### Achados do QA no binário (provedor falso)
 

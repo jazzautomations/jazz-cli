@@ -99,6 +99,12 @@ type hgState struct {
 	edits       map[string]int // single edits per file (batch tip)
 	tipped      map[string]bool
 
+	lastTestRed bool   // the last test run failed (exit code or a failure marker)
+	lastTestCmd string // the last test command the model ran
+	lastTestOut string // its output tail (redacted)
+	nudgedRed   bool   // the "your last test run failed" reminder fired
+	suiteRan    bool   // the harness ran the full suite at stop this turn
+
 	keepJobs    bool            // the request asks to leave background jobs running
 	jobsAtStart map[string]bool // live job ids when the turn began (older jobs are not this turn's to nag)
 	nudgedJobs  bool            // the background-jobs reminder already fired this turn
@@ -110,7 +116,7 @@ type hgHard struct {
 
 // ---------- settings ----------
 
-var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD", "jobs": "JAZZ_JOB_GUARD"}
+var hgEnvNames = map[string]string{"tests": "JAZZ_TEST_GUARD", "hardcode": "JAZZ_HARDCODE_CHECK", "done": "JAZZ_DONE_GATE", "eval": "JAZZ_EVAL_GUARD", "jobs": "JAZZ_JOB_GUARD", "suite": "JAZZ_SUITE_GUARD"}
 
 // hgOn: whether guard name (tests | hardcode | done | eval | jobs) is on.
 func (a *Agent) hgOn(name string) bool {
@@ -934,6 +940,7 @@ func (a *Agent) hgAfterTool(tc ToolCall, out ToolOutput) string {
 		}
 		if bgIsTestCmd(cmd) {
 			st.lastTest = st.seq
+			vsRecord(st, cmd, out)
 			notes = append(notes, a.ojAfterTest(cmd, out)...) // root-cause panel after 2 failed runs (judge_fusion.go)
 		}
 	case "script":
@@ -944,6 +951,7 @@ func (a *Agent) hgAfterTool(tc ToolCall, out ToolOutput) string {
 		}
 		if test {
 			st.lastTest = st.seq
+			vsRecord(st, "", out)
 		}
 	}
 	switch tc.Name {
@@ -1401,6 +1409,11 @@ func (a *Agent) hgDoneGate(ctx context.Context) (again bool, why StopReason) {
 		}
 		a.ui.Warn("guarda de conclusão ainda falha: " + oneLine(issues[0], 140))
 		return false, StopQualityFailed
+	}
+	// The tests ran after the edits but the last run was red, or the model
+	// ran only a narrow slice: one reminder / one full run (verify_suite.go).
+	if again := a.vsGate(ctx, st); again {
+		return true, ""
 	}
 	// Tests must run after the last code edit. The quality gate already asks
 	// for it when it knows the test command; the agent's verify nudge covers

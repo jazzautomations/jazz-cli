@@ -571,3 +571,87 @@ func lastToolText(r recReq) string {
 	}
 	return ""
 }
+
+func TestVsIsFull(t *testing.T) {
+	cases := []struct {
+		cmd, full string
+		want      bool
+	}{
+		{"python3 -m unittest -q", "python3 -m unittest", true},
+		{"python -m unittest discover -v", "python3 -m unittest", true},
+		{"cd /x && python3 -m unittest 2>&1 | tail -5", "python3 -m unittest", false}, // 2>&1 stays: unsure → harness runs it
+		{"python3 -m unittest tests.test_novo", "python3 -m unittest", false},
+		{"go test -count=1 ./...", "go test ./...", true},
+		{"go test -run TestX ./...", "go test ./...", false},
+		{"", "go test ./...", false},
+	}
+	for _, c := range cases {
+		if got := vsIsFull(c.cmd, c.full); got != c.want {
+			t.Errorf("vsIsFull(%q, %q)=%v want %v", c.cmd, c.full, got, c.want)
+		}
+	}
+	if !vsRed(ToolOutput{Text: "....F\nFAILED (failures=1)\n"}) {
+		t.Error("a piped unittest failure is red")
+	}
+	if vsRed(ToolOutput{Text: "Ran 0 tests in 0.000s\n\nNO TESTS RAN", IsErr: true}) {
+		t.Error("no tests is not a verdict")
+	}
+}
+
+// The model ran only its new test file (green) but broke an existing test:
+// the harness runs the full suite before accepting "pronto".
+func TestGuardSuiteRunsFullBeforeDone(t *testing.T) {
+	files := map[string]string{
+		"tests/__init__.py":   "",
+		"tests/test_calc.py":  gTest,
+		"tests/test_extra.py": "import unittest\n\n\nclass E(unittest.TestCase):\n    def test_ok(self):\n        self.assertTrue(True)\n",
+		"calc.py":             "def soma(a, b):\n    return a + b\n",
+	}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest tests.test_extra")}},
+		fakeResp{Text: "tudo funcionando"},
+		fakeResp{Text: "a mudança quebrou tests/test_calc.py (soma(2, 3) agora dá -1)"})
+	stop, err := h.ag.Run(context.Background(), "Mude calc.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) != 3 || !reqs[2].contains("user", "harness ran the project's full test suite, and it FAILS") {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.300v", i, m["role"], m["content"])
+		}
+		t.Fatalf("want the full-suite reminder, requests=%d", len(reqs))
+	}
+	if stop != StopDone {
+		t.Errorf("stop=%s", stop)
+	}
+	// JAZZ_SUITE_GUARD=off: no harness run
+	t.Setenv("JAZZ_SUITE_GUARD", "off")
+	h = newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest tests.test_extra")}},
+		fakeResp{Text: "tudo funcionando"})
+	if err := h.run(t, "Mude calc.py"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("suite guard off: requests=%d", n)
+	}
+}
+
+// The last test run after the edit was red (exit hidden by a pipe): one
+// reminder instead of accepting "tudo funcionando".
+func TestGuardSuiteLastRunRed(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest 2>&1 | tail -3")}},
+		fakeResp{Text: "tudo funcionando"},
+		fakeResp{Text: "a suíte falha: soma está errada e não consegui corrigir"})
+	if _, err := h.ag.Run(context.Background(), "Mude calc.py"); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) < 3 || !reqs[2].contains("user", "Your last test run after the edits FAILED") {
+		t.Fatalf("want the red-run reminder, requests=%d", len(reqs))
+	}
+}
