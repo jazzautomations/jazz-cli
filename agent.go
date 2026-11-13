@@ -374,6 +374,12 @@ const planReminder = "<system-reminder>Plan mode is on: investigate with read-on
 
 const stepLimitReminder = "<system-reminder>Limite de passos atingido. Não chame mais ferramentas: responda agora com o que foi feito e o que falta.</system-reminder>"
 
+// acEmptyResends: silent resends of an empty reply before the nudge; the
+// pause grows (acEmptyWait × n²) so a provider hiccup has time to pass.
+const acEmptyResends = 2
+
+var acEmptyWait = 3 * time.Second
+
 const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
 
 // obDeadlineWarn marks that the run passed 3/4 of its --timeout (main.go arms
@@ -491,7 +497,7 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
-	retriedEmpty := false // one silent resend of a request that came back empty
+	emptyResends := 0 // silent resends of a request that came back empty (max acEmptyResends)
 	callsIssued := 0 // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
@@ -522,7 +528,7 @@ turnLoop:
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
 			nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake = false, false, false, false
-			retriedEmpty = false
+			emptyResends = 0
 			lastDenied, textConts, callTruncs, compactFailStep = false, 0, 0, -100
 			a.bgOnReset() // fresh context: exploration cap and reread index start over (budget.go)
 		}
@@ -680,10 +686,15 @@ turnLoop:
 		// empty content, the same request answers "ok" a minute later). Send
 		// the same request once more before nudging — the empty turn is not
 		// recorded, so the model does not see its own silence.
-		if !thinkCut && !retriedEmpty && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
-			retriedEmpty = true
-			dbg("empty", map[string]any{"retry": true, "reasoning": len(resp.Reasoning)})
-			a.ui.Notice("o provedor devolveu resposta vazia — repetindo o pedido")
+		if !thinkCut && emptyResends < acEmptyResends && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
+			emptyResends++
+			wait := acEmptyWait * time.Duration(emptyResends*emptyResends) // 3 s, 12 s
+			dbg("empty", map[string]any{"retry": emptyResends, "reasoning": len(resp.Reasoning)})
+			a.ui.Notice(fmt.Sprintf("o provedor devolveu resposta vazia — repetindo o pedido em %s (%d/%d)", wait, emptyResends, acEmptyResends))
+			select {
+			case <-ctx.Done():
+			case <-time.After(wait):
+			}
 			continue
 		}
 		if thinkCut {

@@ -1323,6 +1323,8 @@ func (a *Agent) hgCopiesLeft() []string {
 		return nil
 	}
 	var out []string
+	sibDefs := map[string][]string{}
+	mod := strings.TrimSuffix(filepath.Base(target), filepath.Ext(target))
 	hgWalk(filepath.Dir(target), func(abs, rel string) {
 		if abs == target || !isCodeFile(abs) || filepath.Ext(abs) != filepath.Ext(target) || hgKind(a.tools.rel(abs)) != "" {
 			return
@@ -1342,8 +1344,41 @@ func (a *Agent) hgCopiesLeft() []string {
 		for _, n := range names {
 			out = append(out, fmt.Sprintf("%s:%d still defines %s, which %s now provides", a.tools.rel(abs), defs[n], n, a.tools.rel(target)))
 		}
+		// siblings that already import from the target: a helper they all
+		// still define was left out of the extraction (eval v2 task 08:
+		// formatar_reais stayed copied in the three modules)
+		if hgImportsModule(src, mod) {
+			for n, line := range defs {
+				if _, ok := provided[n]; !ok && n != "main" && !strings.HasPrefix(n, "__") {
+					sibDefs[n] = append(sibDefs[n], fmt.Sprintf("%s:%d", a.tools.rel(abs), line))
+				}
+			}
+		}
 	})
+	var dupNames []string
+	for n, where := range sibDefs {
+		if len(where) >= 2 {
+			dupNames = append(dupNames, n)
+		}
+	}
+	sort.Strings(dupNames)
+	for _, n := range dupNames {
+		w := sibDefs[n]
+		sort.Strings(w)
+		out = append(out, fmt.Sprintf("%s is still defined in %s — a helper the modules share belongs in %s too (move it there and import it; if the copies differ on purpose, say why)", n, strings.Join(w, ", "), a.tools.rel(target)))
+	}
 	return out
+}
+
+// hgImportsModule: src imports from module mod (Python "from .mod import",
+// "from pkg.mod import", "import pkg.mod"; JS/TS "./mod").
+func hgImportsModule(src, mod string) bool {
+	if mod == "" {
+		return false
+	}
+	q := regexp.QuoteMeta(mod)
+	re := regexp.MustCompile(`(?m)^\s*(?:from\s+[.\w]*\b` + q + `\s+import|import\s+[.\w]*\b` + q + `\b)|from\s+["'][./\w-]*/` + q + `(?:\.\w+)?["']|require\(["'][./\w-]*/` + q + `["']\)`)
+	return re.MatchString(src)
 }
 
 // hgTestCommand: the project's test command, also for plain unittest/go

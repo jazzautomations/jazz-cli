@@ -540,21 +540,23 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 }
 
 func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
-	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
-	// empty: one silent resend, then one nudge, then an error in PT — never a silent "done"
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	// empty: two silent resends, then one nudge, then an error in PT — never a silent "done"
 	err := h.run(t, "go")
 	if err == nil || !strings.Contains(err.Error(), "resposta vazia duas vezes") {
 		t.Fatalf("want the empty-reply error, got %v", err)
 	}
 	reqs := h.fs.requests()
-	if len(reqs) != 3 {
-		t.Fatalf("resend + one nudge => 3 requests, got %d", len(reqs))
+	if len(reqs) != 4 {
+		t.Fatalf("2 resends + one nudge => 4 requests, got %d", len(reqs))
 	}
-	if reqs[1].contains("user", "última resposta veio vazia") || len(reqs[1].Messages) != len(reqs[0].Messages) {
-		t.Errorf("the resend must be the same request (the empty turn is not recorded)")
+	if reqs[2].contains("user", "última resposta veio vazia") || len(reqs[2].Messages) != len(reqs[0].Messages) {
+		t.Errorf("the resends must be the same request (the empty turn is not recorded)")
 	}
-	if !reqs[2].contains("user", "última resposta veio vazia") {
-		t.Errorf("nudge missing from 3rd request")
+	if !reqs[3].contains("user", "última resposta veio vazia") {
+		t.Errorf("nudge missing from 4th request")
 	}
 	n := 0
 	for _, m := range h.ag.Msgs {
@@ -569,6 +571,8 @@ func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 
 // Work done, then the model goes empty twice: the turn keeps the work and says so in PT.
 func TestAgentEmptyReplyResendRecovers(t *testing.T) {
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
 	h := newHarness(t, seq(fakeResp{}, fakeResp{Text: "ok"}), nil)
 	if err := h.run(t, "responda apenas: ok"); err != nil {
 		t.Fatal(err)
@@ -585,7 +589,9 @@ func TestAgentEmptyReplyResendRecovers(t *testing.T) {
 
 func TestAgentEmptyAfterWorkKeepsTurn(t *testing.T) {
 	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"echo oi"}`}
-	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
 	if err := h.run(t, "go"); err != nil {
 		t.Fatalf("work was done: want no error, got %v", err)
 	}

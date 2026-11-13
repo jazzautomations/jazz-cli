@@ -776,3 +776,42 @@ func TestAutoReviewSpecRequest(t *testing.T) {
 		t.Errorf("review guard off: requests=%d", n)
 	}
 }
+
+// Extraction that left one shared helper behind in every module (it never
+// reached the new module): reported as a copy.
+func TestGuardExtractHelperLeftInSiblings(t *testing.T) {
+	h := newGuardHarness(t, map[string]string{
+		"pagamentos/__init__.py": "",
+		"pagamentos/comum.py":    "def validar_cpf(c):\n    return True\n",
+		"pagamentos/boleto.py":   "from .comum import validar_cpf\n\n\ndef formatar_reais(v):\n    return 'R$ %.2f' % v\n",
+		"pagamentos/pix.py":      "from .comum import validar_cpf\n\n\ndef formatar_reais(v):\n    return 'R$ %.2f' % v\n",
+		"pagamentos/outro.py":    "def formatar_reais(v):\n    return v\n", // does not import comum: not judged
+	},
+		fakeResp{Calls: []fakeCall{editCall("e1", "pagamentos/pix.py", "from .comum import validar_cpf\n", "from .comum import validar_cpf  # ok\n")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto"})
+	if _, err := h.ag.Run(context.Background(), "Extraia as funções auxiliares para um módulo novo pagamentos/comum.py e faça os módulos usarem de lá, sem deixar cópias."); err != nil {
+		t.Fatal(err)
+	}
+	r := h.fs.requests()[2]
+	if !r.contains("user", "formatar_reais is still defined in pagamentos/boleto.py:4, pagamentos/pix.py:4") {
+		t.Errorf("the helper left in the siblings must be reported")
+	}
+	if r.contains("user", "outro.py") {
+		t.Errorf("a module that does not use comum is not part of the extraction")
+	}
+}
+
+func TestHgImportsModule(t *testing.T) {
+	for _, s := range []string{"from .comum import x", "from pagamentos.comum import (a, b)", "import pagamentos.comum", "import { a } from './comum'", "const c = require('../lib/comum')"} {
+		if !hgImportsModule(s, "comum") {
+			t.Errorf("not detected: %q", s)
+		}
+	}
+	for _, s := range []string{"from .comumx import a", "# comum", "import comumente"} {
+		if hgImportsModule(s, "comum") {
+			t.Errorf("false positive: %q", s)
+		}
+	}
+}

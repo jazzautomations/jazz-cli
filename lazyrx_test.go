@@ -67,18 +67,19 @@ func TestInitMainBudget(t *testing.T) {
 // shrinks. Keys are file:func (file:Type.Method for methods); a bare file
 // name covers every function of that file.
 var noInlineMustCompileAllow = map[string]string{
-	"lazyrx.go:lazyRe.R":          "dynamic", // the lazy compile itself
-	"docs.go:dcSelect":            "dynamic", // QuoteMeta(sym)
-	"docs_fetch.go:dcC7Version":   "dynamic", // QuoteMeta(id), QuoteMeta(want)
-	"shell.go:Shell.runOnce":      "dynamic", // QuoteMeta(marker)
-	"methods.go:brTextOp":         "dynamic", // QuoteMeta(from) no ignore_case
-	"web.go:dropBlockRes":         "dynamic", // tag names from the caller
-	"buildtarget.go":              "todo",    // wave 2 (guard FP item owns the file)
-	"hardening2.go:h2WholeDanger": "todo",    // wave 2
-	"improve.go:imAdvice":         "todo",    // wave 2
-	"offers.go:olShellFailMenu":   "todo",    // wave 2
-	"tools.go:closeTruncated":     "todo",    // wave 2
-	"winsafety.go:winReadOnly":    "todo",    // wave 2
+	"lazyrx.go:lazyRe.R":              "dynamic", // the lazy compile itself
+	"docs.go:dcSelect":                "dynamic", // QuoteMeta(sym)
+	"docs_fetch.go:dcC7Version":       "dynamic", // QuoteMeta(id), QuoteMeta(want)
+	"shell.go:Shell.runOnce":          "dynamic", // QuoteMeta(marker)
+	"methods.go:brTextOp":             "dynamic", // QuoteMeta(from) no ignore_case
+	"web.go:dropBlockRes":             "dynamic", // tag names from the caller
+	"guard_honest.go:hgImportsModule": "dynamic", // QuoteMeta(mod)
+	"buildtarget.go":                  "todo",    // wave 2 (guard FP item owns the file)
+	"hardening2.go:h2WholeDanger":     "todo",    // wave 2
+	"improve.go:imAdvice":             "todo",    // wave 2
+	"offers.go:olShellFailMenu":       "todo",    // wave 2
+	"tools.go:closeTruncated":         "todo",    // wave 2
+	"winsafety.go:winReadOnly":        "todo",    // wave 2
 }
 
 // TestNoInlineMustCompile is the regression lock of wave 1 item 7: no
