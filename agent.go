@@ -700,7 +700,7 @@ turnLoop:
 		if !thinkCut && emptyResends < acEmptyResends && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
 			emptyResends++
 			wait := acEmptyWait * time.Duration(emptyResends*emptyResends) // 3 s, 12 s, 27 s
-			dbg("empty", map[string]any{"retry": emptyResends, "reasoning": len(resp.Reasoning)})
+			dbg("empty", map[string]any{"retry": emptyResends, "reasoning": len(resp.Reasoning), "stop": resp.Stop, "usage": resp.Usage, "refusal": resp.Refusal, "partial": resp.Partial, "model": turnModel})
 			a.ui.Notice(fmt.Sprintf("o provedor devolveu resposta vazia — repetindo o pedido em %s (%d/%d)", wait, emptyResends, acEmptyResends))
 			select {
 			case <-ctx.Done():
