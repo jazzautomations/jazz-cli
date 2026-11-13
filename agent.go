@@ -2106,12 +2106,18 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// mode, HIGH asks except under yolo's explicit opt-in, a clean target never
 	// prompts
 	btHigh := ""
+	repoAsk := false // a setup script of a repo the user named: always a question (user_repo.go)
 	if tool == "bash" && !isMCP && cmd != "" {
 		var btCrit string
 		if btCrit, btHigh = btCheckWithSupply(a.tools.lockDir(), cmd, a.cfg.EgressAllow, func(nested, nestedCwd string) string {
 			why, _ := a.sgCheckCommandIn(ctx, nested, dec == PermAllow, nestedCwd)
 			return why
-		}); btCrit != "" {
+		}); btCrit != "" && !a.sub {
+			if repo := urRequestedRepo(ctx, a.tools.lockDir(), btCrit, a.Msgs); repo != "" {
+				btHigh, repoAsk, btCrit = "script do repositório que você pediu ("+repo+") — "+btCrit+"; rodar só se você confia nesse repositório", true, ""
+			}
+		}
+		if btCrit != "" {
 			if a.blockUX() {
 				a.blockWhy = btCrit
 				return false, a.nlDenied(nlGateHostile, blockMsg(what, "the build target or script it runs is hostile: "+btCrit)), true
@@ -2179,7 +2185,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// bypasses the fence (outside-root targets) and HIGH build-target findings.
 	// What still gates: prompt-injection suspicion and sensitive egress —
 	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
-	if mode == "yolo" && injReason == "" && !sensitiveEgress {
+	if mode == "yolo" && injReason == "" && !sensitiveEgress && !repoAsk {
 		return true, "", false
 	}
 	if mode == "plan" {
@@ -2392,6 +2398,9 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		if r := a.nlConsentRule(gate, tool, args, cmd, isMCP); r != "" {
 			need, autoRule = false, r
 		}
+	}
+	if repoAsk {
+		need, autoRule = true, "" // never covered by yolo, a grant or a remembered approval
 	}
 	if mode == "smart" && !need && dec != PermAllow && !hook.approve && !strings.HasPrefix(autoRule, "consent:") {
 		need = a.smartNeedsPrompt(ctx, tool, args, cmd, fetchURL, isMCP, jobKill)

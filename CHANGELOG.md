@@ -186,6 +186,21 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
 
 ### Novo
 
+- **Skills do GitHub, como no Claude Code e no Codex.** `jazz skill install <url | dono/repo | pasta>` (ou
+  `/skill install` na sessão) clona, acha cada `SKILL.md` (na raiz, numa subpasta `/tree/main/…` ou um repo
+  com várias skills), mostra o que cada uma traz, inclusive os scripts, e instala em
+  `~/.config/jazz-cli/skills/<nome>` (`--project`: `.jazz/skills`). Copia só arquivos regulares (symlink
+  fica de fora), com limite de tamanho, e guarda a origem; `jazz skill list | rm | update`. Mensagem que cita
+  uma skill por URL ("usa essa skill … e cria um vídeo") oferece a instalação na hora; no `-p`, um pedido
+  explícito de instalar instala. Depois de instalada, o modelo recebe o caminho do `SKILL.md`.
+- Script de setup de um repositório que **você** citou (a URL está na sua mensagem e o `origin` do clone
+  bate) não é mais "alvo hostil" sem saída: "baixa e executa código" é o que setup faz. Vira pergunta,
+  sempre, até no yolo, sem ser lembrada. Credencial saindo, apagar a home, comando perigoso e qualquer repo
+  que você não citou continuam bloqueados. Na demo de 12/11 o `setup_environment.py` da video-forge travou
+  aqui.
+- Bloqueio de segurança agora pede ao modelo que diga claramente o que foi bloqueado e nunca descreva a
+  tarefa como pronta com um passo necessário bloqueado (na mesma demo ele respondeu "pronto pra produção").
+
 - `/remember <texto>` guarda uma regra ou fato no AGENTS.md do projeto ou no global (como o `#` do Claude Code) e já
   vale na conversa; recusa texto com cara de segredo. `/memory` mostra os arquivos carregados.
 - `/btw <pergunta>`: pergunta paralela sobre a conversa, respondida sem ferramentas e sem entrar no histórico (o

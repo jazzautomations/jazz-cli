@@ -489,6 +489,12 @@ func main() {
 			pfQuit(cmdScript(root, rest[1:]))
 		case "mcp":
 			pfQuit(cmdMCP(rest[1:], os.Stdout)) // presets (mcp_presets.go)
+		case "skill", "skills": // skill_install.go
+			if err := cmdSkill(root, rest[1:], os.Stdin, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "jazz:", err)
+				os.Exit(1)
+			}
+			return
 		case "worktree", "worktrees":
 			pfQuit(cmdWorktree(root, rest[1:], os.Stdin, os.Stdout))
 		case "scan":
@@ -646,7 +652,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true, "distill": true, "alexandria": true, "ax": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true, "distill": true, "alexandria": true, "ax": true, "skill": true, "skills": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
@@ -870,6 +876,9 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	forcedOff := o.offline || olForcedEnv()
 	if forcedOff {
 		ui.Thinking("offline · interpretando")
+	}
+	if n := siHeadlessTurn(root, prompt, os.Stderr); n != "" { // a skill URL in the request (skill_install.go)
+		ag.Note(n)
 	}
 	fp, mprompt := olHeadless(ctx, ag, tools, ui, cfg, prompt, o)
 	if forcedOff {
@@ -1565,8 +1574,9 @@ func (a *App) send(text string) {
 	if text, ok = a.confirmPastedToolTranscript(text); !ok {
 		return
 	}
-	orig := text      // the request as typed: what a takeover answers or keeps (synergy.go)
-	defer a.qSend()() // message queue: next queued turn, or back to the editor (queue.go)
+	a.skillOffer(text) // a skill URL in the message: install it first (main_skill.go)
+	orig := text       // the request as typed: what a takeover answers or keeps (synergy.go)
+	defer a.qSend()()  // message queue: next queued turn, or back to the editor (queue.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	a.turnMu.Lock()
 	a.cancelTurn = cancel
