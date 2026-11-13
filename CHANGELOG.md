@@ -1,5 +1,106 @@
 # Changelog
 
+## 0.14.0 — 2026-11-12
+
+O modelo que você escolhe é o que responde, o `sudo` funciona com sandbox, ação crítica vira pergunta, e
+online o modelo é dono do turno: o offline passa a ajudar em vez de responder no lugar dele.
+
+### Modelo e provedores
+
+- **`-m` é contrato.** `-m`, `/model` ou um `model` no config fixam o modelo: a cadeia é ele mais o
+  `fallback` que você configurou, sem cadeia grátis implícita, sem reordenar por placar ou juiz. Modelo em
+  cota não some da lista: o jazz avisa e tenta assim mesmo. Se ele falha, o interativo pergunta "usar X
+  neste turno?" (sim / sempre nesta sessão / não) e o `-p` sai com código 75, dizendo o modelo, a causa e o
+  que fazer, sem cair escondido em outro modelo. `fallback_on_pinned: auto` troca sozinho (avisando),
+  `off` nunca troca; `--strict-model` (ou `JAZZ_STRICT_MODEL=1`) usa só o `-m`.
+- **Mudança de comportamento:** um `model` no config agora é pin. Quem quer o comportamento antigo põe um
+  `fallback` ou `fallback_on_pinned: auto`. Config apontando para um modelo aposentado passa a falhar com
+  essa mensagem em vez de trocar calado.
+- Sem pin, quando o modelo pedido sai da cadeia ou outro modelo responde no lugar, o jazz diz.
+- Um classificador só para erro de provedor. Modelo aposentado (410, "end of life") sai do rodízio até o
+  provedor voltar a listá-lo (ou `jazz omni reset`); chave recusada vale para aquela chave; tool call que o
+  provedor recusou nunca é "falha de rede", nem quando chega no meio do stream.
+- Nenhuma mensagem de erro mostra JSON cru do provedor (inclui o formato em array do Gemini).
+- Cota grátis anônima do Kilo acabou: a mensagem diz quando volta e como seguir agora (salvar a chave com
+  `/key` e escolher um modelo dela com `/model`).
+- O estado de cada candidato é relido antes de cada pedido: morto, grande demais para o modelo ou esfriando
+  é pulado enquanto houver outro; 429 de cota esfria o provedor inteiro; com tudo fora, sai no máximo um
+  pedido. Espera entre tentativas tem teto por modelo (30 s no interativo, 120 s no `-p`) e a linha de
+  retry é em português.
+- Presets: saíram os modelos da NVIDIA que o provedor removeu; o padrão da NVIDIA é o
+  `nemotron-3-ultra-550b-a55b`. Gemini flash saiu do tier de código; Groq saiu da cadeia implícita do
+  agente principal.
+
+### Sudo, sistema e consentimento
+
+- **`sudo` sai do sandbox.** Com sandbox ativo, comando com `sudo` roda no host: `sudo -n` quando não
+  precisa de senha, senão o jazz pede a senha **mascarada no terminal**. A senha fica só na memória, é
+  pedida de novo se o sudo recusar e vira `[REDACTED]` em saída de ferramenta, eventos e auditoria.
+- **Mudança de comportamento:** senha colada no chat continua apagada do texto, mas não é mais usada, e o
+  jazz avisa para não colar. No `-p`, use `JAZZ_SUDO_PASS`, `sudo -v` ou NOPASSWD.
+- Senha dentro do próprio comando (`sudo -S`, `SUDO_ASKPASS`, `su` lendo de pipe) é recusada em todo modo.
+- `sudo` que leria segredo (`~/.ssh`, `/etc/shadow`, caminhos ocultos do sandbox) nunca roda como root no
+  host, nem em `--yolo`.
+- Escrita aprovada em arquivo de sistema que dá permissão negada vai como root pelo host, com cópia do
+  original em `~/.local/state/jazz/sysbak` antes (cópia de arquivo de segredo fica com dono root).
+- **Ação crítica vira pergunta** no interativo, com o motivo e como desfazer; "sempre" lembra o binário ou
+  o arquivo, nunca a classe inteira. Ação desproporcional numa tarefa de contêiner pergunta sempre. O `-p`
+  continua recusando.
+- "não pode usar sudo, mas pode mexer no wifi" não concede root; "sem sudo" dito depois revoga.
+- Leitura: `>/dev/null`, `2>&1` e metacaractere entre aspas não impedem um comando de ser só leitura;
+  diagnósticos (`dmesg`, `ip`, `iw`, `lsmod`, `journalctl`, `systemctl status`, `ss`…) contam como leitura
+  só com subcomando de leitura. `env`, `printenv` e `export` sem argumento passam a pedir confirmação.
+- `2>&1` e `>/dev/null` não são mais lidos como nome de pacote no guarda de instalação.
+- Sandbox: o temporário privado é recriado antes de cada comando; o shell não morre quando
+  `/tmp/jazz-sbx-*` some.
+- As mensagens de bloqueio não mandam mais o modelo dizer "rode você mesmo" nem sugerir `--yolo`: ele pede
+  aprovação com o comando.
+
+### Online e offline juntos
+
+- **Online, o modelo responde.** O cérebro offline não segura mais frase de conversa ("ta ligado no wifi?",
+  "status", "o que mudou"). Só uma linha de comando literal de lista fechada e só leitura (`git status`,
+  `uptime`, `df`, `docker ps`…) roda sem o modelo; Enter vazio ou `/m` manda pro modelo. Menu online só
+  com "menu".
+- O resultado do offline chega ao modelo como dados (`<offline-data>`, com segredo redigido) e só quando o
+  pedido seguinte se refere a ele.
+- **Provedor caiu (cota, 5xx, sem rede):** se nenhuma ferramenta rodou no turno, o cérebro responde o que
+  dá só com leitura e avisa "respondi offline"; o que ele não resolve fica guardado e só é reenviado com
+  Enter vazio. Se o provedor caiu no meio do trabalho, o jazz mostra em português o que já foi feito
+  (arquivos, última verificação) e Enter vazio manda "continua" — nunca repete o pedido. No `-p`, o
+  offline assume o comando literal em 429/5xx.
+- Ferramenta `fact`: o modelo pode pedir as checagens só leitura do jazz (git, carga, discos, interfaces,
+  teste de rede real) e recebe a evidência em JSON. Recusa arquivo de credencial.
+- `net_status` não diz mais "offline" sem testar a rede.
+- Plano reaproveitado e lição só entram com termos em comum de verdade; "verificado" exige build/teste ou
+  sonda de um arquivo que o turno mudou; resposta que admite falha não grava plano; palavrão não é termo de
+  busca; literais de `sed`/`echo` não ficam no cache. Na primeira carga, o cache de planos de cada projeto
+  é limpo dos planos que não seguem essas regras (com backup `.pre-0.14.bak`).
+- Mapa de API e índice de nomes só com projeto de verdade e nome parecido de verdade.
+
+### Agente
+
+- Exploração não é mais recusada por orçamento; fica uma nota curta. Tarefa de sysadmin e conversa não
+  ganham teto de código nem lembrete.
+- Resposta em português do Brasil, como um colega: sem template de relatório, sem "Não verificado:" nem
+  "Nenhuma alteração". Lembretes do laço em português e sem repetir a mesma nota.
+- Argumento de ferramenta torto é consertado antes do portão de permissão (comando em argv, chave com
+  lixo): o portão vê exatamente o que vai rodar. `bash {}` é refeito uma vez; a mesma chamada inválida
+  repetida não roda.
+- "oi" sem tarefa pendente vai pela pista curta.
+- Checkpoint não varre `$HOME` nem `/`; "arquivos demais" fica lembrado por 48 h e o `/undo` diz o motivo.
+- O relógio da execução vai no fim do último resultado de ferramenta, não como mensagem do usuário.
+
+### Testes e release
+
+- Suíte de replay: sessões reais viram casos determinísticos (`testdata/replay`), com provedor, sudo, rede
+  e sandbox falsos; nenhum caso sai da máquina. `scripts/session2case.py` converte uma sessão em rascunho
+  com segredo redigido.
+- Eval isolado (`JAZZ_HOME` próprio, modelo preso, teste prévio, disjuntor, manifest) e classificação que
+  separa troca de modelo (`SUBST`), modelo que nunca respondeu e falha do harness.
+- O release exige `results/gate-<versão>.json` (`scripts/gate.sh`); sem ele, ou com caso de replay pulado
+  ou sem redteam, sai como pre-release.
+
 ## 0.13.4 — 2026-11-10
 
 Medição do modo offline com pedidos que o código nunca viu, e o que ela achou.
