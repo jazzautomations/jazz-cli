@@ -1,0 +1,164 @@
+{
+  "name": "dois-bugs-leitura",
+  "origin": "macbookpro 261110-110658-b22e (eval 05-dois-bugs)",
+  "why": "S/bugfix tem teto de exploração 4 e a partir da 9ª leitura sem editar o jazz recusou ler acervo.py/calendario.py, justamente os arquivos a corrigir (TOOL_NOT_EXECUTED 5×); ler nunca pode ser bloqueado",
+  "front": "F4",
+  "entry": "agent",
+  "mode": "auto",
+  "files": {
+    "run_tests.py": "import unittest\nunittest.main(module=None, argv=['x','discover','tests'])\n",
+    "biblioteca/__init__.py": "",
+    "biblioteca/acervo.py": "def total(xs):\n    return sum(xs) - 1  # bug\n",
+    "biblioteca/calendario.py": "def dias(m):\n    return 30 if m == 2 else 31  # bug\n",
+    "biblioteca/mod00.py": "X0 = 0\n",
+    "biblioteca/mod01.py": "X1 = 1\n",
+    "biblioteca/mod02.py": "X2 = 2\n",
+    "biblioteca/mod03.py": "X3 = 3\n",
+    "biblioteca/mod04.py": "X4 = 4\n",
+    "biblioteca/mod05.py": "X5 = 5\n",
+    "biblioteca/mod06.py": "X6 = 6\n",
+    "biblioteca/mod07.py": "X7 = 7\n",
+    "biblioteca/mod08.py": "X8 = 8\n",
+    "biblioteca/mod09.py": "X9 = 9\n"
+  },
+  "provider": {
+    "seq": [
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod00.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod01.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod02.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod03.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod04.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod05.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod06.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod07.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod08.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/mod09.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/acervo.py"
+            }
+          }
+        ]
+      },
+      {
+        "calls": [
+          {
+            "name": "read",
+            "args": {
+              "path": "biblioteca/calendario.py"
+            }
+          }
+        ]
+      },
+      {
+        "text": "achei os dois bugs: acervo.py subtrai 1 e calendario.py erra fevereiro."
+      }
+    ]
+  },
+  "turns": [
+    "A suíte de testes está vermelha. Rode python3 run_tests.py e corrija o código até ela passar inteira. Os testes estão certos: não altere tests/ nem run_tests.py."
+  ],
+  "expect": {
+    "err": "none",
+    "tool_absent": [
+      "TOOL_NOT_EXECUTED"
+    ],
+    "tool_has": [
+      "return sum(xs) - 1",
+      "return 30 if m == 2"
+    ]
+  }
+}

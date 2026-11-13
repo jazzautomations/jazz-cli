@@ -1,0 +1,19 @@
+{
+  "name": "argv-gptoss",
+  "origin": "macbookpro 261111-095446-ebff",
+  "why": "gpt-oss manda o comando como argv ({\"cmd\":[\"bash\",\"-lc\",\"ls -R\"]}) e ele vira a palavra '[bash,-lc,ls -R]' (~19 vezes); tem de rodar 'ls -R' de primeira",
+  "front": "F4",
+  "entry": "agent",
+  "mode": "auto",
+  "files": {"docs/LEIAME.txt": "oi\n", "main.py": "print(1)\n"},
+  "provider": {"seq": [
+    {"calls": [{"name": "bash", "args": {"cmd": ["bash", "-lc", "ls -R"]}}]},
+    {"text": "tem docs/LEIAME.txt e main.py."}
+  ]},
+  "turns": ["lista tudo daqui recursivamente"],
+  "expect": {
+    "err": "none",
+    "first_tool_ok": true,
+    "tool_has": ["LEIAME.txt"]
+  }
+}

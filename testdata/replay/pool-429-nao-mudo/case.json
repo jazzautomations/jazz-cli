@@ -1,0 +1,22 @@
+{
+  "name": "pool-429-nao-mudo",
+  "origin": "mac 261026-014843-6013 (modelo único kilo/poolside/laguna-s-2.1:free, 6×429, 2 turnos interrompidos)",
+  "why": "429 em todo candidato elegível: o turno não pode terminar sem dizer nada; a mensagem tem de ser PT, sem JSON cru, nomeando a cota",
+  "entry": "agent",
+  "mode": "auto",
+  "model": "kilo/poolside/laguna-s-2.1:free",
+  "fallback": [],
+  "extra": ["kilo"],
+  "provider": {
+    "repeat": true,
+    "seq": [{"status": 429, "body": "{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-min.\",\"code\":429}}"}]
+  },
+  "turns": ["quem é voce?"],
+  "expect": {
+    "err": "some",
+    "offline": false,
+    "min_requests": 1,
+    "err_has_any": ["cota", "limite", "429"],
+    "err_absent": ["{\""]
+  }
+}

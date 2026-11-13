@@ -45,6 +45,7 @@ type fakeResp struct {
 }
 
 type recReq struct {
+	Provider string // "" or the <name> of a BaseURL ending in /p/<name> (replay_test.go)
 	Model    string
 	Messages []map[string]any
 	Tools    []any
@@ -161,7 +162,13 @@ func (fs *fakeServer) countModel(m string) int {
 }
 
 func (fs *fakeServer) serve(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/chat/completions" {
+	path, prov := r.URL.Path, ""
+	if rest, ok := strings.CutPrefix(path, "/p/"); ok { // several providers on one fake server
+		if i := strings.IndexByte(rest, '/'); i > 0 {
+			prov, path = rest[:i], rest[i:]
+		}
+	}
+	if path != "/chat/completions" {
 		http.NotFound(w, r)
 		return
 	}
@@ -170,7 +177,7 @@ func (fs *fakeServer) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad json", 400)
 		return
 	}
-	rr := recReq{Raw: raw}
+	rr := recReq{Raw: raw, Provider: prov}
 	rr.Model, _ = raw["model"].(string)
 	if ms, ok := raw["messages"].([]any); ok {
 		for _, m := range ms {
