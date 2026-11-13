@@ -37,6 +37,38 @@ func (a *Agent) acKeepAnswer(text string) {
 	}
 }
 
+// acGateFailer is implemented by the -p sinks: the reopened turn ended with
+// the gate still failing (quality_failed …), so the reply is about the gate,
+// not a new complete answer — the kept answer must be printed too.
+type acGateFailer interface{ GateFailed() }
+
+// acGateFailed runs when a harness gate ends the turn as failed after it had
+// reopened it (answer.go acMergeFailed decides what is printed).
+func (a *Agent) acGateFailed() {
+	if a.sub {
+		return
+	}
+	if f, ok := a.ui.(acGateFailer); ok {
+		f.GateFailed()
+	}
+}
+
+// acMergeFailed is acMergeAnswer for a turn a gate ended as failed: the kept
+// answer is never replaced by the reply, however long; a reply that adds
+// something follows it, labelled.
+func acMergeFailed(kept, reply string) string {
+	kept, reply = strings.TrimSpace(kept), strings.TrimSpace(reply)
+	switch {
+	case kept == "":
+		return reply
+	case reply == "", strings.Contains(kept, reply), acAckRE.MatchString(reply):
+		return kept
+	case strings.Contains(reply, kept):
+		return reply
+	}
+	return kept + "\n\n" + acGateFollowLabel + "\n" + reply
+}
+
 // acAckRE: a reply to a gate that says nothing for the user.
 var acAckRE = lazyRx(`(?i)^(ok(ay)?|certo|entendido|feito|pronto|beleza|blz|done|sure|understood|got it|nada (a|para|pra) (mudar|corrigir|fazer)|nada mais a fazer|nothing (else )?to (change|fix|do)|sem (mudan[çc]as|altera[çc][õo]es))[.!…]*$`)
 

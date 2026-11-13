@@ -185,6 +185,16 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   resto digitado na caixa (antes dizia "na fila" sem estar na fila); na caixa de confiança a dica diz
   "vai pro editor, sem enviar" em vez de "enter manda pro agente"; o modo shell (`!cmd`) não mostra
   mais "! !" na caixa de entrada.
+- Checklist de qualidade: o item "lógica nova sem teste ... ou diga qual teste existente cobre" aceita a
+  resposta que nomeia um arquivo de teste ou função de teste que existe no projeto (um nome que não existe
+  continua reprovando); bugfix correto não termina mais em `quality_failed` (exit 9) por ter seguido o
+  convite.
+- Quando a verificação reabre o turno e ele termina reprovado (`quality_failed` …), o `-p` imprime a
+  resposta original seguida da réplica, mesmo que a réplica seja longa.
+- Projeto Python com testes estilo pytest (`def test_*` solto, `import pytest`, fixtures como `tmp_path`)
+  e sem `pytest.ini`/`conftest.py`: o comando de teste detectado é `python3 -m pytest -q` quando o pytest
+  está instalado (checagem feita uma vez, de uma pasta vazia); sem pytest continua `python3 -m unittest`,
+  e o ambiente avisa o modelo que os testes parecem pytest e que ele não deve reescrevê-los em unittest.
 
 ### Achados do QA na TUI (Dell)
 

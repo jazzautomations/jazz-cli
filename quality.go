@@ -71,15 +71,17 @@ type qgPre struct {
 // qgTurn is the gate's per-turn state.
 type qgTurn struct {
 	fed     bool // the one feedback round was used
+	fedAt   int  // len(a.Msgs) right after the feedback: the replies to it follow
 	lastKey string
 	issues  []qgIssue
 }
 
 // qgIssue is one checklist failure.
 type qgIssue struct {
-	File string // relative path ("" = turn-level)
-	Line int
-	Msg  string
+	File    string // relative path ("" = turn-level)
+	Line    int
+	Msg     string
+	TestGap bool // item 8 (new logic, no test touched): an answer naming an existing test settles it
 }
 
 func (i qgIssue) String() string {
@@ -209,7 +211,19 @@ func (a *Agent) acQualityGate(ctx context.Context) (again, failed bool) {
 		bt.qg.fed = true
 		a.ui.Notice(fmt.Sprintf("checagem de qualidade: %d %s — devolvendo ao modelo", len(issues), uiPl(len(issues), "problema", "problemas")))
 		a.append(Message{Role: "user", Content: qgFeedback(issues)})
+		bt.qg.fedAt = len(a.Msgs)
 		return true, false
+	}
+	// The test item invites "say which existing test already covers it": a
+	// reply that names a test file or test function that really exists in the
+	// project answers it (a name that exists nowhere does not).
+	if left := qgDropAnsweredTestGap(issues, a.qgRepliesSinceFeedback(bt), a.tools.Root); len(left) < len(issues) {
+		a.ui.Notice("checagem de qualidade: o modelo apontou o teste existente que cobre a mudança")
+		if len(left) == 0 {
+			a.ui.Notice("checagem de qualidade passou")
+			return false, false
+		}
+		issues = left
 	}
 	a.ui.Warn(fmt.Sprintf("checagem de qualidade ainda falha (%d %s): %s", len(issues), uiPl(len(issues), "item", "itens"), oneLine(issues[0].String(), 140)))
 	return false, true
@@ -410,7 +424,7 @@ func qgCheck(ctx context.Context, env qgEnv, files []qgFile) []qgIssue {
 		if env.newTestOnly {
 			how = "add a test that covers it in a NEW test file (the existing test files are protected in this task), or say which existing test already covers it"
 		}
-		issues = append(issues, qgIssue{Msg: fmt.Sprintf("new logic (%d branch/loop lines) but no test file was touched: %s", logic, how)})
+		issues = append(issues, qgIssue{Msg: fmt.Sprintf("new logic (%d branch/loop lines) but no test file was touched: %s", logic, how), TestGap: true})
 	}
 	if ctx.Err() == nil {
 		issues = append(issues, qgLintRun(ctx, env.root, files)...)

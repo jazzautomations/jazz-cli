@@ -16,13 +16,14 @@ type HeadlessUI struct {
 	Verbose bool
 	Last    string
 
-	mu    sync.Mutex
-	cur   strings.Builder
-	kept  string // final answer saved before a harness gate reopened the turn
-	steps int    // model requests, from TurnStats
-	tools int    // tool calls, from TurnStats
-	errw  io.Writer
-	outw  io.Writer
+	mu     sync.Mutex
+	cur    strings.Builder
+	kept   string // final answer saved before a harness gate reopened the turn
+	failed bool   // that gate ended the turn as failed (GateFailed)
+	steps  int    // model requests, from TurnStats
+	tools  int    // tool calls, from TurnStats
+	errw   io.Writer
+	outw   io.Writer
 }
 
 func (h *HeadlessUI) stderr() io.Writer {
@@ -67,12 +68,25 @@ func (h *HeadlessUI) KeepAnswer() {
 	h.Last = ""
 }
 
+// GateFailed: the gate that reopened the turn still fails and ends it; the
+// kept answer is printed with the reply instead of being replaced (answer.go).
+func (h *HeadlessUI) GateFailed() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.failed = true
+}
+
 // endAnswer folds the kept answer into Last at the end of a turn (h.mu held).
 func (h *HeadlessUI) endAnswer() {
 	if h.kept != "" {
-		h.Last = acMergeAnswer(h.kept, h.Last)
+		if h.failed {
+			h.Last = acMergeFailed(h.kept, h.Last)
+		} else {
+			h.Last = acMergeAnswer(h.kept, h.Last)
+		}
 		h.kept = ""
 	}
+	h.failed = false
 }
 
 // flushText ends the current assistant message (h.mu held).
