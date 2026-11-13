@@ -125,6 +125,11 @@ func (a *App) syRunLiteral(ctx context.Context, text string, m fpMatch) (done bo
 	dbg("fastpath", map[string]any{"intent": m.Intent, "cmd": m.Cmd, "exit": r.ExitCode, "offline": false, "literal": true})
 	last := &syLast{req: text, source: "literal", cmd: m.Cmd, exit: r.ExitCode, out: out, at: time.Now()}
 	text2, ok := olFastText(m, out, r.ExitCode, r.Reset)
+	if secretReasonSh(m.Cmd) != "" {
+		// "git diff .env": shown here, on the user's machine — never carried
+		// to a provider (the model asks for it through bash, under its gate)
+		last = nil
+	}
 	if !ok {
 		// a failing command is the model's job to read: same turn, as data
 		a.sy.last = nil

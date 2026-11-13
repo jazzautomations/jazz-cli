@@ -358,3 +358,23 @@ func TestBrainDomainVeto(t *testing.T) {
 		t.Errorf("offline brain answered uptime for a wifi question:\n%s", r.Text)
 	}
 }
+
+// A literal that reads a credential file ("git diff .env") is shown on the
+// user's machine, but its output is never kept to ride to the provider.
+func TestOnlineLiteralSecretNotCarried(t *testing.T) {
+	scNeedGit(t)
+	app, h := olTestApp(t)
+	_ = uiTestStdout(t)
+	scGit(t, h.root, "init", "-q")
+	scWrite(t, h.root, ".env", "DB_PASS=a\n")
+	scGit(t, h.root, "add", ".env")
+	scGit(t, h.root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "env")
+	scWrite(t, h.root, ".env", "DB_PASS=hunter2supersecret\n")
+	app.olBefore(context.Background(), "git diff .env")
+	if app.sy.last != nil {
+		t.Fatalf("secret diff kept for the model: %+v", app.sy.last)
+	}
+	if _, text := app.olBefore(context.Background(), "não, explica isso"); strings.Contains(text, "hunter2") {
+		t.Errorf("secret carried to the model:\n%s", text)
+	}
+}
