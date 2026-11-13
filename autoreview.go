@@ -23,6 +23,13 @@ import (
 // request "spec-heavy".
 const arMinReqs = 3
 
+// arMaxReview / arMinLeft: the review's time box and the least clock a
+// --timeout run must have left for it.
+const (
+	arMaxReview = 3 * time.Minute
+	arMinLeft   = 150 * time.Second
+)
+
 var arReqLineRE = lazyRx(`(?m)^\s*(?:[-*•]|\d{1,2}[.)])\s+\S`)
 
 // arSpecHeavy: the request lists several requirements.
@@ -49,11 +56,19 @@ func (a *Agent) arAutoReview(ctx context.Context, lt *acTurnLoop) bool {
 	if a.sub || lt == nil || lt.reviewed || a.hg == nil || !a.hg.codeEdited || ctx.Err() != nil {
 		return false
 	}
-	if !a.hgOn("review") || a.obDeadlineWarned() {
+	if !a.hgOn("review") {
 		return false
 	}
-	if !a.RunDeadline.IsZero() && time.Until(a.RunDeadline) < 4*time.Minute {
-		return false
+	// its own time box, so it also runs late in a --timeout run (the slow
+	// free models reach "done" after 3/4 of the clock): half of what is
+	// left, at most arMaxReview; never with less than arMinLeft on the clock
+	budget := arMaxReview
+	if !a.RunDeadline.IsZero() {
+		left := time.Until(a.RunDeadline)
+		if left < arMinLeft {
+			return false
+		}
+		budget = min(budget, left/2)
 	}
 	req := strings.TrimSpace(acStripReminders(lt.input))
 	if !arSpecHeavy(req) {
@@ -107,9 +122,14 @@ func (a *Agent) arAutoReview(ctx context.Context, lt *acTurnLoop) bool {
 	tc := ToolCall{ID: "autoreview", Name: "task", Args: string(args)}
 	a.ui.ToolStart(tc.ID, "task", "revisão automática: pedido item por item")
 	t0 := time.Now()
-	out := a.runTask(ctx, tc)
+	rctx, cancel := context.WithTimeout(ctx, budget)
+	out := a.runTask(rctx, tc)
+	cancel()
 	a.ui.ToolEnd(tc.ID, "task", out, time.Since(t0))
 	if ctx.Err() != nil {
+		return false
+	}
+	if rctx.Err() != nil && acReviewLGTM(acReviewReport(out.Text)) {
 		return false
 	}
 	report := acReviewReport(out.Text)
