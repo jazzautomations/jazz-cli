@@ -380,8 +380,8 @@ func rpSandbox(t *testing.T, root string) (logPath string) {
 		t.Fatal(err)
 	}
 	sb := &Sandbox{Mode: "auto", Backend: sbBwrap, Bin: wrap, Tmp: t.TempDir(), Home: os.Getenv("HOME"), Roots: []string{root}}
-	sbActive.Store(sb)
-	t.Cleanup(func() { sbActive.Store(nil) })
+	old := sbActive.Swap(sb)
+	t.Cleanup(func() { sbActive.Store(old) })
 	return logPath
 }
 
