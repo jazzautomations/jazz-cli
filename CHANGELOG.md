@@ -91,6 +91,18 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
 - Checkpoint não varre `$HOME` nem `/`; "arquivos demais" fica lembrado por 48 h e o `/undo` diz o motivo.
 - O relógio da execução vai no fim do último resultado de ferramenta, não como mensagem do usuário.
 
+### Achados do QA no binário (provedor falso)
+
+- `--allow-tools 'Bash(sudo apt-get:*)'`, que o `-p` sugeria, agora libera esse sudo (regra que nomeia o
+  comando, como `Bash(modprobe:*)`); a regra genérica `bash`, sudo que lê segredo e sudo de comando
+  perigoso continuam perguntando. O `-p` só sugere `--allow-tools` quando a regra de fato libera.
+- "tenta com <senha> no sudo" sai do texto antes do modelo e da sessão.
+- `jazz --offline -p whoami` roda `whoami` (antes respondia o perfil da máquina), como no online.
+- Com `-m` sem fallback, a abertura não promete "fila de reserva"; `--strict-model` não diz que "nenhum
+  outro modelo está disponível"; cota que volta amanhã aparece como "amanhã 21:00"; no `-p` o remédio é
+  `-m provedor/modelo`, não `/model`.
+- Busca de links no macOS: o nome do link não vira o nome do alvo quando a pasta passa por `/var`.
+
 ### Testes e release
 
 - Suíte de replay: sessões reais viram casos determinísticos (`testdata/replay`), com provedor, sudo, rede
