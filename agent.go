@@ -748,6 +748,18 @@ turnLoop:
 				a.append(Message{Role: "user", Content: "<system-reminder>Sua última resposta veio vazia. Continue a tarefa ou dê a resposta final.</system-reminder>"})
 				continue
 			}
+			// Second empty reply in a row (the provider streamed garbage reasoning and no text,
+			// eval v2 task 02 on the d610, 12/11): never end the turn as "done" in silence.
+			if text == "" {
+				dbg("empty", map[string]any{"calls": callsIssued})
+				if callsIssued == 0 {
+					stop = StopError
+					return stop, fmt.Errorf("o modelo %s devolveu resposta vazia duas vezes seguidas e não fez nada — tente de novo ou escolha outro modelo (-m)", turnModel)
+				}
+				if !a.sub {
+					a.ui.Notice("o modelo parou sem resumo final — o que ele fez neste turno está acima")
+				}
+			}
 			// Anti-fake guard: a final answer claiming actions with no tool call
 			// in the whole turn is a pretend reply; nudge once, then flag it.
 			if callsIssued == 0 && a.cfg.ModelSettings(turnModel).Tools != "none" && acClaimsAction(text) && !acRecap(input, a.Msgs) {

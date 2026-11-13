@@ -540,8 +540,10 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 
 func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
-	if err := h.run(t, "go"); err != nil {
-		t.Fatal(err)
+	// two empty replies and no tool call: an error in PT, never a silent "done"
+	err := h.run(t, "go")
+	if err == nil || !strings.Contains(err.Error(), "resposta vazia duas vezes") {
+		t.Fatalf("want the empty-reply error, got %v", err)
 	}
 	reqs := h.fs.requests()
 	if len(reqs) != 2 {
@@ -558,6 +560,24 @@ func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("nudge count = %d", n)
+	}
+}
+
+// Work done, then the model goes empty twice: the turn keeps the work and says so in PT.
+func TestAgentEmptyAfterWorkKeepsTurn(t *testing.T) {
+	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"echo oi"}`}
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	if err := h.run(t, "go"); err != nil {
+		t.Fatalf("work was done: want no error, got %v", err)
+	}
+	found := false
+	for _, n := range h.ui.notices {
+		if strings.Contains(n, "parou sem resumo final") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing PT notice, notices=%q", h.ui.notices)
 	}
 }
 
