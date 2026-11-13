@@ -80,3 +80,36 @@ func TestFactToolEndToEnd(t *testing.T) {
 		t.Errorf("tool result: %v", last)
 	}
 }
+
+// fact's methods read files in-process or through a script — not through
+// the read tool's credential gate. With the project at $HOME (or a .env in
+// the project) a prompt-injected fact{text_grep, .ssh/id_ed25519} sent the
+// private key body to the provider: credential paths are refused outright.
+func TestFactRefusesSecretFiles(t *testing.T) {
+	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
+	t.Setenv("HOME", h.root)
+	key := "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n-----END OPENSSH PRIVATE KEY-----\n"
+	scWrite(t, h.root, ".ssh/id_ed25519", key)
+	scWrite(t, h.root, ".netrc", "machine x login u password hunter2supersecret\n")
+	scWrite(t, h.root, "app/.env", "DB_PASS=hunter2supersecret\n")
+	scWrite(t, h.root, "README.md", "# ok\n")
+	for _, c := range []struct {
+		in   string
+		args map[string]any
+	}{
+		{"text_grep", map[string]any{"pattern": "A", "file": ".ssh/id_ed25519", "context": 10}},
+		{"text_grep", map[string]any{"pattern": "password", "file": ".netrc"}},
+		{"text_grep", map[string]any{"pattern": "PASS", "path": "app/.env"}},
+		{"wordcount_stats", map[string]any{"target": "~/.ssh/id_ed25519"}},
+		{"md_outline", map[string]any{"file": "README.md, .netrc"}},
+	} {
+		_, out := factCall(t, h, c.in, c.args)
+		if !out.IsErr || strings.Contains(out.Text, "b3BlbnNzaC1rZXkt") || strings.Contains(out.Text, "hunter2") || !strings.Contains(out.Text, "credencial") {
+			t.Errorf("%s %v must be refused: %s", c.in, c.args, out.Text)
+		}
+	}
+	// an ordinary file still works
+	if r, out := factCall(t, h, "text_grep", map[string]any{"pattern": "ok", "file": "README.md"}); !r.OK {
+		t.Errorf("README.md: %s", out.Text)
+	}
+}

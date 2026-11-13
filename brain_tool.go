@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -140,6 +141,25 @@ func (a *Agent) factReadOnlyEnv() *brEnv {
 	return env
 }
 
+// factSecretArg returns the first argument that names a credential file or
+// jazz's private state (~/.ssh, .netrc, .env, auth.json, sessions…), or "".
+// Every word of every value is checked: "file", "target", "path", lists.
+func (a *Agent) factSecretArg(slots map[string]string) string {
+	for _, v := range slots {
+		for _, w := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' || r == ';' }) {
+			w = strings.Trim(w, "'\"")
+			if w == "" {
+				continue
+			}
+			abs := a.tools.abs(w)
+			if secretPath(abs) || secretName(filepath.Base(w)) || jazzPrivateStatePath(abs) {
+				return w
+			}
+		}
+	}
+	return ""
+}
+
 // runFact executes a fact call.
 func (a *Agent) runFact(ctx context.Context, tc ToolCall) ToolOutput {
 	args := acArgsMap(factToolName, tc.Args)
@@ -154,6 +174,13 @@ func (a *Agent) runFact(ctx context.Context, tc ToolCall) ToolOutput {
 		for k, v := range m {
 			slots[k] = fmt.Sprint(v)
 		}
+	}
+	if p := a.factSecretArg(slots); p != "" {
+		// the methods read files in-process or through a script: neither
+		// passes the read tool's credential gate. A credential file asked of
+		// fact (prompt injection, or root = $HOME) never reaches the model.
+		return ToolOutput{IsErr: true, Text: fmt.Sprintf("fact não lê arquivo de credencial/segredo (%s). Se o usuário quiser mesmo, use read — ele pede confirmação.", p),
+			Display: Display{Summary: "fact: arquivo sensível recusado"}}
 	}
 	cctx, cancel := context.WithTimeout(ctx, factTimeout)
 	defer cancel()
