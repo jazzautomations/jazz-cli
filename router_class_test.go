@@ -125,7 +125,7 @@ func TestFriendlyErrNoRawJSON(t *testing.T) {
 		{&APIError{Status: 400, Body: rcBodyGemKey}, []string{"credencial recusada", "API key not valid", "/key"}},
 		{&APIError{Status: 404, Body: rcBody404}, []string{"aposentado/removido", "/model"}},
 		{&APIError{Status: 400, Body: rcBodyTools}, []string{"ferramentas demais", "MCP"}},
-		{promo, []string{"cota grátis", "/key"}},
+		{promo, []string{"cota grátis", "/key openrouter", "/model"}},
 		{&APIError{Status: 413, Body: rcBody413}, []string{"grande demais", "/compact"}},
 		{&APIError{Status: 0, Body: "Failed to parse tool call arguments as JSON"}, []string{"chamada de ferramenta"}},
 		{&APIError{Status: 500, Body: `{"error":{"message":"upstream exploded","code":500}}`}, []string{"upstream exploded"}},

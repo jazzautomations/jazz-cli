@@ -107,5 +107,8 @@ func pvQuotaAdvice(ae *APIError) string {
 	if ae.RetryAfter > 0 {
 		who += " — volta em ~" + rcDur(ae.RetryAfter)
 	}
-	return who + ". Pra seguir agora: crie uma conta grátis e salve a chave com /key openrouter ou /key kilo (fora do jazz: jazz key openrouter), ou troque de modelo (/model)"
+	// /key alone does not move the session off a keyless model whose provider
+	// is cooling (the /key flow only switches when the current provider has
+	// no credentials): the advice names both steps, so it actually works
+	return who + ". Pra seguir agora: crie uma conta grátis na OpenRouter, salve a chave com /key openrouter e escolha um modelo dela em /model (fora do jazz: jazz key openrouter, depois -m openrouter/…); ou troque de modelo (/model)"
 }
