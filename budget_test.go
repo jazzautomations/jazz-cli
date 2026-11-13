@@ -29,6 +29,10 @@ func TestBgClassify(t *testing.T) {
 		{"corrija o login: o token jwt expira cedo demais", 'M', "bugfix", true},
 		{"rename the author field", 'M', "refactor", false},
 		{"adicione uma migração para a tabela de pagamentos", 'L', "greenfield", true},
+		// code + new tests is not an S edit (eval v2 task 09, d610 12/11)
+		{"Implemente a função horas_extras de ponto/calculo.py e adicione testes para ela em tests/.", 'M', "greenfield", false},
+		{"implement ParseHeader in header.go with tests", 'M', "greenfield", false},
+		{"conserte o bug em parser.go: o teste quebra com entrada vazia", 'S', "bugfix", false},
 	}
 	for _, c := range cases {
 		got := bgClassify(c.in)

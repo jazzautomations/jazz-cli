@@ -160,6 +160,10 @@ var (
 	bgAskLeadRE = lazyRx(`(?i)^\s*(que|o que|t[áa]|tem|cad[êe]|consegue)\b`)
 	// bgLeadNewRE: the request opens with "add/implement/create": a feature.
 	bgLeadNewRE = lazyRx(`(?i)^\W*(add|adicione|crie|create|implement\w*|implemente|build|construa|escreva|write|fa[çc]a)\b`)
+	// bgAlsoTestsRE: the request also asks for new tests ("… e adicione testes", "with tests"):
+	// code plus tests plus a run is more than an S edit (eval v2 task 09 on the d610, 12/11,
+	// was cut by the S cap at step 19 right before running its tests).
+	bgAlsoTestsRE = lazyRx(`(?i)\b((adicione|adicionar|crie|criar|escreva|escrever|fa[çc]a|add|write|create)\s+(uns?\s+|os\s+|o\s+|some\s+|a\s+)?(testes?|tests?)|(com|with)\s+(testes?|tests?))\b`)
 )
 
 // bgClassify sizes and types a request from its text (reminders stripped).
@@ -195,7 +199,7 @@ func bgClassify(input string) bgTask {
 	switch {
 	case len(files) >= 3 || bgLargeRE.MatchString(bgNegatedRE.ReplaceAllString(s, " ")):
 		t.Size = 'L'
-	case (len(files) == 1 || (len(files) == 0 && syms == 1)) && len(s) < 400:
+	case (len(files) == 1 || (len(files) == 0 && syms == 1)) && len(s) < 400 && !(t.Kind != "refactor" && bgAlsoTestsRE.MatchString(s)):
 		t.Size = 'S'
 	}
 	return t
