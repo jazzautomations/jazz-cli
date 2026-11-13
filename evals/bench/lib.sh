@@ -8,6 +8,8 @@
 # Uso (no run.sh de uma suíte):
 #   . "$(dirname "$0")/../bench/lib.sh"
 #   bench_init "$RUN/summary.txt" "$LIMIT" "$MODEL"
+#   (antes da 1ª tarefa, as travas de evalguard.sh: eg_lock, eg_home, eg_strict, eg_preflight,
+#    eg_manifest; depois de cada tarefa, eg_dead METRICS = disjuntor)
 #   ... por tarefa: roda o agente com `timeout -k 10 $((LIMIT+60)) jazz -p --timeout ${LIMIT}s
 #       --metrics-out "$RUN/$name/metrics.json" ...` > "$RUN/$name/agent.log"; rc=$?;
 #       roda o verificador -> PASS/FAIL
@@ -21,6 +23,7 @@
 # falha do modelo e o jazz improve --harness não deve aprender com ela.
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/classify_infra.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/evalguard.sh"
 
 BENCH_SUMMARY=""; BENCH_LIMIT=0; BENCH_MODEL=""
 BENCH_N=0; BENCH_PASS=0; BENCH_T0=0
