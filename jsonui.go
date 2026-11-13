@@ -36,6 +36,7 @@ type JSONUI struct {
 	cur    strings.Builder
 	last   string
 	kept   string // final answer saved before a harness gate reopened the turn
+	failed bool   // that gate ended the turn as failed (GateFailed)
 	steps  int
 	tools  int
 	// Extra: fields added to the result object (outcome, checkpoint,
@@ -97,12 +98,25 @@ func (j *JSONUI) KeepAnswer() {
 	j.last = ""
 }
 
+// GateFailed: the gate that reopened the turn still fails and ends it; the
+// result "text" keeps the answer with the reply (answer.go).
+func (j *JSONUI) GateFailed() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.failed = true
+}
+
 // endAnswer folds the kept answer into last at the end of a turn (j.mu held).
 func (j *JSONUI) endAnswer() {
 	if j.kept != "" {
-		j.last = acMergeAnswer(j.kept, j.last)
+		if j.failed {
+			j.last = acMergeFailed(j.kept, j.last)
+		} else {
+			j.last = acMergeAnswer(j.kept, j.last)
+		}
 		j.kept = ""
 	}
+	j.failed = false
 }
 
 // flushText ends the current assistant message (j.mu held).

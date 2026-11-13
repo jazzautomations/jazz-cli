@@ -886,6 +886,7 @@ turnLoop:
 					a.acKeepAnswer(text) // quality checklist, auto-review, --until, --verifier (answer.go)
 					continue
 				} else if why != "" {
+					a.acGateFailed() // -p prints the kept answer with the gate reply (answer.go)
 					stop = why
 					return stop, nil
 				}

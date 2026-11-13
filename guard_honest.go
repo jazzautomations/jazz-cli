@@ -1486,16 +1486,15 @@ func hgTestCommand(root string) string {
 			return "python3 " + n
 		}
 	}
-	py := false
-	hgWalk(root, func(abs, rel string) {
-		if !py && strings.HasSuffix(abs, ".py") && hgKind(rel) == "test" && strings.HasPrefix(filepath.Base(abs), "test") {
-			py = true
-		}
-	})
-	if py {
-		return "python3 -m unittest"
+	switch py, pytestStyle := hgPyTests(root); {
+	case !py:
+		return ""
+	case pytestStyle && hgPytestAvailable():
+		// bare test functions / import pytest / fixtures: unittest finds
+		// nothing there (exit 5, NO TESTS RAN), pytest runs both styles
+		return "python3 -m pytest -q"
 	}
-	return ""
+	return "python3 -m unittest"
 }
 
 // hgDoneGate runs when the model wants to stop (before the quality gate).

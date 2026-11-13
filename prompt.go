@@ -283,6 +283,9 @@ func envBlock(root string) string {
 	if home, _ := os.UserHomeDir(); root != "/" && filepath.Clean(root) != filepath.Clean(home) {
 		if tc := hgTestCommand(root); tc != "" {
 			fmt.Fprintf(&b, "test command (detected): %s\n", tc)
+			if n := hgPyTestNote(root, tc); n != "" {
+				fmt.Fprintf(&b, "test note: %s\n", n)
+			}
 		}
 	}
 	return b.String()
