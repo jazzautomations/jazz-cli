@@ -25,6 +25,12 @@ const (
 	codexClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 	codexIssuer   = "https://auth.openai.com"
 	originator    = "jazz-cli"
+	// codexClientVersion is the client version reported to the Codex
+	// backend, which gates models by client version: values below the
+	// supported floor (jazz's own 0.x version is one) get every model
+	// refused as "not supported" and /models returns empty. Keep it in
+	// the range the codex CLI ships.
+	codexClientVersion = "0.166.0"
 )
 
 type tokenResp struct {
