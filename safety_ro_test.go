@@ -28,6 +28,9 @@ func TestReadOnlyRedirectsQuotesDiagnostics(t *testing.T) {
 		"journalctl --vacuum-time=1d", "journalctl --rotate", "journalctl --flush", "journalctl --cursor-file=/tmp/c",
 		"systemctl restart NetworkManager", "systemctl enable sshd", "systemctl -H host status x", "systemctl --machine=c status x",
 		"ss -K dst 1.2.3.4", "ss --kill", "hostname newname", "sysctl -w net.ipv4.ip_forward=1", "modprobe ipw2200",
+		// a quoted action flag is still the flag (the quote mask must not hide it)
+		"find . '-exec' rm x ';'", "find . '-exec' rm '{}' ';'", "find . '-ok' rm ';'", "find . '-delete'", "find . -fprint'out'",
+		"sort -o'out' f", "git branch '-D' x",
 	}
 	for _, c := range change {
 		if IsReadOnly(c) {

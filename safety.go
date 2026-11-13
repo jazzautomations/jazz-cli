@@ -614,6 +614,13 @@ func isReadOnlySh(cmd string) bool {
 		if !readOnlyCmd.MatchString(p) && !roDiagnostic(shellFields(p)) {
 			return false
 		}
+		// quotes do not hide an action flag from the program: `find . '-exec'
+		// rm x ';'` is find -exec. The flag checks also run on the unquoted
+		// words (the quote mask above let ';' and '{}' through).
+		if d := strings.Join(shellFields(p), " "); readOnlyBadArg.MatchString(d) || reSortOutFile.MatchString(d) ||
+			strings.HasPrefix(d, "git ") && reGitMutFlag.MatchString(d) || reUniqTreeOut.MatchString(d) {
+			return false
+		}
 		// git subcommands with mutating flags
 		if strings.HasPrefix(p, "git ") && reGitMutFlag.MatchString(p) {
 			return false
