@@ -307,6 +307,22 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 		t.Fatalf("new key must clear auth state: %+v", st)
 	}
 
+	// 403 without a bad-key body: only that model is parked, the provider
+	// (and its other models) stays in the rotation
+	c.rlEnd("groq/locked", 0, Usage{}, &APIError{Status: 403, Body: `{"error":{"message":"model not available on your plan"}}`})
+	if st := c.pvState("groq/locked", 0); !st.Dead {
+		t.Fatalf("403 must park the model: %+v", st)
+	}
+	if st := c.pvState("groq/other", 0); st.Dead {
+		t.Fatalf("403 on one model must not kill the provider: %+v", st)
+	}
+	// 403 that names the key is still a provider-wide refused credential
+	c.rlEnd("groq/k", 0, Usage{}, &APIError{Status: 403, Body: "invalid api key"})
+	if st := c.pvState("groq/other", 0); !st.Dead {
+		t.Fatalf("403 invalid api key is the key: %+v", st)
+	}
+	t.Setenv("GROQ_API_KEY", "gsk_third")
+
 	// notools: persisted as text tools in the models cache
 	c.rlEnd("groq/x", 0, Usage{}, &APIError{Status: 400, Body: "tool calling is not supported for this model"})
 	if ms := c.ModelSettings("groq/x"); ms.Tools != "text" {

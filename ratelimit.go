@@ -870,6 +870,14 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		note(b)
 		return true
 	case "auth":
+		if ae != nil && ae.Status == 403 && !pvBadKeyRE.MatchString(ae.Body) {
+			// 403 without a bad-key body is usually this model only (not in
+			// the plan, region, moderation): park the ref, keep the provider
+			b := rl.bucketLocked(ref)
+			b.DeadUntil = max(b.DeadUntil, now.Add(6*time.Hour).UnixMilli())
+			note(b)
+			return true
+		}
 		b := rl.bucketLocked(prov)
 		if fp == "" || fp == "nokey" {
 			// no key to blame (keyless gateway, local server): retry later instead

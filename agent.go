@@ -1656,6 +1656,9 @@ func acKindWarn(ref, kind string, ae *APIError) string {
 		return short + " foi aposentado/removido pelo provedor — tirei do rodízio"
 	case "auth":
 		prov, _ := SplitModel(ref)
+		if ae.Status == 403 && !pvBadKeyRE.MatchString(ae.Body) {
+			return fmt.Sprintf("%s recusou acesso a %s (403) — %s; tirei esse modelo do rodízio por 6 h", prov, short, pvPlainErr(ae.Body))
+		}
 		return fmt.Sprintf("%s recusou a credencial (%d) — %s; confira com /key %s", prov, ae.Status, pvPlainErr(ae.Body), prov)
 	case "toomanytools":
 		n := ""

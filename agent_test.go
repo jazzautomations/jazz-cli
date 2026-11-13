@@ -361,7 +361,8 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 		wantWarn string
 	}{
 		{401, `{"error":{"message":"bad key"}}`, "recusou a credencial (401)"},
-		{403, `{"error":{"message":"forbidden"}}`, "recusou a credencial (403)"},
+		{403, `{"error":{"message":"forbidden"}}`, "recusou acesso a m1 (403)"},
+		{403, `{"error":{"message":"invalid api key"}}`, "recusou a credencial (403)"},
 		{404, `{"error":{"message":"no such model"}}`, "m1 foi aposentado/removido"},
 		{400, `{"error":{"message":"invalid parameter foo"}}`, "fake/m1"},
 	}

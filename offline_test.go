@@ -17,8 +17,6 @@ import (
 func TestOfflineErrorClassification(t *testing.T) {
 	yes := []error{
 		&APIError{Status: 0, Body: "dial tcp: lookup api.x: no such host"},
-		&APIError{Status: 401, Body: "bad key"},
-		&APIError{Status: 403, Body: "forbidden"},
 		&net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
 		&net.DNSError{Err: "no such host", Name: "api.x"},
 		fmt.Errorf("wrapped: %w", &net.DNSError{Err: "no such host", Name: "x"}),
@@ -31,7 +29,8 @@ func TestOfflineErrorClassification(t *testing.T) {
 			t.Errorf("%v should be offline-class", e)
 		}
 	}
-	no := []error{nil, context.Canceled, &APIError{Status: 429, Body: "slow down"}, &APIError{Status: 500}, &APIError{Status: 400, Body: "bad request"},
+	no := []error{nil, context.Canceled, &APIError{Status: 401, Body: "bad key"}, &APIError{Status: 403, Body: "forbidden"},
+		&APIError{Status: 429, Body: "slow down"}, &APIError{Status: 500}, &APIError{Status: 400, Body: "bad request"},
 		errStreamIdle, errors.New("contexto estourou"),
 		// tool_use_failed as an SSE error event mid-stream (status 0): the model's defect, not the network
 		&APIError{Status: 0, Body: "Failed to parse tool call arguments as JSON"}}
@@ -113,8 +112,8 @@ func TestOfflineHeadlessForced(t *testing.T) {
 	}
 }
 
-// Every provider refuses (401): the run is rescued by the fast path instead of
-// exiting 1; a non-offline error (429) is not.
+// Every provider refuses (401): a refused key is not offline mode, but the
+// literal command line is still taken over instead of exiting 1.
 func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
@@ -124,8 +123,8 @@ func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, err := h.ag.Run(ctx, "git status")
-	if err == nil || !olIsOffline(err) {
-		t.Fatalf("want an offline-class error, got %v", err)
+	if err == nil || olIsOffline(err) || !syProviderDown(err) {
+		t.Fatalf("want a provider-down (not offline) error, got %v", err)
 	}
 	res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "git status")
 	if res == nil || res.Status != StopDone || res.Status.ExitCode() != 0 {
@@ -141,6 +140,9 @@ func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	}
 	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 400, Body: "bad"}, "git status"); res != nil {
 		t.Errorf("a request error is not a provider outage: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "mostra o git status"); res != nil {
+		t.Errorf("401 + a sentence: the key is the problem, not the network — no fast path: %+v", res)
 	}
 	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "refatora o parser para usar generics"); res != nil {
 		t.Errorf("no fast path, no rescue: %+v", res)

@@ -260,7 +260,7 @@ func syProviderDown(err error) bool {
 		return true
 	}
 	switch pvClassify(err) {
-	case "rate", "daily", "freetier", "transient", "credit":
+	case "rate", "daily", "freetier", "transient", "credit", "auth":
 		return true
 	}
 	return false

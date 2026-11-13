@@ -70,7 +70,10 @@ func olIsOffline(err error) bool {
 		if pvClassify(err) == "toolcall" {
 			return false
 		}
-		return ae.Status == 0 || ae.Status == 401 || ae.Status == 403
+		// a refused key (401/403) is not a dead network: the router moves on
+		// to the next candidate and friendlyErr says /key — offline mode
+		// would hide the real cause behind a "no network" menu
+		return ae.Status == 0
 	}
 	var ne net.Error
 	var de *net.DNSError
