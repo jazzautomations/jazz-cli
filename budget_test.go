@@ -414,3 +414,18 @@ func TestBudgetExplorationCapCountsScripts(t *testing.T) {
 		t.Errorf("read-only script calls must count toward the exploration cap: %q", res["s3"])
 	}
 }
+
+func TestBgSkillTurnNoHardCap(t *testing.T) {
+	if !bgSkillTurn("usa a skill video-forge e cria um vídeo") || !bgSkillTurn("<system-reminder>These skills are installed for this request:\n- x</system-reminder>\nfaz") {
+		t.Error("skill turns must be detected")
+	}
+	if bgSkillTurn("corrige o bug do parser") || bgSkillTurn("<system-reminder>Skill \"surgical-change\" applies</system-reminder>\ncorrige o bug") {
+		t.Error("a built-in skill hint or a plain task is not a skill pipeline")
+	}
+	h := newHarness(t, nil, nil)
+	h.ag.bgBeginTurn("usa a skill video-forge e cria um vídeo curto sobre o jazz")
+	bt := h.ag.bgTurnState()
+	if bt == nil || bt.hardSteps || bt.stepBudget < 120 {
+		t.Errorf("skill turn: %+v", bt)
+	}
+}

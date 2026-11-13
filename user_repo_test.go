@@ -34,7 +34,7 @@ func urRepo(t *testing.T, root, url string) {
 
 func TestUrSlug(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://github.com/jazzautomations/video-forge":      "github.com/jazzautomations/video-forge",
+		"https://github.com/jazzautomations/video-forge":       "github.com/jazzautomations/video-forge",
 		"https://github.com/JazzAutomations/video-forge.git\n": "github.com/jazzautomations/video-forge",
 		"git@github.com:jazzautomations/video-forge.git":       "github.com/jazzautomations/video-forge",
 		"https://example.com/x/y":                              "",
@@ -76,5 +76,51 @@ func TestUnrequestedRepoSetupStaysBlocked(t *testing.T) {
 	res := h.fs.requests()[1].toolResults()["b1"]
 	if !strings.Contains(res, "hostile") || !strings.Contains(res, "say so plainly") {
 		t.Errorf("want the hard block with the honesty steer: %q", res)
+	}
+}
+
+// An installed skill is not patched silently: a question even in yolo.
+func TestInstalledSkillWriteAsks(t *testing.T) {
+	var f string
+	h := newHarness(t, func(n int, r recReq) fakeResp {
+		if n == 0 {
+			args := `{"path":"` + f + `","old_string":"x = 1","new_string":"x = 2"}`
+			return fakeResp{Calls: []fakeCall{{ID: "e1", Name: "edit", Args: args}}}
+		}
+		return fakeResp{Text: "a skill tem um bug; avisei"}
+	}, func(c *Config) { c.Mode = "yolo" })
+	sk := filepath.Join(siUserDir(), "vf", "scripts") // after the harness: it sets its own JAZZ_HOME
+	if err := os.MkdirAll(sk, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f = filepath.Join(sk, "build.py")
+	if err := os.WriteFile(f, []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run(t, "usa a skill vf"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.ui.approvals) != 1 || !strings.Contains(h.ui.approvals[0].Reason, "altera uma skill instalada") {
+		t.Fatalf("want a question about the installed skill, got %+v; result: %q", h.ui.approvals, h.fs.requests()[1].toolResults()["e1"])
+	}
+	if b, _ := os.ReadFile(f); string(b) != "x = 1\n" {
+		t.Errorf("denied edit changed the skill: %q", b)
+	}
+}
+
+// The forced final answer at the step limit is never raw tool-call XML.
+func TestAtLimitTextCallBecomesHonestAnswer(t *testing.T) {
+	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"ls"}`}
+	xml := "<tool_call>\n<function=bash>\n<parameter=command>\npython3 render.py --out film\n</parameter>\n</function>\n</tool_call>"
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{Text: xml}, fakeResp{Text: "never"}), func(c *Config) { c.MaxSteps = 1 })
+	_ = h.run(t, "renderiza o vídeo")
+	var last string
+	for _, m := range h.ag.Msgs {
+		if m.Role == "assistant" && m.Content != "" {
+			last = m.Content
+		}
+	}
+	if strings.Contains(last, "<tool_call>") || !strings.Contains(last, "Parei no limite de passos") || !strings.Contains(last, "render.py") {
+		t.Errorf("final answer: %q", last)
 	}
 }

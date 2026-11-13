@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -79,6 +80,43 @@ func urRequestedRepo(ctx context.Context, root, crit string, msgs []Message) str
 	}
 	if s := urSlug(string(b)); s != "" && want[s] {
 		return s
+	}
+	return ""
+}
+
+// ---------- installed skills are not the model's to rewrite ----------
+
+// urSkillDirs: where installed skills live outside the project (they run in
+// every session, so a change there is persistence, not a project edit).
+func urSkillDirs() []string {
+	d := []string{siUserDir()}
+	if h, _ := os.UserHomeDir(); h != "" {
+		d = append(d, filepath.Join(h, ".claude", "skills"), filepath.Join(h, ".agents", "skills"), filepath.Join(h, ".codex", "skills"))
+	}
+	return d
+}
+
+// urSkillWrite: the installed-skill file a call would change ("" = none).
+func (a *Agent) urSkillWrite(tool string, args map[string]any, cmd string) string {
+	var targets []string
+	switch tool {
+	case "write", "edit":
+		if p, _ := argStr(args, "path"); strings.TrimSpace(p) != "" {
+			targets = append(targets, a.tools.abs(p))
+		}
+	case "bash":
+		w, _ := hgShellTargets(cmd)
+		for _, p := range w {
+			targets = append(targets, a.tools.abs(p))
+		}
+	}
+	for _, t := range targets {
+		rp := resolvePath(t)
+		for _, d := range urSkillDirs() {
+			if pathIn(rp, resolvePath(d)) {
+				return t
+			}
+		}
 	}
 	return ""
 }

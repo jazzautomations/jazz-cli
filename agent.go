@@ -656,6 +656,17 @@ turnLoop:
 
 		calls := resp.ToolCalls
 		text := strings.TrimSpace(resp.Text) // bug 65: never store whitespace-only text
+		if atLimit && len(calls) == 0 && text != "" {
+			// the forced final answer came back as one more call written as text
+			// (video-forge on 13/11: raw <tool_call> XML was the answer)
+			if tc, rest := parseTextToolCalls(text, a.knownTool, false); len(tc) > 0 {
+				text = strings.TrimSpace(rest)
+				if text == "" {
+					text = fmt.Sprintf("Parei no limite de passos antes de terminar. O próximo passo seria: %s %s. Para seguir daqui: jazz -c (ou jazz -p -c) — o trabalho feito até agora está salvo.", tc[0].Name, oneLine(toolDetail(tc[0].Name, tc[0].Args), 160))
+				}
+				resp.Text = text
+			}
+		}
 		if len(calls) == 0 && !atLimit && text != "" && a.cfg.ModelSettings(turnModel).Tools != "none" {
 			if tc, rest := parseTextToolCalls(text, a.knownTool, !a.textMode(turnModel)); len(tc) > 0 {
 				dbg("repair", map[string]any{"text_tool_calls": len(tc), "model": turnModel})
@@ -2185,6 +2196,14 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// bypasses the fence (outside-root targets) and HIGH build-target findings.
 	// What still gates: prompt-injection suspicion and sensitive egress —
 	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
+	skillWhy := ""
+	if !isMCP && !a.sub {
+		if p := a.urSkillWrite(tool, args, cmd); p != "" {
+			// an installed skill runs in every session: changing it always asks
+			// (also in yolo), never remembered (user_repo.go)
+			skillWhy, repoAsk = "altera uma skill instalada ("+p+"): skills rodam em toda sessão — se a skill tem um bug, o certo é avisar o dono dela", true
+		}
+	}
 	if mode == "yolo" && injReason == "" && !sensitiveEgress && !repoAsk {
 		return true, "", false
 	}
@@ -2398,6 +2417,15 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		if r := a.nlConsentRule(gate, tool, args, cmd, isMCP); r != "" {
 			need, autoRule = false, r
 		}
+	}
+	if skillWhy != "" {
+		if reason != "" && !strings.Contains(reason, skillWhy) {
+			reason = skillWhy + "; " + reason
+		} else {
+			reason = skillWhy
+		}
+		gate, whyEN = nlGateHigh, "it changes an installed skill, which runs in every session; report a bug in the skill to the user instead of patching it silently"
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
 	}
 	if repoAsk {
 		need, autoRule = true, "" // never covered by yolo, a grant or a remembered approval

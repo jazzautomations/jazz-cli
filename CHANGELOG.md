@@ -198,6 +198,16 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
   sempre, até no yolo, sem ser lembrada. Credencial saindo, apagar a home, comando perigoso e qualquer repo
   que você não citou continuam bloqueados. Na demo de 12/11 o `setup_environment.py` da video-forge travou
   aqui.
+- A revisão do diff não olha mais dependência instalada nem cache (`site-packages`, venv de qualquer nome —
+  achado pelo `pyvenv.cfg` —, `node_modules`, `vendor/`, `__pycache__`…). Antes, depois de um `pip install`
+  dentro do projeto ela "restaurava" arquivos de biblioteca e quebrava o ambiente (43 arquivos do venv da
+  video-forge no teste de 13/11).
+- Turno guiado por skill (instalada, citada no pedido ou com `SKILL.md`) ganha orçamento grande e sem corte
+  duro em 1,5x: pipeline de skill é longo por natureza (`--max-steps` continua valendo).
+- Mudar uma skill instalada (`~/.config/jazz-cli/skills`, `~/.claude/skills`, `~/.agents/skills`) sempre
+  pergunta, até no yolo: skill roda em toda sessão; bug de skill se avisa ao dono, não se remenda calado.
+- No limite de passos, uma resposta final que vem como chamada de ferramenta escrita em texto não aparece
+  mais crua: o jazz diz que parou no limite, qual era o próximo passo e como continuar (`jazz -c`).
 - Bloqueio de segurança agora pede ao modelo que diga claramente o que foi bloqueado e nunca descreva a
   tarefa como pronta com um passo necessário bloqueado (na mesma demo ele respondeu "pronto pra produção").
 

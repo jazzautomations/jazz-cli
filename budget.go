@@ -293,6 +293,13 @@ func (a *Agent) bgBeginTurn(input string) string {
 	}
 	bt.stepBudget, bt.exploreCap = bgBudgets(bt.task, bt.level)
 	bt.hardSteps = bt.level == bgLean && bt.task.Kind != "ops" && bt.task.Kind != "chat" // ops: diagnosis takes what it takes (--max-steps still holds)
+	if bgSkillTurn(input) {
+		// a skill's pipeline (setup, compose, validate, render, verify) is long
+		// by design: no hard stop at 1.5x, a large budget (video-forge on 13/11
+		// was cut at step 38, mid-render); --max-steps still holds
+		bt.hardSteps = false
+		bt.stepBudget, bt.exploreCap = max(bt.stepBudget, 120), max(bt.exploreCap, 20)
+	}
 	dbg("budget", map[string]any{"size": string(bt.task.Size), "kind": bt.task.Kind, "sensitive": bt.task.Sensitive, "steps": bt.stepBudget, "explore": bt.exploreCap, "level": bt.level})
 	if bt.task.Kind == "question" || bt.task.Kind == "ops" || bt.task.Kind == "chat" || len(strings.TrimSpace(acStripReminders(input))) < 12 {
 		return input
@@ -391,6 +398,15 @@ func (a *Agent) bgStepNote(step int) string {
 		return fmt.Sprintf("<system-reminder>Usou %d de uns %d passos do orçamento. Comece a fechar: termine a mudança, verifique uma vez e responda.</system-reminder>", used, bt.stepBudget)
 	}
 	return ""
+}
+
+// bgSkillTurn: the turn follows a skill — an installed one pointed at by the
+// harness (siNote), one the user forced (/skill) or one the request names.
+func bgSkillTurn(input string) bool {
+	if strings.Contains(input, "These skills are installed for this request") || strings.Contains(input, "SKILL.md") {
+		return true
+	}
+	return siSkillWord.MatchString(acStripReminders(input))
 }
 
 // bgAtLimit explains a step-limit stop caused by the budget's hard cap.
