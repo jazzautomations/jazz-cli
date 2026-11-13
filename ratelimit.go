@@ -1139,6 +1139,13 @@ func RetryDelay(err error, attempt int) time.Duration {
 		return min(ae.RetryAfter, 60*time.Second)
 	}
 	steps := []time.Duration{2 * time.Second, 6 * time.Second, 15 * time.Second}
+	if pvClassify(err) == "rate" {
+		// per-minute limits (NVIDIA 40/min) reopen within 60 s; 2+6+15 s gave up at ~23 s
+		// with the model about to answer again (eval v2 on the d610, 13/11). The caller's
+		// wait budget (30 s interactive, 120 s headless) and the move-to-next-candidate rule
+		// for waits over 20 s still apply.
+		steps = append(steps, 30*time.Second, 40*time.Second)
+	}
 	if attempt < 0 || attempt >= len(steps) {
 		return 0
 	}

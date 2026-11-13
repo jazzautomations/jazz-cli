@@ -172,6 +172,19 @@ func TestOmniClassifyAndRetryDelay(t *testing.T) {
 	if RetryDelay(&APIError{Status: 500}, 3) != 0 {
 		t.Fatal("4th attempt must move on")
 	}
+	// a per-minute 429 keeps waiting into the next minute window: 30 s, 40 s, then moves on
+	rate := &APIError{Status: 429, Body: `{"status":429,"title":"Too Many Requests"}`}
+	if c := pvClassify(rate); c != "rate" {
+		t.Fatalf("class %q", c)
+	}
+	for i, base := range []time.Duration{30 * time.Second, 40 * time.Second} {
+		if d := RetryDelay(rate, 3+i); d < base*8/10 || d > base*12/10 {
+			t.Fatalf("429 attempt %d: %v outside ±20%% of %v", 3+i, d, base)
+		}
+	}
+	if RetryDelay(rate, 5) != 0 {
+		t.Fatal("429: the 6th attempt must move on")
+	}
 	if d := RetryDelay(&APIError{Status: 429, RetryAfter: 5 * time.Minute}, 0); d != 60*time.Second {
 		t.Fatalf("RetryAfter cap: %v", d)
 	}
