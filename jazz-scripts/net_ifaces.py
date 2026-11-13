@@ -51,6 +51,25 @@ def read_int(iface, attr, base=10):
         return None
 
 
+def iface_kind(iface, flags):
+    """wifi / ethernet / vpn / bridge / loopback / virtual, from /sys only. The name lies on
+    old kernels (ipw2200 on a Dell D610 shows up as eth1), so the wireless/ and phy80211/
+    entries decide wifi, never the name."""
+    base = os.path.join(SYS_NET, iface)
+    if os.path.isdir(os.path.join(base, "wireless")) or os.path.exists(os.path.join(base, "phy80211")):
+        return "wifi"
+    if flags & 0x8:  # IFF_LOOPBACK
+        return "loopback"
+    if os.path.isdir(os.path.join(base, "bridge")):
+        return "bridge"
+    t = read_int(iface, "type")
+    if t == 65534 or os.path.exists(os.path.join(base, "tun_flags")):
+        return "vpn"
+    if t == 1 and os.path.exists(os.path.join(base, "device")):
+        return "ethernet"
+    return "virtual"
+
+
 def mask_mac(mac):
     """OUI (vendor) kept, device half hidden: aa:bb:cc:xx:xx:xx."""
     parts = mac.split(":")
@@ -264,6 +283,7 @@ for n in names:
             v4 = [got]
     ifaces.append({
         "name": n,
+        "kind": iface_kind(n, flags),
         "state": read_sys(n, "operstate") or "unknown",
         "up": bool(flags & IFF_UP) and carrier == 1,
         "carrier": None if carrier is None else carrier == 1,
@@ -288,7 +308,7 @@ if up:
     bits = []
     for i in up[:6]:
         addr = i["ipv4"][0] if i["ipv4"] else ("no IPv4" if not i["ipv6"] else "IPv6 only")
-        bits.append("%s %s (rx %s, tx %s)" % (i["name"], addr, human(i["rx_bytes"]), human(i["tx_bytes"])))
+        bits.append("%s [%s] %s (rx %s, tx %s)" % (i["name"], i["kind"], addr, human(i["rx_bytes"]), human(i["tx_bytes"])))
     text = "%d iface(s) up: %s%s" % (len(up), "; ".join(bits), "; …" if len(up) > 6 else "")
 else:
     text = "no interface up (%d listed)" % len(ifaces)
