@@ -120,6 +120,11 @@ type factResult struct {
 	ElapsedMS int64         `json:"elapsed_ms"`
 	Source    string        `json:"source"`
 	At        string        `json:"measured_at"`
+	// Sandbox says the check ran inside jazz's OS sandbox; Partial/Warning
+	// flag a measurement of the hidden $HOME (scripts.go scSandboxMark).
+	Sandbox string `json:"sandbox,omitempty"`
+	Partial bool   `json:"partial,omitempty"`
+	Warning string `json:"warning,omitempty"`
 }
 
 type factEvident struct {
@@ -190,7 +195,16 @@ func (a *Agent) runFact(ctx context.Context, tc ToolCall) ToolOutput {
 	if res.Status == "" {
 		res.Status = "not_run"
 	}
+	if sb := sbCurrent(); sb.Isolates() && r.Commands > 0 {
+		res.Sandbox = "ran inside jazz's OS sandbox (" + sb.Backend + "): $HOME outside the project and toolchain dirs is hidden there"
+	}
 	if r.Task != nil {
+		for _, ev := range r.Task.Evidence {
+			if ev.Kind == "sandbox" {
+				res.Partial, res.Warning = true, ev.Text
+				break
+			}
+		}
 		for i, ev := range r.Task.Evidence {
 			if i >= 8 {
 				break
@@ -201,5 +215,9 @@ func (a *Agent) runFact(ctx context.Context, tc ToolCall) ToolOutput {
 	res.Text = redactSecrets(nlCredScrub(truncateHeadTail(r.Text, 6000)))
 	b, _ := json.Marshal(res)
 	dbg("fact", map[string]any{"intent": name, "status": res.Status, "commands": r.Commands})
-	return ToolOutput{Text: string(b), IsErr: !res.OK, Display: Display{Summary: fmt.Sprintf("fact %s: %s", name, res.Status)}}
+	sum := fmt.Sprintf("fact %s: %s", name, res.Status)
+	if res.Partial {
+		sum += " · " + res.Warning
+	}
+	return ToolOutput{Text: string(b), IsErr: !res.OK, Display: Display{Summary: sum}}
 }

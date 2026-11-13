@@ -74,3 +74,31 @@ func (t *Toolbox) runHost(ctx context.Context, sh *Shell, cmd string, timeout ti
 	r.Note += " [ran outside the OS sandbox, approved by the user]"
 	return r
 }
+
+// Leaving the sandbox never reads secrets. Inside it ~/.ssh, ~/.aws, jazz's
+// auth.json and the keychain are hidden; outside they are not, so a command
+// that names one is refused in every mode (yolo, --allow-unsandboxed, an
+// approval): the output would go to the provider. The text says so plainly
+// — the model used to tell the user to rerun with --allow-unsandboxed to
+// get a private key printed (Dell QA, 0.14).
+
+// usSecretRead: why a sandbox:false command would read credentials ("" = it
+// does not, as far as the secret classifiers see).
+func usSecretRead(cmd string) string {
+	if strings.TrimSpace(cmd) == "" {
+		return ""
+	}
+	return nlHostSecret(cmd)
+}
+
+// usSecretBlockEN is the model-facing refusal of a secret read outside the sandbox.
+func usSecretBlockEN(why string) string {
+	return "reading credentials or secrets outside the OS sandbox is never allowed (" + why + "). " +
+		"No flag, setting or approval unlocks it — not --allow-unsandboxed, JAZZ_ALLOW_UNSANDBOXED=1, --yolo nor a yes on a prompt — " +
+		"so never tell the user to rerun with one; propose a way that does not print the secret (e.g. `ssh-keygen -lf <key>.pub` for a key fingerprint, or ask the user to look at the file themselves)"
+}
+
+// usSecretBlockPT is the same refusal for the user.
+func usSecretBlockPT(why string) string {
+	return "ler credencial/segredo fora do sandbox (" + why + "): nenhuma flag libera isso — nem --allow-unsandboxed, nem JAZZ_ALLOW_UNSANDBOXED=1, nem --yolo"
+}

@@ -687,6 +687,59 @@ func (r *scRegistry) scExec(ctx context.Context, d *scDef, args map[string]any, 
 	return res
 }
 
+// scHomeMaskedNote is the warning of a script that scanned the sandbox's
+// hidden $HOME (user-facing too: the brain prints it).
+const scHomeMaskedNote = "home mascarada pelo sandbox: números parciais; para medir de verdade rode com sandbox:false (pede aprovação)"
+
+// scHomeMaskedConf caps the confidence of a result measured on the masked home.
+const scHomeMaskedConf = 0.2
+
+// scSandboxMark records in a script's JSON result (in place) that it ran
+// inside jazz's OS sandbox and, when the scanned path is the hidden $HOME
+// (or contains it, or lies under it outside what is given back), that the
+// numbers are partial: partial=true, a warning and a low confidence. The
+// returned note is that warning ("" = the view is complete). Scripts run
+// under sbWrapCmd; the model used to read a 1 GB tmpfs as the real 3.1 GB
+// home and to say the check had not run inside the sandbox (Dell QA, 0.14).
+func scSandboxMark(v any, args map[string]any, root string) string {
+	m, ok := v.(map[string]any)
+	sb := sbCurrent()
+	if !ok || !sb.Isolates() {
+		return ""
+	}
+	m["sandboxed"] = true
+	m["sandbox_note"] = "ran inside jazz's OS sandbox (" + sb.Backend + "): it sees the project, toolchain dirs and system files; the rest of $HOME is hidden"
+	note := ""
+	for _, k := range []string{"path", "dir"} {
+		p := scArg(args, k)
+		if p == "" && k == "path" {
+			p = "."
+		}
+		if p == "" {
+			continue
+		}
+		if p == "~" || strings.HasPrefix(p, "~/") {
+			p = filepath.Join(sb.Home, strings.TrimPrefix(p, "~"))
+		} else if !filepath.IsAbs(p) {
+			p = filepath.Join(root, p)
+		}
+		if sb.MasksHome(filepath.Clean(p)) {
+			note = scHomeMaskedNote
+			break
+		}
+	}
+	if note == "" {
+		return ""
+	}
+	m["partial"] = true
+	if c, ok := m["confidence"].(float64); !ok || c > scHomeMaskedConf {
+		m["confidence"] = scHomeMaskedConf
+	}
+	w, _ := m["warnings"].([]any)
+	m["warnings"] = append([]any{note}, w...)
+	return note
+}
+
 // ---------- output shaping ----------
 
 // scClipJSON marshals v within max bytes by halving its largest array or
@@ -831,9 +884,13 @@ func (t *Toolbox) script(ctx context.Context, m map[string]any, raw string) Tool
 		msg := fmt.Sprintf("Script %q did not print a JSON result (exit %d). Output:\n%s", name, res.Exit, truncateHeadTail(redactSecrets(tail), 2000))
 		return ToolOutput{IsErr: true, Text: msg, Display: Display{Summary: fmt.Sprintf("sem JSON (exit %d)", res.Exit), Preview: lastLines(tail, 3)}}
 	}
+	masked := scSandboxMark(v, args, t.Root)
 	text, _ := scClipJSON(v, scMaxOut)
 	ok, conf, errMsg := scStatus(v)
 	sum := fmt.Sprintf("ok · confiança %.2f · %s", conf, dur)
+	if masked != "" {
+		sum += " · " + masked
+	}
 	if !ok {
 		sum = "falhou: " + oneLine(errMsg, 120)
 	}

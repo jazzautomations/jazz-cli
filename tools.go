@@ -1222,6 +1222,10 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 		if t.Window == nil {
 			window = nil
 		}
+	} else if usWanted("bash", m) && usSecretRead(cmd) != "" {
+		// defense in depth: permit refuses this first (agent.go)
+		return ToolOutput{IsErr: true, Text: "Blocked: " + usSecretBlockEN(usSecretRead(cmd)) + ".",
+			Display: Display{Summary: usSecretBlockPT(usSecretRead(cmd))}}
 	} else if usWanted("bash", m) {
 		r = t.runHost(ctx, sh, cmd, time.Duration(to)*time.Second) // approved escape (unsandboxed.go)
 		t.cpAfterBash(cmd)

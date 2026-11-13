@@ -2572,9 +2572,21 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 		obs.Output = truncateHeadTail(redactSecrets(tail), 4000)
 		return brStep{obs: obs, why: fmt.Sprintf("%s não devolveu JSON (exit %d): %s", name, res.Exit, oneLine(tail, 200))}
 	}
+	masked := scSandboxMark(v, args, cx.env.Root)
+	if b, err := json.Marshal(v); err == nil && sbCurrent().Isolates() {
+		res.Stdout = b // the sandbox marks reach the observation too
+	}
 	obs.Output = truncateHeadTail(string(res.Stdout), 4000)
 	ok, conf, errMsg := scStatus(v)
-	t.AddEvidence("script", fmt.Sprintf("%s → exit %d, ok=%v, conf %.2f", desc, res.Exit, ok, conf))
+	where := ""
+	if sbCurrent().Isolates() {
+		where = ", inside the sandbox"
+	}
+	t.AddEvidence("script", fmt.Sprintf("%s → exit %d, ok=%v, conf %.2f%s", desc, res.Exit, ok, conf, where))
+	if masked != "" {
+		t.AddEvidence("sandbox", masked)
+		cx.say("aviso: %s", masked)
+	}
 	if !ok {
 		if errMsg == "" {
 			errMsg = "o script reportou falha"

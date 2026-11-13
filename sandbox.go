@@ -532,6 +532,26 @@ func (s *Sandbox) Isolates() bool {
 	return s != nil && (s.Backend == sbSeatbelt || s.Backend == sbBwrap)
 }
 
+// MasksHome reports whether a scan of p (absolute) from inside the sandbox
+// sees only part of the real $HOME: the home is hidden (bwrap tmpfs, seatbelt
+// deny) and p is the home, contains it (/, /home) or lies under it outside
+// what is given back (project, toolchain dirs, jazz's scripts). A du of ~
+// there measured a 1 GB tmpfs for a 3.1 GB home with confidence 1.00 (Dell
+// QA, 0.14).
+func (s *Sandbox) MasksHome(p string) bool {
+	if !s.Isolates() || !s.HideHome || s.Home == "" || p == "" {
+		return false
+	}
+	rp := resolvePath(p)
+	if pathIn(s.Home, rp) || pathIn(resolvePath(s.Home), rp) {
+		return true // the home is inside the scanned tree
+	}
+	if !pathIn(rp, s.Home) {
+		return false
+	}
+	return !sbUnder(rp, s.Roots, s.CacheRO, s.CacheRW, s.ReadOK, s.WriteOK, []string{s.Tmp})
+}
+
 // PidNamespace: background jobs cannot report host pids with $! (bwrap).
 func (s *Sandbox) PidNamespace() bool { return s != nil && s.Backend == sbBwrap }
 

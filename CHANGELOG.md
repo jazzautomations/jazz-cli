@@ -173,6 +173,17 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   ou privado diz "repositório não encontrado ou privado: …" em vez do erro de usuário do git; branch que
   não existe é dita pelo nome. Skill instalada pelo chat avisa o modelo que foi instalada agora, a pedido
   do usuário, e ele não diz mais que "já estava instalada".
+- **`fact`/`script disk_usage` da home mascarada não sai mais como número real.** Com o sandbox escondendo
+  `$HOME`, medir `~` (ou `/`, ou uma pasta da home fora do projeto) media o tmpfs de 1 GB e voltava com
+  confiança 1.00 — o modelo dizia "sua home ocupa 992 MB" para uma home de 3,1 GB. Agora o resultado vem
+  `partial`, confiança 0.20 e o aviso "home mascarada pelo sandbox: números parciais; para medir de verdade
+  rode com sandbox:false (pede aprovação)". Todo script (e o `fact`) diz que rodou dentro do sandbox — o
+  modelo afirmava que a checagem não tinha rodado lá.
+- **Sair do sandbox nunca lê segredo.** `bash sandbox:false` que lê credencial (`~/.ssh/id_*`,
+  `~/.aws/credentials`, `auth.json` do jazz, chaveiro: `security find-generic-password`, `secret-tool
+  lookup`, `gpg --export-secret-keys` …) é recusado em todo modo — yolo, `--allow-unsandboxed`,
+  `JAZZ_ALLOW_UNSANDBOXED=1` ou um "sim" — antes e dentro da ferramenta. A recusa diz que nenhuma flag
+  libera isso; o modelo sugeria `--allow-unsandboxed` para imprimir a chave privada.
 
 ### Achados do QA na TUI (Dell)
 
