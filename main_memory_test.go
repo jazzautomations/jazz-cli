@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,5 +38,24 @@ func TestMmProjectFilePrefersExistingClaudeMd(t *testing.T) {
 	}
 	if got := mmProjectFile(t.TempDir()); filepath.Base(got) != "AGENTS.md" {
 		t.Errorf("new project file: %s", got)
+	}
+}
+
+// /btw: one request over the conversation, nothing added to the history.
+func TestAgentSideQuestion(t *testing.T) {
+	h := newHarness(t, seq(fakeResp{Text: "foi o calc.py"}), nil)
+	h.ag.EnsureSystem()
+	h.ag.Msgs = append(h.ag.Msgs, Message{Role: "user", Content: "mude calc.py"}, Message{Role: "assistant", Content: "mudei"})
+	n := len(h.ag.Msgs)
+	ans, err := h.ag.Side(context.Background(), "qual arquivo a gente mexeu?")
+	if err != nil || ans != "foi o calc.py" {
+		t.Fatalf("Side = %q, %v", ans, err)
+	}
+	if len(h.ag.Msgs) != n {
+		t.Errorf("the side question must not enter the history (%d -> %d)", n, len(h.ag.Msgs))
+	}
+	r := h.fs.requests()[0]
+	if !r.contains("user", "Side question from the user") {
+		t.Errorf("request misses the side note")
 	}
 }

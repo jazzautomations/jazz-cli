@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,4 +99,19 @@ func (a *App) rel(p string) string {
 		return r
 	}
 	return p
+}
+
+func (a *App) btwCmd(q string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := a.ui.WatchTurn(cancel, nil)
+	a.ui.Thinking("pergunta paralela")
+	ans, err := a.agent.Side(ctx, q)
+	a.ui.StopThinking()
+	stop()
+	if err != nil {
+		a.ui.Warn(friendlyErr(err))
+		return
+	}
+	a.ui.print(sanitizeTerm(redactSecrets(ans)) + "\n")
 }
