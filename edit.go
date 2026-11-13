@@ -28,7 +28,8 @@ type editHunk struct {
 type editResult struct {
 	Content string
 	Fuzzy   bool
-	Count   int // replacements applied
+	Indent  bool // matched ignoring indentation; the replacement was re-indented
+	Count   int  // replacements applied
 	Hunks   []editHunk
 }
 
@@ -151,6 +152,12 @@ func applyEdits(content string, edits []editOp, path string) (*editResult, error
 		if len(occ) == 0 && fuzzy {
 			needle = fuzzyNorm(o.Old)
 			occ = countNonOverlapping(base, needle)
+		}
+		if len(occ) == 0 && n == 1 && !o.All {
+			// last resort: same lines with other indentation (edit_indent.go)
+			if out, ok := eiApply(content, o.Old, o.New); ok {
+				return &editResult{Content: out, Fuzzy: true, Indent: true, Count: 1, Hunks: eiHunks(content, out)}, nil
+			}
 		}
 		if len(occ) == 0 {
 			if n == 1 {

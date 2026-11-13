@@ -1135,7 +1135,9 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 	}
 	b.WriteString(").")
 	b.WriteString(sysNote)
-	if res.Fuzzy {
+	if res.Indent {
+		b.WriteString(" Note: old_string matched only after ignoring indentation; your replacement was re-indented to the file's indentation. Check the snippet below.")
+	} else if res.Fuzzy {
 		b.WriteString(" Note: matched after normalizing whitespace/Unicode quotes; the touched lines were rewritten.")
 	}
 	if len(res.Hunks) > 0 {
