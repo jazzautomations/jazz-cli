@@ -508,12 +508,12 @@ func cbCritTarget(tool string, args map[string]any, cmd string) (target, label s
 		if p == "" || cbSysPath(p) == "" {
 			return "", ""
 		}
-		dir := filepath.ToSlash(filepath.Dir(filepath.Clean(expandTilde(p))))
+		glob := cbCritGlob(p)
 		name := "Edit"
 		if tool == "write" {
 			name = "Write"
 		}
-		return "path:" + dir + "/**", name + "(" + dir + "/**)"
+		return "path:" + glob, name + "(" + glob + ")"
 	case "bash":
 	default:
 		return "", ""
@@ -547,8 +547,8 @@ func cbCritTarget(tool string, args map[string]any, cmd string) (target, label s
 			}
 			a = strings.TrimPrefix(a, "of=")
 			if cbSysPath(a) != "" && strings.HasPrefix(filepath.Clean(expandTilde(a)), "/") {
-				dir := filepath.ToSlash(filepath.Dir(filepath.Clean(expandTilde(a))))
-				tg, lb = "bin:"+w+"@"+dir+"/**", "Bash("+w+" "+dir+"/**)"
+				glob := cbCritGlob(a)
+				tg, lb = "bin:"+w+"@"+glob, "Bash("+w+" "+glob+")"
 				break
 			}
 		}
@@ -558,6 +558,24 @@ func cbCritTarget(tool string, args map[string]any, cmd string) (target, label s
 		target, label = tg, lb
 	}
 	return target, label
+}
+
+// cbCritBroadDirs are system roots whose "<dir>/**" would be the whole
+// system class again (/etc/** covers sudoers, passwd, fstab): a file right
+// under one of them is remembered exactly.
+var cbCritBroadDirs = map[string]bool{"/": true, "/etc": true, "/boot": true, "/usr": true, "/usr/bin": true, "/usr/sbin": true,
+	"/usr/lib": true, "/usr/local": true, "/usr/local/bin": true, "/usr/local/sbin": true, "/bin": true, "/sbin": true, "/lib": true,
+	"/lib64": true, "/lib32": true, "/var": true, "/opt": true, "/private/etc": true, "/Library": true, "/System": true}
+
+// cbCritGlob is what "a" remembers for a critical write to p: its directory
+// glob (/etc/modprobe.d/**), or p itself when the directory is a system root.
+func cbCritGlob(p string) string {
+	c := filepath.ToSlash(filepath.Clean(expandTilde(p)))
+	dir := filepath.ToSlash(filepath.Dir(c))
+	if cbCritBroadDirs[dir] {
+		return c
+	}
+	return dir + "/**"
 }
 
 // cbUndoHint is the "como desfazer" of a critical call, for the prompt.

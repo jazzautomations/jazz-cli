@@ -103,6 +103,25 @@ func TestAlwaysRemembersBinaryNotClass(t *testing.T) {
 	if ok, _ := edit("/etc/sysctl.conf"); ok {
 		t.Error("another directory of /etc must ask again")
 	}
+	// a file right under /etc is remembered by itself: "/etc/**" would be the
+	// whole class again (sudoers, passwd, fstab)
+	if tg, _ := cbCritTarget("edit", map[string]any{"path": "/etc/sysctl.conf"}, ""); tg != "path:/etc/sysctl.conf" {
+		t.Errorf("file under /etc: %q", tg)
+	}
+	if tg, _ := cbCritTarget("bash", nil, "echo x | sudo tee -a /etc/sysctl.conf"); tg != "bin:tee@/etc/sysctl.conf" {
+		t.Errorf("tee into /etc: %q", tg)
+	}
+	h.ui.answer = AllowAlways
+	if ok, _ := edit("/etc/sysctl.conf"); !ok {
+		t.Fatal("edit /etc/sysctl.conf")
+	}
+	h.ui.answer = Deny
+	if ok, msg := edit("/etc/sysctl.conf"); !ok || len(h.ui.approvals) != 0 {
+		t.Errorf("'a' on /etc/sysctl.conf remembers that file: %v %q %+v", ok, msg, h.ui.approvals)
+	}
+	if ok, _ := edit("/etc/fstab"); ok {
+		t.Error("'a' on /etc/sysctl.conf must not cover /etc/fstab")
+	}
 }
 
 // "não pode usar sudo, mas pode mexer no wifi" granted system-ops: the
