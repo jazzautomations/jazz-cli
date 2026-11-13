@@ -280,6 +280,17 @@ func syToolCalls(msgs []Message) int {
 	return n
 }
 
+// syToolResults counts the tool results of the turn: tools that actually ran.
+func syToolResults(msgs []Message) int {
+	n := 0
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			n++
+		}
+	}
+	return n
+}
+
 // syReadOnlyEnv is the brain environment of a takeover: every command must
 // be read-only (a mutation is the model's job, with the user's consent) and
 // nothing runs on another host.
@@ -312,9 +323,16 @@ func (a *App) syTakeover(ctx context.Context, req string, err error, turn []Mess
 	}
 	why := oneLine(friendlyErr(err), 160)
 	if calls := syToolCalls(turn); calls > 0 {
-		// work was under way: re-running the request offline could repeat it
-		a.sy.pending, a.sy.last = req, nil
-		a.ui.Warn(fmt.Sprintf("o modelo caiu no meio do trabalho (%s) depois de %d chamada(s) de ferramenta — guardei o pedido: Enter vazio reenvia quando um provedor voltar (ou troque com /model)", why, calls))
+		// work was under way: re-running the request (offline, or the same
+		// request to the model later) could repeat it. What is kept is the
+		// continuation — the same "continua" the agent's PT summary
+		// (obHandoffPT) tells the user to send, so the two never disagree.
+		a.sy.pending, a.sy.last = "continua", nil
+		if syToolResults(turn) > 0 { // the agent already said why and what is kept
+			a.ui.Warn("Enter vazio manda \"continua\" quando um provedor voltar (ou troque com /model)")
+		} else {
+			a.ui.Warn(fmt.Sprintf("o modelo caiu no meio do trabalho (%s) depois de %d chamada(s) de ferramenta — Enter vazio manda \"continua\" quando um provedor voltar (ou troque com /model)", why, calls))
+		}
 		return true
 	}
 	if i := strings.Index(req, "\n\n<offline-data"); i >= 0 {

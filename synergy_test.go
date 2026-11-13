@@ -246,12 +246,22 @@ func TestTakeoverOn429(t *testing.T) {
 // T4. 429 after the model already ran a tool: re-running the request in
 // the brain could repeat the work — keep it and say so.
 func TestTakeoverAfterToolCallDoesNotRerun(t *testing.T) {
-	app, h, _, read := syTakeoverApp(t, 429, []fakeCall{{ID: "c1", Name: "bash", Args: `{"cmd":"ls"}`}})
+	app, h, _, read := syTakeoverApp(t, 429, []fakeCall{{ID: "c1", Name: "bash", Args: `{"command":"ls"}`}})
+	h.ag.ui = app.ui // the real wiring: the agent and the app share one UI
 	scWrite(t, h.root, "x.txt", "x\n")
 	app.send("quem é voce?")
 	out := strings.Join(strings.Fields(stripANSI(read())), " ")
-	if strings.Contains(out, "respondi offline") || !strings.Contains(out, "no meio do trabalho") || app.sy.pending != "quem é voce?" {
+	// what is kept is the continuation, never the original request (which
+	// would redo the work), and the agent's PT summary and the takeover say
+	// the same thing: no "Enter vazio reenvia" next to "mande continua"
+	if strings.Contains(out, "respondi offline") || !strings.Contains(out, "no meio do trabalho") || app.sy.pending != "continua" {
 		t.Errorf("after a tool call the brain must not re-run it (pending=%q):\n%s", app.sy.pending, out)
+	}
+	if !strings.Contains(out, `mande "continua"`) || !strings.Contains(out, `Enter vazio manda "continua"`) || strings.Contains(out, "reenvia") {
+		t.Errorf("the provider-drop messages disagree:\n%s", out)
+	}
+	if n := strings.Count(out, "no meio do trabalho"); n != 1 {
+		t.Errorf("the drop is said %d times, want 1:\n%s", n, out)
 	}
 }
 
