@@ -180,3 +180,15 @@ func TestIdenticalFailingCallShortCircuit(t *testing.T) {
 		t.Error("the refused call must be remembered for the turn")
 	}
 }
+
+// The install hardening rewrites the command the gate saw, also when the
+// model sent it as an argv array or under an alias key.
+func TestReplaceCommandArgv(t *testing.T) {
+	for _, raw := range []string{`{"command":["npm","install","left-pad"]}`, `{"cmd":"npm install left-pad"}`, `{"command":"npm install left-pad","timeout":60}`} {
+		old, _ := argStr(acArgsMap("bash", raw), "command")
+		got := acReplaceCommand(raw, old, "npm install --ignore-scripts left-pad")
+		if c, _ := argStr(acArgsMap("bash", got), "command"); c != "npm install --ignore-scripts left-pad" {
+			t.Errorf("%s: hardened command lost: %s", raw, got)
+		}
+	}
+}
