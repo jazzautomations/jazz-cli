@@ -818,7 +818,10 @@ func (a *Agent) dcInject(ctx context.Context, input string) string {
 	var parts []string
 	s := dcSettings()
 	bt := bgClassify(input)
-	if dcOn(s.APIMap) && bt.Kind != "question" && (amCodeShaped(input) || !a.dcHadUserTurn()) {
+	// only a request that names code, in a real project: the first-turn
+	// trigger fired on "me ajuda a arrumar o wifi" with cwd=$HOME and
+	// offered eval fixtures as "the project's APIs" (6 of 6 wrong)
+	if dcOn(s.APIMap) && bt.Kind != "question" && amCodeShaped(input) && amIsProject(a.tools.Root) {
 		if n := amNote(ctx, a.tools, input); n != "" {
 			parts = append(parts, n)
 		}

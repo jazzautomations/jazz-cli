@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -57,7 +58,7 @@ func amNote(ctx context.Context, tb *Toolbox, input string) string {
 		return n
 	}
 	amMu.Unlock()
-	ms := amRun(ctx, tb, q, amMaxLines)
+	ms := amExact(amRun(ctx, tb, q, amMaxLines), syms)
 	note := amRender(ms)
 	amMu.Lock()
 	if len(amMemo) > 200 {
@@ -128,6 +129,48 @@ func amRender(ms []amMatch) string {
 }
 
 var amCodeRE = lazyRx("`[^`]+`|\\b[a-z0-9]+_[a-z0-9_]+\\b|\\b[a-z]+[A-Z]\\w*|\\b[A-Z][a-z0-9]+[A-Z]\\w*|\\b\\w+\\.(py|go|js|ts|tsx|jsx|rs|rb|java)\\b|\\b\\w+\\(\\)")
+
+// amProjectMarkers say a directory is a project (lrMarkers plus VCS).
+var amProjectMarkers = append([]string{".git", ".hg", "Cargo.toml", "tsconfig.json"}, lrMarkers...)
+
+// amIsProject: root is a project, not $HOME or a loose folder.
+func amIsProject(root string) bool {
+	if root == "" {
+		return false
+	}
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(root) == filepath.Clean(home) {
+		return false
+	}
+	for _, m := range amProjectMarkers {
+		if pfExists(filepath.Join(root, m)) {
+			return true
+		}
+	}
+	return false
+}
+
+// amExact keeps the matches the request names exactly: the symbol, its
+// file's base name, or a dotted part of it — word overlap alone ("ajuda",
+// "pedido") is not a reference to a function.
+func amExact(ms []amMatch, syms []string) []amMatch {
+	want := map[string]bool{}
+	for _, s := range syms {
+		s = strings.Trim(s, "`()")
+		want[strings.ToLower(s)] = true
+		if b := filepath.Base(s); b != s {
+			want[strings.ToLower(b)] = true
+		}
+	}
+	var out []amMatch
+	for _, m := range ms {
+		base := strings.ToLower(filepath.Base(m.File))
+		stem := strings.TrimSuffix(base, filepath.Ext(base))
+		if want[strings.ToLower(m.Name)] || want[base] || want[stem] && len(stem) >= 4 {
+			out = append(out, m)
+		}
+	}
+	return out
+}
 
 // amCodeShaped: the request names code (snake_case, camelCase, a source
 // file, `backticks`, f()).
