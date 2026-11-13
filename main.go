@@ -586,7 +586,11 @@ func main() {
 	cfg.Pinned = o.modelPinned && !isOmniRef(ref)
 	cfg.StrictModel = *strictModel || os.Getenv("JAZZ_STRICT_MODEL") == "1"
 	if cfg.StrictModel && !cfg.Pinned {
-		pfUsageErr("--strict-model precisa de um modelo escolhido (-m provedor/modelo)")
+		why := ""
+		if cfg.Model == "kilo/"+kiloDefaultModel {
+			why = "; o model da config (" + cfg.Model + ") é o padrão da instalação, não conta como escolha — passe -m ou mude o model na config"
+		}
+		pfUsageErr("--strict-model precisa de um modelo escolhido (-m provedor/modelo)" + why)
 	}
 	o.askStdin = *askStdinFlag
 	lowPowerFlag.apply()
