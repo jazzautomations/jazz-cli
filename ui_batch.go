@@ -53,7 +53,7 @@ func (u *TermUI) ApproveBatch(ctx context.Context, items []apBatchItem) ([]Appro
 		{Label: "Não, nenhuma", Key: 'n'},
 	}
 	sp := mnSpec{Tag: fmt.Sprintf("%d confirmações", len(items)), Body: body, Title: fmt.Sprintf("Fazer estas %d ações?", len(items)),
-		Items: opts, Color: border, Guard: true, Since: lastKey,
+		Items: opts, Color: border, Guard: true, Settle: true, SettleOnly: map[int]bool{0: true}, Since: lastKey,
 		Keys: "enter sim pra tudo " + g.dot + " u uma por uma " + g.dot + " n/esc nenhuma " + g.dot + " v ver tudo"}
 	sp.View = func() string {
 		var b strings.Builder

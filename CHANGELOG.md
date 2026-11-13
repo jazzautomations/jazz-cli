@@ -145,6 +145,11 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
 
 ### Achados do QA no binário (provedor falso)
 
+- Caixa de aprovação de comando: uma letra que aprova ("s", "y", "a", "1", "2") só vale se nenhuma outra tecla vier
+  logo atrás — uma frase digitada que começa com "s" vira texto pro agente, nunca aprova um comando. Negar e
+  instruir ("n", "e") seguem imediatos.
+- Recusar a confiança na pasta também tira o yolo do isolamento de processos (o sandbox volta a ter os seus).
+
 - `--allow-tools 'Bash(sudo apt-get:*)'`, que o `-p` sugeria, agora libera esse sudo (regra que nomeia o
   comando, como `Bash(modprobe:*)`); a regra genérica `bash`, sudo que lê segredo e sudo de comando
   perigoso continuam perguntando. O `-p` só sugere `--allow-tools` quando a regra de fato libera.

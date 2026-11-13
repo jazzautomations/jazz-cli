@@ -146,6 +146,7 @@ func pfStartUntrustedMode(cfg *Config, declined bool) (prev string, changed bool
 	}
 	prev = cfg.ModeOverride
 	cfg.ModeOverride = m
+	sbSetHostPID(cfg) // ask keeps the sandbox's own PID namespace (yolo had shared the host's)
 	return prev, true
 }
 

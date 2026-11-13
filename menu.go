@@ -59,8 +59,12 @@ type mnSpec struct {
 	// of a message ("sim oi" must not pick "Sim"). For questions where a
 	// stray key costs a lot (the startup trust question).
 	Settle bool
-	Text   bool // ask_user: a letter that is no shortcut starts a free answer (mnText)
-	typed  rune // that letter
+	// SettleOnly (with Settle): only these answers wait (the ones that
+	// approve something); nil = every option letter waits. A deny or an
+	// "instruct" letter followed by typing is still an answer.
+	SettleOnly map[int]bool
+	Text       bool // ask_user: a letter that is no shortcut starts a free answer (mnText)
+	typed      rune // that letter
 
 	// Typed (Guard): keys the user typed as text while the menu was open —
 	// letters in the grace/typing window, letters that are no option, and
@@ -675,7 +679,7 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 			draw()
 			continue
 		}
-		if sp.Guard && sp.Settle && k.Code == KRune {
+		if sp.Guard && sp.Settle && k.Code == KRune && (sp.SettleOnly == nil || sp.SettleOnly[res]) {
 			kk := k
 			pend, pendAt, pendRes = &kk, now, res
 			settle = time.After(uiApproveIdle)
