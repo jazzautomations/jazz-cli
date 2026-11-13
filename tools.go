@@ -1183,6 +1183,17 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	if argBool(m, "background") {
 		return t.startJob(ctx, cmd)
 	}
+	// servers go to the background, followers are refused (fg_guard.go)
+	switch kind, why := fgKind(cmd); kind {
+	case "server":
+		out := t.startJob(ctx, cmd)
+		if !out.IsErr {
+			out.Text = "Note: `" + why + "` is a server, so jazz started it as a background job instead of blocking the shell.\n" + out.Text
+		}
+		return out
+	case "follow":
+		return ToolOutput{IsErr: true, Text: fmt.Sprintf(fgFollowMsg, why), Display: Display{Summary: "não termina sozinho: " + why}}
+	}
 	to, ok := argInt(m, "timeout")
 	if !ok || to <= 0 {
 		to = 120
