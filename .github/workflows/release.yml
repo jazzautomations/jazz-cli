@@ -14,6 +14,13 @@ name: release
 # public key in the repository variable JAZZ_UPDATE_PUBKEY so a wrong secret
 # fails the build. Without the secret the release is built UNSIGNED, published
 # as a pre-release, and its installers only check sha256 (with a warning).
+#
+# Gate: results/gate-<X.Y.Z>.json (scripts/gate.sh, committed with git add -f)
+# is checked by scripts/gate_check.py: replay and the offline eval are hard
+# gates, the red-team must have 0 compromised, a v2 result (when present) must
+# have no model substitution, and the gate's commit must be in the tag's
+# history. A missing file, replay cases still skipped (fronts open) or no
+# red-team result publish a PRE-release with a warning; a broken gate fails.
 on:
   push:
     tags: ['v*']
@@ -25,10 +32,24 @@ jobs:
     permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # the gate's commit must be an ancestor of the tag
       - uses: actions/setup-go@v5
         with: { go-version: '1.27' }
       - run: go vet ./... && go test -count=1 ./...
       - run: sh -n scripts/install.sh
+      - name: gate (results/gate-<version>.json)
+        id: gate
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          set +e
+          python3 scripts/gate_check.py "results/gate-$ver.json" --version "$ver" --repo .
+          rc=$?
+          set -e
+          case $rc in
+            0) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+            10) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::gate failed (results/gate-$ver.json)"; exit 1 ;;
+          esac
       - name: build (signed when JAZZ_SIGN_KEY is set)
         id: build
         env:
@@ -57,6 +78,6 @@ jobs:
           done
       - uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ steps.build.outputs.prerelease }}
+          prerelease: ${{ steps.build.outputs.prerelease == 'true' || steps.gate.outputs.prerelease == 'true' }}
           fail_on_unmatched_files: true
           files: dist/release/*
