@@ -54,6 +54,18 @@ func TestChatLaneNotForTasks(t *testing.T) {
 			t.Errorf("%q is small talk", s)
 		}
 	}
+	// the model just asked something: "perfeito"/"show" answers it
+	h.ag.Msgs = append(h.ag.Msgs, Message{Role: "user", Content: "ajusta o nginx"}, Message{Role: "assistant", Content: "achei o erro na linha 12. posso aplicar a correção?"})
+	for _, s := range []string{"perfeito", "show", "valeu"} {
+		if h.ag.acChatLane(s) {
+			t.Errorf("%q after a question from the model is an answer, not chat", s)
+		}
+	}
+	h.ag.Msgs = append(h.ag.Msgs, Message{Role: "user", Content: "sim"}, Message{Role: "assistant", Content: "aplicado e testado."})
+	if !h.ag.acChatLane("valeu") {
+		t.Error(`"valeu" after a finished task is small talk`)
+	}
+	h.ag.Msgs = nil
 	// an open todo list is a pending task: "valeu" does not drop it
 	h.ag.tools.Todos = []Todo{{Content: "rodar testes", Status: "in_progress"}}
 	if h.ag.acChatLane("valeu") {

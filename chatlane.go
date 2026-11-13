@@ -9,6 +9,8 @@ package main
 // "bora", "marcha" and "continua" are go-aheads, never chat: brSmallTalk
 // does not match them.
 
+import "strings"
+
 // acChatOut caps the output of a conversation reply (no boost after a cut).
 const acChatOut = 2048
 
@@ -20,5 +22,16 @@ func (a *Agent) acChatLane(request string) bool {
 	if _, ok := brSmallTalk(acStripReminders(request)); !ok {
 		return false
 	}
-	return a.openTodos() == ""
+	if a.openTodos() != "" {
+		return false
+	}
+	// "show", "perfeito", "boa" right after the model asked something are an
+	// answer (a go-ahead), not small talk: the work that follows needs the
+	// checkpoint and the full output
+	for i := len(a.Msgs) - 1; i >= 0; i-- {
+		if m := a.Msgs[i]; m.Role == "assistant" {
+			return !strings.HasSuffix(strings.TrimSpace(m.Content), "?")
+		}
+	}
+	return true
 }
