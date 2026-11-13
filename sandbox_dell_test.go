@@ -217,7 +217,9 @@ func TestSandboxBwrapDellArgv(t *testing.T) {
 		" --tmpfs ~" +
 		" --ro-bind-try ~/go ~/go --ro-bind-try ~/sdk ~/sdk --ro-bind-try ~/.cargo ~/.cargo --ro-bind-try ~/.rustup ~/.rustup" +
 		" --ro-bind-try ~/.pyenv ~/.pyenv --ro-bind-try ~/.nvm ~/.nvm --ro-bind-try ~/.local/lib ~/.local/lib" +
-		" --ro-bind-try ~/.local/bin ~/.local/bin --ro-bind-try ~/.local/share/pnpm ~/.local/share/pnpm" +
+		" --ro-bind-try ~/.local/bin ~/.local/bin --ro-bind-try ~/.local/opt ~/.local/opt" +
+		" --ro-bind-try ~/.local/share/fonts ~/.local/share/fonts --ro-bind-try ~/.fonts ~/.fonts" +
+		" --ro-bind-try ~/.local/share/pnpm ~/.local/share/pnpm" +
 		" --ro-bind-try ~/.m2 ~/.m2 --ro-bind-try ~/.gradle ~/.gradle --ro-bind-try ~/.yarn ~/.yarn" +
 		" --ro-bind-try ~/.pnpm-store ~/.pnpm-store --ro-bind-try ~/Library/pnpm ~/Library/pnpm --ro-bind-try ~/.bun ~/.bun" +
 		" --ro-bind-try ~/.deno ~/.deno --ro-bind-try ~/.volta ~/.volta --ro-bind-try ~/.asdf ~/.asdf --ro-bind-try ~/.sdkman ~/.sdkman" +

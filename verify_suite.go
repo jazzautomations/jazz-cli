@@ -43,9 +43,10 @@ var (
 // vsInfraErrRE: the test command never started (shell or interpreter error).
 var vsInfraErrRE = lazyRx(`(?i)can't cd|cannot cd|cd: .*(no such|permission|not a directory)|command not found|not found: (python|go|npm|cargo|make)|operation not permitted|no module named (unittest|pytest)\b`)
 
-// vsSetupErrRE: the Go runner found no module or package to test; its FAIL
-// line is about the setup, not a test verdict.
-var vsSetupErrRE = lazyRx(`go\.mod file not found|does not contain main module|cannot find main module|\[setup failed\]`)
+// vsSetupErrRE: the Go runner found no module to test; its FAIL line is
+// about the environment, not a test verdict. "[setup failed]" is NOT here:
+// it is what a broken import the model wrote prints, and that is red.
+var vsSetupErrRE = lazyRx(`go\.mod file not found|does not contain main module|cannot find main module`)
 
 // vsInfraErr: the output says the runner did not run, with no test verdict.
 func vsInfraErr(text string) bool {

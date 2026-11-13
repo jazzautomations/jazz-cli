@@ -328,7 +328,7 @@ func sbNew(mode, backend, bin string, net bool, roots []string) *Sandbox {
 
 // sbHomeRO are toolchain dirs under $HOME a build needs to read (the fence's
 // list plus binaries and git's user config).
-var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".local/lib", ".local/bin", ".local/share/pnpm",
+var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".local/lib", ".local/bin", ".local/opt", ".local/share/fonts", ".fonts", ".local/share/pnpm",
 	".m2", ".gradle", ".yarn", ".pnpm-store", "Library/pnpm", ".bun", ".deno", ".volta", ".asdf", ".sdkman",
 	".gitconfig", ".config/git", ".gitignore_global", ".npm"}
 
@@ -337,7 +337,7 @@ var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".lo
 var sbHomeRW = []string{"go/pkg/mod", ".npm/_cacache", ".npm/_logs", ".cargo/registry", ".cargo/git",
 	".cache/go-build", ".cache/pip", ".cache/uv", ".cache/yarn", ".cache/pnpm", ".cache/node-gyp", ".cache/ms-playwright",
 	"Library/Caches/go-build", "Library/Caches/pip", "Library/Caches/Yarn", "Library/Caches/pnpm", "Library/Caches/node-gyp",
-	"Library/Caches/ms-playwright", ".m2/repository", ".gradle/caches", ".yarn/berry/cache", ".pnpm-store", "Library/pnpm/store", ".bun/install/cache"}
+	"Library/Caches/ms-playwright", ".cache/huggingface", "Library/Caches/huggingface", ".m2/repository", ".gradle/caches", ".yarn/berry/cache", ".pnpm-store", "Library/pnpm/store", ".bun/install/cache"}
 
 // sbHomeSecrets stay unreadable even when the project is $HOME.
 var sbHomeSecrets = []string{".ssh", ".aws", ".gnupg", ".azure", ".kube", ".docker", ".netrc", ".git-credentials",

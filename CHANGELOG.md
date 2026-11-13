@@ -258,6 +258,10 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
   duro em 1,5x: pipeline de skill é longo por natureza (`--max-steps` continua valendo).
 - Mudar uma skill instalada (`~/.config/jazz-cli/skills`, `~/.claude/skills`, `~/.agents/skills`) sempre
   pergunta, até no yolo: skill roda em toda sessão; bug de skill se avisa ao dono, não se remenda calado.
+- Sandbox: `~/.local/opt` (ferramentas instaladas sem root, como o espeak-ng) e as fontes do usuário ficam
+  legíveis; `~/.cache/huggingface` entra nos caches graváveis. O resto da home continua escondido (os `.env` de
+  outros projetos, configs com token…), e o modelo é avisado de que `ls`/`du` na home veem uma visão parcial e
+  de que helpers setuid (`crontab -l`) falham ali — para isso, `sandbox: false` com aprovação.
 - `bash` com `sandbox: false` roda um comando fora do sandbox do sistema, como no Claude Code: para quando o
   sandbox quebrou o comando (Chrome headless do Remotion/Puppeteer que não sobe, cache em `~/.cache` sem
   permissão). Pergunta toda vez, até no yolo, e nunca fica lembrado; no `-p` só com `--allow-unsandboxed` ou

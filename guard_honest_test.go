@@ -869,3 +869,21 @@ func TestAutoReviewBigChangeUsesSubagent(t *testing.T) {
 		t.Error("a big change must be reviewed by the subagent")
 	}
 }
+
+// A user's test deleted and recreated in a turn stays the user's (protected).
+func TestOwnTestNeverClaimsUserTest(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files, fakeResp{Text: "ok"})
+	if err := h.run(t, "olha o projeto"); err != nil {
+		t.Fatal(err)
+	}
+	st := h.ag.hg
+	if st == nil || st.own == nil {
+		t.Skip("own-test tracking not active in this harness")
+	}
+	abs := filepath.Join(h.root, "tests", "test_calc.py")
+	h.ag.hgNoteOwnTest(abs)
+	if st.own[h.ag.hgNorm(abs)] {
+		t.Error("a test present at turn start must never become the agent's own")
+	}
+}

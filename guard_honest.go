@@ -892,6 +892,14 @@ func (a *Agent) hgNoteOwnTest(abs string) {
 		return
 	}
 	abs = a.hgNorm(abs)
+	// a test that existed when the turn began is the user's, even if this
+	// turn deleted and recreated it: it never becomes the agent's own
+	if _, user := st.snap[abs]; user {
+		return
+	}
+	if _, user := st.snap[filepath.Clean(abs)]; user {
+		return
+	}
 	rel, err := filepath.Rel(st.root, abs)
 	if err != nil || filepath.IsAbs(rel) || strings.HasPrefix(rel, "..") || hgKind(rel) != "test" || st.own[abs] || len(st.own) >= hgMaxOwn {
 		return
