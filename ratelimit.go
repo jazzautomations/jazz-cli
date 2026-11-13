@@ -667,7 +667,9 @@ var (
 	pvEOLRE = lazyRx(`(?i)end[ -]of[ -]life|has been retired|\bretired\b|no longer available|deprecated and removed`)
 	// pvBadKeyRE: a refused key answered with HTTP 400 (Gemini: "API key not
 	// valid. Please pass a valid API key." / API_KEY_INVALID).
-	pvBadKeyRE = lazyRx(`(?i)api[ _-]?key|API_KEY_INVALID|unauthenticated`)
+	// Only a key being refused counts — a 400 that merely mentions "API key"
+	// (BYOK hints, docs links) must not kill every model behind the key.
+	pvBadKeyRE = lazyRx(`(?i)api[ _-]?key[^.]{0,40}\b(not valid|invalid|expired|incorrect|revoked|missing|required)|\b(valid|invalid|incorrect|expired|revoked|missing|bad)[ _-]api[ _-]?key|API_KEY_INVALID|unauthenticated`)
 	// pvTooManyToolsRE: the request carried more tools than the provider takes
 	// (Groq: "maximum number of items is 128").
 	pvTooManyToolsRE = lazyRx(`(?i)maximum number of items is (\d+)`)
@@ -886,6 +888,13 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		// persistent tombstone (no 24h expiry: laguna 404'd on 31/10, 02/11,
 		// 04/11 and 12/11 under the old one); rlGoneRevived lifts it
 		b := rl.bucketLocked(ref)
+		if c != nil && c.Providers[prov] != nil && c.Providers[prov].Local {
+			// a local server's 404 is "not pulled yet" (ollama pull fixes it in
+			// a minute): never a tombstone, just out of the chain for a while
+			b.DeadUntil = max(b.DeadUntil, now.Add(10*time.Minute).UnixMilli())
+			note(b)
+			return true
+		}
 		b.Gone = ms
 		note(b)
 		pvCacheInvalidate(prov)

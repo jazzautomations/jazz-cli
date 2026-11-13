@@ -193,3 +193,43 @@ func TestAgentGoneMovesToNextCandidate(t *testing.T) {
 		t.Errorf("fallback asked %d times, want 2", n)
 	}
 }
+
+// A 400 that only mentions "API key" (no refusal) is not a dead key: one such
+// body must not kill every model behind the key for good.
+func TestBadKeyNeedsARefusal(t *testing.T) {
+	for _, b := range []string{
+		`{"error":{"message":"API key not valid. Please pass a valid API key."}}`,
+		`{"error":{"message":"API key expired. Please renew the API key."}}`,
+		`{"error":{"message":"Invalid API key provided"}}`,
+		rcBodyGemKey,
+	} {
+		if k := pvClassify(&APIError{Status: 400, Body: b}); k != "auth" {
+			t.Errorf("%s: kind %q want auth", b, k)
+		}
+	}
+	for _, b := range []string{
+		`{"error":{"message":"This model is only available with your own API key (BYOK); see https://openrouter.ai/docs"}}`,
+		`{"error":{"message":"max_tokens must be <= 8192; check the API key docs for tiers"}}`,
+	} {
+		if k := pvClassify(&APIError{Status: 400, Body: b}); k == "auth" {
+			t.Errorf("%s: a mention of the key is not a refused key", b)
+		}
+	}
+}
+
+// A local server's 404 ("model not found, try pulling it first") is fixed by
+// `ollama pull` in a minute: out of the chain for a while, never tombstoned.
+func TestLocalGoneIsNotATombstone(t *testing.T) {
+	c := pvTestCfg(t)
+	c.Providers["ollama"] = &ProviderConf{Type: "openai", BaseURL: "http://127.0.0.1:11434/v1", NoKey: true, Local: true}
+	now := pvSetClock(t, time.Now())
+	ref := "ollama/qwen3:8b"
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 404, Body: `{"error":{"message":"model \"qwen3:8b\" not found, try pulling it first"}}`})
+	if st := c.pvState(ref, 0); !st.Dead {
+		t.Fatal("a local 404 leaves the chain for now")
+	}
+	*now = now.Add(11 * time.Minute)
+	if st := c.pvState(ref, 0); st.Dead {
+		t.Fatalf("a local 404 must not be a tombstone: %+v", st)
+	}
+}
