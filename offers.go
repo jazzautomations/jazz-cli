@@ -714,7 +714,7 @@ func (a *App) startLine() string {
 	if !a.ol.forced && !a.opts.offline && !olForcedEnv() {
 		cfg, ref := a.cfg, a.agent.Model
 		safeGo(func() {
-			if !olProbe(cfg, ref) {
+			if olStartNoNet(cfg, ref) {
 				a.ui.AsyncNotice("sem rede agora (a sonda não alcançou os provedores) — se continuar, o jazz entra no modo offline sozinho; atalhos e !comando funcionam")
 			}
 		})

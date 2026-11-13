@@ -561,7 +561,8 @@ func TestUiApproveIgnoresLettersOfSteeringText(t *testing.T) {
 	// queued (the audit's "digitar sim" complaint)
 	u, keys := uiTestUI(t)
 	read := uiTestStdout(t)
-	stop := u.WatchTurn(func() {}, func(string) {})
+	var steered []string
+	stop := u.WatchTurn(func() {}, func(s string) { steered = append(steered, s) })
 	uiSendRunes(keys, "usa")
 	time.Sleep(50 * time.Millisecond)
 	ctx0, cancel0 := context.WithTimeout(context.Background(), uiApproveGrace+uiApproveIdle+300*time.Millisecond)
@@ -582,8 +583,9 @@ func TestUiApproveIgnoresLettersOfSteeringText(t *testing.T) {
 		t.Fatalf("enter after typing ahead = %+v, want sim", r)
 	}
 	stop()
-	if got := string(u.takeLeftover()); got != "usa" {
-		t.Errorf("steering text lost: %q", got)
+	// the line typed across the prompt reaches the agent whole (Enter ended it)
+	if got := string(u.takeLeftover()); got != "" || len(steered) != 1 || steered[0] != "usa a branch nova" {
+		t.Errorf("steering text lost or split: leftover %q steered %q", got, steered)
 	}
 
 	// just sent a steering line, keeps typing right after the prompt opens

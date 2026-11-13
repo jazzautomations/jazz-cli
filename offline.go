@@ -167,7 +167,10 @@ var olDial = func(hp string, d time.Duration) error {
 
 // olProbe dials the candidates' endpoints in parallel (1.5 s); true = one answered.
 // It is cheap on purpose: no request, no quota, no tokens.
-func olProbe(cfg *Config, ref string) bool {
+func olProbe(cfg *Config, ref string) bool { return olProbeT(cfg, ref, 1500*time.Millisecond) }
+
+// olProbeT is olProbe with a dial timeout of d.
+func olProbeT(cfg *Config, ref string, d time.Duration) bool {
 	hosts := olProbeHosts(cfg, ref)
 	if len(hosts) == 0 {
 		return false
@@ -179,7 +182,7 @@ func olProbe(cfg *Config, ref string) bool {
 		wg.Add(1)
 		go func(h string) {
 			defer wg.Done()
-			if olDial(h, 1500*time.Millisecond) == nil {
+			if olDial(h, d) == nil {
 				mu.Lock()
 				up = true
 				mu.Unlock()
@@ -188,6 +191,28 @@ func olProbe(cfg *Config, ref string) bool {
 	}
 	wg.Wait()
 	return up
+}
+
+// olStartRetryDial: the startup probe's second, patient try (a slow machine
+// or a slow DNS answer misses the first 1.5 s while the network is fine).
+var olStartRetryDial = 5 * time.Second
+
+// olStartNoNet decides the startup "sem rede agora" notice: true only when
+// the probe failed twice (the second time with more patience) and no model
+// request answered meanwhile. Without endpoints to dial it cannot tell, and
+// says nothing.
+func olStartNoNet(cfg *Config, ref string) bool {
+	if len(olProbeHosts(cfg, ref)) == 0 {
+		return false
+	}
+	start := time.Now()
+	if olProbe(cfg, ref) || rlOKSince(start) {
+		return false
+	}
+	if olProbeT(cfg, ref, olStartRetryDial) {
+		return false
+	}
+	return !rlOKSince(start)
 }
 
 // olNetReason: the reason is about the network (not credentials).

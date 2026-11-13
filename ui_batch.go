@@ -72,6 +72,11 @@ func (u *TermUI) ApproveBatch(ctx context.Context, items []apBatchItem) ([]Appro
 	defer release()
 	i := u.menuKeys(ctx, keys, &sp)
 	what := fmt.Sprintf("%d ações", len(items))
+	if sp.aborted { // Ctrl+C/Ctrl+D: stop the whole turn
+		u.menuDone(false, "não, turno interrompido "+dim+g.dot+" "+what)
+		u.abortTurn()
+		return make([]Approval, len(items)), false
+	}
 	switch i {
 	case 0:
 		u.menuDone(true, "sim pra tudo "+dim+g.dot+" "+what)

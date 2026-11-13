@@ -74,9 +74,20 @@ func (a *App) rememberCmd(text string) {
 	default:
 		return
 	}
+	var pre []byte
+	if path == proj {
+		pre = pfInstructionsBlob(a.root) // what the user trusted (if they did), read right before the write
+	}
 	if err := mmAppend(path, text); err != nil {
 		a.ui.Error("não consegui gravar: " + err.Error())
 		return
+	}
+	if path == proj {
+		// text jazz wrote itself must not trip the next start's trust question
+		// (only when the instructions were trusted before: trust.go)
+		if err := pfRetrustInstructions(a.root, pre); err != nil {
+			a.ui.Warn("não consegui atualizar a confiança das instruções: " + err.Error())
+		}
 	}
 	// the system prompt is built once per session: tell the model now
 	a.agent.Note("<system-reminder>The user added this standing instruction (saved to " + filepath.Base(path) + "): " + text + "</system-reminder>")

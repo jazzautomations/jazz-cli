@@ -501,6 +501,27 @@ func (c *Config) Price(ref string) (inPerTok, outPerTok float64, ok bool) {
 	return 0, 0, false
 }
 
+// costNote is the cost part of /cost: the amount when known, "grátis" for a
+// free model, and an honest "not informed" when the provider sends no cost
+// and jazz has no price for the model (Claude, for instance) — never a
+// silent nothing that reads as "this cost zero". ref is the model that
+// answered last (fallback: the session's model).
+func costNote(c *Config, u Usage, ref, model string) string {
+	if u.Cost > 0 {
+		return fmt.Sprintf(" · US$ %.4f", u.Cost)
+	}
+	if u.In+u.Out == 0 {
+		return ""
+	}
+	if ref == "" {
+		ref = model
+	}
+	if in, out, ok := c.Price(ref); ok && in == 0 && out == 0 {
+		return " · custo: grátis"
+	}
+	return " · custo não informado pelo provedor"
+}
+
 // pvKnownPrices: USD per million tokens [in, out] for paid presets without a priced catalog.
 var pvKnownPrices = map[string][2]float64{
 	"deepseek/deepseek-flash":  {0.15, 0.60},
