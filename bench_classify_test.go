@@ -70,6 +70,12 @@ func TestBenchClassifyInfra(t *testing.T) {
 		// the requested model served every OK request: the verdict stands
 		{"mesmo-modelo-pass", "sem-netwait-ok.log", "0", "600", "PASS", "180", "PASS", "metrics-ok.json", "kilo/cohere/north-mini-code:free", ""},
 		{"mesmo-modelo-fail", "falha-real.log", "0", "600", "FAIL", "484", "FAIL", "metrics-ok.json", "kilo/cohere/north-mini-code:free", ""},
+		// -m with a bare provider resolves to its default model (Config.ResolveModel): the
+		// resolved ref in the metrics is the model asked for, not a substitution; another
+		// provider still is
+		{"provedor-so-pass", "sem-netwait-ok.log", "0", "600", "PASS", "180", "PASS", "metrics-ok.json", "kilo", ""},
+		{"provedor-so-subst", "sem-netwait-ok.log", "0", "600", "PASS", "180", "SUBST", "metrics-subst.json", "groq", ""},
+		{"prefixo-nao-e-provedor", "sem-netwait-ok.log", "0", "600", "PASS", "180", "SUBST", "metrics-ok.json", "kilo/cohere", ""},
 		// no -m: nothing to compare, the metrics only count OK requests
 		{"sem-modelo", "falha-real.log", "0", "600", "FAIL", "484", "FAIL", "metrics-subst.json", "", ""},
 		// 0 OK requests (5 of 5 failed): the model never answered, nothing was measured
@@ -381,5 +387,28 @@ func TestV2RunnerCircuitLanes(t *testing.T) {
 	}
 	if !strings.Contains(out, "disjuntor:") {
 		t.Errorf("sem a linha do disjuntor:\n%s", out)
+	}
+}
+
+// eg_served_other (evals/bench/evalguard.sh) is what the preflight uses to
+// refuse a run whose model was swapped: the same rule as classify_same_model.
+func TestEvalGuardServedOther(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not installed")
+	}
+	guard, _ := filepath.Abs(filepath.Join("evals", "bench", "evalguard.sh"))
+	for _, c := range []struct{ model, served, want string }{
+		{"kilo/cohere/north-mini-code:free", "kilo/cohere/north-mini-code:free", ""},
+		{"groq/openai/gpt-oss-120b", "anthropic/claude-sonnet-5-5,groq/openai/gpt-oss-120b", "anthropic/claude-sonnet-5-5"},
+		{"gemini", "gemini/gemini-3.8-flash", ""},
+		{"gemini", "gemini/gemini-3.8-flash,kilo/cohere/north-mini-code:free", "kilo/cohere/north-mini-code:free"},
+		{"kilo/cohere", "kilo/cohere/north-mini-code:free", "kilo/cohere/north-mini-code:free"},
+		{"gemini", "-", ""},
+	} {
+		out, err := exec.Command(bash, "-c", `. "$1"; eg_served_other "$2" "$3"`, "x", guard, c.model, c.served).CombinedOutput()
+		if err != nil || string(out) != c.want {
+			t.Errorf("eg_served_other %q %q = %q (err %v), want %q", c.model, c.served, out, err, c.want)
+		}
 	}
 }

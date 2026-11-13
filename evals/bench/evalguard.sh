@@ -112,7 +112,12 @@ eg_served_other() {
   local model=$1 list=$2 m out=
   [ -n "$model" ] && [ "$list" != "-" ] && [ "$list" != "?" ] || return 0
   local IFS=,
-  for m in $list; do [ "$m" = "$model" ] || out="${out:+$out,}$m"; done
+  # a bare provider in -m ("-m gemini") resolves to its default model: same provider = asked for
+  for m in $list; do
+    [ "$m" = "$model" ] && continue
+    case $model in */*) ;; *) case $m in "$model"/*) continue ;; esac ;; esac
+    out="${out:+$out,}$m"
+  done
   printf '%s' "$out"
 }
 

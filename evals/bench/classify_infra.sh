@@ -64,6 +64,17 @@ classify_ver_ge() {
   return 0
 }
 
+# classify_same_model ASKED SERVED: SERVED is the model asked for. The metrics
+# carry the resolved ref ("gemini/gemini-3.8-flash"); a bare provider in -m
+# ("-m gemini") resolves to that provider's default (Config.ResolveModel), so
+# any model of the same provider is the one asked for, not a substitution.
+classify_same_model() {
+  [ "$2" = "$1" ] && return 0
+  case $1 in */*) return 1 ;; esac
+  case $2 in "$1"/*) return 0 ;; esac
+  return 1
+}
+
 # classify_metrics FILE: "OK MODELOS" de um --metrics-out (OK = requests - request_errors;
 # MODELOS = os que serviram request OK, separados por vírgula, "-" = nenhum)
 classify_metrics() {
@@ -119,7 +130,7 @@ classify_infra() {
   CLASSIFY_NET_S=$net
   local other= m
   if [ -n "$model" ] && [ "$served" != "-" ]; then
-    for m in ${served//,/ }; do [ "$m" = "$model" ] || other="${other:+$other,}$m"; done
+    for m in ${served//,/ }; do classify_same_model "$model" "$m" || other="${other:+$other,}$m"; done
   fi
   if [ -n "$other" ]; then
     CLASSIFY_RES=SUBST; CLASSIFY_KIND=troca; CLASSIFY_SERVED=$other
