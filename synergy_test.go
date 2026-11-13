@@ -319,3 +319,28 @@ func TestOfflineForcedBrainStillOwnsTurn(t *testing.T) {
 		t.Errorf("%d model requests while forced offline", n)
 	}
 }
+
+// Offline too, a reading whose intent cannot be about the domain noun the
+// user named is not acted on ("ta ligado no wifi?" was uptime_load 0.98).
+func TestBrainDomainVeto(t *testing.T) {
+	in := brDomainVeto("ta ligado no wifi?", Intent{Name: "uptime_load", Confidence: 0.98})
+	if in.Understood() || !strings.Contains(strings.Join(in.Evidence, " "), "wifi") {
+		t.Errorf("uptime_load for a wifi question must be vetoed: %+v", in)
+	}
+	for _, c := range []struct {
+		text, intent string
+	}{
+		{"wifi ta funcionando?", "net_status"},
+		{"que dispositivos estao online na tailscale?", "host_status"},
+		{"mostra os commits do github", "git_log"},
+		{"mostra o uptime", "uptime_load"},
+	} {
+		if in := brDomainVeto(c.text, Intent{Name: c.intent, Confidence: 0.9}); !in.Understood() {
+			t.Errorf("%q → %s is about the noun: %+v", c.text, c.intent, in)
+		}
+	}
+	env, _ := brTestEnv(t, t.TempDir(), nil, -1)
+	if r := brRun(context.Background(), env, "ta ligado no wifi?"); r.Handled && r.Intent.Name == "uptime_load" {
+		t.Errorf("offline brain answered uptime for a wifi question:\n%s", r.Text)
+	}
+}

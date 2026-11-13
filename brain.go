@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"regexp"
 	"strconv"
@@ -56,7 +57,7 @@ func brRun(ctx context.Context, env *brEnv, text string) brResult {
 	if w == nil {
 		w = nuRuntimeWorld(env.Root, env.Profile)
 	}
-	in := nuGet().Parse(text, w)
+	in := brDomainVeto(text, nuGet().Parse(text, w))
 	if cmd, ok := brLiteralCmd(text); ok && !in.Phrase && (!in.Understood() || in.Confidence < brActMin(in) || brHasFlag(cmd)) && !brGitWriteSub(cmd) {
 		// the request is a command line typed as is ("wc -l x.go", "go test
 		// ./...", "grep -rn FIXME internal/"): run it as typed instead of
@@ -1257,6 +1258,49 @@ func brStatusLine(r brResult) string {
 		label = string(r.Status)
 	}
 	return fmt.Sprintf("· cérebro offline: %s · %s · %d evidência(s) · %d comando(s) · %d pergunta(s)", r.Intent.Name, label, len(r.Task.Evidence), r.Commands, r.Questions)
+}
+
+// brDomainNoun: a domain noun of the request and the intents that can be
+// about it. "ta ligado no wifi?" read as uptime_load (0.98) and "que
+// dispositivos estao online na tailscale?" as host_status: a reading whose
+// intent cannot be about the noun the user named is not understood.
+type brDomainNoun struct {
+	re  *lazyRe
+	ok  map[string]bool
+	pfx string // intents with this prefix are about it too
+}
+
+var brNetIntents = smSet("net_status", "net_ifaces", "net_route", "host_status", "list_hosts", "tool_status",
+	"tool_info", "service_status", "service_logs", "log_errors_recent", "list_ports", "port_owner", "list_processes", "pkg_installed")
+
+var brDomainNouns = []brDomainNoun{
+	{re: lazyRx(`(?i)\b(wi-?fi|wireless|wlan\w*|internet|conex[aã]o|conectad[oa]|roteador|router)\b`), ok: brNetIntents},
+	{re: lazyRx(`(?i)\b(tailscale|vpn)\b`), ok: brNetIntents},
+	{re: lazyRx(`(?i)\b(github|gitlab|pull request)\b`), pfx: "git_", ok: smSet("last_commit", "log", "log_n", "changed_files", "remote_info", "tool_status", "tool_info")},
+	{re: lazyRx(`(?i)\b(sudo|driver|drivers|kernel|firmware)\b`), ok: smSet("pkg_installed", "tool_info", "tool_status", "log_errors_recent", "service_status", "service_logs", "self_info")},
+}
+
+// brDomainVeto lowers a reading below the understood floor when the request
+// names a domain its intent is not about. A literal command line and a
+// whole-request phrase are left alone.
+func brDomainVeto(text string, in Intent) Intent {
+	if !in.Understood() || in.Phrase || in.Name == "shell_cmd" {
+		return in
+	}
+	for _, d := range brDomainNouns {
+		m := d.re.FindString(text)
+		if m == "" {
+			continue
+		}
+		if d.ok[in.Name] || d.pfx != "" && strings.HasPrefix(in.Name, d.pfx) {
+			continue
+		}
+		in.Evidence = append(in.Evidence, fmt.Sprintf("veto: %q não é assunto de %s", m, in.Name))
+		in.Alt = append([]string{in.Name}, in.Alt...)
+		in.Confidence = math.Min(in.Confidence, nuMinConf/2)
+		return in
+	}
+	return in
 }
 
 // brHandoffNote: when the brain gives a request up, what it MEASURED goes
