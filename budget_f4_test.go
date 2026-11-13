@@ -26,6 +26,7 @@ func TestBgClassifyRealPhrases(t *testing.T) {
 		{"reinicia o nginx", "ops"},
 		{"quanto de disco livre tem?", "ops"},
 		{"libera a porta 8080 no firewall", "ops"},
+		{"meu github ta conectado aqui?", "ops"},
 		{"porra arruma ae essa merda", "change"},
 		{"oi", "chat"},
 		{"salve", "chat"},
