@@ -117,7 +117,9 @@ func afArgvCommand(v any) (string, bool) {
 		argv = t
 	case string:
 		s := strings.TrimSpace(t)
-		if !strings.HasPrefix(s, "[") || !strings.HasSuffix(s, "]") || json.Unmarshal([]byte(s), &argv) != nil {
+		// at least two elements: `[ "$x" ]` is a real test(1) call and also
+		// valid JSON; argv sent as a string always has a comma
+		if !strings.HasPrefix(s, "[") || !strings.HasSuffix(s, "]") || json.Unmarshal([]byte(s), &argv) != nil || len(argv) < 2 {
 			return "", false
 		}
 	default:

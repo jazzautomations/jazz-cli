@@ -19,6 +19,8 @@ func TestNormalizeArgsBashArgv(t *testing.T) {
 		{map[string]any{"command": []any{"echo", "it's"}}, `echo 'it'\''s'`},
 		{map[string]any{"command": "[ -f x ] && echo ok"}, "[ -f x ] && echo ok"}, // a real test command stays
 		{map[string]any{"command": "ls"}, "ls"},
+		{map[string]any{"command": `[ "$x" ]`}, `[ "$x" ]`}, // test(1) that is also a 1-element JSON array
+		{map[string]any{"command": `[ "-f" ] && echo ok`}, `[ "-f" ] && echo ok`},
 	}
 	for _, c := range cases {
 		got, _ := argStr(normalizeArgs("bash", c.args), "command")
