@@ -1081,11 +1081,11 @@ func nlSysbakDir() string {
 }
 
 // nlSysWriteScript: $1 destino, $2 backup, $3 conteúdo novo, $4 uid:gid do
-// usuário, $5 modo. Arquivo existente: cópia -p para o backup (devolvida ao
+// usuário ("" = a cópia fica de root: arquivo de credencial), $5 modo. Arquivo existente: cópia -p para o backup (devolvida ao
 // usuário) e reescrita no lugar (mantém dono, grupo, modo e inode); novo:
 // install com o modo.
 const nlSysWriteScript = `set -e
-if [ -e "$1" ]; then cp -p -- "$1" "$2"; chown "$4" "$2" 2>/dev/null || true; cat -- "$3" > "$1"
+if [ -e "$1" ]; then cp -p -- "$1" "$2"; if [ -n "$4" ]; then chown "$4" "$2" 2>/dev/null || true; fi; cat -- "$3" > "$1"
 else mkdir -p -- "$(dirname -- "$1")"; install -m "$5" -- "$3" "$1"; fi`
 
 // nlSysWrite escreve um arquivo de sistema já aprovado como root no host:
@@ -1107,17 +1107,25 @@ func (a *Agent) nlSysWrite(p string, data []byte, mode os.FileMode) (string, err
 	if err := f.Close(); err != nil {
 		return "", err
 	}
-	_ = os.Chmod(tmp, 0o644)
 	bak := ""
 	if _, err := os.Lstat(p); err == nil {
 		dir := nlSysbakDir()
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return "", fmt.Errorf("sem backup, não escrevo como root: %v", err)
 		}
-		bak = filepath.Join(dir, time.Now().Format("20060102-150405")+"-"+strings.ReplaceAll(strings.Trim(filepath.ToSlash(p), "/"), "/", "_"))
+		// nanoseconds: two edits of the same file in one second must not
+		// overwrite the first backup (the real original) with the second
+		bak = filepath.Join(dir, time.Now().Format("20060102-150405.000000000")+"-"+strings.ReplaceAll(strings.Trim(filepath.ToSlash(p), "/"), "/", "_"))
+	}
+	owner := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+	if secretPath(p) {
+		// /etc/shadow, /etc/sudoers, /etc/ssh keys: the copy keeps root's
+		// owner and mode (cp -p) — handing it to the user would put the
+		// secret where any unprivileged command (and the model) reads it
+		owner = ""
 	}
 	inner := []string{"sh", "-c", nlSysWriteScript, "jazz-sysw", p, bak, tmp,
-		fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), fmt.Sprintf("%o", mode.Perm())}
+		owner, fmt.Sprintf("%o", mode.Perm())}
 	raw, code, err, via, refusal := a.nlElevate(ctx, "escrever "+p, inner, scrubEnv(os.Environ()), "/", 2*time.Minute)
 	if refusal != "" {
 		return "", fmt.Errorf("%s", refusal)

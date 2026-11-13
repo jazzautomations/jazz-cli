@@ -347,6 +347,17 @@ func TestSysEditGoesElevated(t *testing.T) {
 	if !strings.Contains(nlAudit(t), `"elevated.write"`) {
 		t.Error("elevated write is audited")
 	}
+	// a second write in the same second keeps the first backup (the original)
+	if _, err := h.ag.nlSysWrite(target, []byte("third\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	baks, _ = filepath.Glob(filepath.Join(nlSysbakDir(), "*ipw2200.conf"))
+	if len(baks) != 2 {
+		t.Fatalf("each write keeps its own backup: %v", baks)
+	}
+	if b, _ := os.ReadFile(baks[0]); string(b) != "old line\n" {
+		t.Errorf("the original's backup was overwritten: %q", b)
+	}
 
 	// the write tool falls back to SysWrite only on a permission error on a
 	// system path
@@ -368,5 +379,33 @@ func TestSysEditGoesElevated(t *testing.T) {
 	got = ""
 	if out := tb.Exec(context.Background(), "write", jsonArgs(map[string]any{"path": "ok.txt", "content": "x\n"})); out.IsErr || got != "" {
 		t.Errorf("a project write never elevates: %q %+v", got, out)
+	}
+}
+
+// The backup of a credential file (/etc/shadow, sudoers, ssh host keys) stays
+// root's: chown to the user would leave the secret readable by any command.
+func TestSysWriteSecretBackupStaysRoot(t *testing.T) {
+	var owner, hasOwner = "", false
+	nlStubSudo(t, func(ctx context.Context, argv []string, d string, env []string, stdin io.Reader, timeout time.Duration) (string, int, error) {
+		for i, a := range argv {
+			if a == "jazz-sysw" && i+4 < len(argv) {
+				owner, hasOwner = argv[i+4], true
+			}
+		}
+		return "", 0, nil
+	})
+	h := newHarness(t, nil, nil)
+	h.ag.ui = &askUI{recUI: h.ui, answers: []string{"pw-sys"}}
+	if _, err := h.ag.nlSysWrite("/etc/sudoers", []byte("x\n"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if !hasOwner || owner != "" {
+		t.Errorf("credential file backup must not be handed to the user: owner=%q", owner)
+	}
+	if _, err := h.ag.nlSysWrite("/etc/modprobe.d/x.conf", []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if owner == "" {
+		t.Error("an ordinary system file's backup goes to the user (to undo)")
 	}
 }
