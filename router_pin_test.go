@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -466,5 +467,29 @@ func TestImplicitChainGroqNotInMain(t *testing.T) {
 	}
 	if got := c.CandidatesFor(Need{Role: "sub", Tokens: 6000}, "openrouter/foo:free"); has(got) {
 		t.Fatalf("a request over half of groq's TPM (8000) must not go to groq: %v", got)
+	}
+}
+
+// Pinned, the hedged compaction (judge + hedge on) does not race the user's
+// conversation against the implicit free chain: the pin summarizes it.
+func TestPinnedHedgedSummaryOff(t *testing.T) {
+	t.Setenv("JAZZ_OMNI_JUDGE", "on")
+	t.Setenv("JAZZ_HEDGE", "on")
+	h := newHarness(t, func(n int, r recReq) fakeResp { return fakeResp{Text: "resumo de " + r.Model} }, func(c *Config) {
+		c.Model = "fake/a:free"
+		c.Providers["kilo"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true, DefaultModel: "kfree"}
+		c.Pinned = true
+	})
+	h.ag.Model = "fake/a:free"
+	prefix := []Message{{Role: "user", Content: "conversa"}, {Role: "assistant", Content: "ok"}}
+	if s, ok := h.ag.ojHedgedSummary(context.Background(), prefix); ok {
+		t.Fatalf("pinned: hedged summary ran (%q)", s)
+	}
+	if n := len(h.fs.requests()); n != 0 {
+		t.Fatalf("pinned: %d requests", n)
+	}
+	h.cfg.Pinned = false // control: unpinned, the hedge does run
+	if _, ok := h.ag.ojHedgedSummary(context.Background(), prefix); !ok || h.fs.countModel("kfree") == 0 && h.fs.countModel("a:free") == 0 {
+		t.Fatalf("unpinned: hedge ok=%v, requests %d", ok, len(h.fs.requests()))
 	}
 }

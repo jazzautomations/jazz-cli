@@ -208,6 +208,11 @@ func (a *Agent) ojHedgedSummary(ctx context.Context, prefix []Message) (string, 
 	if a.sub || !a.cfg.ojJudgeOn() || !a.cfg.ojHedgeOn() {
 		return "", false
 	}
+	if a.acPin("compact") != "" {
+		// the user chose the model: the conversation is summarized by it (and
+		// its configured fallback), never raced against the free chain (PROV-1)
+		return "", false
+	}
 	o := acChatOpt{msgs: prefix, noToolUse: true, maxOut: 8000, quiet: true, role: "compact"}
 	need := Need{Tokens: a.estTokens() + 8000, Tools: true, Role: "compact"}
 	refs := []string{a.TurnModel(), a.Model}
