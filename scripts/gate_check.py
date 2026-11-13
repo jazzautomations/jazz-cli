@@ -29,6 +29,8 @@ def main():
     ap.add_argument("file")
     ap.add_argument("--version", required=True)
     ap.add_argument("--repo", help="checa se o commit do portão é ancestral do HEAD")
+    ap.add_argument("--offline-ran", action="store_true",
+                    help="o eval offline já passou neste job (release.yml): aceita offline.ok null (gate gerado fora do Linux)")
     a = ap.parse_args()
     ver = a.version.lstrip("v")
 
@@ -68,7 +70,10 @@ def main():
             warns.append("não consegui conferir o commit do portão (%s)" % r.stderr.decode(errors="replace").strip()[:120])
 
     off = g["offline"]
-    need(isinstance(off, dict) and off.get("ok") is True, "eval offline não passou (portão duro)")
+    if isinstance(off, dict) and off.get("ok") is None and a.offline_ran:
+        warns.append("offline do portão gerado fora do Linux; valeu o eval offline deste job")
+    else:
+        need(isinstance(off, dict) and off.get("ok") is True, "eval offline não passou (portão duro)")
 
     rp = g["replay"]
     if not isinstance(rp, dict):

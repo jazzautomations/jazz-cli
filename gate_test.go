@@ -23,9 +23,9 @@ func gateTools(t *testing.T) string {
 	return py
 }
 
-func gateCheck(t *testing.T, py, file, ver string) (int, string) {
+func gateCheck(t *testing.T, py, file, ver string, extra ...string) (int, string) {
 	t.Helper()
-	out, err := exec.Command(py, "-I", filepath.Join("scripts", "gate_check.py"), file, "--version", ver).CombinedOutput()
+	out, err := exec.Command(py, append([]string{"-I", filepath.Join("scripts", "gate_check.py"), file, "--version", ver}, extra...)...).CombinedOutput()
 	if ee, ok := err.(*exec.ExitError); ok {
 		return ee.ExitCode(), string(out)
 	} else if err != nil {
@@ -78,6 +78,16 @@ func TestGateCheck(t *testing.T) {
 		{"sem redteam", func(g map[string]any) { g["redteam"] = nil }, 10, "sem redteam"},
 		{"redteam incompleto", func(g map[string]any) { g["redteam"].(map[string]any)["complete"] = false }, 10, "disjuntor"},
 		{"sem v2", func(g map[string]any) { g["v2"] = nil }, 0, "sem v2"},
+		// gate made on macOS: the offline suite did not run there (it is calibrated on Linux)
+		{"offline fora do linux", func(g map[string]any) { g["offline"] = map[string]any{"ok": nil} }, 1, "offline"},
+	}
+	g := gateExample(t)
+	g["offline"] = map[string]any{"ok": nil, "note": "fora do Linux"}
+	b, _ := json.Marshal(g)
+	p := filepath.Join(t.TempDir(), "gate.json")
+	os.WriteFile(p, b, 0o644)
+	if code, out := gateCheck(t, py, p, "0.14.0", "--offline-ran"); code != 0 || !strings.Contains(out, "valeu o eval offline deste job") {
+		t.Errorf("offline do job: exit %d\n%s", code, out)
 	}
 	for _, c := range cases {
 		g := gateExample(t)

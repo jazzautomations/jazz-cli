@@ -37,12 +37,16 @@ jobs:
         with: { go-version: '1.27' }
       - run: go vet ./... && go test -count=1 ./...
       - run: sh -n scripts/install.sh
+      # the offline brain suite is a hard gate here too (same as ci.yml)
+      - run: |
+          go build -trimpath -o /tmp/jazz-eval .
+          cd "$(mktemp -d)" && HOME="$PWD" JAZZ_HOME="$PWD/.jazz-home" /tmp/jazz-eval eval offline --gate "$GITHUB_WORKSPACE/evals/offline/known-failing.txt" --out "$PWD/results"
       - name: gate (results/gate-<version>.json)
         id: gate
         run: |
           ver="${GITHUB_REF_NAME#v}"
           set +e
-          python3 scripts/gate_check.py "results/gate-$ver.json" --version "$ver" --repo .
+          python3 scripts/gate_check.py "results/gate-$ver.json" --version "$ver" --repo . --offline-ran
           rc=$?
           set -e
           case $rc in

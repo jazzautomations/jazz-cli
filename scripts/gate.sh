@@ -9,7 +9,10 @@
 #            registro, a mesma suíte com JAZZ_REPLAY_ALL=1 (casos de frentes
 #            ainda abertas). Caso pulado vira pre-release.
 #   offline  jazz eval offline --gate evals/offline/known-failing.txt (portão duro),
-#            num HOME descartável, como o ci.yml
+#            num HOME descartável, como o ci.yml. A suíte é calibrada no Linux (o ci.yml
+#            roda em ubuntu; no macOS as tarefas de /proc e `free` falham): fora do
+#            Linux ela não roda aqui e fica "ok": null — o release.yml a roda antes
+#            do gate_check (--offline-ran)
 #   v2       só quando existir: as pastas de resultado de evals/v2/run.sh
 #            (summary.txt + manifest.json), uma por máquina/rodada. Com modelo
 #            grátis a v2 não é reproduzível; use modelo com chave e N>=2.
@@ -48,11 +51,17 @@ if [ "${GATE_SKIP_GO:-}" != 1 ]; then
   "$GO" test -count=1 -json -run '^TestReplay$' . > "$tmp/replay.json" 2>&1 || true
   JAZZ_REPLAY_ALL=1 "$GO" test -count=1 -json -run '^TestReplay$' . > "$tmp/replay-all.json" 2>&1 || true
   replay_ok="$tmp/replay.json"; replay_all="$tmp/replay-all.json"
+fi
+if [ "${GATE_SKIP_GO:-}" != 1 ] && [ "$(uname -s)" != Linux ]; then
+  echo "offline: pulado fora do Linux ($(uname -s)); o release.yml roda a suíte" >&2
+  offline=elsewhere
+elif [ "${GATE_SKIP_GO:-}" != 1 ]; then
   echo "offline…" >&2
   "$GO" build -trimpath -o "$tmp/jazz" .
   mkdir -p "$tmp/home"
+  known="$PWD/evals/offline/known-failing.txt"
   if (cd "$tmp/home" && HOME="$tmp/home" JAZZ_HOME="$tmp/home/.jazz-home" XDG_CONFIG_HOME= XDG_DATA_HOME= \
-        "$tmp/jazz" eval offline --gate "$PWD/evals/offline/known-failing.txt" --out "$tmp/home/results") >"$tmp/offline.log" 2>&1; then
+        "$tmp/jazz" eval offline --gate "$known" --out "$tmp/home/results") >"$tmp/offline.log" 2>&1; then
     offline=true
   else
     offline=false; tail -n 20 "$tmp/offline.log" >&2
@@ -179,7 +188,9 @@ gate = {
     "version": ver,
     "commit": commit,
     "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "offline": None if offline == "null" else {"ok": offline == "true"},
+    "offline": None if offline == "null" else
+               {"ok": None, "note": "fora do Linux: roda no release.yml"} if offline == "elsewhere" else
+               {"ok": offline == "true"},
     "replay": None if rp_ok is None else dict(rp_ok, ok=rp_ok["failed"] == 0 and rp_ok["passed"] > 0,
                                               all=rp_all),
     "v2": v2(v2dirs),
