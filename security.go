@@ -119,6 +119,36 @@ func pfUntrustedMode(cfg *Config) string {
 	return ""
 }
 
+// pfDeclinedMode is the session mode after the user said "Não" (or Esc) to
+// the startup trust question: the menu promised ask mode, so any mode that
+// runs things without asking (yolo from the global config or a flag, auto,
+// smart, turbo) becomes ask. Plan and ask are already at least as careful.
+// "" = keep the current mode.
+func pfDeclinedMode(cfg *Config) string {
+	switch cfg.EffMode() {
+	case "ask", "plan":
+		return ""
+	}
+	return "ask"
+}
+
+// pfStartUntrustedMode applies the session mode of an untrusted folder at the
+// start of an interactive session: declined = the user refused the trust
+// question. It returns the override that was in force before (restored by
+// /trust) and whether the mode was changed.
+func pfStartUntrustedMode(cfg *Config, declined bool) (prev string, changed bool) {
+	m := pfUntrustedMode(cfg)
+	if declined {
+		m = pfDeclinedMode(cfg)
+	}
+	if m == "" {
+		return "", false
+	}
+	prev = cfg.ModeOverride
+	cfg.ModeOverride = m
+	return prev, true
+}
+
 // trustCmd implements /trust: grant (default), revoke, or status.
 func (a *App) trustCmd(args []string) {
 	ui := a.ui
@@ -134,6 +164,9 @@ func (a *App) trustCmd(args []string) {
 		}
 		a.untrusted = true
 		if m := pfUntrustedMode(a.cfg); m != "" || a.cfg.ModeOverride == "" {
+			if !a.untrustedAsk {
+				a.untrustedPrev = a.cfg.ModeOverride
+			}
 			a.cfg.ModeOverride = "ask"
 			a.untrustedAsk = true
 		}
@@ -161,8 +194,8 @@ func (a *App) trustCmd(args []string) {
 		}
 		a.untrusted = false
 		if a.untrustedAsk {
-			a.cfg.ModeOverride = ""
-			a.untrustedAsk = false
+			a.cfg.ModeOverride = a.untrustedPrev // a --yolo/--ask flag comes back
+			a.untrustedAsk, a.untrustedPrev = false, ""
 		}
 		a.agent.Perms = LoadPerms(a.cfg, a.root, a.opts.allowTools)
 		a.agent.Hooks = LoadHooks(a.cfg, a.root, pfProjectPolicyTrusted(a.root))
