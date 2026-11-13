@@ -250,6 +250,21 @@ func brLevel0Signal(prompt string, in Intent) {
 	_ = sigAppend(sigOf(kind, prompt, in, extra))
 }
 
+// brLevel0SignalOnline logs an online request the brain parsed but did not
+// run (the model answers by default): an intent the brain could have
+// covered becomes a "passthrough" row — the model's reply is free training
+// data — everything else keeps the level-0 taxonomy for the forge.
+func brLevel0SignalOnline(prompt string, in Intent) {
+	if !sigEnabled() {
+		return
+	}
+	kind, extra := brLevel0Reason(in)
+	if in.Understood() && in.Confidence >= brActMin(in) && brLevel0Intents[in.Name] {
+		kind, extra["reason"] = "passthrough", "online_passthrough"
+	}
+	_ = sigAppend(sigOf(kind, prompt, in, extra))
+}
+
 // brLevel0Extra tags what the level-0 gate ran: where, and whether the
 // model took the request after all.
 func brLevel0Extra(ok bool) map[string]string {

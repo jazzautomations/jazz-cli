@@ -382,7 +382,10 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		}
 	}
 	if !offline {
-		if !toModel && a.brLevel0Interactive(ctx, text) { // brain level-0: understood read-only intents skip the model online too
+		// brain level-0 (opt-in via JAZZ_BRAIN=on): understood read-only
+		// intents may skip the model; by default everything reaches it and
+		// the parse is only recorded as a signal for the offline brain
+		if !toModel && a.brLevel0Interactive(ctx, text) {
 			return true, text
 		}
 		return false, text

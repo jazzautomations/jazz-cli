@@ -1438,18 +1438,33 @@ func brActMin(in Intent) float64 {
 	return brLevel0Min
 }
 
-// brLevel0On: JAZZ_BRAIN=off sends everything to the model again.
-func brLevel0On() bool { return !olOffWord(os.Getenv("JAZZ_BRAIN")) }
+// brLevel0On: the online level-0 gate is opt-in — JAZZ_BRAIN=on answers
+// clear read-only requests without a model call. Off by default: online
+// prompts always reach the model; the parse still feeds signals.jsonl, so
+// the offline brain keeps learning what it could have covered.
+func brLevel0On() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("JAZZ_BRAIN"))) {
+	case "1", "true", "on", "yes", "sim":
+		return true
+	}
+	return false
+}
 
 // brHeadlessLevel0 answers a -p request with no model call when it is a
 // clear read-only intent and the method finishes (succeeded, or a
-// deterministic "not a git repository"). nil = the model takes it.
+// deterministic "not a git repository"). Opt-in via JAZZ_BRAIN=on; the
+// default sends everything to the model and just records the parse as a
+// signal. nil = the model takes it.
 func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt string) *RunResult {
-	if !brLevel0On() || len(prompt) > 200 || strings.ContainsAny(prompt, "\n`") {
+	if len(prompt) > 200 || strings.ContainsAny(prompt, "\n`") {
 		return nil
 	}
 	p := epGetLight()
 	in := nuGet().Parse(prompt, nuRuntimeWorld(tools.Root, p))
+	if !brLevel0On() {
+		brLevel0SignalOnline(prompt, in)
+		return nil
+	}
 	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] {
 		brLevel0Signal(prompt, in) // what went to the model, and why
 		return nil
@@ -1491,15 +1506,20 @@ func brHeadlessLevel0(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, pro
 }
 
 // brLevel0Interactive gives the deterministic brain first shot at an ONLINE
-// interactive request too: the -p level-0 rule — a clearly understood
-// read-only intent the brain finishes never reaches the model. Anything else
-// (writes, questions, low confidence) goes to the model untouched.
+// interactive request only with JAZZ_BRAIN=on: a clearly understood
+// read-only intent the brain finishes never reaches the model. By default
+// every online request reaches the model — the parse is still recorded as a
+// signal, so the brain keeps learning what it would have covered.
 func (a *App) brLevel0Interactive(ctx context.Context, text string) bool {
-	if !brLevel0On() || len(text) > 200 || strings.ContainsAny(text, "\n`") {
+	if len(text) > 200 || strings.ContainsAny(text, "\n`") {
 		return false
 	}
 	p := epGetLight()
 	in := nuGet().Parse(text, nuRuntimeWorld(a.root, p))
+	if !brLevel0On() {
+		brLevel0SignalOnline(text, in)
+		return false
+	}
 	if !in.Understood() || in.Confidence < brActMin(in) || !brLevel0Intents[in.Name] {
 		brLevel0Signal(text, in)
 		return false
