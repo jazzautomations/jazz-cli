@@ -241,6 +241,8 @@ var nlCredRules = []struct {
 	{"cred:senha", lazyRx(`(?i)\bsenha\b[^.\n]{0,40}?(?:é|eh|=|:)\s*["']?([^\s"',;]{3,64})`)},
 	// "sudo senha X", "root password X"
 	{"cred:keyword", lazyRx(`(?i)\b(?:sudo|root|admin)\s+(?:senha|pass|password|pw|credencial|credential)s?\s*[:=]?\s*["']?([^\s"',;]{3,64})`)},
+	// "tenta com X no sudo", "usa com a senha X pro root"
+	{"cred:com-no-sudo", lazyRx(`(?i)\b(?:tenta|tente|testa|teste|usa|use|roda|rode)\s+com\s+(?:a\s+senha\s+)?["']?([^\s"',;]{3,64}?)["']?\s+(?:no|pro|pra|para\s+o|n[oa]\s+o)\s+(?:sudo|root|admin)\b`)},
 	{"cred:password", lazyRx(`(?i)\b(?:password|pass|pw|credencial|credentials?)\s*[:=]\s*["']?([^\s"',;]{3,64})`)},
 	// "root ana s3nha-exemplo": uma linha que é só <papel> <user> <senha>
 	{"cred:root-user-pass", lazyRx(`(?im)^[ \t]*(?:root|sudo|admin)\s+([a-zA-Z_][\w.-]{0,31})\s+([^\s"',;]{3,64})[ \t]*[!.]?[ \t]*$`)},

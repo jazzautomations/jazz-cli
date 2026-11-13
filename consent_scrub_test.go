@@ -96,6 +96,11 @@ func TestNLCredScrub(t *testing.T) {
 		"a senha é forte demais":                "a senha é forte demais",
 		"qual a senha do wifi?":                 "qual a senha do wifi?",
 		"roda os testes e me diz o que quebrou": "roda os testes e me diz o que quebrou",
+		// QA 0.14.0: forma real das sessões que passava crua pro provedor
+		"instala o qa-pkg, tenta com " + pw + " no sudo": "instala o qa-pkg, tenta com " + nlCredMark + " no sudo",
+		"usa com a senha " + pw + " pro root":            "usa com a senha " + nlCredMark + " pro root",
+		"tenta com apt-get no lugar do snap":             "tenta com apt-get no lugar do snap",
+		"roda com sudo no servidor":                      "roda com sudo no servidor",
 	} {
 		if got := nlCredScrub(in); got != want {
 			t.Errorf("nlCredScrub(%q) = %q, quero %q", in, got, want)
