@@ -87,3 +87,14 @@ func TestShellRetriesWhenSandboxSourceVanished(t *testing.T) {
 		t.Fatalf("the command must run after the heal: %+v", r)
 	}
 }
+
+// Only an output that is bwrap's mount error alone means "never started": a
+// command that printed the message itself must not run twice.
+func TestSandboxSourceMissingOnlyBwrap(t *testing.T) {
+	if !sbSourceMissing("bwrap: Can't find source path /tmp/jazz-sbx-1/1-x: No such file or directory\n") {
+		t.Error("bwrap's own error is the vanished source")
+	}
+	if sbSourceMissing("grep: log\nbwrap: Can't find source path /x\n") || sbSourceMissing("old.log: bwrap: Can't find source path /x") {
+		t.Error("a command's own output is not bwrap failing to start")
+	}
+}

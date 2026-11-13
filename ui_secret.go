@@ -33,7 +33,12 @@ func (u *TermUI) AskSecret(ctx context.Context, label string) (string, bool) {
 	defer release()
 	var buf []rune
 	draw := func() {
-		u.print("\r\x1b[K" + t.fg(cGold, 33) + label + t.sgr("0") + strings.Repeat(bullet, min(len(buf), 16)))
+		u.print("\r\x1b[K" + t.fg(cGold, 33) + label + t.sgr("0") + func() string { // typing shows, the length does not
+			if len(buf) == 0 {
+				return ""
+			}
+			return strings.Repeat(bullet, 3)
+		}())
 	}
 	draw()
 	since := time.Now()

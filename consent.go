@@ -786,7 +786,7 @@ func nlPasswordInCommand(cmd string) string {
 			args := t[1:]
 			for k := 0; k < len(args) && strings.HasPrefix(args[k], "-") && args[k] != "--"; k++ {
 				a := args[k]
-				if a == "--stdin" || a == "--askpass" || !strings.HasPrefix(a, "--") && strings.ContainsAny(a[1:], "SA") {
+				if a == "--stdin" || a == "--askpass" || !strings.HasPrefix(a, "--") && nlSudoClusterHas(a[1:], "SA") {
 					return "sudo lendo a senha do próprio comando (" + a + ")"
 				}
 				if len(a) == 2 && strings.ContainsRune("pugCDhrtUT", rune(a[1])) && k+1 < len(args) && !strings.HasPrefix(args[k+1], "-") {
@@ -803,6 +803,21 @@ func nlPasswordInCommand(cmd string) string {
 		return "su com a senha vinda do comando"
 	}
 	return ""
+}
+
+// nlSudoClusterHas: a short-option cluster of sudo ("-HS", "-Su") has one of
+// flags — stopping at an option that takes an argument, whose rest is the
+// value ("-uADMIN" is the user ADMIN, not -A).
+func nlSudoClusterHas(cluster, flags string) bool {
+	for _, c := range cluster {
+		if strings.ContainsRune(flags, c) {
+			return true
+		}
+		if strings.ContainsRune("pugCDhrtUT", c) {
+			return false
+		}
+	}
+	return false
 }
 
 // reSuPiped: su lendo do pipe (`echo X | su -c …`).

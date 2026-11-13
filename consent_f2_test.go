@@ -158,6 +158,7 @@ func TestHardGateUnchanged(t *testing.T) {
 			{"command": "SUDO_ASKPASS=./pw.sh sudo -A modprobe x"},
 			{"command": "echo hunter2 | su -c 'modprobe x'"},
 			{"command": "sudo -p '' -S true"},
+			{"command": "echo hunter2 | sudo -HS true"},
 		} {
 			if ok, msg := permitTC(h, "bash", c); ok || !strings.Contains(msg, "plain `sudo") {
 				t.Errorf("%s %v: a password in the command must be refused with the right step: %v %q", mode, c, ok, msg)
@@ -170,6 +171,12 @@ func TestHardGateUnchanged(t *testing.T) {
 	h := permitMode(t, "auto", Allow)
 	if ok, _ := permitTC(h, "bash", map[string]any{"command": "sudo modprobe ipw2200"}); !ok {
 		t.Error("plain sudo is not a password in the command")
+	}
+	// an option's value is not a flag: -uADMIN is the user ADMIN, -pS a prompt
+	for _, c := range []string{"sudo -uADMIN ls", "sudo -u SA ls", "sudo -pS true"} {
+		if why := nlPasswordInCommand(c); why != "" {
+			t.Errorf("%q is not a password in the command: %q", c, why)
+		}
 	}
 }
 

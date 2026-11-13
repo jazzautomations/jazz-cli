@@ -501,9 +501,22 @@ func (s *Sandbox) ensureTmp() bool {
 	return true
 }
 
-// sbSourceMissing: bwrap could not bind a path that vanished.
+// sbSourceMissing: bwrap could not bind a path that vanished — and that is
+// all the shell printed, so the command never started (a command whose own
+// output mentions the message must not be run twice).
 func sbSourceMissing(out string) bool {
-	return strings.Contains(out, "Can't find source path")
+	seen := false
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" {
+			continue
+		}
+		if !strings.HasPrefix(l, "bwrap:") {
+			return false
+		}
+		seen = seen || strings.Contains(l, "Can't find source path")
+	}
+	return seen
 }
 
 // Close removes the private temp dir.
