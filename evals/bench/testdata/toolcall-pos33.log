@@ -1,0 +1,8 @@
+· sessão 261114-091502-77ab · groq/openai/gpt-oss-120b
+● read calendario.py
+  ⎿ read linhas 1-80 de 80 (2ms)
+● bash python3 -m pytest -q
+  ⎿ bash exit 1 (1.1s)
+jazz: falha de rede: Failed to parse tool call arguments as JSON
+jazz: execução incompleta (error) — trabalho salvo: checkpoint 0c1d2e3f4a5b · nota sessions/z.handoff.md
+jazz: retome com: jazz -p -r 261114-091502-77ab   (ou jazz -p --resume-last-in work/05)

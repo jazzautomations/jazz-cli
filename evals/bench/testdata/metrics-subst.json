@@ -1,0 +1,11 @@
+{
+  "session_id": "261103-101500-aa01",
+  "status": "done",
+  "outcome": "completed",
+  "requests": 61,
+  "request_errors": 4,
+  "models": {
+    "groq/openai/gpt-oss-120b": 3,
+    "anthropic/claude-sonnet-5-5": 54
+  }
+}

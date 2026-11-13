@@ -25,50 +25,81 @@ func TestBenchClassifyInfra(t *testing.T) {
 	}
 	cases := []struct {
 		name, log, rc, limit, result, dt, want string
+		metrics, model, ver                    string // optional: --metrics-out, -m, CLASSIFY_VERSION
 	}{
 		// rc 124 and the last network line is "esperando" with no "voltou"/"desisti" after: died waiting
-		{"morreu-esperando", "morreu-esperando.log", "124", "2700", "", "", "INFRA?"},
+		{"morreu-esperando", "morreu-esperando.log", "124", "2700", "", "", "INFRA?", "", "", ""},
 		// sympy-16106: 9 min without network in a 45 min deadline (20%) is still a real FAIL
-		{"16106-like", "sympy-16106.log", "124", "2700", "FAIL", "2715", "FAIL"},
+		{"16106-like", "sympy-16106.log", "124", "2700", "FAIL", "2715", "FAIL", "", "", ""},
 		// the network came back after 30s and the model failed on its own
-		{"voltou-e-falhou", "voltou-e-falhou.log", "3", "2700", "FAIL", "", "FAIL"},
+		{"voltou-e-falhou", "voltou-e-falhou.log", "3", "2700", "FAIL", "", "FAIL", "", "", ""},
 		// rc 124 without jazz's own "tempo esgotado": the LIMIT+60 watchdog killed it
-		{"watchdog", "watchdog.log", "124", "600", "", "", "HANG?"},
-		{"watchdog-dt", "watchdog.log", "124", "600", "FAIL", "660", "HANG?"},
+		{"watchdog", "watchdog.log", "124", "600", "", "", "HANG?", "", "", ""},
+		{"watchdog-dt", "watchdog.log", "124", "600", "FAIL", "660", "HANG?", "", "", ""},
 		// no network trouble, rc 0: PASS
-		{"sem-netwait", "sem-netwait-ok.log", "0", "600", "", "", "PASS"},
-		{"sem-netwait-check", "sem-netwait-ok.log", "0", "600", "PASS", "180", "PASS"},
+		{"sem-netwait", "sem-netwait-ok.log", "0", "600", "", "", "PASS", "", "", ""},
+		{"sem-netwait-check", "sem-netwait-ok.log", "0", "600", "PASS", "180", "PASS", "", "", ""},
 		// waits (2m back + 3m gave up) reach half the deadline: not the model's fault, even with rc != 124
-		{"rede-metade", "rede-metade.log", "3", "600", "FAIL", "500", "INFRA?"},
+		{"rede-metade", "rede-metade.log", "3", "600", "FAIL", "500", "INFRA?", "", "", ""},
 		// the same waits in a 45 min deadline: real FAIL
-		{"rede-pouca", "rede-metade.log", "3", "2700", "FAIL", "500", "FAIL"},
+		{"rede-pouca", "rede-metade.log", "3", "2700", "FAIL", "500", "FAIL", "", "", ""},
 		// the checker's PASS is never downgraded
-		{"pass-com-rede", "morreu-esperando.log", "124", "2700", "PASS", "", "PASS"},
+		{"pass-com-rede", "morreu-esperando.log", "124", "2700", "PASS", "", "PASS", "", "", ""},
 		// jazz's own --timeout (rc 124 + "tempo esgotado"), no network trouble: a real FAIL
-		{"timeout-proprio", "sympy-16106.log", "124", "100000", "", "2715", "FAIL"},
+		{"timeout-proprio", "sympy-16106.log", "124", "100000", "", "2715", "FAIL", "", "", ""},
 		// the provider killed the run (free quota gone; malformed tool call the provider would not
 		// deliver): not the agent's failure. v2 on 0.13.4, 2026-11-10: 8 of 11 tasks died like this.
-		{"cota-esgotada", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA?"},
-		{"toolcall-invalida", "toolcall-invalida.log", "1", "600", "FAIL", "547", "INFRA?"},
+		{"cota-esgotada", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA?", "", "", ""},
+		{"toolcall-invalida", "toolcall-invalida.log", "1", "600", "FAIL", "547", "INFRA?", "", "", ""},
 		// provider overloaded (5xx) and model that never answered, both with the fallbacks dead too
-		{"provedor-503", "provedor-503.log", "1", "600", "FAIL", "32", "INFRA?"},
-		{"modelo-mudo", "modelo-mudo.log", "1", "600", "FAIL", "29", "INFRA?"},
+		{"provedor-503", "provedor-503.log", "1", "600", "FAIL", "32", "INFRA?", "", "", ""},
+		{"modelo-mudo", "modelo-mudo.log", "1", "600", "FAIL", "29", "INFRA?", "", "", ""},
 		// the agent finished and the checker failed it: a real FAIL, whatever the log says earlier
-		{"falha-real", "falha-real.log", "0", "600", "FAIL", "484", "FAIL"},
+		{"falha-real", "falha-real.log", "0", "600", "FAIL", "484", "FAIL", "", "", ""},
 		// a provider error line with the checker's PASS stays PASS
-		{"cota-mas-passou", "cota-esgotada.log", "1", "600", "PASS", "174", "PASS"},
+		{"cota-mas-passou", "cota-esgotada.log", "1", "600", "PASS", "174", "PASS", "", "", ""},
 		// no log at all: nothing to blame on the infrastructure
-		{"sem-log", "nao-existe.log", "1", "600", "", "", "FAIL"},
+		{"sem-log", "nao-existe.log", "1", "600", "", "", "FAIL", "", "", ""},
+		// metrics first (F0 do plano 0.14): another model served the run. The "11/11 gpt-oss" of
+		// 03/11 had 54 of 61 requests served by Sonnet: even the checker's PASS is not gpt-oss's.
+		{"subst-pass", "sem-netwait-ok.log", "0", "600", "PASS", "180", "SUBST", "metrics-subst.json", "groq/openai/gpt-oss-120b", ""},
+		{"subst-fail", "falha-real.log", "0", "600", "FAIL", "484", "SUBST", "metrics-subst.json", "groq/openai/gpt-oss-120b", ""},
+		// the requested model served every OK request: the verdict stands
+		{"mesmo-modelo-pass", "sem-netwait-ok.log", "0", "600", "PASS", "180", "PASS", "metrics-ok.json", "kilo/cohere/north-mini-code:free", ""},
+		{"mesmo-modelo-fail", "falha-real.log", "0", "600", "FAIL", "484", "FAIL", "metrics-ok.json", "kilo/cohere/north-mini-code:free", ""},
+		// no -m: nothing to compare, the metrics only count OK requests
+		{"sem-modelo", "falha-real.log", "0", "600", "FAIL", "484", "FAIL", "metrics-subst.json", "", ""},
+		// 0 OK requests (5 of 5 failed): the model never answered, nothing was measured
+		{"nostart", "cota-esgotada.log", "1", "600", "FAIL", "174", "INFRA-NOSTART", "metrics-nostart.json", "kilo/cohere/north-mini-code:free", ""},
+		// "falha de rede: Failed to parse tool call" on >= 0.13.5 is #33 back (a rejected tool call
+		// reported as network): the harness failed, a VALID failure. The legacy log above (no
+		// version) stays INFRA?; toolcall-pos33.log is the same shape, synthesized.
+		{"pos33", "toolcall-pos33.log", "1", "600", "FAIL", "300", "FAIL-HARNESS", "", "", "0.13.5"},
+		{"pos33-0.14", "toolcall-pos33.log", "1", "600", "FAIL", "300", "FAIL-HARNESS", "", "", "0.14.0"},
+		{"pos33-antigo", "toolcall-pos33.log", "1", "600", "FAIL", "300", "INFRA?", "", "", "0.13.4"},
+		{"pos33-com-metricas", "toolcall-pos33.log", "1", "600", "FAIL", "300", "FAIL-HARNESS", "metrics-ok.json", "kilo/cohere/north-mini-code:free", "0.13.5"},
 	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Log("sem python3: os casos com métricas não rodam")
+	}
+	_, pyErr := exec.LookPath("python3")
 	for _, c := range cases {
+		if c.metrics != "" && pyErr != nil {
+			continue
+		}
 		args := []string{script, filepath.Join(data, c.log), c.rc, c.limit}
-		if c.result != "" || c.dt != "" {
+		if c.result != "" || c.dt != "" || c.metrics != "" {
 			args = append(args, c.result)
 		}
-		if c.dt != "" {
+		if c.dt != "" || c.metrics != "" {
 			args = append(args, c.dt)
 		}
-		out, err := exec.Command(bash, args...).CombinedOutput()
+		if c.metrics != "" {
+			args = append(args, filepath.Join(data, c.metrics), c.model)
+		}
+		cmd := exec.Command(bash, args...)
+		cmd.Env = append(os.Environ(), "CLASSIFY_VERSION="+c.ver)
+		out, err := cmd.CombinedOutput()
 		got := strings.TrimSpace(string(out))
 		if err != nil || got != c.want {
 			t.Errorf("%s: classify_infra %v = %q (err %v), want %q", c.name, args[1:], got, err, c.want)
@@ -104,7 +135,7 @@ bench_finish "lanes: 1"`
 		"hang                     HANG?    660s  tools=?   rc=124 f2p 0/1",
 		"rede                     INFRA?   500s  tools=?   rc=3   rede=300s",
 		"real                     FAIL     250s  tools=6   rc=3   rede=30s  FAIL f2p 0/1",
-		"TOTAL bruto 1/4 · VÁLIDAS 1/2 (2 inválidas: rede 1 / hang 1)  (parede: ",
+		"TOTAL bruto 1/4 · VÁLIDAS 1/2 (inválidas: rede 1 / cota 0 / troca 0 / hang 1)  (parede: ",
 		"s, lanes: 1)",
 	} {
 		if !strings.Contains(s, w) {
