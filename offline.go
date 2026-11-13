@@ -65,6 +65,11 @@ func olIsOffline(err error) bool {
 	}
 	var ae *APIError
 	if errors.As(err, &ae) {
+		// a tool call the provider rejected mid-stream arrives as a status-0
+		// SSE error event: the model's defect, not a dead network (#33)
+		if pvClassify(err) == "toolcall" {
+			return false
+		}
 		return ae.Status == 0 || ae.Status == 401 || ae.Status == 403
 	}
 	var ne net.Error

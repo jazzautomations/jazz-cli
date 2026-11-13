@@ -32,7 +32,9 @@ func TestOfflineErrorClassification(t *testing.T) {
 		}
 	}
 	no := []error{nil, context.Canceled, &APIError{Status: 429, Body: "slow down"}, &APIError{Status: 500}, &APIError{Status: 400, Body: "bad request"},
-		errStreamIdle, errors.New("contexto estourou")}
+		errStreamIdle, errors.New("contexto estourou"),
+		// tool_use_failed as an SSE error event mid-stream (status 0): the model's defect, not the network
+		&APIError{Status: 0, Body: "Failed to parse tool call arguments as JSON"}}
 	for _, e := range no {
 		if olIsOffline(e) {
 			t.Errorf("%v must not switch to offline mode", e)
