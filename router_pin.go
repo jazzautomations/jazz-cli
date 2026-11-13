@@ -23,6 +23,13 @@ import (
 	"time"
 )
 
+// cfgModelChosen: the user chose the model — -m given, or a "model" in the
+// config other than the keyless default. One rule for the binary (main.go)
+// and the replay suite, so a replayed "-m X" is the same contract.
+func cfgModelChosen(flagModel string, cfg *Config) bool {
+	return flagModel != "" || (cfg.Model != "" && cfg.Model != "kilo/"+kiloDefaultModel)
+}
+
 // acRoute is the routing state of one agent.
 type acRoute struct {
 	mu     sync.Mutex

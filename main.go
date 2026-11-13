@@ -580,7 +580,7 @@ func main() {
 	o := pfOpts{cont: *cont, resumeID: *resume, verbose: *verbose, format: *format, systemAppend: *sysAppend, timeout: *timeout, banner: *bannerFlag}
 	o.loop = LoopOpts{Until: *untilFlag, UntilRounds: *untilRounds, Review: *reviewFlag, Budget: *budgetFlag, Quality: *qualityFlag, Guards: *guardsFlag, Recover: *recoverFlag}
 	o.scripts, o.fastPath, o.offline = *scriptsFlag, *fastPathFlag, *offlineFlag
-	o.modelPinned = *model != "" || (cfg.Model != "" && cfg.Model != "kilo/"+kiloDefaultModel)
+	o.modelPinned = cfgModelChosen(*model, cfg)
 	// the user's choice is a contract: no hidden swap (router_pin.go)
 	cfg.Pinned = o.modelPinned && !isOmniRef(ref)
 	cfg.StrictModel = *strictModel || os.Getenv("JAZZ_STRICT_MODEL") == "1"

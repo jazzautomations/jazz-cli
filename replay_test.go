@@ -533,7 +533,11 @@ func rpConfig(t *testing.T, c rpCase, cfg *Config) {
 		cfg.Providers[name] = &ProviderConf{Type: "openai", BaseURL: base + "/p/" + name, NoKey: true}
 	}
 	if c.Model != "" {
+		// the case's "model" is the -m of the real session: the same rule as
+		// main.go makes it a pin (the harness's own default model is not a
+		// user choice, so a case without "model" stays unpinned)
 		cfg.Model = c.Model
+		cfg.Pinned = cfgModelChosen(c.Model, cfg) && !isOmniRef(c.Model)
 	}
 	if c.Mode != "" {
 		cfg.Mode = c.Mode
