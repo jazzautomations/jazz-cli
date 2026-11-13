@@ -202,6 +202,7 @@ var presetModels = []presetModel{
 	{"chatgpt/gpt-6.1-terra", ModelConf{Q: 90, Tiers: pvTiers("coder", "smart")}},
 	{"chatgpt/gpt-6-luna", ModelConf{Q: 84, Tiers: pvTiers("coder", "fast")}},
 	{"anthropic/claude-sonnet-5-5", ModelConf{Q: 94, Context: 200000, Tiers: pvTiers("coder", "smart")}},
+	{"anthropic/claude-haiku-5-5", ModelConf{Q: 86, Context: 200000, Tiers: pvTiers("coder", "fast")}},
 	{"deepseek/deepseek-flash", ModelConf{Q: 82, Context: 1000000, Tiers: pvTiers("coder", "smart", "long")}},
 }
 
