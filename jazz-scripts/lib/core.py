@@ -74,8 +74,12 @@ def rel(p):
         # relpath cru vira "..\..\runneradmin\..." e o fallback devolvia o
         # caminho absoluto, quebrando o confinamento de todo consumidor de
         # path=. Resolve os dois lados antes de desistir pro absoluto.
+        # Só o diretório-pai é resolvido: realpath(p) num symlink devolvia o
+        # ALVO ("no/linkbom" virava "no/real.txt" com ROOT em /var → /private/var
+        # do macOS), e a busca de links listava o nome errado.
         try:
-            r = os.path.relpath(os.path.realpath(p), os.path.realpath(ROOT))
+            rp = os.path.join(os.path.realpath(os.path.dirname(p) or "."), os.path.basename(p))
+            r = os.path.relpath(rp, os.path.realpath(ROOT))
         except ValueError:
             return p
     return p if r.startswith("..") else r
