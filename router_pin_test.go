@@ -541,3 +541,54 @@ func TestReorderServedNoticeOncePerSession(t *testing.T) {
 		t.Fatalf("reorder said %d times in 3 turns, want 1: %q", n, h.ui.notices)
 	}
 }
+
+// QA 0.14.0 (binário): com -m e sem fallback, a linha de abertura dizia "4
+// modelos na fila de reserva" — a cadeia implícita que o roteador nunca usa
+// com modelo escolhido. FirstChoice anda a mesma cadeia que o pedido.
+func TestFirstChoicePinnedNoImplicitReserve(t *testing.T) {
+	c := pvTestCfg(t)
+	pin := "openrouter/foo:free"
+	c.Model, c.Pinned = pin, true
+	a := &Agent{cfg: c, Model: pin}
+	first, chain := a.FirstChoice()
+	if first != pin || len(chain) != 1 {
+		t.Fatalf("pinned FirstChoice = %s %v, want only the pin", first, chain)
+	}
+	c.Pinned = false
+	if _, chain := a.FirstChoice(); len(chain) < 2 {
+		t.Fatalf("unpinned free model keeps its implicit reserve: %v", chain)
+	}
+}
+
+// --strict-model com o fallback de pé: a mensagem não pode dizer que
+// "nenhum outro modelo está disponível" — foi a flag que proibiu.
+func TestPinErrTextStrict(t *testing.T) {
+	e := &acPinError{Ref: "fake/q429", Err: &APIError{Status: 429, Body: "rate limit"}, Strict: true}
+	msg := pinErrText(e)
+	if strings.Contains(msg, "Nenhum outro modelo") || !strings.Contains(msg, "--strict-model") || !strings.Contains(msg, "não troquei") {
+		t.Errorf("strict pin error: %q", msg)
+	}
+}
+
+// A linha do takeover: causa curta do modelo escolhido, sem o remédio do
+// -p cortado no meio entre parênteses.
+func TestTakeoverWhyShort(t *testing.T) {
+	err := &acPinError{Ref: "fake/q429", Err: &APIError{Status: 429, Body: "free-models-per-day", Daily: true}}
+	w := syWhy(err)
+	if !strings.Contains(w, "q429") || strings.Contains(w, "não troquei") || strings.Contains(w, "…") {
+		t.Errorf("syWhy = %q", w)
+	}
+}
+
+func TestUIClockAt(t *testing.T) {
+	now := time.Date(2026, 11, 12, 22, 30, 0, 0, time.Local)
+	for in, want := range map[time.Time]string{
+		now.Add(20 * time.Minute):                        "22:50",
+		time.Date(2026, 11, 13, 21, 0, 0, 0, time.Local): "amanhã 21:00",
+		time.Date(2026, 11, 15, 9, 5, 0, 0, time.Local):  "15/11 09:05",
+	} {
+		if got := uiClockAt(in, now); got != want {
+			t.Errorf("uiClockAt(%v) = %q, want %q", in, got, want)
+		}
+	}
+}

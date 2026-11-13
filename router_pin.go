@@ -167,6 +167,22 @@ func acEarliest(rest []string, need Need, c *Config, avoid string) int {
 	return best
 }
 
+// uiClockAt is when a quota comes back, in local time: "21:00" today,
+// "amanhã 21:00" or "14/11 21:00" — at 22:30 a bare "até 21:00" read as a
+// time already gone (the daily reset is UTC midnight, 21:00 in Brasília).
+func uiClockAt(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	y, m, d := now.Date()
+	ty, tm, td := t.Date()
+	switch {
+	case y == ty && m == tm && d == td:
+		return t.Format("15:04")
+	case now.AddDate(0, 0, 1).Format("2006-01-02") == t.Format("2006-01-02"):
+		return "amanhã " + t.Format("15:04")
+	}
+	return t.Format("02/01 15:04")
+}
+
 // acStateWhy says in PT-BR why a candidate is down.
 func acStateWhy(st rlState) string {
 	why := st.Why
@@ -175,7 +191,7 @@ func acStateWhy(st rlState) string {
 	}
 	switch {
 	case st.Dead && st.Wait > 0 && st.Wait < 48*time.Hour:
-		why += " até " + time.Now().Add(st.Wait).Format("15:04")
+		why += " até " + uiClockAt(time.Now().Add(st.Wait), time.Now())
 	case !st.Dead && st.Wait > 0:
 		why += " (libera em " + st.Wait.Round(time.Second).String() + ")"
 	}
@@ -244,6 +260,8 @@ type acPinError struct {
 	Ref string // the pinned model
 	Alt string // what would have answered ("" = nothing else is up)
 	Err error
+	// Strict: --strict-model forbade the reserve (the fallback may be up)
+	Strict bool
 }
 
 func (e *acPinError) Error() string {
@@ -295,7 +313,7 @@ func (a *Agent) acPinAlternative(pin string) string {
 // switch announced (fallback_on_pinned: auto never gets here), or fail clearly.
 func (a *Agent) acPinFailed(ctx context.Context, pin string, o acChatOpt, used string, err error) (*ChatResponse, string, error) {
 	alt := a.acPinAlternative(pin)
-	pe := &acPinError{Ref: pin, Alt: alt, Err: err}
+	pe := &acPinError{Ref: pin, Alt: alt, Err: err, Strict: a.cfg.StrictModel}
 	if a.cfg.StrictModel || a.cfg.FallbackOnPinned == "off" || alt == "" || !a.Interactive {
 		dbg("route", map[string]any{"pin_failed": pin, "alt": alt, "ask": false, "err": oneLine(err.Error(), 200)})
 		return nil, used, pe
@@ -353,6 +371,9 @@ func pinErrText(e *acPinError) string {
 	msg := fmt.Sprintf("o modelo que você escolheu (%s) falhou: %s — não troquei de modelo sozinho", e.Ref, cause)
 	if e.Alt != "" {
 		return msg + ". Pra usar outro: -m " + e.Alt + ", ou ponha \"fallback\" (ou \"fallback_on_pinned\": \"auto\") no config"
+	}
+	if e.Strict {
+		return msg + " (--strict-model: só esse modelo vale nesta execução; sem a flag, o \"fallback\" do config entra)"
 	}
 	return msg + ". Nenhum outro modelo está disponível agora: tente mais tarde ou salve outra chave (jazz key openrouter)"
 }

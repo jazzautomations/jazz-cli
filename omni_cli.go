@@ -45,7 +45,7 @@ func pfOmniStatus(cfg *Config, model string) string {
 	for i, c := range cfg.Candidates(model) {
 		mark := ""
 		if until, ok := ExhaustedUntil(c); ok && time.Now().Before(until) {
-			mark = " (esgotado até " + until.Format("15:04") + ")"
+			mark = " (esgotado até " + uiClockAt(until, time.Now()) + ")"
 		}
 		fmt.Fprintf(&b, "  %d. %s%s\n", i+1, c, mark)
 	}

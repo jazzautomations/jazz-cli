@@ -321,7 +321,7 @@ func (a *App) syTakeover(ctx context.Context, req string, err error, turn []Mess
 	if a.ol.forced || !syProviderDown(err) || ctx.Err() != nil {
 		return false
 	}
-	why := oneLine(friendlyErr(err), 160)
+	why := syWhy(err)
 	if calls := syToolCalls(turn); calls > 0 {
 		// work was under way: re-running the request (offline, or the same
 		// request to the model later) could repeat it. What is kept is the
@@ -368,6 +368,18 @@ func (a *App) syTakeover(ctx context.Context, req string, err error, turn []Mess
 	a.sy.last = &syLast{req: req, source: "takeover", cmd: r.Intent.Name, exit: 0, out: r.Text, at: time.Now()}
 	a.sy.pending = ""
 	return true
+}
+
+// syWhy is the short cause in the takeover line. A pinned model's failure
+// carries its whole remedy ("não troquei de modelo sozinho. Pra usar
+// outro…"): cut at 160 runes inside the parentheses it read as noise and
+// lost the remedy — the takeover line says the next step itself.
+func syWhy(err error) string {
+	var pe *acPinError
+	if errors.As(err, &pe) {
+		return uiShortModel(pe.Ref) + ": " + acPinWhy(pe.Err)
+	}
+	return oneLine(friendlyErr(err), 160)
 }
 
 // syNetCheck answers a network request with measurements: the interfaces
