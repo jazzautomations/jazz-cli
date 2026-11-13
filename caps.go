@@ -374,6 +374,16 @@ func cbSystemCritical(tool string, args map[string]any, cmd string) string {
 			return why
 		}
 	}
+	// sudo sh -c 'echo x > /etc/y', su -c '...': judge the inner script.
+	// Segments lose the quotes, so look at the fields of the whole line.
+	f := shellFields(cmd)
+	for i := range f {
+		if script, ok := cbInnerScript(filepath.Base(f[i]), f[i+1:]); ok && script != cmd {
+			if why := cbSystemCritical("bash", nil, script); why != "" {
+				return why
+			}
+		}
+	}
 	return ""
 }
 
@@ -407,6 +417,7 @@ func cbSegCritical(seg string) string {
 	if cbKernelCmd[w] {
 		return "mexe no kernel/boot (" + w + ")"
 	}
+
 	switch w {
 	case "sysctl":
 		for _, a := range args {
@@ -494,6 +505,36 @@ func cbSegCritical(seg string) string {
 		}
 	}
 	return ""
+}
+
+// cbInnerScript: the script of `sh -c SCRIPT` (bash/dash/zsh…, combined
+// flags like -ec or -lc included) or `su [user] -c SCRIPT`.
+func cbInnerScript(w string, args []string) (string, bool) {
+	switch w {
+	case "sh", "bash", "dash", "zsh", "ash", "ksh", "mksh", "busybox", "su":
+	default:
+		return "", false
+	}
+	if w == "busybox" {
+		if len(args) == 0 || (args[0] != "sh" && args[0] != "ash") {
+			return "", false
+		}
+		args = args[1:]
+	}
+	for i, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			if w == "su" && i == 0 {
+				continue // su root -c '...'
+			}
+			break // the first operand ends the options
+		}
+		if a == "--command" || (!strings.HasPrefix(a, "--") && strings.Contains(a, "c")) {
+			if i+1 < len(args) {
+				return args[i+1], true
+			}
+		}
+	}
+	return "", false
 }
 
 // cbCritTarget is what "a" (sempre) remembers for a critical call: the

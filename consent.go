@@ -286,6 +286,9 @@ func nlCredFind(input string) (user, pass string, lo, hi int, ok bool) {
 		u, g := "", 1
 		if r.match == "cred:root-user-pass" {
 			u, g = input[m[2]:m[3]], 2
+			if nlIsCommand(u) {
+				continue // "sudo apt update" is a command, not <user> <pass>
+			}
 		} else if (r.match == "cred:senha" || r.match == "cred:password") && len(strings.TrimSpace(input)) > 80 && !nlCredCtx.MatchString(input) {
 			continue
 		}
@@ -294,7 +297,48 @@ func nlCredFind(input string) (user, pass string, lo, hi int, ok bool) {
 			return u, p, lo, hi, true
 		}
 	}
+	// a message that is only "sudo X" where X is no command and looks like a
+	// password (digit, symbol or capital): the answer to "qual a senha?"
+	if m := nlCredBareRE.FindStringSubmatchIndex(input); m != nil {
+		p := input[m[2]:m[3]]
+		if nlCredOK(p) && nlCredShape(p) && !nlIsCommand(p) {
+			return "", p, m[2], m[3], true
+		}
+	}
 	return "", "", 0, 0, false
+}
+
+var (
+	nlCredBareRE  = lazyRx(`^\s*(?:sudo|root)\s*[:=]?\s+["']?([^\s"',;]{3,64})["']?\s*$`)
+	nlCredShapeRE = lazyRx(`[0-9]|[^\p{L}\p{N}_-]|\p{Lu}`)
+)
+
+// nlCredShape: not a plain lowercase word ("sudo reboot" is a request).
+func nlCredShape(p string) bool { return nlCredShapeRE.MatchString(p) }
+
+// nlIsCommand: p names something runnable ("sudo !!", "sudo ./x.sh", "sudo apt").
+func nlIsCommand(p string) bool {
+	if strings.HasPrefix(p, "-") || strings.HasPrefix(p, "!") || strings.HasPrefix(p, "./") || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") || strings.Contains(p, "=") {
+		return true
+	}
+	if nlCommonCmds[strings.ToLower(p)] {
+		return true
+	}
+	_, err := exec.LookPath(p)
+	return err == nil
+}
+
+// nlCommonCmds: commands the user names after sudo even on a machine that
+// does not have them installed (the message may be about another host).
+var nlCommonCmds = map[string]bool{
+	"apt": true, "apt-get": true, "aptitude": true, "dpkg": true, "dnf": true, "yum": true, "rpm": true, "pacman": true,
+	"zypper": true, "apk": true, "snap": true, "flatpak": true, "brew": true, "port": true, "pip": true, "pip3": true, "npm": true,
+	"systemctl": true, "service": true, "sv": true, "rc-service": true, "journalctl": true, "reboot": true, "shutdown": true,
+	"poweroff": true, "halt": true, "mount": true, "umount": true, "docker": true, "podman": true, "ufw": true, "iptables": true,
+	"nft": true, "modprobe": true, "ip": true, "iw": true, "nmcli": true, "tailscale": true, "chown": true, "chmod": true,
+	"cp": true, "mv": true, "rm": true, "mkdir": true, "tee": true, "cat": true, "ls": true, "nano": true, "vim": true, "vi": true,
+	"su": true, "sh": true, "bash": true, "useradd": true, "usermod": true, "passwd": true, "visudo": true, "crontab": true,
+	"update-grub": true, "dmesg": true, "lsof": true, "kill": true, "killall": true, "pkill": true, "fdisk": true, "parted": true,
 }
 
 // nlCredScrub devolve text com toda credencial sudo digitada trocada por

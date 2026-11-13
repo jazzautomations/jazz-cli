@@ -27,6 +27,11 @@ func TestCapsSystemCritical(t *testing.T) {
 		"nano /etc/wsl.conf",
 		"printf '[wsl2]\\nmemory=4GB' > $HOME/.wslconfig",
 		"sudo update-grub",
+		"sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'",
+		"sudo bash -ec \"sed -i s/a/b/ /etc/fstab\"",
+		"su -c 'echo blacklist x >> /etc/modprobe.d/x.conf'",
+		"sudo busybox sh -c 'rm /usr/bin/foo'",
+		"sudo sh -c 'modprobe -r ipw2200'",
 	}
 	for _, c := range crit {
 		if why := cbSystemCritical("bash", nil, c); why == "" {
@@ -46,6 +51,9 @@ func TestCapsSystemCritical(t *testing.T) {
 		"grep -r cgroup /etc/containers",
 		"echo hi > /dev/null",
 		"make 2>&1 | tail",
+		"sh -c 'go test ./...'",
+		"bash -c 'cat /etc/resolv.conf'",
+		"sudo sh -c 'echo ok > ./out.txt'",
 	}
 	for _, c := range safe {
 		if why := cbSystemCritical("bash", nil, c); why != "" {

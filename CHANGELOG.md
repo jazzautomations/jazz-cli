@@ -57,6 +57,11 @@ online o modelo é dono do turno: o offline passa a ajudar em vez de responder n
   `/tmp/jazz-sbx-*` some.
 - As mensagens de bloqueio não mandam mais o modelo dizer "rode você mesmo" nem sugerir `--yolo`: ele pede
   aprovação com o comando.
+- `sudo sh -c '… > /etc/…'`, `bash -ec`, `su -c` e `busybox sh -c`: o script de dentro é julgado também, e
+  escrita em sistema vira CRÍTICO como o comando direto.
+- Mensagem que é só `sudo <senha>` (resposta a "qual a senha?") tem a senha tirada antes de ir pro modelo;
+  `sudo reboot`, `sudo apt update` e outros comandos continuam intactos. Corrigido: `sudo apt update` era
+  lido como "usuário apt, senha update" e o modelo recebia `sudo apt <credencial-recebida>`.
 
 ### Online e offline juntos
 

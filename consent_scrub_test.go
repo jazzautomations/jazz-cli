@@ -101,6 +101,18 @@ func TestNLCredScrub(t *testing.T) {
 		"usa com a senha " + pw + " pro root":            "usa com a senha " + nlCredMark + " pro root",
 		"tenta com apt-get no lugar do snap":             "tenta com apt-get no lugar do snap",
 		"roda com sudo no servidor":                      "roda com sudo no servidor",
+		// a mensagem que é só "sudo <senha>"
+		"sudo " + pw:        "sudo " + nlCredMark,
+		"sudo Hunter2":      "sudo " + nlCredMark,
+		"  sudo: 'abc#9'  ": "  sudo: '" + nlCredMark + "'  ",
+		"sudo reboot":       "sudo reboot",
+		"sudo ls":           "sudo ls",
+		"sudo !!":           "sudo !!",
+		"sudo ./instala.sh": "sudo ./instala.sh",
+		"sudo apt update":   "sudo apt update",
+		"sudo -v":           "sudo -v",
+		"sudo /usr/bin/x1":  "sudo /usr/bin/x1",
+		"sudo FOO=1":        "sudo FOO=1",
 	} {
 		if got := nlCredScrub(in); got != want {
 			t.Errorf("nlCredScrub(%q) = %q, quero %q", in, got, want)
