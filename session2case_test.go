@@ -150,3 +150,22 @@ func TestSession2CaseRefusesLeftovers(t *testing.T) {
 		t.Fatalf("--mask-entropy: exit %d (%s)", code, stderr)
 	}
 }
+
+// TestSession2CaseFindsByID: an id is looked up where jazz writes sessions
+// (config.go dataDir: JAZZ_HOME/data/sessions/<projeto>/<id>.jsonl).
+func TestSession2CaseFindsByID(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JAZZ_HOME", home)
+	dir := filepath.Join(home, "data", "sessions", "proj-abc")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s2cWrite(t, dir, "261112-101010-abcd", []map[string]any{
+		{"t": "meta", "v": 2, "model": "fake/m1"},
+		{"t": "msg", "msg": map[string]any{"role": "user", "content": "oi"}},
+	}, nil)
+	out, stderr, code := s2cRun(t, "261112-101010-abcd", "--stdout")
+	if code != 0 || !strings.Contains(out, `"oi"`) {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)
+	}
+}

@@ -191,10 +191,12 @@ def find_session(arg):
     if os.path.isfile(arg):
         return arg
     roots = []
+    # the same places as config.go dataDir(): JAZZ_HOME/data, XDG_DATA_HOME/jazz-cli, ~/.local/share/jazz-cli
     if os.environ.get("JAZZ_HOME"):
-        roots.append(os.path.join(os.environ["JAZZ_HOME"], "sessions"))
-    xdg = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    roots.append(os.path.join(xdg, "jazz-cli", "sessions"))
+        roots.append(os.path.join(os.environ["JAZZ_HOME"], "data", "sessions"))
+    elif os.environ.get("XDG_DATA_HOME"):
+        roots.append(os.path.join(os.environ["XDG_DATA_HOME"], "jazz-cli", "sessions"))
+    roots.append(os.path.expanduser(os.path.join("~", ".local", "share", "jazz-cli", "sessions")))
     for r in roots:
         hits = glob.glob(os.path.join(r, "**", arg + ".jsonl"), recursive=True)
         if hits:
