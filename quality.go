@@ -3,8 +3,9 @@ package main
 // quality.go: the "old-coder" output bar (docs/research/skills-personas-scripts.md
 // section B). When the model wants to stop, acQualityGate (before --until and
 // --review) runs a deterministic checklist over the files the turn changed
-// through write/edit (pre-images kept by bgPreTool; files changed only by bash
-// are not covered):
+// through write/edit/json_edit (pre-images kept by bgPreTool) and through
+// writing bash commands, sidekick runs included (tree stamp before vs after,
+// qgRegisterTree):
 //
 //  1. tests ran after the last edit, when the project has a known test
 //     command (skipped with --until, which is stronger);
@@ -17,7 +18,9 @@ package main
 //     (gofmt + go vet, ruff or pyflakes, the project's eslint);
 //  8. a test file touched when new logic (branches/loops) was added, per task
 //     kind: bugfix only when a test seam exists, refactor never (instead the
-//     test count must not drop), strict always.
+//     test count must not drop), strict always. Existing coverage counts: a
+//     test run that went red→green across the edit, or a test-command
+//     --until, waives it (strict only for a bugfix).
 //
 // Failures go back to the model once as a numbered list; a second failure
 // ends the turn with StopQualityFailed (exit code 9 in -p; in interactive mode
@@ -163,11 +166,18 @@ func (a *Agent) acQualityGate(ctx context.Context) (again, failed bool) {
 		strict = strict || bgSensitiveRE.MatchString(filepath.ToSlash(f.Rel))
 	}
 	testsAfter := bt.lastTest > bt.lastEdit
-	key := qgKey(files, strict, testsAfter)
+	// existing tests already cover the change: one went red→green across the
+	// edit (verify_suite.go vsRecord), or --until is a test command (a red
+	// one fails the run anyway)
+	covered := a.hg != nil && a.hg.redGreen && !a.hg.lastTestRed
+	if u := a.loop.opts.Until; u != "" && bgIsTestCmd(strings.TrimSpace(u)) {
+		covered = true
+	}
+	key := qgKey(files, strict, testsAfter) + fmt.Sprint(covered)
 	issues := bt.qg.issues
 	if key != bt.qg.lastKey {
 		a.ui.Thinking("checando a qualidade")
-		issues = qgCheck(ctx, qgEnv{root: a.tools.Root, kind: bt.task.Kind, strict: strict, until: a.loop.opts.Until != "", testsAfter: testsAfter, noTestEdit: bt.task.NoTestEdit, newTestOnly: a.hg != nil && a.hg.policy != hgAllow && a.hgOn("tests")}, files)
+		issues = qgCheck(ctx, qgEnv{root: a.tools.Root, kind: bt.task.Kind, strict: strict, until: a.loop.opts.Until != "", testsAfter: testsAfter, covered: covered, noTestEdit: bt.task.NoTestEdit, newTestOnly: a.hg != nil && a.hg.policy != hgAllow && a.hgOn("tests")}, files)
 		a.ui.StopThinking()
 		if ctx.Err() != nil {
 			return false, false
@@ -298,6 +308,7 @@ type qgEnv struct {
 	strict      bool
 	until       bool // --until set: it proves the tests, item 1 is skipped
 	testsAfter  bool // a test command ran after the last edit
+	covered     bool // existing tests cover the change (red→green, or a test --until)
 	noTestEdit  bool // the request forbids changing tests: never demand one
 	newTestOnly bool // existing test files are protected (guard_honest.go): ask for a new one
 }
@@ -395,9 +406,9 @@ func qgCheck(ctx context.Context, env qgEnv, files []qgFile) []qgIssue {
 		issues = append(issues, qgIssue{Msg: fmt.Sprintf("the refactor removed %d test function(s): a refactor keeps the test count", testsBefore-testsNow)})
 	}
 	if logic >= 2 && !anyTest && qgNeedTest(env, files, testCmd) {
-		how := "add or extend a test that covers it"
+		how := "add or extend a test that covers it, or say which existing test already covers it"
 		if env.newTestOnly {
-			how = "add a test that covers it in a NEW test file (the existing test files are protected in this task)"
+			how = "add a test that covers it in a NEW test file (the existing test files are protected in this task), or say which existing test already covers it"
 		}
 		issues = append(issues, qgIssue{Msg: fmt.Sprintf("new logic (%d branch/loop lines) but no test file was touched: %s", logic, how)})
 	}
@@ -412,6 +423,8 @@ func qgNeedTest(env qgEnv, files []qgFile, testCmd string) bool {
 	switch {
 	case env.noTestEdit, env.kind == "refactor": // moved code is not new logic
 		return false
+	case env.covered && (!env.strict || env.kind == "bugfix"):
+		return false // existing tests went red→green across the edit
 	case env.strict: // only where the project tests at all: no new test suite nobody asked for
 		return testCmd != "" || qgHasSeam(env.root, files)
 	case env.kind == "bugfix":

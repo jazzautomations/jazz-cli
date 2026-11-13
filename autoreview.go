@@ -171,33 +171,69 @@ The user's request was:
 %s
 </request>
 
-The changed code files, as they are now:
-%s
+The changed files, as they are now (code first, then tests and docs that fit):
+%s%s
 Go through the request requirement by requirement. For each one, find the code that implements it and check it the way a strict test would: invalid input and its exact error path and exit status (a "usage error like the other arguments" means the same mechanism the other arguments use), defaults, ordering and tie-breaks, filters combined, output format character by character, old data still loading. Report only concrete defects. No style comments.
 
 If every requirement holds, reply with exactly: LGTM
 Otherwise reply with a short numbered list; each item quotes the requirement, names the file and line, and says what is wrong.`
 
-// arOneShot reviews small changes in one request with the files inline (a
-// subagent reading file by file did not finish under a 40 req/min limit:
-// eval 02 on the d610). done=false: too big, use the subagent.
-func (a *Agent) arOneShot(ctx context.Context, req string, files []qgFile, budget time.Duration) (again, done bool) {
+// arIsDoc: a documentation file the reviewer should see next to the code.
+func arIsDoc(rel string) bool {
+	base := strings.ToLower(filepath.Base(rel))
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".md", ".markdown", ".rst", ".adoc", ".txt":
+		return true
+	}
+	return strings.HasPrefix(base, "readme") || strings.HasPrefix(base, "changelog")
+}
+
+// arOneShotMaterial builds the inline files of the one-shot review: the
+// changed code files first (ok=false: they alone are over arOneShotMax, use
+// the subagent), then the changed tests and docs while they fit. Every other
+// changed file is listed in a note so the reviewer never reports it missing.
+func arOneShotMaterial(files []qgFile) (inline, note string, code int, ok bool) {
 	var b strings.Builder
-	n := 0
+	var hidden []string
+	put := func(f qgFile) {
+		fmt.Fprintf(&b, "<file path=%q>\n%s\n</file>\n", filepath.ToSlash(f.Rel), numberLines(f.New))
+	}
 	for _, f := range files {
 		if f.Test || !f.Code {
 			continue
 		}
-		n++
-		fmt.Fprintf(&b, "<file path=%q>\n%s\n</file>\n", filepath.ToSlash(f.Rel), numberLines(f.New))
+		code++
+		put(f)
 		if b.Len() > arOneShotMax {
-			return false, false
+			return "", "", code, false
 		}
 	}
-	if n == 0 {
+	for _, f := range files {
+		if !f.Test && f.Code {
+			continue
+		}
+		block := fmt.Sprintf("<file path=%q>\n%s\n</file>\n", filepath.ToSlash(f.Rel), numberLines(f.New))
+		if (f.Test || arIsDoc(f.Rel)) && b.Len()+len(block) <= arOneShotMax {
+			b.WriteString(block)
+			continue
+		}
+		hidden = append(hidden, filepath.ToSlash(f.Rel))
+	}
+	if len(hidden) > 0 {
+		note = "\nAlso changed but not shown here (they exist; do not report them as missing or unverifiable): " + strings.Join(acClipList(hidden, 30), ", ") + "\n"
+	}
+	return b.String(), note, code, true
+}
+
+// arOneShot reviews small changes in one request with the files inline (a
+// subagent reading file by file did not finish under a 40 req/min limit:
+// eval 02 on the d610). done=false: too big, use the subagent.
+func (a *Agent) arOneShot(ctx context.Context, req string, files []qgFile, budget time.Duration) (again, done bool) {
+	inline, note, n, ok := arOneShotMaterial(files)
+	if !ok || n == 0 {
 		return false, false
 	}
-	prompt := fmt.Sprintf(arOneShotPrompt, acClip(req, 3000), b.String())
+	prompt := fmt.Sprintf(arOneShotPrompt, acClip(req, 3000), inline, note)
 	a.ui.ToolStart("autoreview", "review", "revisão automática: pedido item por item")
 	t0 := time.Now()
 	rctx, cancel := context.WithTimeout(ctx, budget)

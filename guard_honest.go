@@ -78,6 +78,10 @@ type hgSnap struct {
 	mode os.FileMode
 	size int64     // last seen size and mtime (cheap change detection)
 	mod  time.Time //
+	// own: a test file the agent itself created earlier in this session
+	// (Agent.hgOwn): not protected as an existing test, but the weakening
+	// checks still apply to it
+	own bool
 }
 
 // hgState is the per-turn guard state (Agent.hg).
@@ -113,6 +117,13 @@ type hgState struct {
 	keepJobs    bool            // the request asks to leave background jobs running
 	jobsAtStart map[string]bool // live job ids when the turn began (older jobs are not this turn's to nag)
 	nudgedJobs  bool            // the background-jobs reminder already fired this turn
+
+	redAt    int  // seq of the last red test run (0 = none)
+	redGreen bool // a red run went green after an edit, and the last run is green
+	failRed  bool // the suite stayed red after its reminder: the turn ends unverified
+
+	own  map[string]bool // Agent.hgOwn: test files the agent created this session
+	sess *Session        // where a newly created own test file is recorded (-c)
 }
 
 type hgHard struct {
@@ -402,7 +413,7 @@ func (st *hgState) snapshot() {
 		if err != nil {
 			return
 		}
-		st.snap[abs] = &hgSnap{data: string(b), mode: fi.Mode().Perm(), size: fi.Size(), mod: fi.ModTime()}
+		st.snap[abs] = &hgSnap{data: string(b), mode: fi.Mode().Perm(), size: fi.Size(), mod: fi.ModTime(), own: st.own[abs]}
 		if hgKind(rel) == "test" {
 			st.testDirs[filepath.Dir(abs)] = true
 		}
@@ -720,6 +731,10 @@ func (a *Agent) hgBeginTurn(input string) {
 	for _, j := range a.tools.LiveJobs() {
 		st.jobsAtStart[j.ID] = true
 	}
+	if a.hgOwn == nil {
+		a.hgOwn = map[string]bool{}
+	}
+	st.own, st.sess = a.hgOwn, a.sess
 	if a.hgOn("tests") || a.hgOn("hardcode") {
 		st.snapshot()
 	}
@@ -804,8 +819,7 @@ func (a *Agent) hgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 			}
 			next = res.Content
 		}
-		_, orig := st.snap[abs]
-		if why, weak := st.judge(a.tools.rel(abs), orig, cur, next, false); why != "" {
+		if why, weak := st.judge(a.tools.rel(abs), st.protected(abs), cur, next, false); why != "" {
 			return refuse(hgRefusal(why, weak), "bloqueado: guarda de testes", "guarda de testes: alteração recusada em "+a.tools.rel(abs))
 		}
 	case "script":
@@ -814,7 +828,7 @@ func (a *Agent) hgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 		}
 		if _, _, _, sp := a.bgScriptKind(m); sp != "" {
 			sa := a.hgNorm(a.tools.abs(sp))
-			if _, orig := st.snap[sa]; orig && st.policy != hgAllow && hgKind(a.tools.rel(sa)) != "section" {
+			if st.protected(sa) && st.policy != hgAllow && hgKind(a.tools.rel(sa)) != "section" {
 				return refuse(hgRefusal(st.protectedWhy(a.tools.rel(sa)), false), "bloqueado: guarda de testes", "guarda de testes: alteração recusada em "+a.tools.rel(sa))
 			}
 		}
@@ -828,8 +842,8 @@ func (a *Agent) hgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 			for _, x := range a.hgExpand(w) {
 				rel := a.tools.rel(x)
 				if fi, err := os.Stat(x); err == nil && fi.IsDir() && st.policy != hgAllow {
-					for k := range st.snap {
-						if strings.HasPrefix(k, x+string(filepath.Separator)) && hgKind(a.tools.rel(k)) != "section" {
+					for k, sn := range st.snap {
+						if !sn.own && strings.HasPrefix(k, x+string(filepath.Separator)) && hgKind(a.tools.rel(k)) != "section" {
 							return refuse(hgRefusal(st.protectedWhy(a.tools.rel(k)), false), "bloqueado: guarda de testes", "guarda de testes: comando recusado (mexe em "+rel+")")
 						}
 					}
@@ -838,7 +852,7 @@ func (a *Agent) hgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 				if kind == "" || kind == "section" {
 					continue
 				}
-				_, orig := st.snap[x]
+				orig := st.protected(x)
 				var why string
 				switch {
 				case kind == "ci" && !st.ciOK:
@@ -858,6 +872,70 @@ func (a *Agent) hgPreTool(tc ToolCall) (out ToolOutput, hit bool) {
 }
 
 func hgExists(p string) bool { _, err := os.Lstat(p); return err == nil }
+
+// protected: abs is a test (or CI/test config) file that existed when the
+// turn began and was not created by the agent itself earlier in the session.
+func (st *hgState) protected(abs string) bool {
+	sn, ok := st.snap[abs]
+	return ok && !sn.own
+}
+
+// hgMaxOwn caps the session's own-test set (and its session entries).
+const hgMaxOwn = 200
+
+// hgNoteOwnTest records abs, a test file the agent just created (it did not
+// exist before), as the agent's own for the rest of the session: a later
+// turn (-c) may change it like a new file (weakening checks still apply).
+func (a *Agent) hgNoteOwnTest(abs string) {
+	st := a.hg
+	if st == nil || st.own == nil {
+		return
+	}
+	abs = a.hgNorm(abs)
+	rel, err := filepath.Rel(st.root, abs)
+	if err != nil || filepath.IsAbs(rel) || strings.HasPrefix(rel, "..") || hgKind(rel) != "test" || st.own[abs] || len(st.own) >= hgMaxOwn {
+		return
+	}
+	st.own[abs] = true
+	st.sess.write(sessEntry{T: "owntests", Summary: filepath.ToSlash(rel)})
+	dbg("guard", map[string]any{"own_test": filepath.ToSlash(rel)})
+}
+
+// hgWriteOwnTests copies the own-test set into another session (/fork).
+func hgWriteOwnTests(s *Session, own map[string]bool, root string) {
+	rels := make([]string, 0, len(own))
+	for abs := range own {
+		if rel, err := filepath.Rel(root, abs); err == nil && !strings.HasPrefix(rel, "..") {
+			rels = append(rels, filepath.ToSlash(rel))
+		}
+	}
+	sort.Strings(rels)
+	for _, rel := range rels {
+		s.write(sessEntry{T: "owntests", Summary: rel})
+	}
+}
+
+// hgLoadOwnTests reads the own-test set back from a session file (active
+// branch, signed lines only: a tampered or injected line never unprotects a
+// test).
+func hgLoadOwnTests(path, root string) map[string]bool {
+	out := map[string]bool{}
+	ents, err := sessReadEntries(path)
+	if err != nil {
+		return out
+	}
+	for _, e := range sessPath(ents, "") {
+		if e.T != "owntests" || e.Tampered || e.Legacy || len(out) >= hgMaxOwn {
+			continue
+		}
+		rel := filepath.FromSlash(strings.TrimSpace(e.Summary))
+		if rel == "" || filepath.IsAbs(rel) || strings.HasPrefix(filepath.Clean(rel), "..") || hgKind(rel) != "test" {
+			continue
+		}
+		out[filepath.Join(root, filepath.Clean(rel))] = true
+	}
+	return out
+}
 
 func hgReadFile(abs string) (string, bool) {
 	b, err := os.ReadFile(abs)
@@ -923,6 +1001,12 @@ func (a *Agent) hgAfterTool(tc ToolCall, out ToolOutput) string {
 		if !out.IsErr && p != "" && isCodeFile(p) {
 			st.codeEdited = true
 			st.lastEdit = st.seq
+		}
+		if tc.Name == "write" && !out.IsErr && p != "" {
+			abs := a.hgNorm(a.tools.abs(p))
+			if pre, ok := st.pre[abs]; ok && pre == nil {
+				a.hgNoteOwnTest(abs) // created this turn: the agent's own test from now on
+			}
 		}
 		if tc.Name == "edit" && !out.IsErr && p != "" {
 			if _, multi := m["edits"].([]any); !multi {
@@ -998,7 +1082,7 @@ func (a *Agent) hgCheckSnap() []string {
 			continue
 		}
 		rel := a.tools.rel(abs)
-		why, _ := st.judge(rel, true, sn.data, cur, !ok)
+		why, _ := st.judge(rel, !sn.own, sn.data, cur, !ok)
 		if why == "" {
 			if fi != nil {
 				sn.size, sn.mod = fi.Size(), fi.ModTime()
@@ -1497,6 +1581,13 @@ func (a *Agent) hgDoneGate(ctx context.Context) (again bool, why StopReason) {
 			a.append(Message{Role: "user", Content: b.String()})
 			return true, ""
 		}
+	}
+	// the tests stayed red after their one reminder and the answer does not
+	// say the failure is old and unrelated: not a success (vsGate)
+	if st.failRed {
+		a.ui.Warn("guarda de conclusão: os testes continuam falhando depois do aviso (" + oneLine(st.lastTestCmd, 60) + ") — o turno termina sem sucesso")
+		dbg("suite", map[string]any{"fail_red": st.lastTestCmd})
+		return false, StopQualityFailed
 	}
 	return false, ""
 }

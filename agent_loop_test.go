@@ -242,7 +242,8 @@ func TestAgentReviewFeedsDefectsOnce(t *testing.T) {
 		case !r.contains("user", "reviewer") && len(r.toolResults()) == 0:
 			return fakeResp{Calls: []fakeCall{
 				{ID: "w1", Name: "write", Args: `{"path":"b.go","content":"package b\n"}`},
-				{ID: "e1", Name: "bash", Args: `{"command":"echo '// changed' >> a.go"}`},
+				// gofmt-clean: the quality gate now sees bash writes too (0.14.0)
+				{ID: "e1", Name: "bash", Args: `{"command":"printf '\\n// changed\\n' >> a.go"}`},
 			}}
 		default:
 			return fakeResp{Text: "done"}

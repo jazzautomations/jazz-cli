@@ -626,8 +626,9 @@ func TestGuardSuiteRunsFullBeforeDone(t *testing.T) {
 		}
 		t.Fatalf("want the full-suite reminder, requests=%d", len(reqs))
 	}
-	if stop != StopDone {
-		t.Errorf("stop=%s", stop)
+	if stop != StopQualityFailed {
+		// the suite is still red after its reminder: never a success (0.14.0)
+		t.Errorf("stop=%s, want quality_failed", stop)
 	}
 	// JAZZ_SUITE_GUARD=off: no harness run
 	t.Setenv("JAZZ_SUITE_GUARD", "off")

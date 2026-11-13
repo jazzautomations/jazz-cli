@@ -81,9 +81,12 @@ type Agent struct {
 
 	loop acLoop // --until, /goal and --review (agent_loop.go)
 
-	sk  skState  // built-in skills picked by the harness (skills.go)
-	hg  *hgState // honest-completion guards for this turn (guard_honest.go)
-	bud *bgState // ponytail budget, quality gate, outage wait (budget.go, quality.go, netwait.go)
+	sk skState  // built-in skills picked by the harness (skills.go)
+	hg *hgState // honest-completion guards for this turn (guard_honest.go)
+	// hgOwn: test files the agent itself created in this session (abs paths;
+	// kept in the session file for -c): not protected as "existing" tests
+	hgOwn map[string]bool
+	bud   *bgState // ponytail budget, quality gate, outage wait (budget.go, quality.go, netwait.go)
 
 	uiLint map[string]string // per UI file, hash of the last ui_lint findings ("" = clean) (uilint.go)
 
@@ -2942,6 +2945,7 @@ func (a *Agent) LoadSessionAt(si SessionInfo, at string) error {
 	a.h2ResumeNotice(sess)
 	a.obAttach("resume") // obs.go
 	a.loop.goal = acLoadGoal(si.Path)
+	a.hgOwn = hgLoadOwnTests(si.Path, a.tools.Root)
 	if model != "" && a.cfg.HasCreds(mustProvider(model)) {
 		a.Model = model
 	}
@@ -3009,6 +3013,7 @@ func (a *Agent) Fork(n int) (string, error) {
 	if a.loop.goal != "" {
 		acWriteGoal(s, a.loop.goal)
 	}
+	hgWriteOwnTests(s, a.hgOwn, a.tools.Root) // the agent's own tests stay its own (guard_honest.go)
 	// edits made after the fork point stay on disk; a later /rewind in the
 	// fork must not revert them, so drop (without restoring) their checkpoints
 	a.tools.DropTurnsFrom(n)
