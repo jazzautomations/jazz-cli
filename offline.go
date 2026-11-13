@@ -607,11 +607,17 @@ func olHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, cfg *Conf
 
 // olHeadlessFallback rescues a run whose model failed with a network or
 // credential error: when the prompt is a fast path, it runs that instead.
+// With the chain out of quota or the provider down (429, 5xx) only a
+// literal command line of the closed list is taken over (synergy.go).
 func olHeadlessFallback(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, err error, prompt string) *RunResult {
-	if !olIsOffline(err) {
-		return nil
+	var m fpMatch
+	var ok bool
+	switch {
+	case olIsOffline(err):
+		m, ok = fpIntents(tools.Root).Match(prompt, fpDetect(tools.Root), tools.hasRg)
+	case syProviderDown(err):
+		m, ok = syLiteralMatch(tools.Root, prompt, tools.hasRg)
 	}
-	m, ok := fpIntents(tools.Root).Match(prompt, fpDetect(tools.Root), tools.hasRg)
 	if !ok {
 		return nil
 	}

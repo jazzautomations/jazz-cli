@@ -129,8 +129,16 @@ func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	if res == nil || res.Status != StopDone || res.Status.ExitCode() != 0 {
 		t.Errorf("fallback: %+v", res)
 	}
-	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "git status"); res != nil {
-		t.Errorf("429 must not trigger the offline fallback: %+v", res)
+	// 429/5xx (no quota, provider down): only a literal command line is
+	// taken over — since 0.14 the offline side helps instead of dying mute
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "git status"); res == nil || res.Status != StopDone {
+		t.Errorf("429 + literal: the offline side answers: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "mostra o git status"); res != nil {
+		t.Errorf("429 + a sentence: not a literal, no takeover: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 400, Body: "bad"}, "git status"); res != nil {
+		t.Errorf("a request error is not a provider outage: %+v", res)
 	}
 	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "refatora o parser para usar generics"); res != nil {
 		t.Errorf("no fast path, no rescue: %+v", res)
