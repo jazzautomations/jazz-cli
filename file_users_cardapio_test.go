@@ -29,12 +29,16 @@ func TestFileUsersCardapio(t *testing.T) {
 		t.Fatalf("holders: %v\n%s", v, out.Text)
 	}
 	self := os.Getpid()
+	comm, err := os.ReadFile("/proc/self/comm")
+	if err != nil {
+		t.Fatal(err)
+	}
 	found := false
 	for _, h := range d["holders"].([]any) {
 		m := h.(map[string]any)
 		if m["pid"].(float64) == float64(self) {
 			found = true
-			if s, _ := m["comm"].(string); !strings.HasSuffix(s, "test") {
+			if s, _ := m["comm"].(string); s != strings.TrimSpace(string(comm)) {
 				t.Errorf("comm: %v", m["comm"])
 			}
 		}

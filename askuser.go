@@ -135,7 +135,12 @@ func (a *Agent) runAskUser(ctx context.Context, tc ToolCall) ToolOutput {
 		}
 		fmt.Fprint(os.Stderr, "> ")
 		askStdinMu.Lock()
-		line, err := bufio.NewReader(askStdin).ReadString('\n')
+		rd, ok := askStdin.(*bufio.Reader)
+		if !ok {
+			rd = bufio.NewReader(askStdin)
+			askStdin = rd // keep prefetched answers for the next question
+		}
+		line, err := rd.ReadString('\n')
 		askStdinMu.Unlock()
 		if ans := askResolve(q, strings.TrimSpace(line)); ans != "" {
 			return ToolOutput{Text: "The user answered: " + ans, Display: Display{Summary: "resposta: " + oneLine(ans, 80)}}

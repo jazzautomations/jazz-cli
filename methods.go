@@ -2888,6 +2888,9 @@ func (cx *brCtx) lastQuery() string {
 
 func brAskSlot(cx *brCtx, in map[string]string) brStep {
 	slot, q := in["slot"], in["q"]
+	if value := strings.TrimSpace(cx.task.Slots[slot]); value != "" {
+		return brStep{val: value, obs: rvNoCmd(), ok: true}
+	}
 	cx.questions++
 	if cx.env.AskText != nil {
 		if a, ok := cx.env.AskText(q); ok && strings.TrimSpace(a) != "" {

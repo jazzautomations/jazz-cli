@@ -10,6 +10,22 @@
    ],
    "steps": [
     {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "a",
+      "q": "Qual é o primeiro diretório?"
+     },
+     "out": "slot.a"
+    },
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "b",
+      "q": "Qual é o segundo diretório?"
+     },
+     "out": "slot.b"
+    },
+    {
      "cap": "script:dir_diff",
      "in": {
       "a": "$slot.a",

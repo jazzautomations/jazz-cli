@@ -49,9 +49,8 @@ type brResult struct {
 }
 
 // brRun interprets text and, when it understands it and has a method, does it.
-func brRun(ctx context.Context, env *brEnv, text string) brResult {
+func brRun(ctx context.Context, env *brEnv, text string) (res brResult) {
 	t0 := time.Now()
-	res := brResult{}
 	defer func() { res.Elapsed = time.Since(t0) }()
 	w := env.World
 	if w == nil {
@@ -1363,6 +1362,9 @@ func brHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, prompt st
 	if ag.sess != nil { // the request and the answer are part of the session (jazz sessions, trace, -c)
 		ag.sess.Append(Message{Role: "user", Content: prompt})
 	}
+	if err := ag.sess.Err(); err != nil {
+		return &RunResult{Status: StopError, Model: "offline-brain", Err: err.Error()}
+	}
 	r := brRun(ctx, env, prompt)
 	sigFlush(prompt, r, nil)
 	if !r.Handled {
@@ -1556,6 +1558,10 @@ func (a *App) brAppEnv() *brEnv {
 
 // brInteractive tries the brain on an offline request: true = answered.
 func (a *App) brInteractive(ctx context.Context, text string) bool {
+	if err := a.agent.sess.Err(); err != nil {
+		a.ui.Error(err.Error())
+		return true
+	}
 	env := a.brAppEnv()
 	r := brRun(ctx, env, text)
 	sigFlush(text, r, a.sigTTY())
@@ -1583,6 +1589,10 @@ func (a *App) brMissNow() bool {
 // session, menu position and the readings offered (spec 0.14b: a pick at
 // position ≥2 by a human at the terminal is evidence; the default is not).
 func (a *App) brRunReading(ctx context.Context, act olAction) bool {
+	if err := a.agent.sess.Err(); err != nil {
+		a.ui.Error(err.Error())
+		return true
+	}
 	env := a.brAppEnv()
 	in := *act.In
 	r := brRunIntent(ctx, env, act.Text, in, brResult{Intent: in})
@@ -1615,6 +1625,10 @@ func (a *App) sigTTY() map[string]string {
 // brShow prints a brain result — or the P2 menu when the brain did not
 // understand — and records the note for the model.
 func (a *App) brShow(text string, r brResult) bool {
+	if err := a.agent.sess.Err(); err != nil {
+		a.ui.Error(err.Error())
+		return true
+	}
 	if !r.Handled {
 		if r.Text != "" && !r.Miss {
 			a.ui.print(sanitizeTerm(r.Text) + "\n")

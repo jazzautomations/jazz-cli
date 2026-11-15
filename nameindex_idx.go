@@ -497,6 +497,11 @@ func niLoadIdx(root string) *niIndex {
 		return nil
 	}
 	n, nd := int(h.N), int(h.ND)
+	// Check lengths before converting uint32 to int on 386 or slicing the file.
+	_, _, _, _, _, prefix, _ := niIdxLayout(n, nd, 0, 0)
+	if uint64(h.RootLen) != uint64(len(root)) || uint64(prefix)+uint64(h.RootLen)+uint64(h.BlobLen) != uint64(len(b)) {
+		return nil
+	}
 	recs, fast, rel, base, dirs, blob, total := niIdxLayout(n, nd, int(h.BlobLen), int(h.RootLen))
 	if total != len(b) || string(b[blob:blob+int(h.RootLen)]) != root || crc32.Checksum(b[unsafe.Sizeof(niIdxHdr{}):], niCRC) != h.CRC {
 		return nil

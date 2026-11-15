@@ -35,6 +35,9 @@ func uiTestStdout(t *testing.T) func() string {
 
 func uiTestUI(t *testing.T) (*TermUI, chan Key) {
 	t.Helper()
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("JAZZ_ASCII", "0")
+	t.Setenv("JAZZ_PALETTE", "")
 	uiTestStdout(t)
 	t.Setenv("JAZZ_HOME", t.TempDir())
 	edCoalesce = false

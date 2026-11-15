@@ -1,5 +1,17 @@
 # Changelog
 
+## Correções em desenvolvimento sobre 0.14.0
+
+- Saída do shell usa contadores de 64 bits, inclusive a janela do marcador, para não estourar em linux/386.
+- Cache de nomes valida comprimentos antes de converter/slicar: um `.idx` inválido vira cache miss.
+- Falha de gravação da sessão preserva a posição, interrompe ferramentas e aparece como erro; não anuncia retomada salva.
+- OAuth exige lock antes de renovar token; `/logout` só confirma depois de remover a credencial com sucesso.
+- Comparação de diretórios e seleção de linhas perguntam pelos argumentos faltantes antes de executar; respostas completam a tarefa.
+- Extração aceita padrão nomeado entre aspas. Avaliação usa a versão em execução, rejeita seleção desconhecida e falha quando um caso não cumpre a expectativa (salvo `--gate` explícito).
+- `--ask-stdin` reserva a entrada para as respostas, sem anexá-las ao prompt; perguntas consecutivas preservam as linhas já lidas no buffer. Combinar com `--stdin`/`-` é erro de uso.
+- Fixtures corrigidas: dono de arquivo não é processo com arquivo aberto; filtro de permissão recebe arquivo com modo conferido independentemente do umask. Conjuntos cegos permanecem intactos.
+- Testes de terminal independem do ambiente; testes de procfs conferem indisponibilidade no macOS; helpers compartilhados permitem compilar a suíte Windows.
+
 ## 0.14.0 — 2026-11-12
 
 O modelo que você escolhe é o que responde, o `sudo` funciona com sandbox, ação crítica vira pergunta, e

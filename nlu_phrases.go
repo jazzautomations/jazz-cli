@@ -210,6 +210,12 @@ func nuPhraseBuild() []*nuPhraseDef {
 				`(?:roda|rode|rodar|executa|execute|run)(?: o| the)?(?: teste| test) (?P<t>Test[A-Za-z0-9_]+|test_[a-z0-9_]+)(?: so| only| apenas)?`,
 				`go test -run (?P<t>Test[A-Za-z0-9_]+)`,
 			}},
+		{id: "extrai-padrao-nomeado", intent: "text_extract", groups: map[string]string{"file": "file", "kind": "pattern"},
+			pats: []string{`(?:extrai|extraia|extract) (?:padrao|padroes|pattern|patterns) ` + nuPhFile + ` ["']?(?P<kind>[a-z0-9_-]+)["']?`},
+			prepare: func(g map[string]string, w *nuWorld) bool {
+				g["kind"] = nuExtractPat(nuTokenize(g["kind"]))
+				return g["kind"] != ""
+			}},
 		{id: "extrai-padrao", intent: "text_extract", groups: map[string]string{"file": "file", "kind": "pattern"},
 			pats: []string{
 				`(?:any|are there(?: any)?|list|show|show me|find|extract|get|tem|ha|quais|quais sao|lista|mostra|extrai|extraia|pega)(?: os| as| the| all| all the| algum| alguns)? ?(?P<kind>ips?|ip addresses|enderecos ip|enderecos de ip|emails?|e-mails?|email addresses|enderecos de email|urls?|links) (?:in|no|na|do|da|from|em|que aparecem no|que aparecem em|dentro do) (?:the )?` + nuPhFile,

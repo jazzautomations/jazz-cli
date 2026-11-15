@@ -284,16 +284,19 @@ func chatgptCred(ctx context.Context, force bool) (*Cred, error) {
 		return cr, nil
 	}
 	seen := cr.LastRefresh
-	if err := os.MkdirAll(configDir(), 0o700); err == nil {
-		if unlock, err := pvFlock(filepath.Join(configDir(), "auth.lock"), 45*time.Second); err == nil {
-			defer unlock()
-			if fresh := LoadAuth()["chatgpt"]; fresh != nil && fresh.Refresh != "" {
-				if fresh.LastRefresh > seen && fresh.Expires-time.Now().UnixMilli() > 60*1000 {
-					return fresh, nil // another process refreshed while we waited
-				}
-				cr = fresh
-			}
+	if err := os.MkdirAll(configDir(), 0o700); err != nil {
+		return nil, fmt.Errorf("não consegui preparar o lock de autenticação: %w", err)
+	}
+	unlock, err := pvFlock(filepath.Join(configDir(), "auth.lock"), 45*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("não consegui obter o lock de autenticação: %w", err)
+	}
+	defer unlock()
+	if fresh := LoadAuth()["chatgpt"]; fresh != nil && fresh.Refresh != "" {
+		if fresh.LastRefresh > seen && fresh.Expires-time.Now().UnixMilli() > 60*1000 {
+			return fresh, nil // another process refreshed while we waited
 		}
+		cr = fresh
 	}
 	tr, st, b, err := pvRefresh(ctx, cr.Refresh)
 	if err != nil {

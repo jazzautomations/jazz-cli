@@ -234,8 +234,10 @@ func TestSandboxRealHomeSSH(t *testing.T) {
 	}
 	r := sh.Run(context.Background(), "cat ~/.ssh/known_hosts | head -c 64; ls -a ~/.ssh", 20*time.Second, nil)
 	for _, e := range real {
-		if strings.Contains(r.Output, e.Name()) && !strings.Contains(r.Output, e.Name()+": No such") {
-			t.Errorf("real ~/.ssh entry %q visible inside the sandbox: exit %d %q", e.Name(), r.ExitCode, r.Output)
+		for _, line := range strings.Split(r.Output, "\n") {
+			if strings.TrimSpace(line) == e.Name() {
+				t.Errorf("real ~/.ssh entry %q listed inside the sandbox: exit %d %q", e.Name(), r.ExitCode, r.Output)
+			}
 		}
 	}
 	if kh, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")); err == nil && len(kh) > 0 {

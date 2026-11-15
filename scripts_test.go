@@ -66,18 +66,6 @@ func scDataOf(v map[string]any) map[string]any {
 	return d
 }
 
-func scWrite(t *testing.T, root, rel, content string) string {
-	t.Helper()
-	p := filepath.Join(root, rel)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
-
 func scFixture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("jazz-scripts", "testdata", name))
@@ -85,22 +73,6 @@ func scFixture(t *testing.T, name string) string {
 		t.Fatal(err)
 	}
 	return string(b)
-}
-
-func scGit(t *testing.T, root string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
-
-func scNeedGit(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not installed")
-	}
 }
 
 func scConf(v map[string]any) float64 { c, _ := v["confidence"].(float64); return c }
@@ -294,7 +266,22 @@ func TestScriptsEachBuiltin(t *testing.T) {
 	tested := map[string]bool{}
 	run := func(name string, f func(t *testing.T)) {
 		tested[name] = true
-		t.Run(name, f)
+		t.Run(name, func(t *testing.T) {
+			if name == "proc_ports" || name == "file_users" || name == "net_route" || name == "service_status" {
+				if _, err := os.Stat("/proc/self"); err != nil {
+					args := map[string]any{}
+					if name == "service_status" {
+						args = map[string]any{"name": "zz9absentsvc", "kind": "process"}
+					}
+					v, out := scCall(t, tb, name, args)
+					if scOK(v) || !out.IsErr || !strings.Contains(fmt.Sprint(v["error"]), "/proc") {
+						t.Fatalf("unsupported procfs backend must report its limit: %v", v)
+					}
+					return
+				}
+			}
+			f(t)
+		})
 	}
 
 	run("detect_project", func(t *testing.T) {

@@ -116,3 +116,27 @@ func TestAskUserHeadlessDefault(t *testing.T) {
 		t.Error("one option accepted")
 	}
 }
+
+func TestAskStdinKeepsAnswersAcrossQuestions(t *testing.T) {
+	h := newHarness(t, seq(
+		fakeResp{Calls: []fakeCall{{ID: "q1", Name: "ask_user", Args: askTestArgs()}, {ID: "q2", Name: "ask_user", Args: askTestArgs()}}},
+		fakeResp{Text: "opções registradas"},
+	), nil)
+	h.ag.ui = &HeadlessUI{}
+	h.ag.AskStdin = true
+	old := askStdin
+	askStdin = strings.NewReader("1\n2\n")
+	t.Cleanup(func() { askStdin = old })
+	if err := h.run(t, "pergunte duas vezes"); err != nil {
+		t.Fatal(err)
+	}
+	var answers []string
+	for _, m := range h.ag.Msgs {
+		if m.Role == "tool" {
+			answers = append(answers, m.Content)
+		}
+	}
+	if len(answers) != 2 || !strings.Contains(answers[0], "SQLite") || !strings.Contains(answers[1], "Postgres") {
+		t.Fatalf("prefetched answer lost: %v", answers)
+	}
+}

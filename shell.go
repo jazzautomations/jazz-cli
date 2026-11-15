@@ -205,11 +205,11 @@ type outBuf struct {
 	head, tail []byte
 	headCap    int
 	tailCap    int
-	total      int
+	total      int64 // cumulative output can exceed 2 GiB on linux/386
 }
 
 func (o *outBuf) write(p []byte) {
-	o.total += len(p)
+	o.total += int64(len(p))
 	if len(o.head) < o.headCap {
 		n := o.headCap - len(o.head)
 		if n > len(p) {
@@ -229,19 +229,19 @@ func (o *outBuf) write(p []byte) {
 
 // upTo returns the stream content before absolute offset end, and the number
 // of bytes that were dropped from the middle.
-func (o *outBuf) upTo(end int) (string, int) {
-	if end <= len(o.head) {
+func (o *outBuf) upTo(end int64) (string, int64) {
+	if end <= int64(len(o.head)) {
 		return string(o.head[:end]), 0
 	}
-	tailStart := o.total - len(o.tail)
-	if tailStart < len(o.head) {
-		tailStart = len(o.head)
+	tailStart := o.total - int64(len(o.tail))
+	if tailStart < int64(len(o.head)) {
+		tailStart = int64(len(o.head))
 	}
-	tailOff := o.total - len(o.tail)
+	tailOff := o.total - int64(len(o.tail))
 	from := tailStart - tailOff
 	to := end - tailOff
-	if to > len(o.tail) {
-		to = len(o.tail)
+	if to > int64(len(o.tail)) {
+		to = int64(len(o.tail))
 	}
 	if from < 0 {
 		from = 0
@@ -249,10 +249,10 @@ func (o *outBuf) upTo(end int) (string, int) {
 	if from > to {
 		from = to
 	}
-	if to-from > o.tailCap { // tail may hold up to 2*tailCap between trims
-		from = to - o.tailCap
+	if to-from > int64(o.tailCap) { // tail may hold up to 2*tailCap between trims
+		from = to - int64(o.tailCap)
 	}
-	dropped := tailOff + from - len(o.head)
+	dropped := tailOff + from - int64(len(o.head))
 	if dropped < 0 {
 		dropped = 0
 	}
@@ -325,8 +325,8 @@ func (s *Shell) runOnce(ctx context.Context, command string, timeout time.Durati
 	}
 
 	ob := &outBuf{headCap: s.maxKeep / 4, tailCap: s.maxKeep - s.maxKeep/4}
-	var win []byte // sliding window used only to find the marker line
-	winOff := 0    // absolute offset of win[0]
+	var win []byte   // sliding window used only to find the marker line
+	var winOff int64 // absolute offset of win[0], including discarded output
 	const maxLine = 8192
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -349,7 +349,7 @@ func (s *Shell) runOnce(ctx context.Context, command string, timeout time.Durati
 				if loc := re.FindSubmatchIndex(win[i:]); loc != nil {
 					code, _ := strconv.Atoi(string(win[i+loc[2] : i+loc[3]]))
 					cwd := string(win[i+loc[4] : i+loc[5]])
-					out, dropped := ob.upTo(winOff + i)
+					out, dropped := ob.upTo(winOff + int64(i))
 					out = strings.TrimSuffix(out, "\n")
 					if onChunk != nil {
 						onChunk(nil)
@@ -367,12 +367,12 @@ func (s *Shell) runOnce(ctx context.Context, command string, timeout time.Durati
 				// marker seen but line incomplete: keep from the marker on
 				if i > 0 {
 					win = win[i:]
-					winOff += i
+					winOff += int64(i)
 				}
 			} else if len(win) > maxLine {
 				cut := len(win) - len(mb) - 1
 				win = win[cut:]
-				winOff += cut
+				winOff += int64(cut)
 			}
 			if onChunk != nil {
 				onChunk(chunk)

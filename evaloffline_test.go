@@ -144,3 +144,60 @@ func TestEvalGateRatchet(t *testing.T) {
 		t.Errorf("portão devia passar: %v", msgs)
 	}
 }
+
+func TestEvalRejectsUnknownOrEmptySelection(t *testing.T) {
+	for _, suite := range []string{"offline", "real"} {
+		for _, ids := range []map[string]bool{{"no-such-task": true}, {"open-exact": true, "no-such-task": true}, {"": true}} {
+			var out bytes.Buffer
+			if _, err := eoRunSuite(suite, ids, false, &out); err == nil || out.Len() != 0 {
+				t.Fatalf("%s %v: err=%v output=%s", suite, ids, err, out.String())
+			}
+		}
+	}
+	for _, flag := range []string{"--out", "--only", "--tasks", "--gate"} {
+		for _, suffix := range [][]string{nil, {""}, {"--verbose"}} {
+			args := append([]string{"offline", flag}, suffix...)
+			if code := cmdEval(t.TempDir(), args, &bytes.Buffer{}); code != 2 {
+				t.Fatalf("%v: exit %d", args, code)
+			}
+		}
+	}
+}
+
+func TestEvalSelfUsesRunningVersion(t *testing.T) {
+	old := version
+	version = "99.42.1-test"
+	defer func() { version = old }()
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	t.Setenv("JAZZ_ENV_NO_NET", "1")
+	defer epSetForTest(nil)()
+	var out bytes.Buffer
+	rep, err := eoRun(map[string]bool{"self-who": true}, false, &out)
+	if err != nil || rep.Summary.Success != 1 || rep.Summary.FalseSuccess != 0 {
+		t.Fatalf("err=%v report=%+v output=%s", err, rep, out.String())
+	}
+}
+
+func TestEvalFailureExitsNonzeroUnlessExplicitlyGated(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	t.Setenv("JAZZ_ENV_NO_NET", "1")
+	defer epSetForTest(nil)()
+	old := erTasksOverride
+	defer func() { erTasksOverride = old }()
+	dir := t.TempDir()
+	tasks := filepath.Join(dir, "tasks.json")
+	gate := filepath.Join(dir, "known.txt")
+	if err := os.WriteFile(tasks, []byte(`{"tasks":[{"id":"broken-fixture","fixture":"no-such-fixture"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(gate, []byte("broken-fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"real", "--tasks", tasks, "--out", filepath.Join(dir, "results")}
+	if code := cmdEval(dir, args, &bytes.Buffer{}); code != 1 {
+		t.Fatalf("failed evaluation exited %d", code)
+	}
+	if code := cmdEval(dir, append(args, "--gate", gate), &bytes.Buffer{}); code != 0 {
+		t.Fatalf("known failure ratchet exited %d", code)
+	}
+}

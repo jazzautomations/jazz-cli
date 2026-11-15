@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -555,4 +558,54 @@ func permitTC(h *harness, name string, args map[string]any) (bool, string) {
 	h.ag.blockWhy = ""
 	ok, msg, _ := h.ag.permit(context.Background(), ToolCall{Name: name, Args: jsonArgs(args)}, toolDetail(name, jsonArgs(args)), false, acHookVerdict{})
 	return ok, msg
+}
+
+func editCall(id, path, old, new string) fakeCall {
+	return fakeCall{ID: id, Name: "edit", Args: jsonArgs(map[string]string{"path": path, "old_string": old, "new_string": new})}
+}
+
+func writeCall(id, path, content string) fakeCall {
+	return fakeCall{ID: id, Name: "write", Args: jsonArgs(map[string]string{"path": path, "content": content})}
+}
+
+func bashCall(id, cmd string) fakeCall {
+	return fakeCall{ID: id, Name: "bash", Args: jsonArgs(map[string]string{"command": cmd})}
+}
+
+func countMsg(msgs []Message, substr string) int {
+	n := 0
+	for _, m := range msgs {
+		if m.Role == "user" && strings.Contains(m.Content, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+func scNeedGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+}
+
+func scGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func scWrite(t *testing.T, root, rel, content string) string {
+	t.Helper()
+	p := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

@@ -321,6 +321,9 @@ func olDoctorLine(cfg *Config, root string) string {
 // smart classifier, approval prompt) for a bash command the harness wants to
 // run on the user's behalf (fast paths). ok=false carries the reason.
 func (a *Agent) PermitCommand(ctx context.Context, cmd string) (bool, string) {
+	if err := a.sess.Err(); err != nil {
+		return false, err.Error()
+	}
 	b, _ := json.Marshal(map[string]any{"command": cmd})
 	tc := ToolCall{Name: "bash", Args: string(b)}
 	ok, why, _ := a.permit(ctx, tc, toolDetail("bash", tc.Args), false, acHookVerdict{})

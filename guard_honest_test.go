@@ -166,18 +166,6 @@ func newGuardHarness(t *testing.T, files map[string]string, script ...fakeResp) 
 
 const gTest = "import unittest\nfrom calc import soma\n\nclass T(unittest.TestCase):\n    def test_soma(self):\n        self.assertEqual(soma(2, 3), 5)\n"
 
-func editCall(id, path, old, new string) fakeCall {
-	return fakeCall{ID: id, Name: "edit", Args: jsonArgs(map[string]string{"path": path, "old_string": old, "new_string": new})}
-}
-
-func writeCall(id, path, content string) fakeCall {
-	return fakeCall{ID: id, Name: "write", Args: jsonArgs(map[string]string{"path": path, "content": content})}
-}
-
-func bashCall(id, cmd string) fakeCall {
-	return fakeCall{ID: id, Name: "bash", Args: jsonArgs(map[string]string{"command": cmd})}
-}
-
 // Eval v2: laguna and minimax edited test_pedidos.py / tests/test_util.py
 // although the request never asked for test changes.
 func TestGuardRefusesEditOfExistingTest(t *testing.T) {

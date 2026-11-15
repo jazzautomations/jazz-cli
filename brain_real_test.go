@@ -406,3 +406,67 @@ func TestCommitOnlyOnPlainOrder(t *testing.T) {
 		t.Error("pacotes do projeto não é pacotes da máquina")
 	}
 }
+
+func TestReadMethodsAskBeforeRunningIncompleteRequests(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	for _, prompt := range []string{"compara diretórios", "mostra linhas notes.txt"} {
+		t.Run(prompt, func(t *testing.T) {
+			env, _ := brTestEnv(t, brFixture(t, "notes.txt", "one\ntwo\n", "a/x.txt", "a", "b/x.txt", "b"), nil, -1)
+			r := brRun(context.Background(), env, prompt)
+			if r.Status != tkNeedsInput || r.Commands != 0 || r.Questions != 1 || r.Elapsed <= 0 {
+				t.Fatalf("incomplete request executed or lost its question: %+v", r)
+			}
+		})
+	}
+}
+
+func TestReadMethodsResumeWithAnswers(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 required")
+	}
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	for _, c := range []struct {
+		prompt    string
+		answers   []string
+		questions int
+		want      string
+	}{
+		{"compara diretórios", []string{"a", "b"}, 2, "x.txt"},
+		{"mostra linhas notes.txt", []string{"2"}, 1, "two"},
+		{"mostra as 2 primeiras linhas de notes.txt", nil, 0, "two"},
+	} {
+		t.Run(c.prompt, func(t *testing.T) {
+			env, _ := brTestEnv(t, brFixture(t, "notes.txt", "one\ntwo\n", "a/x.txt", "a", "b/x.txt", "b"), nil, -1)
+			answers := append([]string(nil), c.answers...)
+			env.AskText = func(q string) (string, bool) {
+				if len(answers) == 0 {
+					t.Fatalf("unexpected question: %s", q)
+				}
+				a := answers[0]
+				answers = answers[1:]
+				return a, true
+			}
+			r := brRun(context.Background(), env, c.prompt)
+			if r.Status != tkSucceeded || r.Questions != c.questions || r.Commands != 1 || !strings.Contains(r.Text, c.want) {
+				t.Fatalf("answered request: %+v", r)
+			}
+		})
+	}
+}
+
+func TestQuotedNamedExtractionPatterns(t *testing.T) {
+	m, w := nuTestWorld(t)
+	for _, c := range []struct{ text, pattern string }{
+		{`extrai padrões README.md "email"`, "email"},
+		{`extract patterns README.md "ipv4"`, "ipv4"},
+	} {
+		in := m.Parse(c.text, w)
+		if !in.Understood() || in.Name != "text_extract" || in.Slots["pattern"] != c.pattern {
+			t.Fatalf("%q: %+v", c.text, in)
+		}
+	}
+	in := m.Parse(`mostra "email"`, w)
+	if in.Name == "text_extract" && in.Understood() {
+		t.Fatalf("quoted data became an action: %+v", in)
+	}
+}

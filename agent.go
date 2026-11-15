@@ -431,16 +431,23 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 
 	defer func() {
 		a.ptEnd() // early calls still running are cancelled and discarded (partools.go)
+		if saveErr := a.sess.Err(); saveErr != nil {
+			stop, err = StopError, saveErr
+		}
 		if s := a.dgReview(ctx); s != "" {
 			stop = s // risky diff refused at the end of the turn (diffguard.go)
 		}
 		a.turnModel = turnModel
 		a.parkSteer()
-		a.qTurnEnd(stop, err) // follow-ups start only after a turn that ended well (queue.go)
 		a.bgEndTurn(stop, steps)
 		a.acTurnDone(ctx, lt, stop, steps)                 // plan cache (plancache.go)
 		a.obAfterStep(steps)                               // traced checkpoint of pending writes (obs.go)
 		a.obTurnEnd(stop, steps, toolsRun, time.Since(t0)) // obs.go
+		if saveErr := a.sess.Err(); saveErr != nil {
+			stop, err = StopError, saveErr
+			a.ui.Error(saveErr.Error())
+		}
+		a.qTurnEnd(stop, err) // never start a follow-up after a persistence failure
 		a.ui.TurnEnd(TurnStats{Dur: time.Since(t0), Tools: toolsRun, Usage: a.turnUsage, Model: turnModel, Ctx: a.estTokens(), Win: a.window(), Cost: a.turnUsage.Cost, Stop: string(stop), Steps: steps, Redacted: a.rdTurnCount()})
 		if note := a.hgJobsNote(); note != "" { // background jobs still up (guard_honest.go)
 			a.ui.Warn(note)
@@ -524,6 +531,9 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 
 turnLoop:
 	for step := 1; ; step++ {
+		if saveErr := a.sess.Err(); saveErr != nil {
+			return StopError, saveErr
+		}
 		if ctx.Err() != nil {
 			a.append(Message{Role: "user", Content: "<system-reminder>The user interrupted the previous response.</system-reminder>"})
 			stop = StopInterrupted
@@ -1867,6 +1877,9 @@ func (a *Agent) execGate(ctx context.Context, tc ToolCall) (_ ToolCall, o ToolOu
 		a.ui.ToolStart(tc.ID, tc.Name, detail)
 		a.ui.ToolEnd(tc.ID, tc.Name, o, 0)
 		return o
+	}
+	if saveErr := a.sess.Err(); saveErr != nil {
+		return tc, refuse("TOOL_NOT_STARTED: "+saveErr.Error(), "sessão não salva"), false, false
 	}
 	if !isMCP && strings.HasPrefix(tc.Name, "mcp__") {
 		return tc, refuse(fmt.Sprintf("MCP tool %q is not available (server not connected).", tc.Name), "MCP indisponível"), false, false

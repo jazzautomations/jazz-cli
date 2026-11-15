@@ -365,15 +365,6 @@ func TestAcReviewLGTM(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // countMsg counts user messages whose content holds substr.
-func countMsg(msgs []Message, substr string) int {
-	n := 0
-	for _, m := range msgs {
-		if m.Role == "user" && strings.Contains(m.Content, substr) {
-			n++
-		}
-	}
-	return n
-}
 
 func TestDeadlineWarnNudgesWrapUp(t *testing.T) {
 	// warn active across a multi-step turn: the wrap-up reminder is appended

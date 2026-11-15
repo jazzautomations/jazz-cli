@@ -620,13 +620,16 @@ func main() {
 	if n := len(rest); n > 0 && rest[n-1] == "-" { // `jazz -p "x" -` / `jazz -p -`: read stdin to EOF
 		rest, forceStdin = rest[:n-1], true
 	}
+	if o.askStdin && forceStdin {
+		pfUsageErr("--ask-stdin reserva o stdin para respostas; passe o prompt como argumento, sem --stdin ou '-'")
+	}
 	prompt := strings.Join(rest, " ")
 	stdinTTY := isTTY(os.Stdin)
 	if pfHeadlessYoloNeedsAck(cfg.EffMode(), turboSandboxOK(), *pr || !stdinTTY || forceStdin) && !*ackNoSandbox {
 		pfUsageErr("YOLO headless sem sandbox do sistema não é isolado; passe --ack-no-sandbox para confirmar explicitamente")
 	}
 	if *pr || !stdinTTY || forceStdin {
-		if !stdinTTY || forceStdin {
+		if (!stdinTTY || forceStdin) && !o.askStdin {
 			wait := siWaitArg
 			if prompt == "" {
 				wait = siWaitNoArg
@@ -939,7 +942,14 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		res.Err = pfTimeoutMsg(o.timeout) + " (parado antes, com folga, e salvo)"
 	}
 	// no work lost: checkpoint, handoff note, end record, fsync (obs.go)
+	if err := ag.sess.Err(); err != nil {
+		res.Status, res.Err = StopError, err.Error()
+	}
 	end := obFinishRun(ag, tools, res, res.Status.ExitCode())
+	if err := ag.sess.Err(); err != nil {
+		res.Status, res.Err = StopError, err.Error()
+		end.Outcome = obIncomplete
+	}
 	if o.metricsOut != "" && ag.sess != nil {
 		if err := obWriteMetrics(o.metricsOut, ag.sess.Path); err != nil {
 			fmt.Fprintln(os.Stderr, "jazz: --metrics-out:", err)
@@ -956,14 +966,16 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		}
 		if end.Outcome != obCompleted {
 			j.Extra["checkpoint"], j.Extra["handoff"] = end.Checkpoint, end.Handoff
-			j.Extra["resume"] = "jazz -p -r " + ag.SessionID
+			if ag.sess.Err() == nil {
+				j.Extra["resume"] = "jazz -p -r " + ag.SessionID
+			}
 		}
 	}
 	ui.Finish(res)
 	if res.Err != "" && o.format == "text" {
 		fmt.Fprintln(os.Stderr, "jazz:", res.Err)
 	}
-	if end.Outcome != obCompleted && ag.SessionID != "" {
+	if end.Outcome != obCompleted && ag.SessionID != "" && ag.sess.Err() == nil {
 		if res.Model == "offline-brain" && strings.HasSuffix(res.Err, "blocked") {
 			// the brain gave a deliberate terminal answer ("não é repo", "sem
 			// método"): resuming changes nothing, so no "retome com" hint
@@ -2004,7 +2016,10 @@ func (a *App) command(line string) {
 			ui.Error("uso: /logout <provedor>")
 			return
 		}
-		_ = SaveCred(args[0], nil)
+		if err := SaveCred(args[0], nil); err != nil {
+			ui.Error("não consegui remover a credencial: " + err.Error())
+			return
+		}
 		ui.Notice("credencial de " + args[0] + " removida")
 	case "/mode":
 		if len(args) == 0 {
