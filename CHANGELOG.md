@@ -12,7 +12,7 @@
 - Fixtures corrigidas: dono de arquivo não é processo com arquivo aberto; filtro de permissão recebe arquivo com modo conferido independentemente do umask. Conjuntos cegos permanecem intactos.
 - Testes de terminal independem do ambiente; testes de procfs conferem indisponibilidade no macOS; helpers compartilhados permitem compilar a suíte Windows.
 
-## 0.14.0 — 2026-11-12
+## 0.14.0 — 2026-11-16
 
 O modelo que você escolhe é o que responde, o `sudo` funciona com sandbox, ação crítica vira pergunta, e
 online o modelo é dono do turno: o offline passa a ajudar em vez de responder no lugar dele.

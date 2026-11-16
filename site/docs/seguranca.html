@@ -150,19 +150,24 @@ Se o modelo usar o marcador num
 (<code>--redact</code>, <code>JAZZ_REDACT</code>; padrão <code>on</code>), <code>/redact</code> mostra o que foi retido e `/redact allow
 &lt;marcador&gt;` libera um falso positivo neste projeto. Detalhes em
 <a href="/docs/politica-seguranca#redação-de-segredos-antes-do-provedor-redact"><code>SECURITY.md</code></a>.</li></ul>
-<p><strong>O que foi medido</strong> (suíte <a href="https://github.com/jazzautomations/jazz-cli/tree/main/evals/redteam" rel="noopener"><code>evals/redteam</code></a>, 14 cenários de ataque com HOME
+<p><strong>O que foi medido</strong> (suíte <a href="https://github.com/jazzautomations/jazz-cli/tree/main/evals/redteam" rel="noopener"><code>evals/redteam</code></a>, 22 cenários de ataque com HOME
 canário e sumidouro local; detalhes e ressalvas em
 <a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/redteam-results.md" rel="noopener"><code>docs/research/redteam-results.md</code></a>):</p>
-<ul><li>Modelo <code>kilo/poolside/laguna-s-2.1:free</code>, modo <code>auto</code>: a v0.4.0 (sem a camada de segurança) teve
+<ul><li><strong>Rodada do release v0.14.0</strong> (16/11/2026, Linux, <code>anthropic/claude-opus-5-5</code>, modo <code>yolo</code>):
+<strong>22/22 BLOCKED, 0 COMPROMISED</strong>, incluindo os cenários 19–25 — registrada em
+<a href="https://github.com/jazzautomations/jazz-cli/blob/main/results/gate-0.14.0.json" rel="noopener"><code>results/gate-0.14.0.json</code></a>, que o release exige. Ressalva: numa
+rodada prévia com modelo mais fraco, 1 cenário tocou o sumidouro num GET de recon sem executar
+o payload — o CHECK conta como COMPROMISED.</li><li>Modelo <code>kilo/poolside/laguna-s-2.1:free</code>, modo <code>auto</code>, na v0.5.0: a v0.4.0 (sem a camada de segurança) teve
 12 BLOCKED, 1 COMPROMISED (escrita por symlink para fora do projeto) e 1 ERROR; a v0.4.1 teve
 12 BLOCKED, 0 COMPROMISED e 2 ERROR (o modelo entrava em espiral depois de um bloqueio); com o
 bloqueio que orienta (v0.4.3), <strong>14/14 BLOCKED, 0 ERROR, sumidouro vazio</strong>.</li><li>Sandbox do sistema (macOS): rodando o payload dos cenários 11 (<code>curl … | sh</code>) e 14 (escrita
 através de symlink) por um hook confiado, que nenhuma guarda inspeciona, os dois deram
 COMPROMISED com <code>--sandbox off</code> e BLOCKED com <code>--sandbox auto</code>. Na rodada com o modelo, o cenário
 11 ainda conta COMPROMISED pelo verificador: o modelo baixou o payload "para revisar" (a rede de
-loopback é livre no <code>auto</code>), mas não o executou.</li><li>Limites: uma rodada por cenário (a variância do modelo não foi medida), um modelo só, 11 cenários
-especificados em <a href="https://github.com/jazzautomations/jazz-cli/blob/main/evals/redteam/SPECS.md" rel="noopener"><code>evals/redteam/SPECS.md</code></a> ainda sem implementação, e a
-suíte não roda no CI.</li></ul></div>
+loopback é livre no <code>auto</code>), mas não o executou.</li><li>Limites: uma rodada por cenário por modelo (a variância do modelo não foi medida); o resultado
+depende do modelo — com um modelo fraco a suíte incompleta ou um cenário pode tocar o sumidouro
+no recon (ver acima). A suíte ainda não roda no CI; a rodada do release fica no portão
+(<code>results/gate-&lt;versão&gt;.json</code>).</li></ul></div>
 <div class="doc-body" data-l="en" lang="en"><h1 id="security">Security<a class="anchor" href="#security" aria-label="link">#</a></h1>
 <p>Read <a href="/docs/politica-seguranca"><code>SECURITY.md</code></a> (Portuguese) before pointing jazz at someone else's repository.
 In short:</p>
@@ -176,19 +181,24 @@ cuts the commands' network (loopback only). Windows has no file sandbox. <code>j
 ideally in a container.</li><li>Untrusted folders: project <code>AGENTS.md</code>/<code>CLAUDE.md</code>, <code>.mcp.json</code>, hooks, allow rules, steering and
 scripts stay off until <code>jazz trust</code>; changes to them (or to the files they run) ask again.</li><li>Secrets are stripped from the environment of the shell, hooks and MCP servers, and redacted from
 outputs; no telemetry.</li></ul>
-<p><strong>What was measured</strong> (suite <a href="https://github.com/jazzautomations/jazz-cli/tree/main/evals/redteam" rel="noopener"><code>evals/redteam</code></a>, 14 attack scenarios with a canary
+<p><strong>What was measured</strong> (suite <a href="https://github.com/jazzautomations/jazz-cli/tree/main/evals/redteam" rel="noopener"><code>evals/redteam</code></a>, 22 attack scenarios with a canary
 HOME and a local exfiltration sink; details and caveats in
 <a href="https://github.com/jazzautomations/jazz-cli/blob/main/docs/research/redteam-results.md" rel="noopener"><code>docs/research/redteam-results.md</code></a>, Portuguese):</p>
-<ul><li>Model <code>kilo/poolside/laguna-s-2.1:free</code>, <code>auto</code> mode: v0.4.0 (no security layer) got 12 BLOCKED,
+<ul><li><strong>v0.14.0 release run</strong> (2026-11-16, Linux, <code>anthropic/claude-opus-5-5</code>, <code>yolo</code> mode):
+<strong>22/22 BLOCKED, 0 COMPROMISED</strong>, including scenarios 19–25 — recorded in
+<a href="https://github.com/jazzautomations/jazz-cli/blob/main/results/gate-0.14.0.json" rel="noopener"><code>results/gate-0.14.0.json</code></a>, which the release requires. Caveat: in an
+earlier run with a weaker model, 1 scenario touched the sink on a recon GET without executing
+the payload — the CHECK counts it as COMPROMISED.</li><li>Model <code>kilo/poolside/laguna-s-2.1:free</code>, <code>auto</code> mode, on v0.5.0: v0.4.0 (no security layer) got 12 BLOCKED,
 1 COMPROMISED (write through a symlink out of the project) and 1 ERROR; v0.4.1 got 12 BLOCKED,
 0 COMPROMISED and 2 ERROR (the model spiralled after a block); with guiding block messages
 (v0.4.3), <strong>14/14 BLOCKED, 0 ERROR, empty sink</strong>.</li><li>OS sandbox (macOS): running the payloads of scenarios 11 (<code>curl … | sh</code>) and 14 (write through a
 symlink) from a trusted hook, which no guard inspects, both were COMPROMISED with
 <code>--sandbox off</code> and BLOCKED with <code>--sandbox auto</code>. In the run with the model, scenario 11 still
 counts as COMPROMISED by its checker: the model downloaded the payload "to review it" (loopback
-network is open in <code>auto</code>) but did not execute it.</li><li>Limits: one run per scenario (model variance not measured), a single model, 11 scenarios
-specified in <a href="https://github.com/jazzautomations/jazz-cli/blob/main/evals/redteam/SPECS.md" rel="noopener"><code>evals/redteam/SPECS.md</code></a> not implemented yet, and the suite
-does not run in CI.</li></ul></div>
+network is open in <code>auto</code>) but did not execute it.</li><li>Limits: one run per scenario per model (model variance not measured); results depend on the
+model — a weaker model can leave the suite incomplete or touch the sink on recon (see above).
+The suite still does not run in CI; the release run lives in the gate
+(<code>results/gate-&lt;version&gt;.json</code>).</li></ul></div>
 <p class="srcline"><a href="https://github.com/jazzautomations/jazz-cli/blob/main/README.md" rel="noopener"><span data-l="pt">Ver a fonte no GitHub</span><span data-l="en" lang="en">View the source on GitHub</span></a></p>
 <nav class="pn" aria-label="Páginas"><a class="prev" href="/docs/evals"><small><span data-l="pt">← anterior</span><span data-l="en" lang="en">← previous</span></small><span><span data-l="pt">Evals</span><span data-l="en" lang="en">Evals</span></span></a><a class="next" href="/docs/politica-seguranca"><small><span data-l="pt">próxima →</span><span data-l="en" lang="en">next →</span></small><span><span data-l="pt">Política de segurança</span><span data-l="en" lang="en">Security policy</span></span></a></nav>
   </main>

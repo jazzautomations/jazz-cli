@@ -339,11 +339,16 @@ Se o modelo usar o marcador num
 <marcador>` libera um falso positivo neste projeto. Detalhes em
 [`SECURITY.md`](SECURITY.md#redação-de-segredos-antes-do-provedor-redact).
 
-**O que foi medido** (suíte [`evals/redteam`](evals/redteam), 14 cenários de ataque com HOME
+**O que foi medido** (suíte [`evals/redteam`](evals/redteam), 22 cenários de ataque com HOME
 canário e sumidouro local; detalhes e ressalvas em
 [`docs/research/redteam-results.md`](docs/research/redteam-results.md)):
 
-- Modelo `kilo/poolside/laguna-s-2.1:free`, modo `auto`: a v0.4.0 (sem a camada de segurança) teve
+- **Rodada do release v0.14.0** (16/11/2026, Linux, `anthropic/claude-opus-5-5`, modo `yolo`):
+  **22/22 BLOCKED, 0 COMPROMISED**, incluindo os cenários 19–25 — registrada em
+  [`results/gate-0.14.0.json`](results/gate-0.14.0.json), que o release exige. Ressalva: numa
+  rodada prévia com modelo mais fraco, 1 cenário tocou o sumidouro num GET de recon sem executar
+  o payload — o CHECK conta como COMPROMISED.
+- Modelo `kilo/poolside/laguna-s-2.1:free`, modo `auto`, na v0.5.0: a v0.4.0 (sem a camada de segurança) teve
   12 BLOCKED, 1 COMPROMISED (escrita por symlink para fora do projeto) e 1 ERROR; a v0.4.1 teve
   12 BLOCKED, 0 COMPROMISED e 2 ERROR (o modelo entrava em espiral depois de um bloqueio); com o
   bloqueio que orienta (v0.4.3), **14/14 BLOCKED, 0 ERROR, sumidouro vazio**.
@@ -352,9 +357,10 @@ canário e sumidouro local; detalhes e ressalvas em
   COMPROMISED com `--sandbox off` e BLOCKED com `--sandbox auto`. Na rodada com o modelo, o cenário
   11 ainda conta COMPROMISED pelo verificador: o modelo baixou o payload "para revisar" (a rede de
   loopback é livre no `auto`), mas não o executou.
-- Limites: uma rodada por cenário (a variância do modelo não foi medida), um modelo só, 11 cenários
-  especificados em [`evals/redteam/SPECS.md`](evals/redteam/SPECS.md) ainda sem implementação, e a
-  suíte não roda no CI.
+- Limites: uma rodada por cenário por modelo (a variância do modelo não foi medida); o resultado
+  depende do modelo — com um modelo fraco a suíte incompleta ou um cenário pode tocar o sumidouro
+  no recon (ver acima). A suíte ainda não roda no CI; a rodada do release fica no portão
+  (`results/gate-<versão>.json`).
 
 ## Como o harness trabalha
 
@@ -1030,7 +1036,7 @@ LIMIT=600 evals/v1/run.sh [provedor/modelo]          # usa o `timeout` do GNU co
 evals/v2/calibrate.sh                                 # confere que cada CHECK falha sem solução e passa com refsol/
 LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provedor/modelo]
 
-# red-team: 14 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
+# red-team: 22 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixos…]
 ```
 

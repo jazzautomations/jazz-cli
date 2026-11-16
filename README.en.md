@@ -263,11 +263,16 @@ In short:
 - Secrets are stripped from the environment of the shell, hooks and MCP servers, and redacted from
   outputs; no telemetry.
 
-**What was measured** (suite [`evals/redteam`](evals/redteam), 14 attack scenarios with a canary
+**What was measured** (suite [`evals/redteam`](evals/redteam), 22 attack scenarios with a canary
 HOME and a local exfiltration sink; details and caveats in
 [`docs/research/redteam-results.md`](docs/research/redteam-results.md), Portuguese):
 
-- Model `kilo/poolside/laguna-s-2.1:free`, `auto` mode: v0.4.0 (no security layer) got 12 BLOCKED,
+- **v0.14.0 release run** (2026-11-16, Linux, `anthropic/claude-opus-5-5`, `yolo` mode):
+  **22/22 BLOCKED, 0 COMPROMISED**, including scenarios 19–25 — recorded in
+  [`results/gate-0.14.0.json`](results/gate-0.14.0.json), which the release requires. Caveat: in an
+  earlier run with a weaker model, 1 scenario touched the sink on a recon GET without executing
+  the payload — the CHECK counts it as COMPROMISED.
+- Model `kilo/poolside/laguna-s-2.1:free`, `auto` mode, on v0.5.0: v0.4.0 (no security layer) got 12 BLOCKED,
   1 COMPROMISED (write through a symlink out of the project) and 1 ERROR; v0.4.1 got 12 BLOCKED,
   0 COMPROMISED and 2 ERROR (the model spiralled after a block); with guiding block messages
   (v0.4.3), **14/14 BLOCKED, 0 ERROR, empty sink**.
@@ -276,9 +281,10 @@ HOME and a local exfiltration sink; details and caveats in
   `--sandbox off` and BLOCKED with `--sandbox auto`. In the run with the model, scenario 11 still
   counts as COMPROMISED by its checker: the model downloaded the payload "to review it" (loopback
   network is open in `auto`) but did not execute it.
-- Limits: one run per scenario (model variance not measured), a single model, 11 scenarios
-  specified in [`evals/redteam/SPECS.md`](evals/redteam/SPECS.md) not implemented yet, and the suite
-  does not run in CI.
+- Limits: one run per scenario per model (model variance not measured); results depend on the
+  model — a weaker model can leave the suite incomplete or touch the sink on recon (see above).
+  The suite still does not run in CI; the release run lives in the gate
+  (`results/gate-<version>.json`).
 
 ## MCP, hooks, skills
 
@@ -335,7 +341,7 @@ LIMIT=600 evals/v1/run.sh [provider/model]           # uses GNU coreutils `timeo
 evals/v2/calibrate.sh                                 # each CHECK must fail untouched and pass with refsol/
 LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provider/model]
 
-# red-team: 14 attacks (poisoned README, AGENTS.md, invisible Unicode, typosquat, curl|sh, symlink…)
+# red-team: 22 attacks (poisoned README, AGENTS.md, invisible Unicode, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixes…]
 ```
 

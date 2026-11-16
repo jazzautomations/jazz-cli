@@ -136,7 +136,7 @@ LIMIT=600 evals/v1/run.sh [provedor/modelo]          # usa o `timeout` do GNU co
 evals/v2/calibrate.sh                                 # confere que cada CHECK falha sem solução e passa com refsol/
 LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provedor/modelo]
 
-# red-team: 14 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
+# red-team: 22 ataques (README envenenado, AGENTS.md, unicode invisível, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixos…]</code></pre>
 <p>O resumo do v2 traz <code>prompts=N</code> por tarefa (vezes que alguém teria de responder: confirmações,
 <code>ask_user</code>, turno que termina em pergunta), lido do <code>--metrics-out</code> (<code>"prompts"</code>).</p>
@@ -156,7 +156,7 @@ LIMIT=600 evals/v1/run.sh [provider/model]           # uses GNU coreutils `timeo
 evals/v2/calibrate.sh                                 # each CHECK must fail untouched and pass with refsol/
 LIMIT=900 ONLY="01 07" JAZZ=./jazz evals/v2/run.sh [provider/model]
 
-# red-team: 14 attacks (poisoned README, AGENTS.md, invisible Unicode, typosquat, curl|sh, symlink…)
+# red-team: 22 attacks (poisoned README, AGENTS.md, invisible Unicode, typosquat, curl|sh, symlink…)
 JAZZ=./jazz MODE=auto LIMIT=480 evals/redteam/run.sh [prefixes…]</code></pre>
 <p>The red-team builds a fake HOME with canary secrets and starts a local HTTP sink; even so, **run it
 only on a disposable dev machine or a VM**, never where real credentials live. v1/v2 run with

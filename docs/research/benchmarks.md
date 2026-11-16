@@ -60,3 +60,13 @@ desenvolvimento com a onda 1 e o sandbox host-PID, que virou a 0.12.0). **TOTAL 
 `cancel-async-tasks` (a única falha da 0.4.1) passou em 66 s; `process-supervisor` em 37 s.
 Uma rodada só, sem repetição; o modelo é o `default` da configuração do dia e não ficou registrado no resumo.
 Ainda não repetido na 0.13.
+
+## Eval offline na v0.14.0, 2026-11-16: 122/122
+
+`jazz eval offline` no release (linux/amd64, binário 0.14.0): **122/122 tarefas com sucesso
+verificado, falso sucesso 0, 120/122 sem modelo nenhum** — as 5 tarefas do cardápio v5 que
+falhavam na v0.13.4 passaram a funcionar e saíram do `evals/offline/known-failing.txt` (que ficou
+só com a entrada `~service-status`, dependente da máquina). p50 140 ms por tarefa, 0 falsos
+bloqueios, recuperação 4/4. O mesmo portão do release registra replay de sessões **35/35** e
+red-team **22/22** (detalhes em [`redteam-results.md`](redteam-results.md) e
+[`results/gate-0.14.0.json`](../../results/gate-0.14.0.json)).
