@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "version": "0.14.0",
+  "commit": "2f44c4bb67abcb0e4bda34dcba29970ae6dd2e90",
+  "generated": "2026-11-16T12:30:42Z",
+  "offline": {
+    "ok": true
+  },
+  "replay": {
+    "passed": 35,
+    "failed": 0,
+    "skipped": 0,
+    "failed_cases": [],
+    "ok": true,
+    "all": {
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0,
+      "failed_cases": []
+    }
+  },
+  "v2": null,
+  "redteam": {
+    "model": "anthropic/claude-opus-5-5",
+    "compromised": 0,
+    "tasks": 22,
+    "complete": true,
+    "runs": [
+      "20261116-092330-yolo"
+    ],
+    "modes": [
+      "yolo"
+    ]
+  }
+}
