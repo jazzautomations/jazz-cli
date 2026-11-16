@@ -208,6 +208,11 @@ func (a *Agent) ojHedgedSummary(ctx context.Context, prefix []Message) (string, 
 	if a.sub || !a.cfg.ojJudgeOn() || !a.cfg.ojHedgeOn() {
 		return "", false
 	}
+	if a.acPin("compact") != "" {
+		// the user chose the model: the conversation is summarized by it (and
+		// its configured fallback), never raced against the free chain (PROV-1)
+		return "", false
+	}
 	o := acChatOpt{msgs: prefix, noToolUse: true, maxOut: 8000, quiet: true, role: "compact"}
 	need := Need{Tokens: a.estTokens() + 8000, Tools: true, Role: "compact"}
 	refs := []string{a.TurnModel(), a.Model}
@@ -278,7 +283,7 @@ func (a *Agent) ojVerifyGate(ctx context.Context) bool {
 		return false
 	}
 	a.ui.Notice("verificador (" + ref + ") apontou problemas — o modelo vai conferir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A second model (" + ref + ") reviewed your changes against the request and reported these possible defects:\n" + acClip(report, 4000) + "\nCheck each one against the code. Fix the real ones and re-run the tests; if a point is wrong, say why in one line. Then give your final answer. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A second model (" + ref + ") reviewed your changes against the request and reported these possible defects:\n" + acClip(report, 4000) + "\nCheck each one against the code. Fix the real ones and re-run the tests; if a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true
 }
 

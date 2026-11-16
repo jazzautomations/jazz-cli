@@ -172,6 +172,19 @@ func TestOmniClassifyAndRetryDelay(t *testing.T) {
 	if RetryDelay(&APIError{Status: 500}, 3) != 0 {
 		t.Fatal("4th attempt must move on")
 	}
+	// a per-minute 429 keeps waiting into the next minute window: 30 s, 40 s, then moves on
+	rate := &APIError{Status: 429, Body: `{"status":429,"title":"Too Many Requests"}`}
+	if c := pvClassify(rate); c != "rate" {
+		t.Fatalf("class %q", c)
+	}
+	for i, base := range []time.Duration{30 * time.Second, 40 * time.Second} {
+		if d := RetryDelay(rate, 3+i); d < base*8/10 || d > base*12/10 {
+			t.Fatalf("429 attempt %d: %v outside ±20%% of %v", 3+i, d, base)
+		}
+	}
+	if RetryDelay(rate, 5) != 0 {
+		t.Fatal("429: the 6th attempt must move on")
+	}
 	if d := RetryDelay(&APIError{Status: 429, RetryAfter: 5 * time.Minute}, 0); d != 60*time.Second {
 		t.Fatalf("RetryAfter cap: %v", d)
 	}
@@ -293,6 +306,22 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 	if st := c.pvState(ref2, 0); st.Dead {
 		t.Fatalf("new key must clear auth state: %+v", st)
 	}
+
+	// 403 without a bad-key body: only that model is parked, the provider
+	// (and its other models) stays in the rotation
+	c.rlEnd("groq/locked", 0, Usage{}, &APIError{Status: 403, Body: `{"error":{"message":"model not available on your plan"}}`})
+	if st := c.pvState("groq/locked", 0); !st.Dead {
+		t.Fatalf("403 must park the model: %+v", st)
+	}
+	if st := c.pvState("groq/other", 0); st.Dead {
+		t.Fatalf("403 on one model must not kill the provider: %+v", st)
+	}
+	// 403 that names the key is still a provider-wide refused credential
+	c.rlEnd("groq/k", 0, Usage{}, &APIError{Status: 403, Body: "invalid api key"})
+	if st := c.pvState("groq/other", 0); !st.Dead {
+		t.Fatalf("403 invalid api key is the key: %+v", st)
+	}
+	t.Setenv("GROQ_API_KEY", "gsk_third")
 
 	// notools: persisted as text tools in the models cache
 	c.rlEnd("groq/x", 0, Usage{}, &APIError{Status: 400, Body: "tool calling is not supported for this model"})
@@ -432,9 +461,17 @@ func TestOmniRankFreeFirst(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-x")
 	t.Setenv("DEEPSEEK_API_KEY", "sk-x")
 	got := c.CandidatesFor(Need{Tools: true}, "omni/coder")
-	if len(got) == 0 || got[0] != "nvidia/z-ai/glm-5.3" {
+	// the retired presets (glm-5.3 410, kimi-k2.6 404, deepseek-v4.1-flash
+	// 0/37) never come back through the pool
+	for _, r := range got {
+		if r == "nvidia/z-ai/glm-5.3" || r == "nvidia/moonshotai/kimi-k2.6" || r == "nvidia/deepseek-ai/deepseek-v4.1-flash" {
+			t.Fatalf("retired preset in the pool: %v", got)
+		}
+	}
+	if len(got) == 0 || !c.pvIsFreeish(got[0]) && !c.isFreeRef(got[0]) {
 		t.Fatalf("best free coder first: %v", got)
 	}
+	best := got[0]
 	idx := map[string]int{}
 	for i, r := range got {
 		idx[r] = i
@@ -477,11 +514,14 @@ func TestOmniRankFreeFirst(t *testing.T) {
 	}
 	c.Omni.Exclude = nil
 	// a dead free candidate drops out; a cooling one goes behind the ready ones
-	MarkExhausted("nvidia/z-ai/glm-5.3", time.Now().Add(time.Hour))
+	MarkExhausted(best, time.Now().Add(time.Hour))
 	got = c.CandidatesFor(Need{}, "omni/coder")
-	if got[0] == "nvidia/z-ai/glm-5.3" || got[0] != "nvidia/moonshotai/kimi-k2.6" {
-		t.Fatalf("dead not skipped: %v", got)
+	for _, r := range got {
+		if r == best {
+			t.Fatalf("dead not skipped: %v", got)
+		}
 	}
+	last := got[len(got)-1]
 	// big request: models with a small window are filtered out
 	for _, r := range c.CandidatesFor(Need{Tokens: 300000}, "omni/long") {
 		if w, _ := c.Limits(r); w < 300000 {
@@ -489,9 +529,9 @@ func TestOmniRankFreeFirst(t *testing.T) {
 		}
 	}
 	// sticky preference
-	got = c.CandidatesFor(Need{Prefer: "nvidia/deepseek-ai/deepseek-v4.1-flash"}, "omni/coder")
-	if got[0] != "nvidia/deepseek-ai/deepseek-v4.1-flash" {
-		t.Fatalf("prefer bonus: %v", got)
+	got = c.CandidatesFor(Need{Prefer: "nvidia/nvidia/nemotron-3-ultra-550b-a55b"}, "omni/coder")
+	if got[0] != "nvidia/nvidia/nemotron-3-ultra-550b-a55b" {
+		t.Fatalf("prefer bonus: %v (last before: %s)", got, last)
 	}
 }
 
@@ -744,7 +784,7 @@ func TestOmniConfigSaveSkipsPresetsAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c2.EffMode() != "auto" || c2.Providers["kilo"] == nil || c2.Models["nvidia/z-ai/glm-5.3"] == nil || c2.Models["mine/m"].Context != 32768 {
+	if c2.EffMode() != "auto" || c2.Providers["kilo"] == nil || c2.Models["nvidia/nvidia/nemotron-3-ultra-550b-a55b"] == nil || c2.Models["mine/m"].Context != 32768 {
 		t.Fatalf("reload: mode %s", c2.EffMode())
 	}
 	c2.SetMode("plan")

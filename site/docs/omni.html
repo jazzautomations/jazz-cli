@@ -132,7 +132,21 @@ uma cadeia de candidatos:</p>
 recomeça do principal, e quem travou no primeiro byte fica no fim da fila por 3 min);</li><li>o modelo principal (<code>model</code>);</li><li>a lista <code>fallback</code> da config;</li><li>todos os outros provedores com credencial.</li></ol>
 <p>A ordem desses últimos depende de <code>omni.strategy</code>:</p>
 <ul><li><code>free-first</code> (padrão): modelos grátis primeiro;</li><li><code>weighted</code>: pelo <code>weight</code> de cada provedor;</li><li><code>ordered</code>: a ordem da config;</li><li><code>cheapest</code>: o mais barato primeiro.</li></ul>
-<p>Erros 429/402/5xx com <code>Retry-After</code> curto esperam e tentam de novo. Cota diária esgotada
+<p><strong>Modelo escolhido é contrato.</strong> Com <code>-m</code>, <code>/model</code> ou <code>model</code> na config (fora o padrão
+keyless), a cadeia é só esse modelo + a lista <code>fallback</code> (configurar é consentir): nada de
+cadeia grátis implícita, juiz ou omni trocando por baixo. Se ele está sem cota, o jazz avisa e
+tenta assim mesmo. Se falha: no interativo pergunta "usar X neste turno?" (sim / sempre nesta
+sessão / não); no <code>-p</code> sai com código 75 dizendo qual modelo falhou, por quê e o que fazer.
+<code>fallback_on_pinned: auto</code> troca sozinho (sempre avisando), <code>off</code> nunca troca.
+<code>--strict-model</code> (ou <code>JAZZ_STRICT_MODEL=1</code>) usa só o <code>-m</code>, nem o <code>fallback</code> — é o que o eval
+usa para medir o modelo pedido. Sem modelo escolhido, toda troca também é dita: quem saiu da
+cadeia e por quê, e quem respondeu no lugar.</p>
+<p>Erros 429/402/5xx com <code>Retry-After</code> curto esperam e tentam de novo, com orçamento de espera
+por modelo (~30 s no interativo, ~120 s no <code>-p</code>); passou disso, vai pro próximo candidato.
+Cota grátis que acaba (ex.: <code>PROMOTION_MODEL_LIMIT_REACHED</code> do Kilo) esfria o provedor
+inteiro: os outros modelos dele não recebem pedido no mesmo passo. Modelo aposentado (HTTP
+410, "end of life") sai do rodízio de vez, até o <code>/models</code> do provedor listá-lo de novo ou
+<code>jazz omni reset</code>; chave recusada vale para aquela chave, e uma chave nova funciona na hora. Cota diária esgotada
 tira o candidato da cadeia até o reset (fica em <code>exhausted.json</code> e volta sozinho).
 <code>omni.exclude</code> remove provedores ou refs (aceita glob), <code>omni.paid</code> decide quando usar
 modelo pago (<code>never</code>, <code>emergency</code> (padrão) ou <code>always</code>) e <code>omni.no_training</code> descarta

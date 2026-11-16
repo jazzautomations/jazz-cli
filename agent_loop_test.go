@@ -242,7 +242,8 @@ func TestAgentReviewFeedsDefectsOnce(t *testing.T) {
 		case !r.contains("user", "reviewer") && len(r.toolResults()) == 0:
 			return fakeResp{Calls: []fakeCall{
 				{ID: "w1", Name: "write", Args: `{"path":"b.go","content":"package b\n"}`},
-				{ID: "e1", Name: "bash", Args: `{"command":"echo '// changed' >> a.go"}`},
+				// gofmt-clean: the quality gate now sees bash writes too (0.14.0)
+				{ID: "e1", Name: "bash", Args: `{"command":"printf '\\n// changed\\n' >> a.go"}`},
 			}}
 		default:
 			return fakeResp{Text: "done"}
@@ -364,15 +365,6 @@ func TestAcReviewLGTM(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // countMsg counts user messages whose content holds substr.
-func countMsg(msgs []Message, substr string) int {
-	n := 0
-	for _, m := range msgs {
-		if m.Role == "user" && strings.Contains(m.Content, substr) {
-			n++
-		}
-	}
-	return n
-}
 
 func TestDeadlineWarnNudgesWrapUp(t *testing.T) {
 	// warn active across a multi-step turn: the wrap-up reminder is appended
@@ -418,7 +410,7 @@ func TestDeadlineWarnDoesNotReopen(t *testing.T) {
 			t.Fatalf("turn reopened: requests = %d, want 2", n)
 		}
 		last := h.fs.requests()[1]
-		if last.contains("user", "did not run anything") || last.contains("user", "unfinished items") {
+		if last.contains("user", "não rodou nada") || last.contains("user", "itens abertos") {
 			t.Errorf("warned turn must not nudge verify/todo")
 		}
 	})

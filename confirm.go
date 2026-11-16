@@ -117,6 +117,12 @@ func pfShortDir(p string) string {
 func pfTrustSpec(t Theme, root, mode string, st pfTrustState) (sp mnSpec, onlyFolder bool) {
 	dim, gold := t.fg(cGray, 90), t.fg(cGold, 33)
 	onlyFolder = len(st.kinds) == 1 && st.kinds[0] == "folder"
+	// typing at start (a message typed before the box shows) never picks an
+	// option: those keys go back to the prompt's editor, an Enter is not sent.
+	// Settle: a letter answers only when no other key follows it, so the "s"
+	// of "sim oi" typed after a pause does not trust the folder.
+	sp.Guard, sp.Settle = true, true
+	sp.TypedHint = "vai pro editor, sem enviar"
 	dir := visibleDetail(pfShortDir(pfTrustRoot(root)))
 	if onlyFolder {
 		sp.Tag = "pasta nova"
@@ -161,6 +167,9 @@ func pfTrustGateUI(root string, cfg *Config, ui *TermUI) bool {
 		}
 	}
 	dir := visibleDetail(pfShortDir(pfTrustRoot(root)))
+	ui.mu.Lock()
+	sp.Since = ui.lastKey
+	ui.mu.Unlock()
 	switch ui.Menu(context.Background(), &sp) {
 	case 0:
 		if err := pfTrustStore(root, st); err != nil {

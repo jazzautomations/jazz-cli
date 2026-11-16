@@ -24,7 +24,7 @@ func pfResetDebug(t *testing.T) {
 		if pfDbg.f != nil {
 			pfDbg.f.Close()
 		}
-		pfDbg.f, pfDbg.path, pfDbg.size, pfDbg.ring, pfDbg.sysSeen = nil, "", 0, nil, nil
+		pfDbg.f, pfDbg.path, pfDbg.size, pfDbg.ring, pfDbg.sysSeen, pfDbg.fatal = nil, "", 0, nil, nil, ""
 		pfDbg.mu.Unlock()
 		debugOn = false
 		// pfDebugStart hands a .fatal.txt handle to the runtime; Windows cannot

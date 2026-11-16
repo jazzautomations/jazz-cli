@@ -1,5 +1,275 @@
 # Changelog
 
+## Correções em desenvolvimento sobre 0.14.0
+
+- Saída do shell usa contadores de 64 bits, inclusive a janela do marcador, para não estourar em linux/386.
+- Cache de nomes valida comprimentos antes de converter/slicar: um `.idx` inválido vira cache miss.
+- Falha de gravação da sessão preserva a posição, interrompe ferramentas e aparece como erro; não anuncia retomada salva.
+- OAuth exige lock antes de renovar token; `/logout` só confirma depois de remover a credencial com sucesso.
+- Comparação de diretórios e seleção de linhas perguntam pelos argumentos faltantes antes de executar; respostas completam a tarefa.
+- Extração aceita padrão nomeado entre aspas. Avaliação usa a versão em execução, rejeita seleção desconhecida e falha quando um caso não cumpre a expectativa (salvo `--gate` explícito).
+- `--ask-stdin` reserva a entrada para as respostas, sem anexá-las ao prompt; perguntas consecutivas preservam as linhas já lidas no buffer. Combinar com `--stdin`/`-` é erro de uso.
+- Fixtures corrigidas: dono de arquivo não é processo com arquivo aberto; filtro de permissão recebe arquivo com modo conferido independentemente do umask. Conjuntos cegos permanecem intactos.
+- Testes de terminal independem do ambiente; testes de procfs conferem indisponibilidade no macOS; helpers compartilhados permitem compilar a suíte Windows.
+
+## 0.14.0 — 2026-11-12
+
+O modelo que você escolhe é o que responde, o `sudo` funciona com sandbox, ação crítica vira pergunta, e
+online o modelo é dono do turno: o offline passa a ajudar em vez de responder no lugar dele.
+
+### Modelo e provedores
+
+- **`-m` é contrato.** `-m`, `/model` ou um `model` no config fixam o modelo: a cadeia é ele mais o
+  `fallback` que você configurou, sem cadeia grátis implícita, sem reordenar por placar ou juiz. Modelo em
+  cota não some da lista: o jazz avisa e tenta assim mesmo. Se ele falha, o interativo pergunta "usar X
+  neste turno?" (sim / sempre nesta sessão / não) e o `-p` sai com código 75, dizendo o modelo, a causa e o
+  que fazer, sem cair escondido em outro modelo. `fallback_on_pinned: auto` troca sozinho (avisando),
+  `off` nunca troca; `--strict-model` (ou `JAZZ_STRICT_MODEL=1`) usa só o `-m`.
+- **Mudança de comportamento:** um `model` no config agora é pin. Quem quer o comportamento antigo põe um
+  `fallback` ou `fallback_on_pinned: auto`. Config apontando para um modelo aposentado passa a falhar com
+  essa mensagem em vez de trocar calado.
+- Sem pin, quando o modelo pedido sai da cadeia ou outro modelo responde no lugar, o jazz diz.
+- Chave recusada (401/403) não joga o jazz no modo offline: a rede está de pé, ele passa para o próximo
+  candidato e diz `/key`. 403 sem cara de chave inválida (plano, região) tira só aquele modelo por 6 h.
+- Um classificador só para erro de provedor. Modelo aposentado (410, "end of life") sai do rodízio até o
+  provedor voltar a listá-lo (ou `jazz omni reset`); chave recusada vale para aquela chave; tool call que o
+  provedor recusou nunca é "falha de rede", nem quando chega no meio do stream.
+- Nenhuma mensagem de erro mostra JSON cru do provedor (inclui o formato em array do Gemini).
+- Cota grátis anônima do Kilo acabou: a mensagem diz quando volta e como seguir agora (salvar a chave com
+  `/key` e escolher um modelo dela com `/model`).
+- O estado de cada candidato é relido antes de cada pedido: morto, grande demais para o modelo ou esfriando
+  é pulado enquanto houver outro; 429 de cota esfria o provedor inteiro; com tudo fora, sai no máximo um
+  pedido. Espera entre tentativas tem teto por modelo (30 s no interativo, 120 s no `-p`) e a linha de
+  retry é em português.
+- Presets: saíram os modelos da NVIDIA que o provedor removeu; o padrão da NVIDIA é o
+  `nemotron-3-ultra-550b-a55b`. Gemini flash saiu do tier de código; Groq saiu da cadeia implícita do
+  agente principal.
+
+### Sudo, sistema e consentimento
+
+- **`sudo` sai do sandbox.** Com sandbox ativo, comando com `sudo` roda no host: `sudo -n` quando não
+  precisa de senha, senão o jazz pede a senha **mascarada no terminal**. A senha fica só na memória, é
+  pedida de novo se o sudo recusar e vira `[REDACTED]` em saída de ferramenta, eventos e auditoria.
+- **Mudança de comportamento:** senha colada no chat continua apagada do texto, mas não é mais usada, e o
+  jazz avisa para não colar. No `-p`, use `JAZZ_SUDO_PASS`, `sudo -v` ou NOPASSWD.
+- Senha dentro do próprio comando (`sudo -S`, `SUDO_ASKPASS`, `su` lendo de pipe) é recusada em todo modo.
+- `sudo` que leria segredo (`~/.ssh`, `/etc/shadow`, caminhos ocultos do sandbox) nunca roda como root no
+  host, nem em `--yolo`.
+- Escrita aprovada em arquivo de sistema que dá permissão negada vai como root pelo host, com cópia do
+  original em `~/.local/state/jazz/sysbak` antes (cópia de arquivo de segredo fica com dono root).
+- **Ação crítica vira pergunta** no interativo, com o motivo e como desfazer; "sempre" lembra o binário ou
+  o arquivo, nunca a classe inteira. Ação desproporcional numa tarefa de contêiner pergunta sempre. O `-p`
+  continua recusando.
+- "não pode usar sudo, mas pode mexer no wifi" não concede root; "sem sudo" dito depois revoga.
+- Leitura: `>/dev/null`, `2>&1` e metacaractere entre aspas não impedem um comando de ser só leitura;
+  diagnósticos (`dmesg`, `ip`, `iw`, `lsmod`, `journalctl`, `systemctl status`, `ss`…) contam como leitura
+  só com subcomando de leitura. `env`, `printenv` e `export` sem argumento passam a pedir confirmação.
+- `2>&1` e `>/dev/null` não são mais lidos como nome de pacote no guarda de instalação.
+- Sandbox: o temporário privado é recriado antes de cada comando; o shell não morre quando
+  `/tmp/jazz-sbx-*` some.
+- As mensagens de bloqueio não mandam mais o modelo dizer "rode você mesmo" nem sugerir `--yolo`: ele pede
+  aprovação com o comando.
+- `sudo sh -c '… > /etc/…'`, `bash -ec`, `su -c` e `busybox sh -c`: o script de dentro é julgado também, e
+  escrita em sistema vira CRÍTICO como o comando direto.
+- Mensagem que é só `sudo <senha>` (resposta a "qual a senha?") tem a senha tirada antes de ir pro modelo;
+  `sudo reboot`, `sudo apt update` e outros comandos continuam intactos. Corrigido: `sudo apt update` era
+  lido como "usuário apt, senha update" e o modelo recebia `sudo apt <credencial-recebida>`.
+
+### Online e offline juntos
+
+- **Online, o modelo responde.** O cérebro offline não segura mais frase de conversa ("ta ligado no wifi?",
+  "status", "o que mudou"). Só uma linha de comando literal de lista fechada e só leitura (`git status`,
+  `uptime`, `df`, `docker ps`…) roda sem o modelo; Enter vazio ou `/m` manda pro modelo. Menu online só
+  com "menu".
+- O resultado do offline chega ao modelo como dados (`<offline-data>`, com segredo redigido) e só quando o
+  pedido seguinte se refere a ele.
+- **Provedor caiu (cota, 5xx, sem rede):** se nenhuma ferramenta rodou no turno, o cérebro responde o que
+  dá só com leitura e avisa "respondi offline"; o que ele não resolve fica guardado e só é reenviado com
+  Enter vazio. Se o provedor caiu no meio do trabalho, o jazz mostra em português o que já foi feito
+  (arquivos, última verificação) e Enter vazio manda "continua" — nunca repete o pedido. No `-p`, o
+  offline assume o comando literal em 429/5xx.
+- Ferramenta `fact`: o modelo pode pedir as checagens só leitura do jazz (git, carga, discos, interfaces,
+  teste de rede real) e recebe a evidência em JSON. Recusa arquivo de credencial.
+- `net_status` não diz mais "offline" sem testar a rede.
+- Plano reaproveitado e lição só entram com termos em comum de verdade; "verificado" exige build/teste ou
+  sonda de um arquivo que o turno mudou; resposta que admite falha não grava plano; palavrão não é termo de
+  busca; literais de `sed`/`echo` não ficam no cache. Na primeira carga, o cache de planos de cada projeto
+  é limpo dos planos que não seguem essas regras (com backup `.pre-0.14.bak`).
+- Mapa de API e índice de nomes só com projeto de verdade e nome parecido de verdade.
+
+### Agente
+
+- Exploração não é mais recusada por orçamento; fica uma nota curta. Tarefa de sysadmin e conversa não
+  ganham teto de código nem lembrete.
+- Resposta em português do Brasil, como um colega: sem template de relatório, sem "Não verificado:" nem
+  "Nenhuma alteração". Lembretes do laço em português e sem repetir a mesma nota.
+- Argumento de ferramenta torto é consertado antes do portão de permissão (comando em argv, chave com
+  lixo): o portão vê exatamente o que vai rodar. `bash {}` é refeito uma vez; a mesma chamada inválida
+  repetida não roda.
+- "oi" sem tarefa pendente vai pela pista curta.
+- Checkpoint não varre `$HOME` nem `/`; "arquivos demais" fica lembrado por 48 h e o `/undo` diz o motivo.
+- O relógio da execução vai no fim do último resultado de ferramenta, não como mensagem do usuário.
+- **Não aceita "pronto" com teste vermelho.** Se o último teste depois da edição falhou (mesmo com o exit
+  escondido por `| tail`), o modelo ouve isso uma vez antes de responder. Se ele só rodou um teste estreito,
+  o jazz roda a suíte completa do projeto antes de aceitar (teto de 3 min, nunca perto do `--timeout`) e
+  devolve as falhas. Falha que já existia antes pode ficar, mas tem que ser dita. `JAZZ_SUITE_GUARD=off`
+  desliga.
+- **Teste antigo reescrito não passa batido.** Se o modelo mudou um teste que já existia, o jazz roda a versão
+  original dele contra o código novo, numa cópia do projeto, e devolve o que quebrou: comportamento que o
+  teste antigo garante continua valendo, a não ser que o pedido mude isso.
+- **Revisão automática de pedido em lista.** Pedido com 3 ou mais requisitos (itens com `-` ou numerados) que
+  mexeu em código ganha, antes do "pronto", um revisor de contexto limpo que confere item por item (entrada
+  inválida, padrão, ordem, formato), com ou sem git. Mudança pequena (até 16 KB de código) é revisada numa
+  chamada só, com os arquivos no pedido; maior vai pra um subagente. Achados voltam pro modelo uma vez.
+  `JAZZ_REVIEW_GUARD=off` desliga.
+- Extract que esqueceu uma função auxiliar: função com o mesmo nome em 2+ módulos que já importam do módulo
+  novo conta como cópia.
+- Extract que junta cópias que eram diferentes (um módulo arredondava de um jeito, outro de outro): o modelo
+  vê as versões antigas lado a lado e tem que manter o comportamento de cada módulo.
+- Ideias portadas do Hermes Agent:
+  - teste atrás de pipe (`go test | tail`) não conta mais como verde: o exit 0 é do `tail`, e o resultado
+    do bash diz isso ao modelo;
+  - o resultado do bash explica o exit code quando importa: `grep`/`diff` com 1 não é erro, 137 é falta de
+    memória, 127 é comando inexistente (`python` → `python3`), módulo ausente, permissão;
+  - resposta que termina anunciando o próximo passo ("agora vou rodar os testes.") sem chamar ferramenta
+    volta pro modelo fazer (até 2 vezes por turno).
+  - sem modelo fixado, um modelo que continua vazio depois das repetições sai da frente e o próximo da
+    cadeia responde;
+  - o ambiente que o modelo recebe já diz o comando de teste do projeto, então ele não gasta passos
+    descobrindo;
+  - compactação mais robusta: saída antiga de ferramenta é podada antes do resumo (chamada menor e mais
+    barata); as mensagens do usuário (literais) e os arquivos mexidos entram no resumo sem depender do
+    modelo; estouro de contexto vira resumo automático em vez de descartar o histórico; depois de compactar,
+    o lembrete diz que as ferramentas continuam ativas;
+  - servidor rodado em primeiro plano (`python3 -m http.server`, `npm run dev`, `uvicorn`, `docker compose up`
+    sem `-d`) vira job em segundo plano na hora, em vez de travar o shell até o timeout; `ping` sem `-c`,
+    `tail -f`, `journalctl -f` e `watch` voltam pro modelo com a forma que termina;
+  - a mesma chamada com o mesmo resultado grande (≥ 512 caracteres) não repete a saída: vai uma referência
+    curta com a primeira e a última linha, poupando a janela;
+  - edit que não acha o texto por causa da indentação (espaços onde o arquivo tem tab, outro nível de
+    aninhamento) casa linha a linha ignorando a indentação, se o trecho for único, e reindenta a troca no
+    padrão do arquivo, avisando o modelo.
+- A guarda de conclusão (cópia que sobrou num extract, símbolo que devia sumir) dá duas voltas; a segunda
+  diz exatamente como resolver.
+- Resposta vazia do provedor (só raciocínio, nenhum texto) é repetida três vezes em silêncio (pausa de 3 s, 12 s e 27 s); se continuar
+  vazia, o modelo é lembrado uma vez e, sem nada feito, vira erro claro em vez de "pronto" mudo. Pedido de
+  mudança que só leu arquivos e ficou mudo também é erro ("parou no meio"), não "done".
+
+### Achados do QA no binário (provedor falso)
+
+- Falha antiga na suíte, provada pelo modelo ("a falha é anterior à minha mudança", "já falha no HEAD"), não reprova mais
+  a tarefa com erro 9. No `-p`, bloqueio por credencial não sugere mais `--yolo`: nenhuma flag libera segredo.
+
+- Caixa de aprovação de comando: uma letra que aprova ("s", "y", "a", "1", "2") só vale se nenhuma outra tecla vier
+  logo atrás — uma frase digitada que começa com "s" vira texto pro agente, nunca aprova um comando. Negar e
+  instruir ("n", "e") seguem imediatos.
+- Recusar a confiança na pasta também tira o yolo do isolamento de processos (o sandbox volta a ter os seus).
+
+- `--allow-tools 'Bash(sudo apt-get:*)'`, que o `-p` sugeria, agora libera esse sudo (regra que nomeia o
+  comando, como `Bash(modprobe:*)`); a regra genérica `bash`, sudo que lê segredo e sudo de comando
+  perigoso continuam perguntando. O `-p` só sugere `--allow-tools` quando a regra de fato libera.
+- "tenta com <senha> no sudo" sai do texto antes do modelo e da sessão.
+- `jazz --offline -p whoami` roda `whoami` (antes respondia o perfil da máquina), como no online.
+- Com `-m` sem fallback, a abertura não promete "fila de reserva"; `--strict-model` não diz que "nenhum
+  outro modelo está disponível"; cota que volta amanhã aparece como "amanhã 21:00"; no `-p` o remédio é
+  `-m provedor/modelo`, não `/model`.
+- Busca de links no macOS: o nome do link não vira o nome do alvo quando a pasta passa por `/var`.
+- `-p` não perde mais a resposta final quando uma verificação reabre o turno depois dela (checklist de
+  qualidade, revisão automática, `--verifier`, `--until`, lembrete de todo/verificação/ação inventada/
+  parada no meio, hook Stop): a resposta original sai no stdout (e no `text` do json), seguida da réplica
+  sob "Depois da verificação final:" quando ela acrescenta algo; esses lembretes pedem ao modelo uma
+  resposta final completa ao pedido do usuário, não ao revisor.
+- Pedido de resumo sem "?" ("me fala o que vc corrigiu", "resume o que mudou", "lista o que você fez")
+  depois de trabalho com ferramentas não dispara mais o lembrete de ação inventada; pedido que manda
+  fazer algo ("corrige o que vc fez") continua cobrado.
+- O aviso "pasta não confiável: comandos bash ... ficam bloqueados" do `-p` só aparece quando é verdade:
+  não com `--yolo` nem com `--allow-tools`.
+- `--debug` não deixa mais um `<ts>.fatal.txt` vazio ao lado de cada log: some na saída normal, e os
+  vazios de execuções que já acabaram são limpos; só fica o que tem um erro fatal.
+- `jazz skill install …/tree/<ref>/<pasta>` baixa só aquela pasta (clone parcial + sparse checkout; git ou
+  servidor sem suporte cai no clone raso inteiro) e clona na pasta de dados do jazz, não no `/tmp` (no D610
+  é tmpfs de 1 GB na RAM). Mostra "baixando github.com/dono/repo (subpasta …)"; Ctrl+C, SIGTERM ou
+  terminal fechado cancelam o git e apagam o clone; sobra de um jazz morto é varrida depois. Repo errado
+  ou privado diz "repositório não encontrado ou privado: …" em vez do erro de usuário do git; branch que
+  não existe é dita pelo nome. Skill instalada pelo chat avisa o modelo que foi instalada agora, a pedido
+  do usuário, e ele não diz mais que "já estava instalada".
+- **Recusar a confiança da pasta agora põe a sessão em ask de verdade.** "3. Não, modo ask" ou Esc
+  dizia modo ask, mas a sessão seguia no modo da configuração (yolo) e rodava comandos sem perguntar.
+  Agora a recusa vale como ask nesta sessão, também por cima de um yolo da configuração global ou da
+  flag, e o rodapé mostra ask; `/trust` depois devolve o modo de antes.
+- **A pergunta de confiança da abertura não pega mais a primeira letra de uma mensagem.** "sim oi"
+  digitado depois de uma pausa escolhia "Sim, confiar" pelo "s" e mandava "im oi" pro agente. Agora
+  uma letra só responde se nenhuma tecla vier logo depois; o texto digitado fica inteiro no editor,
+  sem ser enviado ("↳ no editor: …" acima da caixa).
+- Texto digitado antes de uma confirmação aparecer é mostrado como "digitando", numa linha só com o
+  resto digitado na caixa (antes dizia "na fila" sem estar na fila); na caixa de confiança a dica diz
+  "vai pro editor, sem enviar" em vez de "enter manda pro agente"; o modo shell (`!cmd`) não mostra
+  mais "! !" na caixa de entrada.
+- Checklist de qualidade: o item "lógica nova sem teste ... ou diga qual teste existente cobre" aceita a
+  resposta que nomeia um arquivo de teste ou função de teste que existe no projeto (um nome que não existe
+  continua reprovando); bugfix correto não termina mais em `quality_failed` (exit 9) por ter seguido o
+  convite.
+- Quando a verificação reabre o turno e ele termina reprovado (`quality_failed` …), o `-p` imprime a
+  resposta original seguida da réplica, mesmo que a réplica seja longa.
+- Projeto Python com testes estilo pytest (`def test_*` solto, `import pytest`, fixtures como `tmp_path`)
+  e sem `pytest.ini`/`conftest.py`: o comando de teste detectado é `python3 -m pytest -q` quando o pytest
+  está instalado (checagem feita uma vez, de uma pasta vazia); sem pytest continua `python3 -m unittest`,
+  e o ambiente avisa o modelo que os testes parecem pytest e que ele não deve reescrevê-los em unittest.
+- **`fact`/`script disk_usage` da home mascarada não sai mais como número real.** Com o sandbox escondendo
+  `$HOME`, medir `~` (ou `/`, ou uma pasta da home fora do projeto) media o tmpfs de 1 GB e voltava com
+  confiança 1.00 — o modelo dizia "sua home ocupa 992 MB" para uma home de 3,1 GB. Agora o resultado vem
+  `partial`, confiança 0.20 e o aviso "home mascarada pelo sandbox: números parciais; para medir de verdade
+  rode com sandbox:false (pede aprovação)". Todo script (e o `fact`) diz que rodou dentro do sandbox — o
+  modelo afirmava que a checagem não tinha rodado lá.
+- **Sair do sandbox nunca lê segredo.** `bash sandbox:false` que lê credencial (`~/.ssh/id_*`,
+  `~/.aws/credentials`, `auth.json` do jazz, chaveiro: `security find-generic-password`, `secret-tool
+  lookup`, `gpg --export-secret-keys` …) é recusado em todo modo — yolo, `--allow-unsandboxed`,
+  `JAZZ_ALLOW_UNSANDBOXED=1` ou um "sim" — antes e dentro da ferramenta. A recusa diz que nenhuma flag
+  libera isso; o modelo sugeria `--allow-unsandboxed` para imprimir a chave privada.
+
+### Achados do QA na TUI (Dell)
+
+- Texto que você está digitando quando uma confirmação aparece não some mais: as letras viram texto
+  (nunca escolhem opção), aparecem na caixa como "digitando: …", e o Enter que termina a linha manda a
+  frase inteira pro agente em vez de responder. Nada fica colado na mensagem seguinte.
+- Ctrl+C (ou Ctrl+D) numa confirmação ou pergunta interrompe o turno inteiro, como Ctrl+C com ferramenta
+  rodando: o resto não roda e o modelo não é chamado de novo. Esc continua sendo "não" só pra aquela.
+- `/remember` no AGENTS.md do projeto não dispara mais o aviso de confiança na próxima abertura: a
+  confiança acompanha o texto que o próprio jazz escreveu, só se as instruções já eram confiadas (no
+  disco ou só nesta sessão) — edição de outra pessoa continua pedindo confiança. A pergunta de confiança
+  da abertura não aceita letra digitada às pressas como resposta.
+- O aviso "sem rede agora" só aparece se a sonda falhar duas vezes (a segunda com mais paciência) e
+  nenhuma resposta do modelo tiver chegado; `/cost` diz "custo não informado pelo provedor" quando não
+  há preço (Claude, por exemplo) e "grátis" no modelo grátis; a saída sem mensagem não mostra sessão
+  vazia; `!comando` mostra "código de saída N".
+
+### Guardas de teste (QA no Dell)
+
+- A checagem de qualidade enxerga arquivos criados ou mudados pelo bash (heredoc, `cp`, `sed -i`): teste
+  escrito com `cat > tests/test_x.py` conta, e trabalho certo não termina mais em `quality_failed` (exit 9).
+- Correção de bug cujo teste existente foi de vermelho a verde depois da edição (ou com `--until` de teste)
+  não é obrigada a criar arquivo de teste novo; o item agora pede "adicione ou estenda um teste, ou diga qual
+  teste existente cobre".
+- A revisão automática de uma passada recebe também os testes e o README mudados (código primeiro) e é
+  avisada dos arquivos que mudaram mas não couberam, em vez de apontá-los como faltando.
+- A suíte que o jazz roda sozinho no fim não deixa `__pycache__` nem `.pytest_cache` novos no projeto
+  (`PYTHONDONTWRITEBYTECODE=1` e limpeza do que a rodada criou).
+- Teste que o próprio jazz criou num turno anterior da mesma sessão (inclusive com `-c`) pode ser alterado
+  quando o pedido muda o comportamento; enfraquecer (skip, assert removido) continua recusado, e os testes
+  do usuário continuam protegidos. A lista fica na sessão, só em linhas assinadas.
+- Turno que termina com os testes ainda vermelhos depois do aviso não é mais sucesso: acaba como
+  `quality_failed` com aviso claro, a não ser que a resposta diga que a falha já existia e não tem relação.
+
+### Testes e release
+
+- Suíte de replay: sessões reais viram casos determinísticos (`testdata/replay`), com provedor, sudo, rede
+  e sandbox falsos; nenhum caso sai da máquina. `scripts/session2case.py` converte uma sessão em rascunho
+  com segredo redigido.
+- Eval isolado (`JAZZ_HOME` próprio, modelo preso, teste prévio, disjuntor, manifest) e classificação que
+  separa troca de modelo (`SUBST`), modelo que nunca respondeu e falha do harness.
+- O release exige `results/gate-<versão>.json` (`scripts/gate.sh`); sem ele, ou com caso de replay pulado
+  ou sem redteam, sai como pre-release.
+
 ## 0.13.4 — 2026-11-10
 
 Medição do modo offline com pedidos que o código nunca viu, e o que ela achou.
@@ -21,6 +291,45 @@ Medição do modo offline com pedidos que o código nunca viu, e o que ela achou
 
 ### Novo
 
+- **Skills do GitHub, como no Claude Code e no Codex.** `jazz skill install <url | dono/repo | pasta>` (ou
+  `/skill install` na sessão) clona, acha cada `SKILL.md` (na raiz, numa subpasta `/tree/main/…` ou um repo
+  com várias skills), mostra o que cada uma traz, inclusive os scripts, e instala em
+  `~/.config/jazz-cli/skills/<nome>` (`--project`: `.jazz/skills`). Copia só arquivos regulares (symlink
+  fica de fora), com limite de tamanho, e guarda a origem; `jazz skill list | rm | update`. Mensagem que cita
+  uma skill por URL ("usa essa skill … e cria um vídeo") oferece a instalação na hora; no `-p`, um pedido
+  explícito de instalar instala. Depois de instalada, o modelo recebe o caminho do `SKILL.md`.
+- Script de setup de um repositório que **você** citou (a URL está na sua mensagem e o `origin` do clone
+  bate) não é mais "alvo hostil" sem saída: "baixa e executa código" é o que setup faz. Vira pergunta,
+  sempre, até no yolo, sem ser lembrada. Credencial saindo, apagar a home, comando perigoso e qualquer repo
+  que você não citou continuam bloqueados. Na demo de 12/11 o `setup_environment.py` da video-forge travou
+  aqui.
+- A revisão do diff não olha mais dependência instalada nem cache (`site-packages`, venv de qualquer nome —
+  achado pelo `pyvenv.cfg` —, `node_modules`, `vendor/`, `__pycache__`…). Antes, depois de um `pip install`
+  dentro do projeto ela "restaurava" arquivos de biblioteca e quebrava o ambiente (43 arquivos do venv da
+  video-forge no teste de 13/11).
+- Turno guiado por skill (instalada, citada no pedido ou com `SKILL.md`) ganha orçamento grande e sem corte
+  duro em 1,5x: pipeline de skill é longo por natureza (`--max-steps` continua valendo).
+- Mudar uma skill instalada (`~/.config/jazz-cli/skills`, `~/.claude/skills`, `~/.agents/skills`) sempre
+  pergunta, até no yolo: skill roda em toda sessão; bug de skill se avisa ao dono, não se remenda calado.
+- Cada skill instalada ganha o seu `~/.cache/<nome>` gravável dentro do sandbox (e só ele): a video-lite guarda ali
+  a voz e os efeitos já gerados.
+- Sandbox: `~/.local/opt` (ferramentas instaladas sem root, como o espeak-ng) e as fontes do usuário ficam
+  legíveis; `~/.cache/huggingface` entra nos caches graváveis. O resto da home continua escondido (os `.env` de
+  outros projetos, configs com token…), e o modelo é avisado de que `ls`/`du` na home veem uma visão parcial e
+  de que helpers setuid (`crontab -l`) falham ali — para isso, `sandbox: false` com aprovação.
+- `bash` com `sandbox: false` roda um comando fora do sandbox do sistema, como no Claude Code: para quando o
+  sandbox quebrou o comando (Chrome headless do Remotion/Puppeteer que não sobe, cache em `~/.cache` sem
+  permissão). Pergunta toda vez, até no yolo, e nunca fica lembrado; no `-p` só com `--allow-unsandboxed` ou
+  `JAZZ_ALLOW_UNSANDBOXED=1`. O render da video-forge travou aqui em 13/11.
+- No limite de passos, uma resposta final que vem como chamada de ferramenta escrita em texto não aparece
+  mais crua: o jazz diz que parou no limite, qual era o próximo passo e como continuar (`jazz -c`).
+- Bloqueio de segurança agora pede ao modelo que diga claramente o que foi bloqueado e nunca descreva a
+  tarefa como pronta com um passo necessário bloqueado (na mesma demo ele respondeu "pronto pra produção").
+
+- `/remember <texto>` guarda uma regra ou fato no AGENTS.md do projeto ou no global (como o `#` do Claude Code) e já
+  vale na conversa; recusa texto com cara de segredo. `/memory` mostra os arquivos carregados.
+- `/btw <pergunta>`: pergunta paralela sobre a conversa, respondida sem ferramentas e sem entrar no histórico (o
+  contexto da tarefa não cresce).
 - `jazz eval real`: 89 pedidos do dia a dia com veredito por pedido e conferência do repositório depois;
   `--tasks ARQ` roda um conjunto externo; `jazz eval parse "pedido"` mostra a leitura sem agir.
 - `jazz eval real --variants`: corpus metamórfico. Cada pedido roda de novo sob oito variações de

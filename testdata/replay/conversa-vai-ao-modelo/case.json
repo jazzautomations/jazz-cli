@@ -1,0 +1,51 @@
+{
+  "name": "conversa-vai-ao-modelo",
+  "origin": "frases reais das sessões d610/macbookpro/mac (lista T1 do estudo-sinergia §7)",
+  "why": "online, o modelo é dono do turno: o cérebro level-0 respondeu 'ta ligado no wifi?' com uptime_load (0.98) e net_status disse offline sem testar; nenhuma dessas frases pode ser segurada pelo offline nem levar nota do cérebro ao modelo",
+  "entry": "app",
+  "mode": "auto",
+  "provider": {
+    "repeat": true,
+    "seq": [
+      {
+        "text": "certo."
+      }
+    ]
+  },
+  "each": [
+    "o que tu melhoraria nessa porra?",
+    "o que mais tu melhoraria nessa porra?",
+    "ta rodando sim caraio, tu ta rodando onde entao? me fala",
+    "pois é, o offline ja respondeu",
+    "acho que o wifi n ta funcionando aqui nao",
+    "wifi ta funcionando?",
+    "ta ligado no wifi?",
+    "cade?",
+    "e eu autorizo operacoes de baixo nivel, pode torar caraio",
+    "que dispositivos estao online na tailscale?",
+    "qual a diferença entre o brain e o nlu?",
+    "por que o teste de config ta falhando?",
+    "revisa o que eu mudei",
+    "o que esse projeto faz?",
+    "o que você faz",
+    "opcoes",
+    "porra",
+    "responda apenas: ok",
+    "quem é voce?",
+    "roda os testes",
+    "status",
+    "o que mudou"
+  ],
+  "expect": {
+    "handled": false,
+    "min_requests": 1,
+    "request_absent": [
+      "deterministic offline layer",
+   "deterministic brain",
+      "Reading: intent",
+      "Lesson",
+      "Plan cache",
+      "do not re-run"
+    ]
+  }
+}

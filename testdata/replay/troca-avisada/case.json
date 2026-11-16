@@ -1,0 +1,27 @@
+{
+  "name": "troca-avisada",
+  "origin": "macbookpro 261110-191600-5c06 + rodada 03/11 ('11/11 gpt-oss' servida por outro modelo)",
+  "why": "com -m e reserva configurada pelo usuário (consentimento), o pin em cota não pode sumir da lista em silêncio: tenta o pin primeiro, avisa, e a reserva só entra avisada",
+  "entry": "agent",
+  "mode": "auto",
+  "model": "gemini/gemini-3.8-flash",
+  "fallback": ["kilo/cohere/north-mini-code:free"],
+  "presets": ["gemini", "kilo"],
+  "env": {"GEMINI_API_KEY": "AIzaTESTE-replay"},
+  "dead": [{"ref": "gemini/gemini-3.8-flash", "minutes": 60}],
+  "provider": {
+    "repeat": true,
+    "by_ref": {
+      "gemini/gemini-3.8-flash": [{"status": 429, "body": "[{\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"status\":\"RESOURCE_EXHAUSTED\"}}]"}],
+      "kilo/cohere/north-mini-code:free": [{"text": "ok"}]
+    }
+  },
+  "turns": ["responda apenas: ok"],
+  "expect": {
+    "err": "none",
+    "first_model": "gemini/gemini-3.8-flash",
+    "models_some": ["kilo/cohere/north-mini-code:free"],
+    "models_only": ["gemini/gemini-3.8-flash", "kilo/cohere/north-mini-code:free"],
+    "ui_has": ["gemini-3.8-flash"]
+  }
+}

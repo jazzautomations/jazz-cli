@@ -60,8 +60,8 @@ o resto = eventos de span.
 | `session.start` | `source` (startup/resume/fork), `model`, `cwd`, `version`, `pid`, `os`, `arch`, `leaf` |
 | `turn.start` | `prompt_sha` (sha256 do pedido), `input_bytes`, `model`, `msgs` (tamanho do histórico) |
 | `turn.end` | `stop` (StopReason), `steps`, `tools`, `dur_ms`, `in`, `out`, `cache_read`, `cache_write`, `cost`, `ctx_tokens` |
-| `request.start` | `model`, `provider`, `cand` (índice na cadeia de fallback), `attempt`, `msgs`, `est_tokens` |
-| `request.end` | `model`, `provider`, `cand`, `attempt`, `latency_ms`, `in`, `out`, `cache_read`, `cache_write`, `cost`, `finish` (finish_reason), `tool_calls`, `text_bytes`; com erro: `error`, `status`, `daily`, `payload` (300 chars, redigido), `retry_after_ms` |
+| `request.start` | `model`, `provider`, `cand` (índice na cadeia de fallback), `attempt`, `msgs`, `est_tokens`, `requested` (o modelo pedido à cadeia), `pinned`? (escolhido pelo usuário) |
+| `request.end` | `model`, `provider`, `cand`, `attempt`, `latency_ms`, `in`, `out`, `cache_read`, `cache_write`, `cost`, `finish` (finish_reason), `tool_calls`, `text_bytes`; `first_byte_ms` (1º byte do stream); com erro: `error`, `class` (classe do pvClassify: rate, daily, gone, auth, toobig, toomanytools, toolcall, transient…), `status`, `daily`, `payload` (300 chars, redigido), `retry_after_ms` |
 | `tool.start` | `id`, `name`, `args_sha`, `args_bytes`, `lane` (`par` = já rodando em paralelo com as vizinhas, `seq` = vai rodar em ordem; `partools.go`) |
 | `tool.end` | `id`, `name`, `dur_ms`, `bytes`, `is_err`, `ran`, `lane` (`par` = o resultado veio da execução paralela; `seq` = rodou em ordem, inclusive quando a paralela foi descartada), `denied`?, `blocked`?, `truncated`? (saída longa foi para arquivo) |
 | `guard` (decisão) | `guard` (permission/hook/honest/budget/cancel), `tool`, `target`, `reason`, `outcome` (refused/denied) |

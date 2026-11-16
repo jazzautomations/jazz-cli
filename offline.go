@@ -65,7 +65,15 @@ func olIsOffline(err error) bool {
 	}
 	var ae *APIError
 	if errors.As(err, &ae) {
-		return ae.Status == 0 || ae.Status == 401 || ae.Status == 403
+		// a tool call the provider rejected mid-stream arrives as a status-0
+		// SSE error event: the model's defect, not a dead network (#33)
+		if pvClassify(err) == "toolcall" {
+			return false
+		}
+		// a refused key (401/403) is not a dead network: the router moves on
+		// to the next candidate and friendlyErr says /key — offline mode
+		// would hide the real cause behind a "no network" menu
+		return ae.Status == 0
 	}
 	var ne net.Error
 	var de *net.DNSError
@@ -159,7 +167,10 @@ var olDial = func(hp string, d time.Duration) error {
 
 // olProbe dials the candidates' endpoints in parallel (1.5 s); true = one answered.
 // It is cheap on purpose: no request, no quota, no tokens.
-func olProbe(cfg *Config, ref string) bool {
+func olProbe(cfg *Config, ref string) bool { return olProbeT(cfg, ref, 1500*time.Millisecond) }
+
+// olProbeT is olProbe with a dial timeout of d.
+func olProbeT(cfg *Config, ref string, d time.Duration) bool {
 	hosts := olProbeHosts(cfg, ref)
 	if len(hosts) == 0 {
 		return false
@@ -171,7 +182,7 @@ func olProbe(cfg *Config, ref string) bool {
 		wg.Add(1)
 		go func(h string) {
 			defer wg.Done()
-			if olDial(h, 1500*time.Millisecond) == nil {
+			if olDial(h, d) == nil {
 				mu.Lock()
 				up = true
 				mu.Unlock()
@@ -180,6 +191,28 @@ func olProbe(cfg *Config, ref string) bool {
 	}
 	wg.Wait()
 	return up
+}
+
+// olStartRetryDial: the startup probe's second, patient try (a slow machine
+// or a slow DNS answer misses the first 1.5 s while the network is fine).
+var olStartRetryDial = 5 * time.Second
+
+// olStartNoNet decides the startup "sem rede agora" notice: true only when
+// the probe failed twice (the second time with more patience) and no model
+// request answered meanwhile. Without endpoints to dial it cannot tell, and
+// says nothing.
+func olStartNoNet(cfg *Config, ref string) bool {
+	if len(olProbeHosts(cfg, ref)) == 0 {
+		return false
+	}
+	start := time.Now()
+	if olProbe(cfg, ref) || rlOKSince(start) {
+		return false
+	}
+	if olProbeT(cfg, ref, olStartRetryDial) {
+		return false
+	}
+	return !rlOKSince(start)
 }
 
 // olNetReason: the reason is about the network (not credentials).
@@ -288,6 +321,9 @@ func olDoctorLine(cfg *Config, root string) string {
 // smart classifier, approval prompt) for a bash command the harness wants to
 // run on the user's behalf (fast paths). ok=false carries the reason.
 func (a *Agent) PermitCommand(ctx context.Context, cmd string) (bool, string) {
+	if err := a.sess.Err(); err != nil {
+		return false, err.Error()
+	}
 	b, _ := json.Marshal(map[string]any{"command": cmd})
 	tc := ToolCall{Name: "bash", Args: string(b)}
 	ok, why, _ := a.permit(ctx, tc, toolDetail("bash", tc.Args), false, acHookVerdict{})
@@ -344,10 +380,17 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		a.ol = olState{} // the background probe found a provider (and said so)
 		a.olGen.Add(1)
 	}
+	a.syRejected(text) // "não, …" right after an offline answer: a negative label (synergy.go)
 	// a reply to a pending numbered menu runs the chosen action
 	if act, ok := a.olTakePick(text); ok {
 		a.olRun(ctx, act)
 		return true, text
+	}
+	offline := a.ol.on || a.ol.forced
+	if !offline {
+		// online the model owns the turn: only a literal command line of the
+		// closed list runs here, everything else goes to it (synergy.go)
+		return a.syOnline(ctx, text)
 	}
 	if ohIsHome(text) { // "menu": the offline brain as buttons (offline_home.go)
 		a.ohShow("")
@@ -363,29 +406,16 @@ func (a *App) olBefore(ctx context.Context, text string) (handled bool, out stri
 		}
 		return true, text
 	}
-	offline := a.ol.on || a.ol.forced
-	if offline && olSummaryRe.MatchString(fpNormalize(text)) {
+	if olSummaryRe.MatchString(fpNormalize(text)) {
 		a.olSummary(ctx)
 		return true, text
 	}
-	toModel := false // the user explicitly chose "Mandar pro modelo" on a fast path
-	if offline || fpEnabled(a.cfg) {
-		if m, ok := fpIntents(a.root).Match(text, fpDetect(a.root), a.tools.hasRg); ok {
-			done, note := a.olFastPath(ctx, m, offline)
-			if done {
-				return true, text
-			}
-			toModel = note == ""
-			if note != "" {
-				text += "\n\n" + note
-			}
-		}
-	}
-	if !offline {
-		if !toModel && a.brLevel0Interactive(ctx, text) { // brain level-0: understood read-only intents skip the model online too
+	if m, ok := fpIntents(a.root).Match(text, fpDetect(a.root), a.tools.hasRg); ok {
+		if done, note := a.olFastPath(ctx, m, true); done {
 			return true, text
+		} else if note != "" {
+			text += "\n\n" + note
 		}
-		return false, text
 	}
 	if olIsLocalRef(a.cfg, a.agent.Model) {
 		return false, text // a local model needs no network
@@ -581,9 +611,19 @@ func cmdScript(root string, args []string) int {
 func olHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, cfg *Config, prompt string, o pfOpts) (*RunResult, string) {
 	offline := (o.offline || olForcedEnv()) && !olIsLocalRef(cfg, ag.Model) // a local model is allowed offline
 	if !offline && !o.fastPath {
-		// level 0: a clear read-only request needs no model (brain.go)
-		if r := brHeadlessLevel0(ctx, ag, tools, ui, prompt); r != nil {
-			return r, prompt
+		// online the model owns the turn: only a literal command line of the
+		// closed list ("git status", "whoami") runs without it (synergy.go);
+		// JAZZ_BRAIN=level0 brings back the brain's generic answer (brain.go)
+		if brLevel0Forced() {
+			if r := brHeadlessLevel0(ctx, ag, tools, ui, prompt); r != nil {
+				return r, prompt
+			}
+			return nil, prompt
+		}
+		if brLevel0On() && fpEnabled(cfg) {
+			if m, ok := syLiteralMatch(tools.Root, prompt, tools.hasRg); ok {
+				return olHeadlessRun(ctx, ag, tools, ui, m, false, prompt)
+			}
 		}
 		return nil, prompt
 	}
@@ -603,11 +643,17 @@ func olHeadless(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, cfg *Conf
 
 // olHeadlessFallback rescues a run whose model failed with a network or
 // credential error: when the prompt is a fast path, it runs that instead.
+// With the chain out of quota or the provider down (429, 5xx) only a
+// literal command line of the closed list is taken over (synergy.go).
 func olHeadlessFallback(ctx context.Context, ag *Agent, tools *Toolbox, ui UI, err error, prompt string) *RunResult {
-	if !olIsOffline(err) {
-		return nil
+	var m fpMatch
+	var ok bool
+	switch {
+	case olIsOffline(err):
+		m, ok = fpIntents(tools.Root).Match(prompt, fpDetect(tools.Root), tools.hasRg)
+	case syProviderDown(err):
+		m, ok = syLiteralMatch(tools.Root, prompt, tools.hasRg)
 	}
-	m, ok := fpIntents(tools.Root).Match(prompt, fpDetect(tools.Root), tools.hasRg)
 	if !ok {
 		return nil
 	}

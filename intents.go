@@ -227,11 +227,17 @@ type fpIntentDef struct {
 	Slots    map[string]string `json:"slots,omitempty"`
 	Reject   []string          `json:"reject,omitempty"`
 	Disabled bool              `json:"disabled,omitempty"`
+	// Literal are the command lines typed as is ("git status", "whoami")
+	// that may answer an ONLINE request without the model (synergy.go):
+	// a closed, anchored list, separate from the conversational Patterns
+	// that only the offline mode and --fast-path use.
+	Literal []string `json:"literal,omitempty"`
 }
 
 type fpIntent struct {
 	fpIntentDef
 	res    []*regexp.Regexp
+	lit    []*regexp.Regexp // Literal, compiled like res
 	slots  map[string]*regexp.Regexp
 	reject map[string]bool
 }
@@ -307,6 +313,18 @@ func fpBuild(root string) *fpSet {
 			}
 			it.res = append(it.res, re)
 		}
+		for _, p := range d.Literal {
+			if !ok {
+				break
+			}
+			re, err := regexp.Compile(`(?i)^(?:` + p + `)$`)
+			if err != nil {
+				set.warns = append(set.warns, d.Name+" (literal): "+err.Error())
+				ok = false
+				break
+			}
+			it.lit = append(it.lit, re)
+		}
 		for k, p := range d.Slots {
 			re, err := regexp.Compile(p)
 			if err != nil {
@@ -319,7 +337,7 @@ func fpBuild(root string) *fpSet {
 		for _, r := range d.Reject {
 			it.reject[strings.ToLower(r)] = true
 		}
-		if ok && len(it.res) > 0 {
+		if ok && (len(it.res) > 0 || len(it.lit) > 0) {
 			set.intents = append(set.intents, it)
 		}
 	}
@@ -402,6 +420,12 @@ func (set *fpSet) Match(input string, p fpProject, hasRg bool) (fpMatch, bool) {
 	if m, ok := set.matchNorm(n, p, hasRg, nil); ok {
 		return m, true
 	}
+	// a literal command line of the closed list ("whoami", "df -h") is the
+	// same request offline: without this, --offline answered "whoami" with
+	// the machine profile while online it ran whoami
+	if m, ok := set.MatchLiteral(input, p, hasRg); ok {
+		return m, true
+	}
 	// typos: "git stauts", "procra X no codgio", "roda os tesets" (fuzzy.go).
 	// Words of the request that are not in the pattern vocabulary are moved to
 	// the nearest vocabulary word; a captured symbol must stay as typed.
@@ -434,6 +458,20 @@ func fpSynonymLead(n string, vocab map[string]bool) string {
 // matchNorm matches one normalized request; orig (typo repair) lists the
 // words the user really typed: a slot value outside it is a repaired word.
 func (set *fpSet) matchNorm(n string, p fpProject, hasRg bool, orig map[string]bool) (fpMatch, bool) {
+	return set.matchWith(n, p, hasRg, orig, func(it *fpIntent) []*regexp.Regexp { return it.res })
+}
+
+// MatchLiteral resolves input against the Literal forms only (no typo
+// repair, no synonyms): the online fast path (synergy.go).
+func (set *fpSet) MatchLiteral(input string, p fpProject, hasRg bool) (fpMatch, bool) {
+	n := fpNormalize(input)
+	if n == "" || set == nil {
+		return fpMatch{}, false
+	}
+	return set.matchWith(n, p, hasRg, nil, func(it *fpIntent) []*regexp.Regexp { return it.lit })
+}
+
+func (set *fpSet) matchWith(n string, p fpProject, hasRg bool, orig map[string]bool, pats func(*fpIntent) []*regexp.Regexp) (fpMatch, bool) {
 	vars := map[string]string{"test": p.Test, "build": p.Build, "lint": p.Lint, "fmt": p.Fmt}
 	if p.Git {
 		vars["git"] = "git"
@@ -445,7 +483,7 @@ func (set *fpSet) matchNorm(n string, p fpProject, hasRg bool, orig map[string]b
 	}
 	var found []fpMatch
 	for _, it := range set.intents {
-		for _, re := range it.res {
+		for _, re := range pats(it) {
 			sm := re.FindStringSubmatch(n)
 			if sm == nil {
 				continue

@@ -29,6 +29,10 @@ func TestBgClassify(t *testing.T) {
 		{"corrija o login: o token jwt expira cedo demais", 'M', "bugfix", true},
 		{"rename the author field", 'M', "refactor", false},
 		{"adicione uma migração para a tabela de pagamentos", 'L', "greenfield", true},
+		// code + new tests is not an S edit (eval v2 task 09, d610 12/11)
+		{"Implemente a função horas_extras de ponto/calculo.py e adicione testes para ela em tests/.", 'M', "greenfield", false},
+		{"implement ParseHeader in header.go with tests", 'M', "greenfield", false},
+		{"conserte o bug em parser.go: o teste quebra com entrada vazia", 'S', "bugfix", false},
 	}
 	for _, c := range cases {
 		got := bgClassify(c.in)
@@ -160,10 +164,10 @@ func TestBudgetReminderAndRereadGuard(t *testing.T) {
 	}
 	reqs := h.fs.requests()
 	first := reqs[0].Messages[len(reqs[0].Messages)-1]
-	if c, _ := first["content"].(string); !strings.Contains(c, "Budget for this task (size S)") || !strings.Contains(c, "at most 8 lines") || !strings.Contains(c, "Bugfix:") {
+	if c, _ := first["content"].(string); !strings.Contains(c, "Orçamento desta tarefa (tamanho S)") || strings.Contains(c, "8 lines") || strings.Contains(c, "Final reply") || !strings.Contains(c, "Bug:") {
 		t.Errorf("budget reminder missing from the user message: %q", c)
 	}
-	if strings.Contains(reqs[0].system(), "Budget for this task") {
+	if strings.Contains(reqs[0].system(), "Orçamento desta tarefa") {
 		t.Error("budget must never go into the system prompt")
 	}
 	res := reqs[len(reqs)-1].toolResults()
@@ -226,26 +230,28 @@ func TestBudgetExplorationCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := h.fs.requests()[9].toolResults()
-	if !strings.Contains(res["r3"], "read/search call 4 without an edit") {
+	if !strings.Contains(res["r3"], "Leitura/busca 4 sem editar") {
 		t.Errorf("nudge at the cap missing: %q", res["r3"])
 	}
-	if strings.Contains(res["r4"], "without an edit") {
+	if strings.Contains(res["r4"], "sem editar") {
 		t.Errorf("nudge must come once: %q", res["r4"])
 	}
 	if !strings.Contains(res["r7"], "V7") {
 		t.Errorf("call 8 still runs: %q", res["r7"])
 	}
-	if !strings.Contains(res["r8"], "TOOL_NOT_EXECUTED: exploration budget used up") {
-		t.Errorf("call 9 (past 2x) must be refused: %q", res["r8"])
+	// v0.14: exploration is never refused (05-dois-bugs: the refusal at 2x
+	// blocked reading the file that had to be fixed); one soft note only.
+	if strings.Contains(res["r8"], "TOOL_NOT_EXECUTED") || !strings.Contains(res["r8"], "V8") {
+		t.Errorf("call 9 (past 2x) must run: %q", res["r8"])
 	}
-	if !anyContains(h.ui.warns, "orçamento de exploração esgotado") {
-		t.Errorf("user warning missing: %v", h.ui.warns)
+	if anyContains(h.ui.warns, "orçamento de exploração esgotado") {
+		t.Errorf("no exploration warning any more: %v", h.ui.warns)
 	}
 }
 
 func TestBudgetStepHardStopAtCloseGrace(t *testing.T) {
 	stepStop := func(n int, r recReq) fakeResp {
-		if r.contains("user", "Step limit reached") {
+		if r.contains("user", "Limite de passos atingido") {
 			return fakeResp{Text: "partial"}
 		}
 		return fakeResp{Calls: []fakeCall{{ID: fmt.Sprintf("b%d", n), Name: "bash", Args: fmt.Sprintf(`{"command":"true %d"}`, n)}}}
@@ -285,7 +291,7 @@ func TestBudgetStepHardStopAtCloseGrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := h.fs.requests()[18] // the final no-tools request
-	if !last.contains("tool", "used 9 of about 12 steps") || !last.contains("tool", "used the 12 steps budgeted") {
+	if !last.contains("tool", "Usou 9 de uns 12 passos") || !last.contains("tool", "Os 12 passos do orçamento acabaram") {
 		t.Error("70% and 100% step reminders missing")
 	}
 }
@@ -301,7 +307,7 @@ func TestBudgetStepNoteLastPass(t *testing.T) {
 	// and only once.
 	firstUsed, count := -1, 0
 	for step := 1; step <= 60; step++ {
-		if strings.Contains(h.ag.bgStepNote(step), "last pass") {
+		if strings.Contains(h.ag.bgStepNote(step), "última volta") {
 			count++
 			if firstUsed < 0 {
 				firstUsed = step - 1 // used = step - 1
@@ -328,12 +334,12 @@ func TestBudgetNormalAndOff(t *testing.T) {
 			t.Fatal(err)
 		}
 		reqs := h.fs.requests()
-		hasRem := reqs[0].contains("user", "Budget for this task")
+		hasRem := reqs[0].contains("user", "Orçamento desta tarefa")
 		reread := strings.Contains(reqs[2].toolResults()["r2"], "File unchanged")
 		if lvl == bgOff && (hasRem || reread) {
 			t.Errorf("off: reminder=%v reread guard=%v, want neither", hasRem, reread)
 		}
-		if lvl == bgNormal && (!hasRem || !reread || !reqs[0].contains("user", "about 24 steps") || reqs[0].contains("user", "at most 8 lines")) {
+		if lvl == bgNormal && (!hasRem || !reread || !reqs[0].contains("user", "uns 24 passos") || reqs[0].contains("user", "8 lines")) {
 			t.Errorf("normal: doubled budget, guards on, no brevity rule")
 		}
 		if got := h.ag.bgStepLimit(80); got != 80 {
@@ -358,7 +364,7 @@ func TestBudgetQuestionHasNoReminder(t *testing.T) {
 	if err := h.run(t, "how does the router pick a model?"); err != nil {
 		t.Fatal(err)
 	}
-	if h.fs.requests()[0].contains("user", "Budget for this task") {
+	if h.fs.requests()[0].contains("user", "Orçamento desta tarefa") {
 		t.Error("a question gets no budget reminder")
 	}
 }
@@ -404,7 +410,22 @@ func TestBudgetExplorationCapCountsScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := h.fs.requests()[5].toolResults()
-	if !strings.Contains(res["s3"], "read/search call 4 without an edit") {
+	if !strings.Contains(res["s3"], "Leitura/busca 4 sem editar") {
 		t.Errorf("read-only script calls must count toward the exploration cap: %q", res["s3"])
+	}
+}
+
+func TestBgSkillTurnNoHardCap(t *testing.T) {
+	if !bgSkillTurn("usa a skill video-forge e cria um vídeo") || !bgSkillTurn("<system-reminder>These skills are installed for this request:\n- x</system-reminder>\nfaz") {
+		t.Error("skill turns must be detected")
+	}
+	if bgSkillTurn("corrige o bug do parser") || bgSkillTurn("<system-reminder>Skill \"surgical-change\" applies</system-reminder>\ncorrige o bug") {
+		t.Error("a built-in skill hint or a plain task is not a skill pipeline")
+	}
+	h := newHarness(t, nil, nil)
+	h.ag.bgBeginTurn("usa a skill video-forge e cria um vídeo curto sobre o jazz")
+	bt := h.ag.bgTurnState()
+	if bt == nil || bt.hardSteps || bt.stepBudget < 120 {
+		t.Errorf("skill turn: %+v", bt)
 	}
 }

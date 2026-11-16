@@ -271,7 +271,7 @@ func TestUiInputBoxFrame(t *testing.T) {
 		t.Errorf("continuation row: %q", stripANSI(lines[2]))
 	}
 	// a shell escape tints the box
-	if l, _, _ := e.boxFrame([]rune("!ls"), 3, 40); !strings.Contains(stripANSI(l[1]), "│ ! !ls") {
+	if l, _, _ := e.boxFrame([]rune("!ls"), 3, 40); !strings.Contains(stripANSI(l[1]), "│ › !ls") {
 		t.Errorf("bash mode: %q", stripANSI(l[1]))
 	}
 	// ASCII

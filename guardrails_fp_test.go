@@ -488,3 +488,32 @@ func TestFPStrictRestoresNameOnly(t *testing.T) {
 		t.Errorf("strict: typo=%q", v.Typo)
 	}
 }
+
+// Redirections are not packages: 42 real supply prompts asked whether "2",
+// "2>&1" or ">" exist on PyPI/npm, and the user learned to click yes without
+// reading (macbookpro 261027-182325-2a3b ended denied over one of them).
+func TestSupplyParseIgnoresRedirects(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"pip install requests 2>&1", []string{"requests"}},
+		{"npm install lodash > /dev/null", []string{"lodash"}},
+		{"pip install -r requirements.txt 2>&1 | tail -5", nil},
+		{"pip install 2>&1", nil},
+		{"pip install yt-dlp 2>&1 | tail -3", []string{"yt-dlp"}},
+		{"pip install -U yt-dlp &>/dev/null && echo ok", []string{"yt-dlp"}},
+		{"npm i -D typescript 2> err.log", []string{"typescript"}},
+		{"pip install requests >>log", []string{"requests"}},
+		{"pip install 'django<5' 2>/dev/null", []string{"django"}},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, p := range sgParseInstalls(c.cmd) {
+			got = append(got, p.Name)
+		}
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%q: packages %q, want %q", c.cmd, got, c.want)
+		}
+	}
+}

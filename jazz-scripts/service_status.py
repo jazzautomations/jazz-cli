@@ -124,6 +124,8 @@ def _proc_is(name, pid, raw):
 
 def check_process():
     if not os.path.isdir("/proc"):
+        if kind == "process":
+            fail("process backend needs Linux procfs (/proc)")
         return None
     me = os.getpid()
     skip = _ancestors(me) | {me}

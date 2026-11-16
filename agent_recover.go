@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,10 +100,11 @@ type rcTurn struct {
 	reset    bool   // history was replaced; Run must clear its per-context state
 	step     int    // current step of Run
 
-	untilPassed bool   // --until exited 0 in this turn
-	gateOK      bool   // another verifier (quality gate) passed: MarkVerified
-	verifyOK    bool   // the last build/test bash exited 0 and nothing changed after it
-	verifyCmd   string // that command
+	untilPassed bool     // --until exited 0 in this turn
+	gateOK      bool     // another verifier (quality gate) passed: MarkVerified
+	verifyOK    bool     // the last build/test bash exited 0 and nothing changed after it
+	verifyCmd   string   // that command
+	mutPaths    []string // what the turn changed (write/edit paths, path words of mutating bash): a probe must name one
 
 	plans []string // plan cache entries injected in this turn
 }
@@ -226,6 +228,61 @@ var rcVerifyRE = lazyRx(`\b(go (test|build|vet)|cargo (test|build|check|clippy)|
 
 func rcIsVerifyCmd(cmd string) bool { return rcVerifyRE.MatchString(cmd) }
 
+// rcProbeRE: the filesystem probes of rcVerifyRE (ls, test -, wc, stat,
+// diff, cmp, sums). Alone they prove nothing — an `ls /etc` exit 0 got a
+// failed wifi fix stored as "verified" (d610, plan dc2e261ebfea) — so they
+// count only AFTER a change in the turn, and only on a path it changed.
+var rcProbeRE = lazyRx(`^\s*(test +-|\[ +-|wc +-|stat +|sha[0-9]+sum|md5sum|cmp +|diff +|ls\b)`)
+
+// rcBuildTestRE: rcVerifyRE minus the probes — build, test, lint, typecheck.
+func rcIsBuildTest(cmd string) bool {
+	if !rcVerifyRE.MatchString(cmd) {
+		return false
+	}
+	for _, part := range rcCmdParts(cmd) {
+		if rcVerifyRE.MatchString(part) && !rcProbeRE.MatchString(part) {
+			return true
+		}
+	}
+	return false
+}
+
+// rcCmdParts splits a command line on its && ; || | separators.
+func rcCmdParts(cmd string) []string {
+	return strings.FieldsFunc(cmd, func(r rune) bool { return r == ';' || r == '&' || r == '|' || r == '\n' })
+}
+
+// rcPathWords are the words of a command that look like paths.
+func rcPathWords(cmd string) []string {
+	var out []string
+	for _, w := range strings.Fields(cmd) {
+		w = strings.Trim(w, `'"`)
+		if strings.HasPrefix(w, "-") || len(w) < 2 {
+			continue
+		}
+		if strings.ContainsAny(w, "/.") {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// rcProbeOK: a probe proves the change only when it names a path the turn changed.
+func rcProbeOK(rc *rcTurn, cmd string) bool {
+	if len(rc.mutPaths) == 0 {
+		return false
+	}
+	for _, w := range rcPathWords(cmd) {
+		wb := filepath.Base(w)
+		for _, m := range rc.mutPaths {
+			if w == m || wb == filepath.Base(m) && wb != "." && wb != "/" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func rcArg(tc ToolCall, key string) string {
 	m, _, err := parseArgs(tc.Args)
 	if err != nil {
@@ -256,7 +313,12 @@ func (a *Agent) rcObserve(lt *acTurnLoop, tc ToolCall, out ToolOutput, denied bo
 		e.mut = cmd != "" && !IsReadOnly(cmd)
 		if cmd != "" && rcIsVerifyCmd(cmd) && e.exit >= 0 {
 			e.verify = true
-			rc.verifyOK, rc.verifyCmd = e.exit == 0, cmd
+			strong := rcIsBuildTest(cmd)
+			// a test behind a pipe reports tail's status, not its own (bash_hints.go)
+			rc.verifyOK, rc.verifyCmd = e.exit == 0 && !bhPipedTest(cmd) && (strong || rcProbeOK(rc, cmd)), cmd
+		}
+		if e.mut && e.exit == 0 && !e.verify {
+			rc.mutPaths = append(rc.mutPaths, rcPathWords(cmd)...)
 		}
 		// grep/rg with no match: exit 1 and no output is not a tool error
 		if e.exit == 1 && strings.TrimSpace(rcExitRE.ReplaceAllString(out.Text, "")) == "" {
@@ -266,6 +328,9 @@ func (a *Agent) rcObserve(lt *acTurnLoop, tc ToolCall, out ToolOutput, denied bo
 		e.mut = !out.IsErr
 		if e.mut {
 			rc.verifyOK = false // the change after the check is not verified
+			if p := rcArg(tc, "path"); p != "" {
+				rc.mutPaths = append(rc.mutPaths, p)
+			}
 		}
 	}
 	if out.IsErr {

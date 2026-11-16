@@ -553,6 +553,8 @@ com `-p`), `--output-format text|json|stream-json`, `--max-steps N`, `--timeout 
 | `/todo` · `/jobs [kill]` · `/mcp` · `/cost` · `/expand` | estado · saída inteira da última ferramenta |
 | `/goal [objetivo\|off]` · `/until [comando\|off]` · `/review [on\|off]` | objetivo fixo · só termina quando o comando passar · revisão do diff por subagente |
 | `/init` | cria um `AGENTS.md` analisando o projeto |
+| `/remember <texto>` · `/memory` | guarda uma regra no `AGENTS.md` do projeto ou global (como o `#` do Claude Code) · mostra os arquivos carregados |
+| `/btw <pergunta>` | pergunta paralela sobre a conversa, sem ferramentas e sem entrar no histórico |
 | `/script [nome] [json]` | lista os scripts prontos ou roda um (`/script git_state`) |
 | `/offline` · `/online` | força o modo offline · volta a tentar os provedores agora |
 | `/doctor` · `/exit` | diagnóstico · sair |
@@ -855,7 +857,22 @@ A ordem desses últimos depende de `omni.strategy`:
 - `ordered`: a ordem da config;
 - `cheapest`: o mais barato primeiro.
 
-Erros 429/402/5xx com `Retry-After` curto esperam e tentam de novo. Cota diária esgotada
+**Modelo escolhido é contrato.** Com `-m`, `/model` ou `model` na config (fora o padrão
+keyless), a cadeia é só esse modelo + a lista `fallback` (configurar é consentir): nada de
+cadeia grátis implícita, juiz ou omni trocando por baixo. Se ele está sem cota, o jazz avisa e
+tenta assim mesmo. Se falha: no interativo pergunta "usar X neste turno?" (sim / sempre nesta
+sessão / não); no `-p` sai com código 75 dizendo qual modelo falhou, por quê e o que fazer.
+`fallback_on_pinned: auto` troca sozinho (sempre avisando), `off` nunca troca.
+`--strict-model` (ou `JAZZ_STRICT_MODEL=1`) usa só o `-m`, nem o `fallback` — é o que o eval
+usa para medir o modelo pedido. Sem modelo escolhido, toda troca também é dita: quem saiu da
+cadeia e por quê, e quem respondeu no lugar.
+
+Erros 429/402/5xx com `Retry-After` curto esperam e tentam de novo, com orçamento de espera
+por modelo (~30 s no interativo, ~120 s no `-p`); passou disso, vai pro próximo candidato.
+Cota grátis que acaba (ex.: `PROMOTION_MODEL_LIMIT_REACHED` do Kilo) esfria o provedor
+inteiro: os outros modelos dele não recebem pedido no mesmo passo. Modelo aposentado (HTTP
+410, "end of life") sai do rodízio de vez, até o `/models` do provedor listá-lo de novo ou
+`jazz omni reset`; chave recusada vale para aquela chave, e uma chave nova funciona na hora. Cota diária esgotada
 tira o candidato da cadeia até o reset (fica em `exhausted.json` e volta sozinho).
 `omni.exclude` remove provedores ou refs (aceita glob), `omni.paid` decide quando usar
 modelo pago (`never`, `emergency` (padrão) ou `always`) e `omni.no_training` descarta

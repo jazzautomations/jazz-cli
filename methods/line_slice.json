@@ -1,6 +1,69 @@
 {
  "methods": [
   {
+   "name": "line_slice.ask_range",
+   "intent": "line_slice",
+   "priority": 11,
+   "doc": "sem intervalo: pergunta a linha antes de executar",
+   "needs": [
+    "bin.python3"
+   ],
+   "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "file",
+      "q": "Qual arquivo você quer ler?"
+     },
+     "out": "slot.file"
+    },
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "start",
+      "q": "Qual linha você quer mostrar? (número a partir de 1)"
+     },
+     "out": "slot.start"
+    },
+    {
+     "cap": "script:line_slice",
+     "in": {
+      "file": "$slot.file",
+      "start": "$slot.start",
+      "end": "$slot.end",
+      "tail": "$slot.tail"
+     },
+     "out": "res"
+    }
+   ],
+   "verify": [
+    {
+     "check": "script_ok",
+     "arg": "$res"
+    }
+   ],
+   "risk": "low",
+   "cost_ms": 500,
+   "pre": [
+    {
+     "fact": "slot.stdin",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.start",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.end",
+     "op": "unset"
+    },
+    {
+     "fact": "slot.tail",
+     "op": "unset"
+    }
+   ]
+  },
+  {
    "name": "line_slice.script",
    "intent": "line_slice",
    "priority": 10,
@@ -9,6 +72,14 @@
     "bin.python3"
    ],
    "steps": [
+    {
+     "cap": "ask_slot",
+     "in": {
+      "slot": "file",
+      "q": "Qual arquivo você quer ler?"
+     },
+     "out": "slot.file"
+    },
     {
      "cap": "script:line_slice",
      "in": {

@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -1372,7 +1373,7 @@ func TestProviderCodexStream(t *testing.T) {
 		t.Fatalf("path %q", cap.path)
 	}
 	h := cap.headers
-	if h.Get("Authorization") != "Bearer "+access || h.Get("ChatGPT-Account-ID") != "acct-1" || h.Get("session-id") != "sess-9" || h.Get("originator") != originator || h.Get("version") != version {
+	if h.Get("Authorization") != "Bearer "+access || h.Get("ChatGPT-Account-ID") != "acct-1" || h.Get("session-id") != "sess-9" || h.Get("originator") != originator || h.Get("version") != codexClientVersion {
 		t.Fatalf("headers %v", h)
 	}
 	if !strings.HasPrefix(h.Get("User-Agent"), originator+"/"+version+" (") {
@@ -2394,6 +2395,10 @@ func TestProviderChatgptCredSaveFailureKeepsSession(t *testing.T) {
 	newAccess := provJWT(map[string]any{"exp": time.Now().Add(time.Hour).Unix()})
 	authSrv, _ := provAuthServer(t, newAccess, 200)
 	provHijackHosts(t, map[string]string{"auth.openai.com": authSrv.URL})
+	// The lock is available; only saving after the refresh must fail.
+	if err := os.WriteFile(filepath.Join(home, "auth.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chmod(home, 0o500); err != nil { // read-only config dir: SaveCred fails
 		t.Skip(err)
 	}
@@ -2404,5 +2409,26 @@ func TestProviderChatgptCredSaveFailureKeepsSession(t *testing.T) {
 	}
 	if w := ChatGPTWarning(); !strings.Contains(w, "não consegui salvar") {
 		t.Fatalf("warning %q", w)
+	}
+}
+
+func TestProviderChatgptLockFailureNeverRefreshes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JAZZ_HOME", home)
+	if err := SaveCred("chatgpt", &Cred{Type: "oauth", Access: "old", Refresh: "fake-refresh"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(home, "auth.lock"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(503) }))
+	defer srv.Close()
+	provHijackHosts(t, map[string]string{"auth.openai.com": srv.URL})
+	if _, err := chatgptCred(context.Background(), true); err == nil || !strings.Contains(err.Error(), "lock") {
+		t.Fatalf("lock failure hidden: %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("rotated token without lock: %d request(s)", calls.Load())
 	}
 }

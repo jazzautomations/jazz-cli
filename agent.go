@@ -48,10 +48,13 @@ type Agent struct {
 	countedIdx  int // Msgs index already included in lastPrompt
 	allow       map[string]bool
 	recent      []string
+	badCalls    map[string]bool // calls refused by validation in this turn (argfix.go)
+	chatLane    bool            // this turn is small talk (chatlane.go)
 	steerMu     sync.Mutex
 	steer       []string // typed during the turn, not yet delivered
 	unsent      []string // steer left over when a turn ended (bug 39); guarded by steerMu
 	pendingNote []string
+	pcPrev      pcPrevTurn // plans injected in the last turn: a correction in the next one counts against them (plancache.go)
 
 	mq *MsgQueue // messages typed during the turn: steer / follow-up (queue.go); guarded by steerMu
 
@@ -78,9 +81,12 @@ type Agent struct {
 
 	loop acLoop // --until, /goal and --review (agent_loop.go)
 
-	sk  skState  // built-in skills picked by the harness (skills.go)
-	hg  *hgState // honest-completion guards for this turn (guard_honest.go)
-	bud *bgState // ponytail budget, quality gate, outage wait (budget.go, quality.go, netwait.go)
+	sk skState  // built-in skills picked by the harness (skills.go)
+	hg *hgState // honest-completion guards for this turn (guard_honest.go)
+	// hgOwn: test files the agent itself created in this session (abs paths;
+	// kept in the session file for -c): not protected as "existing" tests
+	hgOwn map[string]bool
+	bud   *bgState // ponytail budget, quality gate, outage wait (budget.go, quality.go, netwait.go)
 
 	uiLint map[string]string // per UI file, hash of the last ui_lint findings ("" = clean) (uilint.go)
 
@@ -91,7 +97,11 @@ type Agent struct {
 	// or --yolo, otherwise they are refused.
 	UntrustedBash bool
 	// Headless: no interactive user (the privacy notice is a stderr line, F4).
-	Headless     bool
+	Headless bool
+	// Interactive: a person can answer a question now (the TUI). A pinned
+	// model that fails asks before switching; headless fails clearly instead.
+	Interactive  bool
+	rt           acRoute         // pin, announced swaps, served models (router_pin.go)
 	PrivacyCheck bool            // main turns on the privacy notice (security.go)
 	privacyRef   map[string]bool // Train providers already announced this session
 
@@ -155,7 +165,8 @@ func (a *Agent) acDemoteStalled(cands []string) []string {
 func NewAgent(cfg *Config, ui UI, tools *Toolbox, mcp *MCPManager, model string) *Agent {
 	a := &Agent{cfg: cfg, ui: ui, tools: tools, mcp: mcp, Model: model, allow: map[string]bool{}, ptIdx: -1}
 	if tools != nil {
-		tools.Window = a.window // bash output budget follows the model in use (outshape.go)
+		tools.Window = a.window       // bash output budget follows the model in use (outshape.go)
+		tools.SysWrite = a.nlSysWrite // approved /etc writes go as root, with backup (consent.go)
 	}
 	return a
 }
@@ -282,8 +293,12 @@ func (a *Agent) estTokens() int {
 		n = len(a.System) / 4
 		from = 0
 	}
+	msgs := a.Msgs
+	if from == 0 {
+		msgs = cvApply(msgs) // no provider count yet: estimate what is actually sent (ctxview.go)
+	}
 	chars := 0
-	for _, m := range a.Msgs[min(from, len(a.Msgs)):] {
+	for _, m := range msgs[min(from, len(msgs)):] {
 		chars += len(m.Content) + len(m.Reasoning)
 		for _, tc := range m.ToolCalls {
 			chars += len(tc.Args) + len(tc.Name)
@@ -328,7 +343,9 @@ func (a *Agent) compactThreshold() int {
 		w, out := a.limitsOf(a.TurnModel())
 		return acThreshold(w, out)
 	}
-	refs := a.cfg.Candidates(a.TurnModel(), a.Model)
+	// pinned, only the pin and the configured fallback can answer: a smaller
+	// window in the implicit chain must not compact the pin's history early
+	refs := a.cfg.CandidatesFor(Need{Pin: a.acPin("main")}, a.TurnModel(), a.Model)
 	if len(refs) == 0 {
 		refs = []string{a.TurnModel()}
 	}
@@ -362,7 +379,22 @@ func (a *Agent) stepLimit() int {
 
 const planReminder = "<system-reminder>Plan mode is on: investigate with read-only tools (read, read-only bash such as rg/ls/git log, task), then reply with a concise numbered plan (files, changes, verification). Do not edit or write files and do not run commands that change anything.</system-reminder>"
 
-const stepLimitReminder = "<system-reminder>Step limit reached. Do not call any more tools. Give your final answer now: what was done, what is left.</system-reminder>"
+const stepLimitReminder = "<system-reminder>Limite de passos atingido. Não chame mais ferramentas: responda agora com o que foi feito e o que falta.</system-reminder>"
+
+// acChangeKind: a task kind that must change files to be done.
+func acChangeKind(k string) bool {
+	switch k {
+	case "bugfix", "greenfield", "refactor":
+		return true
+	}
+	return false
+}
+
+// acEmptyResends: silent resends of an empty reply before the nudge; the
+// pause grows (acEmptyWait × n²) so a provider hiccup has time to pass.
+const acEmptyResends = 3
+
+var acEmptyWait = 3 * time.Second
 
 const deadlineWrapUpReminder = "<system-reminder>Perto do limite de tempo: pare de explorar, termine a edição atual, verifique uma vez e dê a resposta final agora; diga o que ficou.</system-reminder>"
 
@@ -387,6 +419,7 @@ func (a *Agent) obDeadlineWarned() bool {
 // Run handles one user message until the model gives a final answer.
 func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err error) {
 	a.EnsureSystem()
+	a.langNote(input) // Portuguese in → "Responda em português do Brasil" at the end of the system prompt (lang.go)
 	mode := a.mode()
 	a.ui.SetMode(mode)
 	a.gr.injection, a.gr.startHit = a.gr.startHit, "" // the injection guard is per turn
@@ -402,16 +435,23 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 
 	defer func() {
 		a.ptEnd() // early calls still running are cancelled and discarded (partools.go)
+		if saveErr := a.sess.Err(); saveErr != nil {
+			stop, err = StopError, saveErr
+		}
 		if s := a.dgReview(ctx); s != "" {
 			stop = s // risky diff refused at the end of the turn (diffguard.go)
 		}
 		a.turnModel = turnModel
 		a.parkSteer()
-		a.qTurnEnd(stop, err) // follow-ups start only after a turn that ended well (queue.go)
 		a.bgEndTurn(stop, steps)
 		a.acTurnDone(ctx, lt, stop, steps)                 // plan cache (plancache.go)
 		a.obAfterStep(steps)                               // traced checkpoint of pending writes (obs.go)
 		a.obTurnEnd(stop, steps, toolsRun, time.Since(t0)) // obs.go
+		if saveErr := a.sess.Err(); saveErr != nil {
+			stop, err = StopError, saveErr
+			a.ui.Error(saveErr.Error())
+		}
+		a.qTurnEnd(stop, err) // never start a follow-up after a persistence failure
 		a.ui.TurnEnd(TurnStats{Dur: time.Since(t0), Tools: toolsRun, Usage: a.turnUsage, Model: turnModel, Ctx: a.estTokens(), Win: a.window(), Cost: a.turnUsage.Cost, Stop: string(stop), Steps: steps, Redacted: a.rdTurnCount()})
 		if note := a.hgJobsNote(); note != "" { // background jobs still up (guard_honest.go)
 			a.ui.Warn(note)
@@ -462,30 +502,42 @@ func (a *Agent) Run(ctx context.Context, input string) (stop StopReason, err err
 	if mode == "plan" && !a.sub {
 		input = planReminder + "\n" + input
 	}
+	chat := a.acChatLane(lt.input) // "oi"/"valeu" with nothing pending: no task machinery (chatlane.go)
+	a.chatLane = chat
 	turnModel, input = a.ojStartTurn(ctx, lt.input, turnModel, input) // omni judge: task type -> model, fusion/panel notes (judge.go)
 	if !a.sub {
-		a.tools.BeginTurn(len(a.Msgs))
-		OmniBeginTurn() // re-seed the weighted router once per turn, not per request
+		a.tools.beginTurn(len(a.Msgs), !chat) // chat: no checkpoint scan
+		OmniBeginTurn()                       // re-seed the weighted router once per turn, not per request
 	}
 	// similar verified plans go after the user's text (plancache.go); input
 	// itself stays clean for the checks that read it later (acRecap)
 	a.cbAttachNotice(turnModel) // a model without vision: say so and name one that sees (caps.go)
-	a.append(Message{Role: "user", Content: input + a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input), Images: a.attach})
+	inject := ""
+	if !chat {
+		inject = a.pcInject(lt) + a.niInject(lt.input) + a.dcInject(ctx, lt.input)
+	}
+	a.append(Message{Role: "user", Content: input + inject, Images: a.attach})
 	a.attach = nil
 
 	nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake := false, false, false, false
-	callsIssued := 0 // tool calls the model made in this turn (run or not)
+	stallNudges := 0  // "announced an action and stopped" reminders (max 2 per turn)
+	emptyResends := 0 // silent resends of a request that came back empty (max acEmptyResends)
+	callsIssued := 0  // tool calls the model made in this turn (run or not)
 	editedCode, lastDenied := false, false
 	nudgedDeadline := false // per run (not reset on handoff): the wrap-up nudge is appended once
 	textConts, callTruncs, stopHooks := 0, 0, 0
 	boostOut := false // the last reply was cut: the next request asks for more output (cutoff.go)
-	a.recent = nil
+	a.recent, a.badCalls = nil, nil
+	emptyRetried := false // one silent re-ask per turn for a `bash {}`-style call (argfix.go)
 	// lean budget: hard stop at 2x the step budget (budget.go)
 	maxSteps := a.bgStepLimit(a.stepLimit())
 	compactFailStep := -100 // a failed proactive compaction is retried 5 steps later, not every step
 
 turnLoop:
 	for step := 1; ; step++ {
+		if saveErr := a.sess.Err(); saveErr != nil {
+			return StopError, saveErr
+		}
 		if ctx.Err() != nil {
 			a.append(Message{Role: "user", Content: "<system-reminder>The user interrupted the previous response.</system-reminder>"})
 			stop = StopInterrupted
@@ -503,6 +555,8 @@ turnLoop:
 		a.obStep(step, turnModel)
 		if a.rcTakeReset(lt, step) { // a handoff replaced the history (agent_recover.go)
 			nudgedVerify, nudgedTodo, nudgedEmpty, nudgedFake = false, false, false, false
+			emptyResends = 0
+			stallNudges = 0
 			lastDenied, textConts, callTruncs, compactFailStep = false, 0, 0, -100
 			a.bgOnReset() // fresh context: exploration cap and reread index start over (budget.go)
 		}
@@ -514,7 +568,7 @@ turnLoop:
 		}
 		if why := a.overBudget(); why != "" {
 			a.ui.Warn("limite do turno atingido: " + why)
-			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Stop now: give your final answer with what was done and what is left. Do not call any more tools.</system-reminder>"})
+			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Pare agora: responda com o que foi feito e o que falta, sem chamar mais ferramentas.</system-reminder>"})
 			stop = StopStepLimit
 			return stop, nil
 		}
@@ -542,7 +596,11 @@ turnLoop:
 		if pre != nil {
 			resp, used = pre, turnModel
 		} else {
-			resp, used, err = a.chatWithFallback(ctx, turnModel, acChatOpt{noToolUse: atLimit, stream: true, boost: boost})
+			opt := acChatOpt{noToolUse: atLimit, stream: true, boost: boost}
+			if chat && !boost {
+				opt.maxOut = acChatOut // a conversation reply is short (chatlane.go)
+			}
+			resp, used, err = a.chatWithFallback(ctx, turnModel, opt)
 		}
 		if used != "" {
 			if used != a.Model && used != turnModel {
@@ -602,6 +660,9 @@ turnLoop:
 				a.append(Message{Role: "assistant", Content: ccPartialNote(r, err), Reasoning: r.Reasoning, PartialCalls: r.ToolCalls})
 				a.append(Message{Role: "user", Content: "<system-reminder>The previous response stream failed before it finished.</system-reminder>"})
 			}
+			if toolsRun > 0 && !a.sub { // work already done in this turn: say it is kept, in PT (obs.go)
+				a.ui.Notice(a.obHandoffPT(err))
+			}
 			stop = StopError
 			return stop, err
 		}
@@ -612,6 +673,17 @@ turnLoop:
 
 		calls := resp.ToolCalls
 		text := strings.TrimSpace(resp.Text) // bug 65: never store whitespace-only text
+		if atLimit && len(calls) == 0 && text != "" {
+			// the forced final answer came back as one more call written as text
+			// (video-forge on 13/11: raw <tool_call> XML was the answer)
+			if tc, rest := parseTextToolCalls(text, a.knownTool, false); len(tc) > 0 {
+				text = strings.TrimSpace(rest)
+				if text == "" {
+					text = fmt.Sprintf("Parei no limite de passos antes de terminar. O próximo passo seria: %s %s. Para seguir daqui: jazz -c (ou jazz -p -c) — o trabalho feito até agora está salvo.", tc[0].Name, oneLine(toolDetail(tc[0].Name, tc[0].Args), 160))
+				}
+				resp.Text = text
+			}
+		}
 		if len(calls) == 0 && !atLimit && text != "" && a.cfg.ModelSettings(turnModel).Tools != "none" {
 			if tc, rest := parseTextToolCalls(text, a.knownTool, !a.textMode(turnModel)); len(tc) > 0 {
 				dbg("repair", map[string]any{"text_tool_calls": len(tc), "model": turnModel})
@@ -622,6 +694,15 @@ turnLoop:
 			if !a.mcp.Has(calls[i].Name) {
 				calls[i].Name = CanonicalTool(calls[i].Name)
 			}
+		}
+		// `bash {}`: a built-in call with no argument at all. Re-ask once per
+		// turn without putting the empty call or an error in the history; it
+		// does not count as a step (argfix.go).
+		if !emptyRetried && !atLimit && len(calls) > 0 && !resp.Truncated() && afAllEmpty(calls) {
+			emptyRetried = true
+			dbg("repair", map[string]any{"empty_args_retry": calls[0].Name, "model": turnModel})
+			step--
+			continue
 		}
 		// A write/edit cut inside its content: ask for the rest and splice it
 		// instead of throwing the work away (cutoff.go).
@@ -639,6 +720,22 @@ turnLoop:
 		// it; it is dropped, and the next request is not given more room to
 		// think (cutoff.go).
 		thinkCut := resp.Truncated() && len(calls) == 0 && text == "" && strings.TrimSpace(resp.Reasoning) != "" && a.ccEnabled()
+		// No text, no call, not cut: the provider streamed reasoning and then
+		// nothing (NVIDIA nemotron on the d610, 13/11: minutes of reasoning,
+		// empty content, the same request answers "ok" a minute later). Send
+		// the same request once more before nudging — the empty turn is not
+		// recorded, so the model does not see its own silence.
+		if !thinkCut && emptyResends < acEmptyResends && len(calls) == 0 && text == "" && !resp.Truncated() && ctx.Err() == nil {
+			emptyResends++
+			wait := acEmptyWait * time.Duration(emptyResends*emptyResends) // 3 s, 12 s, 27 s
+			dbg("empty", map[string]any{"retry": emptyResends, "reasoning": len(resp.Reasoning), "stop": resp.Stop, "usage": resp.Usage, "refusal": resp.Refusal, "partial": resp.Partial, "model": turnModel})
+			a.ui.Notice(fmt.Sprintf("o provedor devolveu resposta vazia — repetindo o pedido em %s (%d/%d)", wait, emptyResends, acEmptyResends))
+			select {
+			case <-ctx.Done():
+			case <-time.After(wait):
+			}
+			continue
+		}
 		if thinkCut {
 			dbg("cutoff", map[string]any{"reasoning_only": len(resp.Reasoning)})
 			a.append(Message{Role: "assistant", Content: ""})
@@ -711,8 +808,36 @@ turnLoop:
 			if text == "" && !nudgedEmpty {
 				nudgedEmpty = true
 				dbg("nudge", "empty")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your last reply was empty. Continue the task, or give your final answer.</system-reminder>"})
+				// the same model went empty after the resends: without a pin the
+				// router tries the next candidate for the nudge (Hermes:
+				// deterministic empties go to the fallback)
+				if a.acPin("main") == "" {
+					if a.stalled == nil {
+						a.stalled = map[string]time.Time{}
+					}
+					a.stalled[turnModel] = time.Now()
+				}
+				a.append(Message{Role: "user", Content: "<system-reminder>Sua última resposta veio vazia. Continue a tarefa ou dê a resposta final.</system-reminder>"})
 				continue
+			}
+			// Second empty reply in a row (the provider streamed garbage reasoning and no text,
+			// eval v2 task 02 on the d610, 12/11): never end the turn as "done" in silence.
+			if text == "" {
+				dbg("empty", map[string]any{"calls": callsIssued})
+				if callsIssued == 0 {
+					stop = StopError
+					return stop, fmt.Errorf("o modelo %s devolveu resposta vazia duas vezes seguidas e não fez nada — tente de novo ou escolha outro modelo (-m)", turnModel)
+				}
+				// a change request that went silent before changing anything
+				// is not done (eval 02 on the d610, 13/11: 9 reads, then empty
+				// x4, reported "done")
+				if bt := a.bgTurnState(); bt != nil && !bt.edited && acChangeKind(bt.task.Kind) {
+					stop = StopError
+					return stop, fmt.Errorf("o modelo %s parou no meio: depois de %d %s devolveu só respostas vazias e não mudou nada — tente de novo (jazz -p -c continua daqui) ou escolha outro modelo (-m)", turnModel, callsIssued, uiPl(callsIssued, "ferramenta", "ferramentas"))
+				}
+				if !a.sub {
+					a.ui.Notice("o modelo parou sem resumo final — o que ele fez neste turno está acima")
+				}
 			}
 			// Anti-fake guard: a final answer claiming actions with no tool call
 			// in the whole turn is a pretend reply; nudge once, then flag it.
@@ -720,6 +845,7 @@ turnLoop:
 				if !nudgedFake {
 					nudgedFake = true
 					dbg("nudge", "fake_action")
+					a.acKeepAnswer(text) // -p keeps the answer the nudge reopens (answer.go)
 					a.append(Message{Role: "user", Content: "<system-reminder>" + fakeActionNudge + "</system-reminder>"})
 					continue
 				}
@@ -727,16 +853,28 @@ turnLoop:
 				stop = StopUnverified
 				return stop, nil
 			}
+			// Stall guard (ported from Hermes Agent): a short reply that ends by
+			// announcing the next action ("agora vou rodar os testes.") with no
+			// call is the model stopping mid-task, not a final answer.
+			if stallNudges < 2 && a.cfg.ModelSettings(turnModel).Tools != "none" && acAnnouncesAction(text) && !a.obDeadlineWarned() {
+				stallNudges++
+				dbg("nudge", "stall")
+				a.acKeepAnswer(text)
+				a.append(Message{Role: "user", Content: "<system-reminder>" + stallNudge + "</system-reminder>"})
+				continue
+			}
 			if open := a.openTodos(); open != "" && !nudgedTodo && !a.sub && !a.obDeadlineWarned() {
 				nudgedTodo = true
 				dbg("nudge", "todo")
-				a.append(Message{Role: "user", Content: "<system-reminder>Your todo list still has unfinished items:\n" + open + "\nContinue working on them, or update the list (mark items completed or remove ones that are no longer needed) and explain why.</system-reminder>"})
+				a.acKeepAnswer(text)
+				a.append(Message{Role: "user", Content: "<system-reminder>A lista de tarefas ainda tem itens abertos:\n" + open + "\nContinue neles, ou atualize a lista (marque como feito ou tire o que não precisa mais) dizendo por quê. " + acGateAnswerNote + "</system-reminder>"})
 				continue
 			}
 			if editedCode && !nudgedVerify && a.cfg.VerifyNudge() && !a.obDeadlineWarned() {
 				nudgedVerify = true
 				dbg("nudge", "verify")
-				a.append(Message{Role: "user", Content: "<system-reminder>You changed code but did not run anything afterwards. If this project can be built, tested, linted or run, verify your change now with bash and fix any problem you caused. If verification isn't possible, say so in one line and finish.</system-reminder>"})
+				a.acKeepAnswer(text)
+				a.append(Message{Role: "user", Content: "<system-reminder>Você mudou código e não rodou nada depois. Se dá para compilar, testar ou rodar, verifique agora com bash e corrija o que quebrou; se não dá, diga isso numa frase e termine. " + acGateAnswerNote + "</system-reminder>"})
 				continue
 			}
 			if steer := a.takeSteer(); len(steer) > 0 {
@@ -752,14 +890,17 @@ turnLoop:
 				if hr.Block && strings.TrimSpace(hr.Reason) != "" {
 					stopHooks++
 					a.ui.Notice("hook pediu pra continuar: " + oneLine(hr.Reason, 120))
+					a.acKeepAnswer(text)
 					a.append(Message{Role: "user", Content: "<system-reminder>A Stop hook asked you to continue:\n" + hr.Reason + "</system-reminder>"})
 					continue
 				}
 			}
 			if !lastDenied { // --until / --review (agent_loop.go)
 				if again, why := a.acStopGate(ctx, lt); again {
+					a.acKeepAnswer(text) // quality checklist, auto-review, --until, --verifier (answer.go)
 					continue
 				} else if why != "" {
+					a.acGateFailed() // -p prints the kept answer with the gate reply (answer.go)
 					stop = why
 					return stop, nil
 				}
@@ -801,9 +942,14 @@ turnLoop:
 			fan = a.saFanoutAt(ctx, step, calls, i, fan)
 			out, ran, denied, pre := fan.take(tc.ID)
 			if !pre {
-				a.ptIdx = i
-				out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
-				a.ptIdx = -1
+				if o, short := a.acBadCallShort(tc); short { // identical call already refused by validation (argfix.go)
+					out = o
+				} else {
+					a.ptIdx = i
+					out, ran, denied = a.obExecTool(ctx, step, tc) // execTool + write-ahead + audit (obs.go)
+					a.ptIdx = -1
+					a.acBadCallSeen(tc, out)
+				}
 			}
 			if ran {
 				toolsRun++
@@ -870,14 +1016,19 @@ turnLoop:
 					continue turnLoop // handed off to a clean context
 				}
 				a.ui.Warn("o modelo entrou em loop (mesma chamada 6×) — parei o turno")
-				a.append(Message{Role: "user", Content: "<system-reminder>You were stuck repeating the same tool call. The turn was stopped. Next time, change approach.</system-reminder>"})
+				a.append(Message{Role: "user", Content: "<system-reminder>Você ficou repetindo a mesma chamada e o turno foi parado. Na próxima, mude de abordagem.</system-reminder>"})
 				stop = StopLoop
 				return stop, nil
 			}
+			// a byte-identical big result already in context is not repeated
+			// (Hermes tool_guardrails): a short reference saves the window
+			if rep >= 2 && len(out.Text) >= acStubMin && tc.Name != "read" {
+				out.Text = acStubResult(tc, out.Text)
+			}
 			if rep >= 3 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You have made this exact call %d times with the same result. Stop repeating it: change your approach, or give the final answer.</system-reminder>", rep)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Esta mesma chamada já foi feita %d vezes com o mesmo resultado. Pare de repetir: mude a abordagem ou dê a resposta final.</system-reminder>", rep)
 			} else if per > 1 && cyc >= 2 {
-				out.Text += fmt.Sprintf("\n\n<system-reminder>You are repeating a cycle of %d tool calls (%d times in a row, same results). Stop looping: change your approach, or give the final answer.</system-reminder>", per, cyc)
+				out.Text += fmt.Sprintf("\n\n<system-reminder>Você está repetindo um ciclo de %d chamadas (%d vezes seguidas, mesmos resultados). Saia do laço: mude a abordagem ou dê a resposta final.</system-reminder>", per, cyc)
 			}
 			out.Text += a.acSteeringNote(tc, out)  // fileMatch steering, once per rule
 			out.Text += a.dcHintNote(tc, out)      // API error on a pinned library: point to the docs tool (docs.go)
@@ -964,6 +1115,11 @@ func argPath(raw string) string {
 			return s
 		}
 	}
+	// a dirty key ("path Metall") the tool itself repairs (argfix.go): the
+	// subagent path lock and steering must see the same path it writes
+	if s, ok := afRepair("edit", m)["path"].(string); ok {
+		return s
+	}
 	return ""
 }
 
@@ -972,6 +1128,18 @@ var codeExt = map[string]bool{".go": true, ".py": true, ".js": true, ".ts": true
 	".cs": true, ".scala": true, ".zig": true, ".ex": true, ".exs": true, ".mjs": true, ".cjs": true, ".vue": true, ".svelte": true, ".dart": true, ".pl": true}
 
 func isCodeFile(p string) bool { return codeExt[strings.ToLower(filepath.Ext(p))] }
+
+// acStubMin: results at least this big are replaced by a reference when the
+// same call returned the same bytes before.
+const acStubMin = 512
+
+// acStubResult keeps the first and last line (the exit code lives there) and
+// points at the earlier identical result.
+func acStubResult(tc ToolCall, text string) string {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	first, last := oneLine(lines[0], 160), oneLine(lines[len(lines)-1], 160)
+	return fmt.Sprintf("[Same result as your previous identical call (%s %s): %d chars, byte-for-byte unchanged, so it is not repeated here — read it above.]\nfirst line: %s\nlast line: %s", tc.Name, oneLine(toolDetail(tc.Name, tc.Args), 80), len(text), first, last)
+}
 
 func hashCall(name, args, result string) string {
 	h := sha256.Sum256([]byte(name + "\x00" + args + "\x00" + result))
@@ -1030,13 +1198,17 @@ type acChatOpt struct {
 	maxOut    int       // cap on MaxTokens (0 = model limit)
 	boost     bool      // after a cutoff: raise MaxTokens toward the provider limit (cutoff.go)
 	quiet     bool      // no "usando X" notices (compaction)
+	avoid     string    // a ref the chain must skip (the pin the user just declined)
 	label     string    // spinner label
 	role      string    // router role: main | compact | sub (omni)
 }
 
+// limiter is the rate-limit policy of every request this agent makes: the
+// limiter state of the config (ratelimit.go) unless a test replaced
+// DefaultLimiter.
 func (a *Agent) limiter() Limiter {
 	if DefaultLimiter == nil {
-		return noopLimiter{}
+		return rlLimiter{a.cfg}
 	}
 	return DefaultLimiter
 }
@@ -1101,6 +1273,7 @@ func (a *Agent) buildRequest(ref, mid string, o acChatOpt) ChatRequest {
 	if msgs == nil {
 		msgs = a.Msgs
 	}
+	msgs = cvApply(msgs) // context_view: old tool results as stubs (off by default; ctxview.go)
 	if !a.cfg.SupportsImages(ref) {
 		msgs = acStripImages(msgs, ref)
 	}
@@ -1163,26 +1336,57 @@ const acInteractiveFirstByte = 20 * time.Second
 
 // chatWithFallback sends one request with retries and the model fallback chain
 // (G4). It returns the model actually used, which stays sticky for the turn.
+// A pinned model that fails (with its configured fallback) is never swapped
+// in silence: interactive asks, headless returns acPinError (router_pin.go).
 func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt) (*ChatResponse, string, error) {
-	role := o.role
-	if role == "" {
-		role = "main"
-		if a.sub {
-			role = "sub"
-		}
+	resp, used, err := a.acChain(ctx, model, o)
+	if err == nil || ctx.Err() != nil {
+		return resp, used, err
 	}
+	if pin := a.acPin(a.acRole(o)); pin != "" && acPinSwappable(resp, err) {
+		return a.acPinFailed(ctx, pin, o, used, err)
+	}
+	return resp, used, err
+}
+
+// acRole is the router role of a request (main | compact | sub | …).
+func (a *Agent) acRole(o acChatOpt) string {
+	if o.role != "" {
+		return o.role
+	}
+	if a.sub {
+		return "sub"
+	}
+	return "main"
+}
+
+// acChain walks the candidate chain once: the state of every candidate is
+// read again right before it is tried (a quota 429 cools the whole provider
+// mid-chain), and the requested model never leaves the chain unannounced.
+func (a *Agent) acChain(ctx context.Context, model string, o acChatOpt) (*ChatResponse, string, error) {
+	role := a.acRole(o)
+	pin := a.acPin(role)
 	maxOut := a.outCap(model, o)
-	need := Need{Tokens: a.estTokens() + maxOut, Tools: !a.textMode(model), Role: role, Prefer: model}
+	need := Need{Tokens: a.estTokens() + maxOut, Tools: !a.textMode(model), Role: role, Prefer: model, Pin: pin}
 	refs := []string{model, a.Model}
 	if role == "compact" && (a.cfg.Omni.Enabled || isOmniRef(a.Model)) {
 		refs = append(refs, "omni/long")
 	}
-	cands := a.acDemoteStalled(a.ojOrder(role, a.bgOrderCands(a.cfg.CandidatesFor(need, refs...))))
-	if a.FastFirst && role == "main" && model == a.Model {
-		cands = a.acFastFirst(cands)
+	var cands []string
+	if pin != "" {
+		// the user's choice: no reordering by scores, judge or speed
+		cands = a.cfg.CandidatesFor(need, refs...)
+	} else {
+		cands = a.acDemoteStalled(a.ojOrder(role, a.bgOrderCands(a.cfg.CandidatesFor(need, refs...))))
+		if a.FastFirst && role == "main" && model == a.Model {
+			cands = a.acFastFirst(cands)
+		}
 	}
 	if len(cands) == 0 {
 		cands = []string{model}
+	}
+	if pin == "" && !o.quiet {
+		a.acAnnounceDrop(model, cands, need)
 	}
 	lim := a.limiter()
 	label := o.label
@@ -1225,11 +1429,37 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 	}
 	var lastPartial *ChatResponse // output of a stream that failed, kept if nothing better comes (cutoff.go)
 	why := ""                     // why the previous candidate was left (shown with the next one)
+	sent := false                 // a request already went out in this chain
+	waitBudget := acWaitBudget(a.Interactive || a.NetOffline)
+chain:
 	for ci, ref := range cands {
-		if ok, wait := lim.Allow(ref); !ok && ci+1 < len(cands) {
-			lastErr, lastRef = fmt.Errorf("%s: limite de uso (libera em %s)", ref, wait.Round(time.Second)), ref
-			noteFail(ref, lastErr)
+		if ref == o.avoid {
 			continue
+		}
+		// PROV-3: state read again per candidate, with the real size
+		st := a.cfg.pvState(ref, need.Tokens)
+		limOK, _ := lim.Allow(ref)
+		if ref == pin {
+			if st.Dead || st.TooBig {
+				a.acPinStateWarn(ref, st, o.quiet) // never dropped: said, then tried
+			}
+		} else if !limOK || acCandDown(st) {
+			switch {
+			case a.acUsableAfter(cands[ci+1:], need, lim, o.avoid):
+				dbg("route", map[string]any{"skip": ref, "why": st.Why, "dead": st.Dead, "toobig": st.TooBig, "wait_s": st.Wait.Seconds()})
+				if why == "" {
+					why = uiShortModel(ref) + ": " + acStateWhy(st) // said with the next one
+				}
+				continue
+			case sent:
+				// everything left is down too: no request per dead ref
+				if !o.quiet {
+					a.ui.Warn("os outros modelos da fila também estão indisponíveis (" + uiShortModel(ref) + ": " + acStateWhy(st) + ") — parei aqui pra não gastar pedido à toa; mais opções: /key openrouter ou jazz omni setup")
+				}
+				break chain
+			case acEarliest(cands[ci:], need, a.cfg, o.avoid) != 0:
+				continue // all down: only the one that frees up first gets a request
+			}
 		}
 		pname, mid := SplitModel(ref)
 		prov, err := a.cfg.NewProvider(pname)
@@ -1255,9 +1485,18 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 			}
 			cctx = WithFirstByte(ctx, fb)
 		}
-		if ph, ok := a.ui.(uiPhaser); ok && !o.quiet {
+		{
 			r := ref
-			cctx = WithPhase(cctx, func(p string) { ph.Phase(r, p) })
+			ph, phOK := a.ui.(uiPhaser)
+			phOK = phOK && !o.quiet
+			cctx = WithPhase(cctx, func(p string) {
+				if p == "gerando" {
+					a.obFirstByte() // first_byte_ms of request.end (obs.go)
+				}
+				if phOK {
+					ph.Phase(r, p)
+				}
+			})
 		}
 		if ci > 0 && !o.quiet {
 			// say why the model changed and to what (honest fallback)
@@ -1271,8 +1510,9 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		triedText, netWaits := false, 0
 		toolRetried := false // the one rejected-tool-call retry this ref gets
 		var repairNote string
+		var waited time.Duration // PROV-5: backoff spent on this ref
 	attempts:
-		for attempt := 0; attempt < 6; attempt++ {
+		for attempt := 0; attempt < acMaxAttempts; attempt++ {
 			req := a.buildRequest(ref, mid, o)
 			if repairNote != "" { // rejected tool call: retry once with the exact names
 				req.Messages = append(append([]Message(nil), req.Messages...), Message{Role: "user", Content: repairNote})
@@ -1298,7 +1538,8 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 				}
 			}
 			tReq := time.Now()
-			a.obReqStart(ref, ci, attempt) // obs.go
+			sent = true
+			a.obReqStart(ref, ci, attempt, model, pin != "") // obs.go
 			resp, err := prov.Chat(cctx, req, fn)
 			a.obReqEnd(ref, ci, attempt, resp, err)
 			a.rdNotice() // first redacted secret: one-time notice (redact.go)
@@ -1319,8 +1560,17 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 					return nil, ref, &RefusalError{Ref: ref, Reason: why}
 				}
 				a.priceUsage(ref, &resp.Usage)
-				if ci > 0 && !o.quiet {
-					a.ui.Notice(fmt.Sprintf("usando %s por enquanto (o modelo principal volta a ser tentado em %s)", ref, acStickyTTL.Round(time.Second)))
+				a.rtServe(ref)
+				if !o.quiet && role == "main" && ref != a.Model {
+					// served != requested: always said (H2, UX-5) — a failure
+					// once per turn, a reorder (fast first, sticky) once per
+					// session, so a working route is not a line on every turn
+					pair := "served:" + a.Model + ">" + ref
+					if ci > 0 && a.rtOnce(pair) {
+						a.ui.Notice(fmt.Sprintf("usando %s por enquanto (o modelo principal volta a ser tentado em %s)", ref, acStickyTTL.Round(time.Second)))
+					} else if ci == 0 && !a.rtOnceTurnSaid(pair) && a.rtOnceSession(pair) {
+						a.ui.Notice(fmt.Sprintf("respondendo com %s (seu modelo: %s)", uiShortModel(ref), uiShortModel(a.Model)))
+					}
 				}
 				return resp, ref, nil
 			}
@@ -1389,24 +1639,44 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 					a.ui.Notice(ref + " não aceita tools nativas — usando tools em modo texto")
 					continue
 				}
-				if ae.Daily {
-					MarkExhausted(ref, acResetTime(ae))
-					a.ui.Warn(fmt.Sprintf("%s: cota diária esgotada", ref))
+				switch kind := pvClassify(err); kind {
+				case "gone", "auth", "toomanytools":
+					// waiting never fixes these on this ref (retired model,
+					// refused key, too many tools for the provider): the
+					// limiter recorded it (gone/auth persist) — next candidate
+					msg := acKindWarn(ref, kind, ae)
+					if ci+1 < len(cands) {
+						why = msg
+					} else if !o.quiet {
+						a.ui.Warn(msg)
+					}
 					break attempts
 				}
-				if ae.Status == 401 || ae.Status == 403 {
-					a.ui.Warn(fmt.Sprintf("%s recusou a credencial (%d)", pname, ae.Status))
-					break attempts // next candidate
+				if ae.Daily {
+					MarkExhausted(ref, acResetTime(ae))
+					msg := uiShortModel(ref) + ": cota diária esgotada"
+					if ae.Quota {
+						msg = uiShortModel(ref) + ": a cota grátis do provedor acabou"
+						if ae.RetryAfter > 0 {
+							msg += " (volta em ~" + rcDur(ae.RetryAfter) + ")"
+						}
+					}
+					if ci+1 < len(cands) {
+						why = msg
+					} else if !o.quiet {
+						a.ui.Warn(msg)
+					}
+					break attempts
 				}
 				if ae.Status == 400 || ae.Status == 404 || ae.Status == 402 || ae.Status == 422 {
-					a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+					a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 					break attempts
 				}
 				if !ae.Retryable() {
 					// classified as "try another model" (413 too big, model gone,
 					// no tool support …): RetryDelay 0 means next candidate now
 					if ci+1 < len(cands) && a.retryWait(err, attempt) == 0 {
-						a.ui.Warn(fmt.Sprintf("%s: %s", ref, firstSentence(ae.Error())))
+						a.ui.Warn(fmt.Sprintf("%s: HTTP %d: %s", ref, ae.Status, pvPlainErr(ae.Body)))
 						break attempts
 					}
 					return acPartialOnly(resp), ref, wrapFail(ref, err)
@@ -1455,7 +1725,18 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 			if wait > 20*time.Second && ci+1 < len(cands) {
 				break // a long wait: try the next model now
 			}
-			a.ui.Notice(fmt.Sprintf("%s: %s — tentando de novo em %s", ref, firstSentence(err.Error()), wait.Round(time.Second)))
+			if waited+wait > waitBudget {
+				// PROV-5: the wait budget of this ref is spent (the limiter
+				// already cooled it): next candidate, or the error — never
+				// minutes of silent backoff
+				dbg("route", map[string]any{"budget": ref, "waited_s": waited.Seconds(), "next_s": wait.Seconds()})
+				if ci+1 < len(cands) {
+					why = uiShortModel(ref) + ": " + acRetryWhy(err) + " — desisti de esperar"
+				}
+				break
+			}
+			waited += wait
+			a.ui.Notice(fmt.Sprintf("%s: %s — tentando de novo em %s (%d/%d)", uiShortModel(ref), acRetryWhy(err), wait.Round(time.Second), attempt+2, acMaxAttempts))
 			select {
 			case <-ctx.Done():
 				return nil, ref, ctx.Err()
@@ -1467,6 +1748,39 @@ func (a *Agent) chatWithFallback(ctx context.Context, model string, o acChatOpt)
 		lastErr = errors.New("nenhum modelo disponível — configure uma chave (/key) ou faça login (/login)")
 	}
 	return lastPartial, model, wrapFail(lastRef, lastErr)
+}
+
+// acMaxAttempts bounds the requests to one ref in one chain.
+const acMaxAttempts = 6
+
+// acEOLDateRE pulls the retirement date out of a 410 ("reached its end of
+// life on 2026-10-28").
+var acEOLDateRE = lazyRx(`(?i)end[ -]of[ -]life (?:on|at) (\d{4})-(\d\d)-(\d\d)`)
+
+// acKindWarn says in PT-BR why ref left the chain for a class that waiting
+// never fixes (pvClassify: gone, auth, toomanytools).
+func acKindWarn(ref, kind string, ae *APIError) string {
+	short := uiShortModel(ref)
+	switch kind {
+	case "gone":
+		if m := acEOLDateRE.FindStringSubmatch(ae.Body); m != nil {
+			return fmt.Sprintf("%s foi aposentado pelo provedor em %s/%s — tirei do rodízio", short, m[3], m[2])
+		}
+		return short + " foi aposentado/removido pelo provedor — tirei do rodízio"
+	case "auth":
+		prov, _ := SplitModel(ref)
+		if ae.Status == 403 && !pvBadKeyRE.MatchString(ae.Body) {
+			return fmt.Sprintf("%s recusou acesso a %s (403) — %s; tirei esse modelo do rodízio por 6 h", prov, short, pvPlainErr(ae.Body))
+		}
+		return fmt.Sprintf("%s recusou a credencial (%d) — %s; confira com /key %s", prov, ae.Status, pvPlainErr(ae.Body), prov)
+	case "toomanytools":
+		n := ""
+		if m := pvTooManyToolsRE.FindStringSubmatch(ae.Body); m != nil {
+			n = " (máx. " + m[1] + ")"
+		}
+		return short + " não aceita tantas ferramentas num pedido" + n
+	}
+	return fmt.Sprintf("%s: HTTP %d: %s", short, ae.Status, pvPlainErr(ae.Body))
 }
 
 // acPartialOnly keeps a reply that failed mid-stream (text and cut tool calls
@@ -1569,6 +1883,9 @@ func (a *Agent) execGate(ctx context.Context, tc ToolCall) (_ ToolCall, o ToolOu
 		a.ui.ToolEnd(tc.ID, tc.Name, o, 0)
 		return o
 	}
+	if saveErr := a.sess.Err(); saveErr != nil {
+		return tc, refuse("TOOL_NOT_STARTED: "+saveErr.Error(), "sessão não salva"), false, false
+	}
 	if !isMCP && strings.HasPrefix(tc.Name, "mcp__") {
 		return tc, refuse(fmt.Sprintf("MCP tool %q is not available (server not connected).", tc.Name), "MCP indisponível"), false, false
 	}
@@ -1651,6 +1968,8 @@ func (a *Agent) execBody(ctx context.Context, tc ToolCall) (ToolCall, ToolOutput
 		out = a.runTask(ctx, tc)
 	case tc.Name == "ask_user" && !isMCP:
 		out = a.runAskUser(ctx, tc)
+	case tc.Name == factToolName && !isMCP:
+		out = a.runFact(ctx, tc) // the offline brain as a read-only tool (brain_tool.go)
 	case tc.Name == ojSidekickTool && !isMCP && a.ojFusionActive():
 		out = a.ojRunSidekick(ctx, tc)
 	case isMCP:
@@ -1782,7 +2101,19 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 				a.blockWhy = why
 				return false, a.nlDenied(nlGatePrivate, blockMsg(what, why)), true
 			}
-			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+". Use Jazz's built-in configuration or session features instead."), true
+			return false, a.nlDenied(nlGatePrivate, "Blocked: "+why+"; no flag unlocks it (not --allow-unsandboxed or --yolo). Use Jazz's built-in configuration or session features instead."), true
+		}
+	}
+	if tool == "bash" && !isMCP && cmd != "" {
+		// a password inside the command (sudo -S, askpass, piped su) would sit
+		// in the transcript, the approval and the audit: jazz asks for it
+		// masked instead (consent.go nlElevate). Hard gate, every mode.
+		if why := nlPasswordInCommand(cmd); why != "" {
+			a.blockWhy = "senha dentro do comando (" + why + "): use sudo puro, o jazz pede a senha mascarada"
+			if a.blockUX() {
+				return false, a.nlDenied(nlGateCredCmd, blockMsg(what, "it hands a password to sudo/su inside the command ("+why+"), which would put it in the transcript and the audit log")), true
+			}
+			return false, a.nlDenied(nlGateCredCmd, "Blocked: the command hands a password to sudo/su inside it ("+why+")."), true
 		}
 	}
 	dec, rule := a.Perms.Check(tool, args)
@@ -1814,12 +2145,18 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// mode, HIGH asks except under yolo's explicit opt-in, a clean target never
 	// prompts
 	btHigh := ""
+	repoAsk := false // a setup script of a repo the user named: always a question (user_repo.go)
 	if tool == "bash" && !isMCP && cmd != "" {
 		var btCrit string
 		if btCrit, btHigh = btCheckWithSupply(a.tools.lockDir(), cmd, a.cfg.EgressAllow, func(nested, nestedCwd string) string {
 			why, _ := a.sgCheckCommandIn(ctx, nested, dec == PermAllow, nestedCwd)
 			return why
-		}); btCrit != "" {
+		}); btCrit != "" && !a.sub {
+			if repo := urRequestedRepo(ctx, a.tools.lockDir(), btCrit, a.Msgs); repo != "" {
+				btHigh, repoAsk, btCrit = "script do repositório que você pediu ("+repo+") — "+btCrit+"; rodar só se você confia nesse repositório", true, ""
+			}
+		}
+		if btCrit != "" {
 			if a.blockUX() {
 				a.blockWhy = btCrit
 				return false, a.nlDenied(nlGateHostile, blockMsg(what, "the build target or script it runs is hostile: "+btCrit)), true
@@ -1830,22 +2167,29 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	mode := a.mode()
 	autoRule := "" // why a call that some mode would confirm runs without a prompt (audit)
 	// menor intervenção (caps.go): writing /etc, the kernel, system binaries or
-	// container-engine/WSL configuration is CRITICAL — except in yolo, where the
-	// user already opted into low-level system work explicitly, or under an
-	// audited session grant of the system-ops class (consent.go)
+	// container-engine/WSL configuration is CRITICAL. It is a question to the
+	// user (applied after the other checks below), not a dead end: the user's
+	// explicit yes, an allow rule naming the command or path, an audited
+	// session grant of system-ops (consent.go) or "a" remembered for this
+	// binary/directory covers it. yolo is the user's opt-in and skips it. A
+	// disproportionate action for a container task (the Podman reinstall that
+	// cost the first external user his setup) always asks and is never
+	// remembered nor covered by a grant.
+	critReason, critGate, critRule := "", "", ""
 	if !isMCP && mode != "yolo" {
 		goal := ""
 		if a.oj != nil {
 			goal = a.oj.input
 		}
 		if crit := cbMinimalIntervention(tool, args, cmd, goal); crit != "" {
-			if r := a.nlConsentRule(nlGateSysOps, tool, args, cmd, isMCP); r != "" {
-				autoRule = r
-			} else if a.blockUX() {
-				a.blockWhy = crit
-				return false, a.nlDenied(nlGateSysOps, blockMsg(what, crit)), true
-			} else {
-				return false, a.nlDenied(nlGateSysOps, "Blocked: "+crit+". Do not retry it or work around it: do the task inside the project, or tell the user what they would have to change themselves."), true
+			critReason, critGate = crit, nlGateSysOps
+			if tool == "bash" && cbDisproportionate(goal, cmd) != "" || cbContainerGoal(goal) {
+				critGate = nlGateDisprop
+			} else if dec == PermAllow {
+				critRule = a.Perms.CoversCritical(tool, args, func(seg string) bool { return cbSegCritical(seg) != "" })
+			}
+			if u := cbUndoHint(tool, args, cmd); u != "" && critGate == nlGateSysOps {
+				critReason += "; " + u
 			}
 		}
 	}
@@ -1880,7 +2224,34 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 	// bypasses the fence (outside-root targets) and HIGH build-target findings.
 	// What still gates: prompt-injection suspicion and sensitive egress —
 	// content-driven risks consent cannot cover — plus CRITICAL blocks above.
-	if mode == "yolo" && injReason == "" && !sensitiveEgress {
+	usWhy := ""
+	if !isMCP && usWanted(tool, args) {
+		if sr := usSecretRead(cmd); sr != "" {
+			// hard gate, every mode: outside the sandbox nothing hides the
+			// secret (unsandboxed.go)
+			a.blockWhy = usSecretBlockPT(sr)
+			if a.blockUX() {
+				return false, a.nlDenied(nlGatePrivate, blockMsg(what, usSecretBlockEN(sr))), true
+			}
+			return false, a.nlDenied(nlGatePrivate, "Blocked: "+usSecretBlockEN(sr)+"."), true
+		}
+		if a.sub {
+			return false, "A subagent may not leave the OS sandbox. Report what should be run instead.", false
+		}
+		if !usAllow {
+			// outside the sandbox: a question every time, also in yolo (unsandboxed.go)
+			usWhy, repoAsk = "roda FORA do sandbox do sistema, sem isolamento (lê e escreve onde o seu usuário pode)", true
+		}
+	}
+	skillWhy := ""
+	if !isMCP && !a.sub {
+		if p := a.urSkillWrite(tool, args, cmd); p != "" {
+			// an installed skill runs in every session: changing it always asks
+			// (also in yolo), never remembered (user_repo.go)
+			skillWhy, repoAsk = "altera uma skill instalada ("+p+"): skills rodam em toda sessão — se a skill tem um bug, o certo é avisar o dono dela", true
+		}
+	}
+	if mode == "yolo" && injReason == "" && !sensitiveEgress && !repoAsk {
 		return true, "", false
 	}
 	if mode == "plan" {
@@ -1908,6 +2279,20 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			whyEN = "it is a destructive or dangerous command (" + why + ")"
 			if nlSudoCmd(cmd) && DangerReason(nlStripSudo(cmd)) == "" {
 				gate = nlGateSudo // sudo é o único risco: o que roda como root é benigno
+				if sr := nlHostSecret(cmd); sr != "" {
+					// as root on the host the sandbox no longer hides ~/.ssh or
+					// /etc/shadow: a secret read, never covered by a grant
+					reason, gate = why+"; "+sr, nlGateSecret
+					whyEN = "it would read credentials as root, outside the sandbox (" + sr + ")"
+				} else if dec == PermAllow {
+					// an allow rule that names this sudo command (not the
+					// tool-wide `bash`) is the user's explicit yes — the same
+					// rule CoversCritical applies to modprobe & co.; a CRITICAL
+					// segment below still needs its own rule
+					if r := a.Perms.CoversCritical(tool, args, nlSudoCmd); r != "" {
+						reason, need, whyEN, autoRule = "", false, "", "perm:"+r
+					}
+				}
 			}
 			if c, tg := tbDangerClass(cmd); c != "" {
 				apClass, apTarget, apLabel = c, tg, c+": "+tg
@@ -1972,6 +2357,29 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		need, gate = isMCP && mode == "ask", nlGatePrompt
 		whyEN = "ask mode needs the user's approval"
 	}
+	if critReason != "" {
+		switch {
+		case critGate == nlGateDisprop:
+			if reason != "" {
+				critReason += "; " + reason
+			}
+			reason, need, gate = critReason, true, nlGateDisprop
+			whyEN = "it is out of proportion for the user's container task (" + critReason + ")"
+			apClass = ""
+		case critRule != "" && (reason == "" || gate == nlGateSudo || gate == nlGateSysOps):
+			reason, need, autoRule = "", false, "perm:"+critRule // the user named this command/path in a rule
+		case reason == "" || gate == nlGateSudo || gate == nlGateSysOps:
+			reason, need, gate = critReason, true, nlGateSysOps
+			whyEN = "it changes the system outside the project, as root (" + critReason + ")"
+			apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+			if tg, lb := cbCritTarget(tool, args, cmd); tg != "" {
+				apClass, apTarget, apLabel = "sysops", tg, lb
+			}
+		default:
+			reason = critReason + "; " + reason // two risks in one call: the other gate stays, nothing is remembered
+			need, apClass = true, ""
+		}
+	}
 	if sensitiveEgress {
 		// Sensitive input egress always gets a fresh, scoped confirmation. Never
 		// inherit yolo, a permission rule, or an earlier remembered approval.
@@ -1999,7 +2407,12 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 			apClass, apTarget, apLabel = "fence", target, "alvo exato fora do projeto: "+target
 		}
 	} else if fenceReason != "" {
-		apClass = "" // two risks in one call: remembering one must not skip the other
+		// two risks in one call: remembering one must not skip the other —
+		// except a system path outside the project, where the fence and the
+		// critical write are the same target ("a" remembers it by directory)
+		if out := a.fenceCheck(tool, args, cmd, isMCP); apClass != "sysops" || fencePriv || cbSysPath(out) == "" {
+			apClass = ""
+		}
 	}
 	if injReason != "" || hook.ask {
 		apClass = "" // a suspected injection or a hook that asks: never answered from the store
@@ -2051,6 +2464,27 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		if r := a.nlConsentRule(gate, tool, args, cmd, isMCP); r != "" {
 			need, autoRule = false, r
 		}
+	}
+	if usWhy != "" {
+		if reason != "" {
+			reason = usWhy + "; " + reason
+		} else {
+			reason = usWhy
+		}
+		gate, whyEN = nlGateHigh, "it runs outside the OS sandbox (unisolated); in a -p run the user opts in with --allow-unsandboxed or JAZZ_ALLOW_UNSANDBOXED=1"
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+	}
+	if skillWhy != "" {
+		if reason != "" && !strings.Contains(reason, skillWhy) {
+			reason = skillWhy + "; " + reason
+		} else {
+			reason = skillWhy
+		}
+		gate, whyEN = nlGateHigh, "it changes an installed skill, which runs in every session; report a bug in the skill to the user instead of patching it silently"
+		apClass, apTarget, apLabel, apOnAllow = "", "", "", false
+	}
+	if repoAsk {
+		need, autoRule = true, "" // never covered by yolo, a grant or a remembered approval
 	}
 	if mode == "smart" && !need && dec != PermAllow && !hook.approve && !strings.HasPrefix(autoRule, "consent:") {
 		need = a.smartNeedsPrompt(ctx, tool, args, cmd, fetchURL, isMCP, jobKill)
@@ -2165,7 +2599,7 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 		if a.blockWhy == "" {
 			switch {
 			case a.UntrustedBash && tool == "bash":
-				a.blockWhy = "pasta não confiável: só comandos de leitura rodam sem confirmação"
+				a.blockWhy = "pasta não confiável: só comandos de leitura rodam sem confirmação (rode `jazz trust` nesta pasta, ou passe --allow-tools)"
 			case a.Headless:
 				a.blockWhy = "precisa de confirmação e o modo -p não pergunta"
 			default:
@@ -2285,10 +2719,10 @@ Decisions taken and why.
 Ordered, concrete.
 ## Critical Context
 Exact file paths, function names, commands, error messages, values and URLs needed to continue.
+## Unverified
+Assumptions and hypotheses not yet confirmed by a command or a test.
 
 Preserve exact file paths, function names and error messages. Be dense; no filler.%s</system-reminder>`
-
-const droppedHistoryNote = "(The earlier part of this conversation no longer fit in the context window and was dropped without a summary. If something important seems to be missing, ask the user.)"
 
 // Compact summarizes older messages, keeping roughly the last 20k tokens verbatim.
 // The summary request reuses the live prefix byte-for-byte so it hits the prompt
@@ -2331,7 +2765,8 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 	}
 	dbg("compact", map[string]any{"cut": cut, "msgs": len(a.Msgs), "model": a.TurnModel()})
 	ask := Message{Role: "user", Content: fmt.Sprintf(compactPrompt, extra)}
-	head := a.Msgs[:cut]
+	orig := a.Msgs[:cut]
+	head := chPrune(orig) // old tool output to head+tail first: a smaller, cheaper summary call (compact_harden.go)
 	var summary string
 	for round := 0; ; round++ {
 		prefix := append(append([]Message{}, head...), ask)
@@ -2354,12 +2789,14 @@ func (a *Agent) Compact(ctx context.Context, focus string) error {
 		// The prefix itself overflows (bug 36): shrink it and try again.
 		head = acShrinkHistory(head, round)
 		if head == nil || round >= 3 {
-			summary = droppedHistoryNote
-			a.ui.Warn("não deu pra resumir o histórico antigo (estouro de contexto) — ele foi descartado")
+			// never drop the history blind: a deterministic digest instead
+			summary = acDigestHistory(orig)
+			a.ui.Warn("o histórico antigo não coube pra resumir — fica um resumo automático (pedidos, arquivos e comandos)")
 			break
 		}
 	}
-	kept := append([]Message{{Role: "user", Content: "<summary>\n" + summary + "\n</summary>\n<system-reminder>The earlier part of this conversation was compacted into the summary above. Continue from where it left off.</system-reminder>"}}, a.Msgs[cut:]...)
+	summary += chAnchors(orig, strings.HasPrefix(summary, "(No model summary")) // the user's own words and the touched files, never left to the model
+	kept := append([]Message{{Role: "user", Content: "<summary>\n" + summary + "\n</summary>\n" + chAfterNote}}, a.Msgs[cut:]...)
 	offset := cut - 1 // Msgs[cut] lands at index 1
 	if len(kept) > 1 && kept[1].Role == "user" {
 		offset = cut // merged into the summary message
@@ -2507,7 +2944,8 @@ func (a *Agent) TokenEstimate() int { return a.estTokens() }
 // SetModel switches the primary model and records it in the session.
 func (a *Agent) SetModel(ref string) {
 	a.Model, a.turnModel = ref, ""
-	a.FastFirst = false // the user chose: no reordering
+	a.FastFirst = false            // the user chose: no reordering
+	a.cfg.Pinned = !isOmniRef(ref) // …and that choice is a contract (router_pin.go)
 	a.sess.Model(ref)
 }
 
@@ -2541,6 +2979,7 @@ func (a *Agent) LoadSessionAt(si SessionInfo, at string) error {
 	a.h2ResumeNotice(sess)
 	a.obAttach("resume") // obs.go
 	a.loop.goal = acLoadGoal(si.Path)
+	a.hgOwn = hgLoadOwnTests(si.Path, a.tools.Root)
 	if model != "" && a.cfg.HasCreds(mustProvider(model)) {
 		a.Model = model
 	}
@@ -2608,6 +3047,7 @@ func (a *Agent) Fork(n int) (string, error) {
 	if a.loop.goal != "" {
 		acWriteGoal(s, a.loop.goal)
 	}
+	hgWriteOwnTests(s, a.hgOwn, a.tools.Root) // the agent's own tests stay its own (guard_honest.go)
 	// edits made after the fork point stay on disk; a later /rewind in the
 	// fork must not revert them, so drop (without restoring) their checkpoints
 	a.tools.DropTurnsFrom(n)

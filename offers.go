@@ -660,7 +660,10 @@ func (a *App) olWatch() {
 
 // FirstChoice is the model the next main request starts with, and the chain.
 func (a *Agent) FirstChoice() (string, []string) {
-	need := Need{Tools: !a.textMode(a.Model), Role: "main", Prefer: a.Model}
+	// the same chain the request walks: a pinned model has no implicit
+	// reserve ("4 modelos na fila de reserva" under -m was a promise the
+	// router does not keep)
+	need := Need{Tools: !a.textMode(a.Model), Role: "main", Prefer: a.Model, Pin: a.acPin("main")}
 	cands := a.acDemoteStalled(a.bgOrderCands(a.cfg.CandidatesFor(need, a.Model)))
 	if a.FastFirst {
 		cands = a.acFastFirst(cands)
@@ -686,9 +689,13 @@ func (a *App) startLine() string {
 		parts = append(parts, fmt.Sprintf("~%.0f s por resposta", s.MS/1000))
 	}
 	var bad []string
-	for _, r := range append([]string{first}, chain...) {
+	refs := chain // chain[0] is first: listing both said the same model twice
+	if len(refs) == 0 {
+		refs = []string{first}
+	}
+	for _, r := range refs {
 		if until, dead := ExhaustedUntil(r); dead {
-			bad = append(bad, uiShortModel(r)+" sem cota até "+until.Format("15:04"))
+			bad = append(bad, uiShortModel(r)+" sem cota até "+uiClockAt(until, time.Now()))
 		} else if n, last, _ := rlInfo(r); n >= 3 && last != "" {
 			bad = append(bad, uiShortModel(r)+" falhando ("+oneLine(last, 40)+")")
 		}
@@ -707,7 +714,7 @@ func (a *App) startLine() string {
 	if !a.ol.forced && !a.opts.offline && !olForcedEnv() {
 		cfg, ref := a.cfg, a.agent.Model
 		safeGo(func() {
-			if !olProbe(cfg, ref) {
+			if olStartNoNet(cfg, ref) {
 				a.ui.AsyncNotice("sem rede agora (a sonda não alcançou os provedores) — se continuar, o jazz entra no modo offline sozinho; atalhos e !comando funcionam")
 			}
 		})

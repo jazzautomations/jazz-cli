@@ -161,10 +161,6 @@ type Limiter interface {
 	Report(ref string, err error)
 }
 
-type noopLimiter struct{}
-
-func (noopLimiter) Allow(string) (bool, time.Duration) { return true, 0 }
-func (noopLimiter) Report(string, error)               {}
-
-// DefaultLimiter is the Limiter used by every Agent. nil behaves like a no-op.
-var DefaultLimiter Limiter = noopLimiter{}
+// DefaultLimiter replaces the Limiter of every Agent (tests). nil = the
+// config's limiter state (rlLimiter, ratelimit.go).
+var DefaultLimiter Limiter

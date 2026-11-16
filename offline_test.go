@@ -17,8 +17,6 @@ import (
 func TestOfflineErrorClassification(t *testing.T) {
 	yes := []error{
 		&APIError{Status: 0, Body: "dial tcp: lookup api.x: no such host"},
-		&APIError{Status: 401, Body: "bad key"},
-		&APIError{Status: 403, Body: "forbidden"},
 		&net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
 		&net.DNSError{Err: "no such host", Name: "api.x"},
 		fmt.Errorf("wrapped: %w", &net.DNSError{Err: "no such host", Name: "x"}),
@@ -31,8 +29,11 @@ func TestOfflineErrorClassification(t *testing.T) {
 			t.Errorf("%v should be offline-class", e)
 		}
 	}
-	no := []error{nil, context.Canceled, &APIError{Status: 429, Body: "slow down"}, &APIError{Status: 500}, &APIError{Status: 400, Body: "bad request"},
-		errStreamIdle, errors.New("contexto estourou")}
+	no := []error{nil, context.Canceled, &APIError{Status: 401, Body: "bad key"}, &APIError{Status: 403, Body: "forbidden"},
+		&APIError{Status: 429, Body: "slow down"}, &APIError{Status: 500}, &APIError{Status: 400, Body: "bad request"},
+		errStreamIdle, errors.New("contexto estourou"),
+		// tool_use_failed as an SSE error event mid-stream (status 0): the model's defect, not the network
+		&APIError{Status: 0, Body: "Failed to parse tool call arguments as JSON"}}
 	for _, e := range no {
 		if olIsOffline(e) {
 			t.Errorf("%v must not switch to offline mode", e)
@@ -111,8 +112,8 @@ func TestOfflineHeadlessForced(t *testing.T) {
 	}
 }
 
-// Every provider refuses (401): the run is rescued by the fast path instead of
-// exiting 1; a non-offline error (429) is not.
+// Every provider refuses (401): a refused key is not offline mode, but the
+// literal command line is still taken over instead of exiting 1.
 func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
@@ -122,15 +123,26 @@ func TestOfflineHeadlessFallbackAfterModelFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, err := h.ag.Run(ctx, "git status")
-	if err == nil || !olIsOffline(err) {
-		t.Fatalf("want an offline-class error, got %v", err)
+	if err == nil || olIsOffline(err) || !syProviderDown(err) {
+		t.Fatalf("want a provider-down (not offline) error, got %v", err)
 	}
 	res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "git status")
 	if res == nil || res.Status != StopDone || res.Status.ExitCode() != 0 {
 		t.Errorf("fallback: %+v", res)
 	}
-	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "git status"); res != nil {
-		t.Errorf("429 must not trigger the offline fallback: %+v", res)
+	// 429/5xx (no quota, provider down): only a literal command line is
+	// taken over — since 0.14 the offline side helps instead of dying mute
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "git status"); res == nil || res.Status != StopDone {
+		t.Errorf("429 + literal: the offline side answers: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 429}, "mostra o git status"); res != nil {
+		t.Errorf("429 + a sentence: not a literal, no takeover: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, &APIError{Status: 400, Body: "bad"}, "git status"); res != nil {
+		t.Errorf("a request error is not a provider outage: %+v", res)
+	}
+	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "mostra o git status"); res != nil {
+		t.Errorf("401 + a sentence: the key is the problem, not the network — no fast path: %+v", res)
 	}
 	if res := olHeadlessFallback(ctx, h.ag, h.ag.tools, &HeadlessUI{}, err, "refatora o parser para usar generics"); res != nil {
 		t.Errorf("no fast path, no rescue: %+v", res)
@@ -194,20 +206,24 @@ func TestOfflineInteractiveStateMachine(t *testing.T) {
 	if app.ol.forced || app.ol.on {
 		t.Errorf("/online with a reachable provider: %+v", app.ol)
 	}
-	// online, no git repo: the brain's deterministic "not a git repository"
-	// answer needs no model (level 0)
-	if handled, _ := app.olBefore(ctx, "git status"); !handled {
-		t.Error("online level 0: 'git status' outside a repo is a deterministic answer")
-	}
-	// a fast path the user declines (Esc) goes to the model unchanged when online
-	scGit(t, app.root, "init", "-q")
+	// online, no git repo: "git status" is not a literal here ({{git}} needs
+	// a repo) — the model reads the situation, not the brain
 	if handled, text := app.olBefore(ctx, "git status"); handled || text != "git status" {
-		t.Errorf("declined fast path: handled=%v text=%q", handled, text)
+		t.Errorf("online, no repo: handled=%v text=%q — the model's", handled, text)
 	}
-	// fastpaths off: no prompt at all
+	// in a repo the literal runs at once, read-only, no "⚡ atalho" prompt
+	scGit(t, app.root, "init", "-q")
+	if handled, _ := app.olBefore(ctx, "git status"); !handled {
+		t.Error("online literal git status in a repo runs without the model")
+	}
+	// fastpaths off: no literal either
 	app.cfg.FastPaths = "off"
+	app.sy.last = nil // (the result above would ride along as data)
 	if fpEnabled(app.cfg) {
 		t.Error("fastpaths off ignored")
+	}
+	if handled, text := app.olBefore(ctx, "git status"); handled || text != "git status" {
+		t.Errorf("fastpaths off: handled=%v text=%q", handled, text)
 	}
 }
 
@@ -241,34 +257,20 @@ func TestOfflineBannerMentionsTools(t *testing.T) {
 	}
 }
 
-// Online + interactive: a clearly understood read-only intent is answered
-// by the deterministic brain without a model call; everything else goes to
-// the model untouched; a declined fast path is respected.
-func TestOnlineInteractiveBrainLevel0(t *testing.T) {
+// Online + interactive: the MODEL owns the turn. The deterministic brain
+// used to answer "clearly understood" readings here and was confidently
+// wrong on real sessions ("ta ligado no wifi?" → uptime 0.98, "quem é
+// você" → a self_info dump); since 0.14 nothing but a literal command line
+// is intercepted online (synergy_test.go covers the field phrases).
+func TestOnlineInteractiveModelOwnsTurn(t *testing.T) {
 	app, h := olTestApp(t)
-	app.cfg.FastPaths = "off"
 	ctx := context.Background()
-	if handled, _ := app.olBefore(ctx, "quem é você"); !handled {
-		t.Error("self_info is level-0: the brain must answer online too")
-	}
-	if len(h.ag.pendingNote) == 0 || !strings.Contains(h.ag.pendingNote[len(h.ag.pendingNote)-1], "deterministic brain handled") {
-		t.Errorf("the model must be told what the brain did; notes=%v", h.ag.pendingNote)
-	}
-	for _, p := range []string{"refatora o parser para usar generics", "cria o arquivo x.txt", "apaga o arquivo x.txt"} {
+	for _, p := range []string{"quem é você", "explique o código", "refatora o parser para usar generics", "cria o arquivo x.txt", "apaga o arquivo x.txt"} {
 		if handled, text := app.olBefore(ctx, p); handled || text != p {
-			t.Errorf("%q: handled=%v text=%q — writes/unknown go to the model", p, handled, text)
+			t.Errorf("%q: handled=%v text=%q — online it goes to the model untouched", p, handled, text)
 		}
 	}
-	// interpretive intents ground the model instead of replacing it
-	h.ag.pendingNote = nil
-	if handled, text := app.olBefore(ctx, "explique o código"); handled || text != "explique o código" {
-		t.Errorf("explain goes to the model: handled=%v text=%q", handled, text)
-	}
-	if len(h.ag.pendingNote) == 0 || !strings.Contains(h.ag.pendingNote[0], "Deterministic facts") {
-		t.Errorf("explain: the brain's facts must reach the model as grounding; notes=%v", h.ag.pendingNote)
-	}
-	t.Setenv("JAZZ_BRAIN", "off")
-	if handled, _ := app.olBefore(ctx, "quem é você"); handled {
-		t.Error("JAZZ_BRAIN=off must send everything to the model")
+	if len(h.ag.pendingNote) != 0 {
+		t.Errorf("online the brain must not inject notes: %v", h.ag.pendingNote)
 	}
 }

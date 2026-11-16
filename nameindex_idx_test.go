@@ -184,3 +184,25 @@ func TestNiIdxLayoutSizes(t *testing.T) {
 		}
 	}
 }
+
+func TestNiIdxRejectsOverflowingLengths(t *testing.T) {
+	niIdxOn(t)
+	root := t.TempDir()
+	for _, sizes := range [][2]uint32{{^uint32(0), 1}, {1, ^uint32(0)}, {^uint32(0), ^uint32(0)}} {
+		h := niIdxHdr{Ver: niIdxVer, BOM: niIdxBOM, N: 1, RootLen: sizes[0], BlobLen: sizes[1]}
+		copy(h.Magic[:], niIdxMagic)
+		_, _, _, _, _, prefix, _ := niIdxLayout(1, 0, 0, 0)
+		raw := make([]byte, prefix)
+		copy(raw, niBytesOf([]niIdxHdr{h}))
+		path := niIdxPath(root)
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if niLoadIdx(root) != nil {
+			t.Fatalf("accepted corrupt lengths: %v", sizes)
+		}
+	}
+}

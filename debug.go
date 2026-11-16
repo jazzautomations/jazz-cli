@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ var pfDbg struct {
 	sse     int // SSE bytes logged since the last request/status event
 	sysSeen map[string]bool
 	ring    []string
+	fatal   string // the .fatal.txt handed to the runtime ("" = none)
 }
 
 func pfLogDir() string { return filepath.Join(dataDir(), "logs") }
@@ -59,11 +61,54 @@ func pfDebugStart() (string, error) {
 	}
 	// Fatal runtime errors (concurrent map writes, out of memory) cannot be
 	// recovered; at least keep their trace next to the debug log.
-	if f, err := os.OpenFile(strings.TrimSuffix(pfDbg.path, ".log")+".fatal.txt", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err == nil {
-		_ = debug.SetCrashOutput(f, debug.CrashOptions{})
+	// The file stays empty unless the runtime dies: pfDebugEnd removes it on a
+	// normal exit and pfPruneFatal removes the ones left by runs that are gone.
+	fp := strings.TrimSuffix(pfDbg.path, ".log") + ".fatal.txt"
+	if f, err := os.OpenFile(fp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err == nil {
+		if debug.SetCrashOutput(f, debug.CrashOptions{}) == nil {
+			pfDbg.fatal = fp
+		}
 		f.Close()
+		if pfDbg.fatal == "" {
+			os.Remove(fp)
+		}
 	}
 	return pfDbg.path, nil
+}
+
+// pfDebugEnd runs on every normal exit (main, pfQuit, pfExit): it releases the
+// crash output and removes the .fatal.txt when nothing fatal was written to it.
+func pfDebugEnd() {
+	if !pfDbg.mu.TryLock() { // a crash inside dbg may hold it: never block the exit
+		return
+	}
+	defer pfDbg.mu.Unlock()
+	if pfDbg.fatal == "" {
+		return
+	}
+	_ = debug.SetCrashOutput(nil, debug.CrashOptions{}) // Windows cannot remove an open file
+	if fi, err := os.Stat(pfDbg.fatal); err == nil && fi.Size() == 0 {
+		os.Remove(pfDbg.fatal)
+	}
+	pfDbg.fatal = ""
+}
+
+// pfPruneFatal removes the empty .fatal.txt of runs that are gone (an exit
+// that skipped pfDebugEnd). A live run keeps its file: its runtime holds it.
+func pfPruneFatal(d string, ents []os.DirEntry) {
+	for _, e := range ents {
+		n := e.Name()
+		if e.IsDir() || !strings.HasSuffix(n, ".fatal.txt") || filepath.Join(d, n) == pfDbg.fatal {
+			continue
+		}
+		base := strings.TrimSuffix(n, ".fatal.txt")
+		if pid, err := strconv.Atoi(base[strings.LastIndex(base, "-")+1:]); err == nil && (pid == os.Getpid() || procAlive(pid)) {
+			continue
+		}
+		if fi, err := e.Info(); err == nil && fi.Size() == 0 {
+			os.Remove(filepath.Join(d, n))
+		}
+	}
 }
 
 // pfOpenLog opens a new log file and prunes old ones. Caller holds pfDbg.mu.
@@ -98,6 +143,7 @@ func pfPruneLogs(d string) {
 			logs = append(logs, e.Name())
 		}
 	}
+	pfPruneFatal(d, ents)
 	sort.Strings(logs) // names start with a sortable timestamp
 	for len(logs) > pfLogKeep {
 		os.Remove(filepath.Join(d, logs[0]))
@@ -293,7 +339,7 @@ func pfCrashGuard() {
 }
 
 // pfExit is os.Exit, replaceable in tests.
-var pfExit = func(code int) { pfProfileStop(); os.Exit(code) }
+var pfExit = func(code int) { pfProfileStop(); pfDebugEnd(); os.Exit(code) }
 
 // pfCrash restores the terminal, kills children, writes dataDir()/crash-<ts>.txt
 // and exits with status 70. Only the first crash does the work.

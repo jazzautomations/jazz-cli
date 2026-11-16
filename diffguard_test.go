@@ -700,3 +700,27 @@ func TestDiffGuardSemgrepOptionFilename(t *testing.T) {
 		t.Fatalf("filename can become an option: %s", args)
 	}
 }
+
+// Installed dependencies are not the agent's change: never reviewed nor restored.
+func TestDgSkipsThirdPartyAndVenv(t *testing.T) {
+	for _, p := range []string{".venv/lib/python3.11/site-packages/x.py", "proj/node_modules/a/b.js", "lib/python3.11/site-packages/fsspec/fuse.py", "vendor/github.com/x/y.go", "a/__pycache__/m.pyc", "pkg.egg-info/PKG-INFO"} {
+		if !dgSkipPath(p) {
+			t.Errorf("%s must be skipped", p)
+		}
+	}
+	for _, p := range []string{"src/main.py", "build/ci.sh", "venvtools/x.py", "notas/cli.py"} {
+		if dgSkipPath(p) {
+			t.Errorf("%s is user code", p)
+		}
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".video-forge-tools", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".video-forge-tools", "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !dgInVenv(root, ".video-forge-tools/bin/activate") || dgInVenv(root, "src/x.py") {
+		t.Error("a venv of any name is detected by its pyvenv.cfg")
+	}
+}

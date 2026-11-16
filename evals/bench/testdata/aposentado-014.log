@@ -1,0 +1,3 @@
+· sessão 261112-102000-c3d4 · nvidia/z-ai/glm-5.3
+jazz: nvidia/z-ai/glm-5.3: o modelo foi aposentado/removido pelo provedor (Gone: The model 'z-ai/glm-5.3' has reached its end of life on 2026-10-28.) — escolha outro com /model
+jazz: execução incompleta (error) — trabalho salvo: checkpoint 1a2b3c4d5e6f · nota sessions/y.handoff.md

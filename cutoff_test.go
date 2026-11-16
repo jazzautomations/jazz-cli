@@ -198,7 +198,7 @@ func TestAgentCutWriteContinuationCap(t *testing.T) {
 		case n <= ccMaxConts:
 			return fakeResp{Text: fmt.Sprintf("x%d = %d\ny%d = ", n, n, n), Finish: "length"}
 		case n == ccMaxConts+1:
-			return fakeResp{Text: "vou escrever em partes"}
+			return fakeResp{Text: "não deu para escrever o arquivo inteiro de uma vez"}
 		}
 		return fakeResp{Text: "(end)"}
 	}, nil)

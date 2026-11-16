@@ -168,7 +168,7 @@ func TestNLGrantAudit(t *testing.T) {
 	h.ag.nlScanConsent("autorizo operações de baixo nível")
 	h.ag.nlScanConsent("root ana s3nha-exemplo")
 	audit := nlAudit(t)
-	for _, want := range []string{`"consent.grant"`, `"system-ops"`, `"user:nl"`, `"consent.credential"`, `"ana"`} {
+	for _, want := range []string{`"consent.grant"`, `"system-ops"`, `"user:nl"`, `"consent.credential_ignored"`} {
 		if !strings.Contains(audit, want) {
 			t.Errorf("audit must record %s", want)
 		}
@@ -259,46 +259,57 @@ func TestNLGoAhead(t *testing.T) {
 
 // ---------- 3. caminho de elevação ----------
 
-func TestNLCredentialCapture(t *testing.T) {
-	cases := []struct {
-		input, user, pass string
-	}{
-		{"root ana s3nha-exemplo", "ana", "s3nha-exemplo"},
-		{"a senha do sudo é s3cret!pw", "", "s3cret!pw"},
-		{"senha do root: abc12345", "", "abc12345"},
-		{"sudo senha minhaPass99", "", "minhaPass99"},
-		{"password: qwerty123", "", "qwerty123"},
-	}
-	for _, c := range cases {
+// Senha colada no chat: sai do texto (nlCredScrub), entra na redação de toda
+// saída, e NÃO vira credencial — o jazz avisa e pede mascarada quando o sudo
+// precisar. Antes ela era usada, e as formas que o scrub não pegava ("sudo X",
+// "tenta com X no sudo") iam cruas pro provedor e pro audit (85 ocorrências).
+func TestChatPasswordScrubbedButNotUsed(t *testing.T) {
+	for _, in := range []string{"root ana s3nha-exemplo", "a senha do sudo é s3cret!pw", "senha do root: abc12345", "sudo senha minhaPass99", "password: qwerty123"} {
 		h := newHarness(t, nil, nil)
-		h.ag.nlScanConsent(c.input)
-		cred := h.ag.nlCredFor()
-		if cred == nil || cred.pass != c.pass {
-			t.Errorf("%q: credential not captured (cred=%+v)", c.input, cred)
-			continue
+		got := h.ag.nlScanConsent(in)
+		if !strings.Contains(got, nlCredMark) {
+			t.Errorf("%q: the password must leave the text: %q", in, got)
 		}
-		if c.user != "" && cred.user != c.user {
-			t.Errorf("%q: user %q, want %q", c.input, cred.user, c.user)
+		if h.ag.nl.cred != nil || h.ag.nlHas(nlClassSystemOps) {
+			t.Errorf("%q: a chat password is neither a credential nor a grant: cred=%+v", in, h.ag.nl.cred)
 		}
-		if cred.via != "chat" {
-			t.Errorf("%q: via=%q", c.input, cred.via)
+		if !anyContains(h.ui.warns, "não cole senha no chat") {
+			t.Errorf("%q: the user must be told not to paste passwords: %v", in, h.ui.warns)
 		}
-		// dar a senha É consentimento de elevação
-		if !h.ag.nlHas(nlClassSystemOps) {
-			t.Errorf("%q: credential must imply the system-ops grant", c.input)
+		pass := strings.Fields(in)[len(strings.Fields(in))-1]
+		if r := redactSecrets("saída com " + pass + " no meio"); strings.Contains(r, pass) {
+			t.Errorf("%q: the value must be redacted everywhere after it was seen: %q", in, r)
 		}
 	}
-	// frases que NÃO são credencial
 	for _, s := range []string{"a senha é forte demais", "sudo sem senha", "qual a senha do wifi?", "senha do wifi da casa"} {
 		h := newHarness(t, nil, nil)
 		h.ag.nlScanConsent(s)
-		if h.ag.nl.cred != nil {
-			t.Errorf("%q: must not capture a credential: %+v", s, h.ag.nl.cred)
+		if len(h.ui.warns) != 0 {
+			t.Errorf("%q: not a password: %v", s, h.ui.warns)
 		}
 	}
 }
 
-func TestNLElevatedRunsSudoS(t *testing.T) {
+// askUI is recUI with the masked password prompt of the terminal UI.
+type askUI struct {
+	*recUI
+	answers []string
+	asked   int
+}
+
+func (u *askUI) AskSecret(ctx context.Context, label string) (string, bool) {
+	u.asked++
+	if len(u.answers) == 0 {
+		return "", false
+	}
+	a := u.answers[0]
+	u.answers = u.answers[1:]
+	return a, true
+}
+
+// Sudo that needs a password: the jazz asks it masked on the terminal and
+// feeds sudo -S on the host; the model only sees the command's output.
+func TestSudoPromptsMaskedNotModel(t *testing.T) {
 	var gotArgv []string
 	var gotStdin string
 	calls := 0
@@ -310,11 +321,12 @@ func TestNLElevatedRunsSudoS(t *testing.T) {
 		return "active (running)", 0, nil
 	})
 	h := newHarness(t, nil, nil)
-	h.ag.nlScanConsent("root ana s3nha-exemplo")
+	ui := &askUI{recUI: h.ui, answers: []string{"s3nha-exemplo"}}
+	h.ag.ui = ui
 
 	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo systemctl restart NetworkManager"})})
-	if calls != 1 {
-		t.Fatalf("elevated runner not invoked: %d", calls)
+	if calls != 1 || ui.asked != 1 {
+		t.Fatalf("one masked prompt, one elevated run: asked=%d calls=%d", ui.asked, calls)
 	}
 	if len(gotArgv) < 5 || gotArgv[0] != "sudo" || gotArgv[1] != "-S" {
 		t.Errorf("must run via sudo -S: %v", gotArgv)
@@ -325,30 +337,99 @@ func TestNLElevatedRunsSudoS(t *testing.T) {
 	if out.IsErr || !strings.Contains(out.Text, "active (running)") || !strings.Contains(out.Text, "[exit code 0]") {
 		t.Errorf("elevated output malformed: %+v", out)
 	}
-	if strings.Contains(out.Text, "s3nha-exemplo") || strings.Contains(out.Display.Summary, "s3nha-exemplo") {
-		t.Errorf("the password must never reach tool output: %+v", out)
+	// the second sudo of the session reuses it: no new prompt
+	h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo modprobe ipw2200"})})
+	if ui.asked != 1 || calls != 2 {
+		t.Errorf("the password is asked once per session: asked=%d calls=%d", ui.asked, calls)
 	}
 	audit := nlAudit(t)
 	if !strings.Contains(audit, `"elevated.exec"`) || !strings.Contains(audit, `"sudo -S"`) || !strings.Contains(audit, "systemctl restart NetworkManager") {
 		t.Errorf("elevated execution must be audited (who, what, evidence)")
 	}
-	if strings.Contains(audit, "s3nha-exemplo") {
-		t.Error("the password must NEVER reach the audit log")
+	for _, m := range h.ag.Msgs {
+		if strings.Contains(m.Content, "s3nha-exemplo") {
+			t.Error("the password reached the history")
+		}
+	}
+	if strings.Contains(audit, "s3nha-exemplo") || strings.Contains(out.Text, "s3nha-exemplo") {
+		t.Error("the password must NEVER reach the audit log or the tool output")
 	}
 }
 
-func TestNLSudoNoCredPedagogical(t *testing.T) {
+// A wrong password is asked again (sudo rejected it before running anything).
+func TestSudoWrongPasswordAsksAgain(t *testing.T) {
+	calls := 0
+	nlStubSudo(t, func(ctx context.Context, argv []string, dir string, env []string, stdin io.Reader, timeout time.Duration) (string, int, error) {
+		calls++
+		b, _ := io.ReadAll(stdin)
+		if string(b) != "certa\n" {
+			return "Sorry, try again.\nsudo: 1 incorrect password attempt", 1, fmt.Errorf("exit status 1")
+		}
+		return "ok", 0, nil
+	})
+	h := newHarness(t, nil, nil)
+	ui := &askUI{recUI: h.ui, answers: []string{"errada", "certa"}}
+	h.ag.ui = ui
+	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo apt update"})})
+	if out.IsErr || ui.asked != 2 || calls != 2 {
+		t.Errorf("wrong password → asked again and ran: asked=%d calls=%d %+v", ui.asked, calls, out)
+	}
+}
+
+// NOPASSWD/timestamp under an isolating sandbox: sudo still never runs in the
+// sandboxed shell ("no new privileges"); it goes to the host with sudo -n.
+func TestSudoPasswordlessUnderSandboxRunsOnHost(t *testing.T) {
+	var argv0 []string
+	nlStubSudo(t, func(ctx context.Context, argv []string, dir string, env []string, stdin io.Reader, timeout time.Duration) (string, int, error) {
+		argv0 = argv
+		return "ok", 0, nil
+	})
+	nlSudoProbe = func(ctx context.Context) error { return nil }
+	prev := sbActive.Load()
+	t.Cleanup(func() { sbActive.Store(prev) })
+	sbActive.Store(&Sandbox{Backend: sbBwrap, Bin: "/nonexistent/bwrap"})
+	h := newHarness(t, nil, nil)
+	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo -n true && echo ok"})})
+	if len(argv0) < 3 || argv0[0] != "sudo" || argv0[1] != "-n" || argv0[2] != "--" {
+		t.Fatalf("passwordless sudo under bwrap must run on the host with sudo -n: %v", argv0)
+	}
+	if out.IsErr || !strings.Contains(out.Text, "ok") {
+		t.Errorf("output: %+v", out)
+	}
+	// sudo -n that suddenly needs a password: re-probe and ask instead of failing
+	asked := 0
+	nlSudoRun = func(ctx context.Context, argv []string, dir string, env []string, stdin io.Reader, timeout time.Duration) (string, int, error) {
+		if argv[1] == "-n" {
+			return "sudo: a password is required", 1, fmt.Errorf("exit status 1")
+		}
+		asked++
+		return "ok2", 0, nil
+	}
+	ui := &askUI{recUI: h.ui, answers: []string{"pw-x"}}
+	h.ag.ui = ui
+	out = h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo modprobe ipw2200"})})
+	if asked != 1 || ui.asked != 1 || !strings.Contains(out.Text, "ok2") {
+		t.Errorf("expired timestamp must fall back to the masked prompt: runs=%d asked=%d %q", asked, ui.asked, out.Text)
+	}
+}
+
+// Without a terminal the next step is for the USER (sudo -v / NOPASSWD), on
+// the UI; the model is told not to retry and never to put a password in a
+// command.
+func TestHeadlessSudoNextStep(t *testing.T) {
 	nlStubSudo(t, func(ctx context.Context, argv []string, dir string, env []string, stdin io.Reader, timeout time.Duration) (string, int, error) {
 		t.Error("runner must not be invoked without a credential")
 		return "", 0, nil
 	})
 	h := newHarness(t, nil, nil)
 	h.ag.Headless = true
-	// com grant mas sem credencial, permit passa mas a execução ensina o caminho
 	h.ag.nlGrant(nlClassSystemOps, "test")
 	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo apt update"})})
-	if !out.IsErr || !strings.Contains(out.Text, "NOT RUN") || !strings.Contains(out.Text, "senha do sudo") {
-		t.Errorf("missing credential must produce the pedagogical NOT RUN: %+v", out)
+	if !out.IsErr || !strings.Contains(out.Text, "NOT RUN") || strings.Contains(out.Text, "senha do sudo é") || strings.Contains(out.Text, "themselves") {
+		t.Errorf("headless sudo: NOT RUN, never 'send the password in chat': %+v", out)
+	}
+	if !anyContains(h.ui.warns, "sudo -v") || !anyContains(h.ui.warns, "NOPASSWD") {
+		t.Errorf("the user gets the next step on the UI: %v", h.ui.warns)
 	}
 }
 
@@ -358,16 +439,17 @@ func TestNLCredentialRejected(t *testing.T) {
 		calls++
 		return "Sorry, try again.\nsudo: 1 incorrect password attempt", 1, fmt.Errorf("exit status 1")
 	})
+	t.Setenv("JAZZ_SUDO_PASS", "errada-123")
 	h := newHarness(t, nil, nil)
-	h.ag.nlScanConsent("root ana s3nha-exemplo")
+	h.ag.Headless = true
 	out := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo apt update"})})
 	if !out.IsErr || calls != 1 {
 		t.Fatalf("expected one failed elevation: out=%+v calls=%d", out, calls)
 	}
-	if !strings.Contains(out.Text, "credencial") {
+	if !strings.Contains(out.Text, "recusou a senha") {
 		t.Errorf("rejected credential must be flagged in the output: %q", out.Text)
 	}
-	// a segunda tentativa não roda o runner: pede a senha de novo
+	// a segunda tentativa não roda o runner
 	out2 := h.ag.nlExecMaybeElevated(context.Background(), ToolCall{Name: "bash", Args: jsonArgs(map[string]any{"command": "sudo apt update"})})
 	if calls != 1 || !strings.Contains(out2.Text, "NOT RUN") {
 		t.Errorf("a rejected credential must stop retrying: calls=%d %q", calls, out2.Text)
@@ -404,9 +486,10 @@ func TestNLSysOpsEndToEnd(t *testing.T) {
 		fakeResp{Text: "wifi reiniciado e driver recarregado"},
 	), func(c *Config) { c.NoVerifyNudge = true })
 	h.ag.Headless = true
+	t.Setenv("JAZZ_SUDO_PASS", "s3nha-exemplo") // -p: a senha vem do ambiente (a do chat não é usada)
 
-	// o usuário autoriza em linguagem natural e fornece a credencial
-	h.ag.nlScanConsent("arruma meu wifi. e eu autorizo operacoes de baixo nivel, pode torar caraio\nroot ana s3nha-exemplo")
+	// o usuário autoriza em linguagem natural
+	h.ag.nlScanConsent("arruma meu wifi. e eu autorizo operacoes de baixo nivel, pode torar caraio")
 	if err := h.run(t, "arruma meu wifi"); err != nil {
 		t.Fatal(err)
 	}

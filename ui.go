@@ -690,9 +690,11 @@ type TermUI struct {
 	// Approval/Ask key handshake (bugs 4, 11, 13, 41). While a WatchTurn runs it
 	// owns the key channel; a prompt sends a fresh channel on grabCh to receive
 	// keys and nil to release it. Keys never outlive the prompt that grabbed them.
-	grabCh    chan chan Key
-	watchDone chan struct{} // done channel of the running watcher; nil when none
-	leftover  []rune        // text typed during the last turn, not yet sent
+	grabCh     chan chan Key
+	watchDone  chan struct{} // done channel of the running watcher; nil when none
+	leftover   []rune        // text typed during the last turn, not yet sent
+	handBack   []Key         // text keys a guarded menu took as typing: replayed into the steering buffer on release
+	turnCancel func()        // cancels the running turn (WatchTurn); Ctrl+C at a prompt uses it
 
 	lastTool string // id of the last ToolStart (parallel calls)
 
@@ -1386,6 +1388,9 @@ func (u *TermUI) readLine(ctx context.Context, keys <-chan Key, prompt string, s
 		k, ok := uiReadKey(ctx, keys)
 		if !ok {
 			u.print("\n")
+			if k.Code == KCtrlD {
+				u.abortTurn()
+			}
 			return "", false
 		}
 		if time.Since(since) < uiApproveGrace {
@@ -1395,8 +1400,12 @@ func (u *TermUI) readLine(ctx context.Context, keys <-chan Key, prompt string, s
 		case KEnter:
 			u.print("\n")
 			return string(buf), true
-		case KEsc, KCtrlC:
+		case KEsc:
 			u.print("\n")
+			return "", false
+		case KCtrlC: // stops the turn, like Ctrl+C at the menu before this line
+			u.print("\n")
+			u.abortTurn()
 			return "", false
 		case KBackspace:
 			if len(buf) > 0 {
@@ -1478,7 +1487,7 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 		border = t.fg(cRed, 31)
 	}
 	canAlways := reason == "" || offer != ""
-	question := map[string]string{"bash": "Rodar este comando?", "write": "Escrever este arquivo?", "edit": "Aplicar esta edição?"}[tool]
+	question := map[string]string{"bash": "Rodar este comando?", "write": "Escrever este arquivo?", "edit": "Aplicar esta edição?", "modelo": "Trocar de modelo?"}[tool]
 	if question == "" {
 		question = "Usar " + uiToolLabel(tool) + "?"
 	}
@@ -1548,10 +1557,11 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	}
 	hint += " " + g.dot + " n/esc não " + g.dot + " e instruir " + g.dot + " v ver tudo"
 	sp := mnSpec{Tag: uiToolLabel(tool), Body: body, Title: question, Items: items, Color: border, Keys: hint,
-		Alt: map[rune]int{'n': apMenuNo}, Guard: true, Since: lastKey}
-	if typed != "" {
-		sp.Above = "  " + dim + g.arrow + " na fila: " + reset + oneLine(typed, 200)
-	}
+		Alt: map[rune]int{'n': apMenuNo}, Guard: true, Settle: true, Since: lastKey,
+		SettleOnly: map[int]bool{0: true, alwaysIdx: true}} // a letter typed into a sentence never approves a command
+	// the unfinished line typed before the box: still being typed, not queued
+	// (it is sent only by its Enter); what is typed in the box continues it
+	sp.Pending = typed
 	sp.View = func() string {
 		var b strings.Builder
 		for _, l := range uiWrap(full, max(w-6, 10)) {
@@ -1588,7 +1598,13 @@ func (u *TermUI) Approve(ctx context.Context, tool, detail, reason string) (Appr
 	u.StopThinking()
 	keys, release := u.grabKeys(ctx)
 	defer release()
-	switch i := u.menuKeys(ctx, keys, &sp); i {
+	i := u.menuKeys(ctx, keys, &sp)
+	if sp.aborted { // Ctrl+C/Ctrl+D: stop the whole turn, not just this call
+		summary(t.fg(cRed, 31), "não, turno interrompido")
+		u.abortTurn()
+		return Deny, ""
+	}
+	switch i {
 	case 0:
 		summary(t.fg(cGreen, 32), "sim")
 		return Allow, ""
@@ -1729,11 +1745,14 @@ func (u *TermUI) WatchTurn(cancel func(), steer func(string)) func() {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	nl := u.T.G().nl
+	cancel = sync.OnceFunc(cancel) // a prompt's Ctrl+C (abortTurn) and EOF may both cancel
 	u.mu.Lock()
 	buf := u.leftover
 	u.leftover = nil
 	u.watchDone = done
 	u.typed = uiTyped(buf, nl)
+	prevCancel := u.turnCancel
+	u.turnCancel = cancel
 	u.mu.Unlock()
 	keys := u.keys.Keys
 	save := func() {
@@ -1741,6 +1760,75 @@ func (u *TermUI) WatchTurn(cancel func(), steer func(string)) func() {
 		u.leftover = buf
 		u.typed = ""
 		u.mu.Unlock()
+	}
+	// handle applies one key typed outside a prompt (steering). replay: a
+	// text key handed back by a prompt (never Esc/Ctrl+C, never an offer pick).
+	handle := func(k Key, replay bool) {
+		// typing outside a prompt (steering): the next prompt waits
+		// for a pause before a single key counts as an answer (a replayed
+		// key was typed earlier: its time was already counted)
+		if !replay {
+			u.mu.Lock()
+			u.lastKey = time.Now()
+			u.mu.Unlock()
+		}
+		nb, ok := u.qKey(k, buf, steer != nil) // message queue (queue.go)
+		if buf = nb; ok {
+			u.mu.Lock()
+			u.typed = uiTyped(buf, nl)
+			u.mu.Unlock()
+			return
+		}
+		changed := true
+		switch k.Code {
+		case KEsc:
+			if len(buf) > 0 {
+				// Esc once clears the text typed ahead; the next one
+				// (with nothing typed) interrupts, like at the prompt
+				buf = nil
+				break
+			}
+			u.StopThinking()
+			u.Warn("interrompendo…")
+			cancel()
+			changed = false
+		case KCtrlC:
+			u.StopThinking()
+			u.Warn("interrompendo…")
+			cancel()
+			changed = false
+		case KEnter:
+			if s := strings.TrimSpace(string(buf)); s != "" && steer != nil {
+				steer(s)
+				buf = nil
+				u.Notice(u.T.G().arrow + " na fila pro agente: " + oneLine(s, 80))
+			}
+		case KAltEnter:
+			buf = append(buf, '\n')
+		case KBackspace:
+			if len(buf) > 0 {
+				buf = buf[:len(buf)-1]
+			}
+		case KCtrlU:
+			buf = nil
+		case KCtrlW:
+			buf = uiDelWord(buf)
+		case KRune:
+			if !replay && len(buf) == 0 && u.offerPick(k.R) {
+				changed = false
+				break
+			}
+			buf = append(buf, k.R)
+		case KPaste:
+			buf = append(buf, []rune(strings.ReplaceAll(strings.ReplaceAll(k.Text, "\r\n", "\n"), "\r", "\n"))...)
+		default:
+			changed = false
+		}
+		if changed {
+			u.mu.Lock()
+			u.typed = uiTyped(buf, nl)
+			u.mu.Unlock()
+		}
 	}
 	safeGo(func() {
 		defer close(done)
@@ -1757,6 +1845,15 @@ func (u *TermUI) WatchTurn(cancel func(), steer func(string)) func() {
 				return
 			case g := <-u.grabCh:
 				grab = g
+				if g == nil { // a prompt closed: the text typed in it goes on the line
+					u.mu.Lock()
+					back := u.handBack
+					u.handBack = nil
+					u.mu.Unlock()
+					for _, k := range back {
+						handle(k, true)
+					}
+				}
 			case k, ok := <-keys:
 				if !ok {
 					save()
@@ -1770,68 +1867,7 @@ func (u *TermUI) WatchTurn(cancel func(), steer func(string)) func() {
 					}
 					continue
 				}
-				// typing outside a prompt (steering): the next prompt waits
-				// for a pause before a single key counts as an answer
-				u.mu.Lock()
-				u.lastKey = time.Now()
-				u.mu.Unlock()
-				nb, ok := u.qKey(k, buf, steer != nil) // message queue (queue.go)
-				if buf = nb; ok {
-					u.mu.Lock()
-					u.typed = uiTyped(buf, nl)
-					u.mu.Unlock()
-					continue
-				}
-				changed := true
-				switch k.Code {
-				case KEsc:
-					if len(buf) > 0 {
-						// Esc once clears the text typed ahead; the next one
-						// (with nothing typed) interrupts, like at the prompt
-						buf = nil
-						break
-					}
-					u.StopThinking()
-					u.Warn("interrompendo…")
-					cancel()
-					changed = false
-				case KCtrlC:
-					u.StopThinking()
-					u.Warn("interrompendo…")
-					cancel()
-					changed = false
-				case KEnter:
-					if s := strings.TrimSpace(string(buf)); s != "" && steer != nil {
-						steer(s)
-						buf = nil
-						u.Notice(u.T.G().arrow + " na fila pro agente: " + oneLine(s, 80))
-					}
-				case KAltEnter:
-					buf = append(buf, '\n')
-				case KBackspace:
-					if len(buf) > 0 {
-						buf = buf[:len(buf)-1]
-					}
-				case KCtrlU:
-					buf = nil
-				case KCtrlW:
-					buf = uiDelWord(buf)
-				case KRune:
-					if len(buf) == 0 && u.offerPick(k.R) {
-						changed = false
-						break
-					}
-					buf = append(buf, k.R)
-				case KPaste:
-					buf = append(buf, []rune(strings.ReplaceAll(strings.ReplaceAll(k.Text, "\r\n", "\n"), "\r", "\n"))...)
-				default:
-					changed = false
-				}
-				if changed {
-					u.mu.Lock()
-					u.typed = uiTyped(buf, nl)
-					u.mu.Unlock()
-				}
+				handle(k, false)
 			}
 		}
 	})
@@ -1841,9 +1877,43 @@ func (u *TermUI) WatchTurn(cancel func(), steer func(string)) func() {
 		u.mu.Lock()
 		if u.watchDone == done {
 			u.watchDone = nil
+			u.turnCancel = prevCancel
+			u.leftover = uiApplyTyped(u.leftover, u.handBack) // a prompt released after the watcher stopped
+			u.handBack = nil
 		}
 		u.mu.Unlock()
 	}
+}
+
+// handBackTyped gives the keys a guarded menu took as typing back to the
+// line they belong to: the steering buffer of the running turn (replayed
+// when the prompt releases its keys), or the next prompt's editor when no
+// turn is running (text only: a pending Enter is never submitted).
+func (u *TermUI) handBackTyped(keys []Key) {
+	if len(keys) == 0 {
+		return
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.watchDone != nil {
+		u.handBack = append(u.handBack, keys...)
+		return
+	}
+	u.leftover = uiApplyTyped(u.leftover, keys)
+}
+
+// abortTurn stops the running turn from a prompt (Ctrl+C/Ctrl+D at an
+// approval or question): the same as Ctrl+C while a tool runs.
+func (u *TermUI) abortTurn() {
+	u.mu.Lock()
+	c := u.turnCancel
+	u.mu.Unlock()
+	if c == nil {
+		return
+	}
+	u.StopThinking()
+	u.Warn("interrompendo…")
+	c()
 }
 
 // uiTyped is the one-line, sanitized form of the text being typed.

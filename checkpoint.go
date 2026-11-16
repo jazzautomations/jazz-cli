@@ -43,7 +43,12 @@ var (
 	cpMaxFileSize int64 = 1 << 20
 	cpGitBin            = "git"
 	cpTimeout           = 60 * time.Second
-	cpIndexMaxAge       = 48 * time.Hour
+	// cpWalkTimeout bounds the untracked-file walk. On heavy roots (home
+	// dirs, trees without ignore rules) `ls-files --others` can take longer
+	// than the feature is worth; a walk this slow means per-turn snapshots
+	// are hopeless anyway, so fail fast instead of stalling the request.
+	cpWalkTimeout = 10 * time.Second
+	cpIndexMaxAge = 48 * time.Hour
 )
 
 var errCPTooMany = errors.New("too many files")
@@ -80,12 +85,66 @@ func (c *cpStore) disableLocked(reason string) {
 	}
 }
 
+// cpOffWide is why checkpoints are off in $HOME or /.
+const cpOffWide = "/undo não cobre bash aqui (pasta pessoal ou raiz) — rode dentro do projeto"
+
+// cpOffFile, in the checkpoint repo, keeps a "too many files" verdict for
+// cpOffTTL so each new run does not pay the scan again.
+const cpOffFile = "OFF"
+
+var cpOffTTL = 48 * time.Hour
+
+// cpWideRoot: root is the user's home or the filesystem root.
+func cpWideRoot(root string) bool {
+	clean := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+		}
+		return filepath.Clean(p)
+	}
+	r := clean(root)
+	if r == string(filepath.Separator) || filepath.Dir(r) == r {
+		return true
+	}
+	home, err := os.UserHomeDir()
+	return err == nil && home != "" && r == clean(home)
+}
+
+// cpOffPersisted returns the saved off reason while it is fresh ("" = none).
+func cpOffPersisted(gitDir string) string {
+	p := filepath.Join(gitDir, cpOffFile)
+	fi, err := os.Stat(p)
+	if err != nil {
+		return ""
+	}
+	if time.Since(fi.ModTime()) > cpOffTTL {
+		_ = os.Remove(p)
+		return ""
+	}
+	b, _ := os.ReadFile(p)
+	if why := strings.TrimSpace(string(b)); why != "" {
+		return why + " (lembrado; vale 48h)"
+	}
+	return "desligado (lembrado; vale 48h)"
+}
+
 func (c *cpStore) initLocked() error {
 	if c.off != "" {
 		return errors.New(c.off)
 	}
 	if c.ready {
 		return nil
+	}
+	// $HOME or / is no project: indexing it is a full scan of the user's
+	// files on every turn ("oi" in $HOME paid it). Decided before any git call.
+	if cpWideRoot(c.root) {
+		c.disableLocked(cpOffWide)
+		return errors.New(c.off)
+	}
+	c.gitDir = filepath.Join(dataDir(), "checkpoints", projectSlug(c.root)+".git")
+	if why := cpOffPersisted(c.gitDir); why != "" { // "too many files" from an earlier run, for 48h
+		c.disableLocked(why)
+		return errors.New(c.off)
 	}
 	git, err := exec.LookPath(cpGitBin)
 	if err != nil {
@@ -98,7 +157,6 @@ func (c *cpStore) initLocked() error {
 		c.disableLocked("git antigo demais (precisa de 2.25+): " + strings.TrimSpace(string(out)))
 		return errors.New(c.off)
 	}
-	c.gitDir = filepath.Join(dataDir(), "checkpoints", projectSlug(c.root)+".git")
 	if _, err := os.Stat(filepath.Join(c.gitDir, "HEAD")); err != nil {
 		if err := os.MkdirAll(filepath.Dir(c.gitDir), 0o700); err != nil {
 			c.disableLocked("init: " + err.Error())
@@ -211,8 +269,8 @@ func (c *cpStore) cmd(ctx context.Context, stdin []byte, args ...string) ([]byte
 
 // listZ streams NUL-separated paths from git, stopping (errCPTooMany) once
 // more than limit paths came out, so a huge tree is never walked to the end.
-func (c *cpStore) listZ(limit int, args ...string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cpTimeout)
+func (c *cpStore) listZ(timeout time.Duration, limit int, args ...string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := c.gitCmd(ctx, args...)
 	var stderr bytes.Buffer
@@ -264,6 +322,8 @@ func (c *cpStore) Snapshot() (string, error) {
 	if err != nil {
 		if errors.Is(err, errCPTooMany) {
 			c.disableLocked(fmt.Sprintf("mais de %d arquivos no projeto", cpMaxFiles))
+			// remembered: the next runs skip the scan that ends the same way
+			_ = os.WriteFile(filepath.Join(c.gitDir, cpOffFile), []byte(c.off), 0o600)
 		} else {
 			c.disableLocked("snapshot: " + err.Error())
 		}
@@ -273,11 +333,11 @@ func (c *cpStore) Snapshot() (string, error) {
 }
 
 func (c *cpStore) snapshotLocked() (string, error) {
-	cached, err := c.listZ(cpMaxFiles, "ls-files", "-z", "--cached")
+	cached, err := c.listZ(cpTimeout, cpMaxFiles, "ls-files", "-z", "--cached")
 	if err != nil {
 		return "", err
 	}
-	others, err := c.listZ(cpMaxFiles-len(cached), "ls-files", "-z", "--others", "--exclude-standard")
+	others, err := c.listZ(cpWalkTimeout, cpMaxFiles-len(cached), "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return "", err
 	}
@@ -457,7 +517,11 @@ func (t *Toolbox) cpSnapshot() string {
 	if c == nil {
 		return ""
 	}
+	t0 := time.Now()
 	tree, _ := c.Snapshot()
+	if debugOn {
+		dbg("checkpoint", map[string]any{"snapshot_ms": time.Since(t0).Milliseconds(), "ok": tree != ""})
+	}
 	return tree
 }
 
@@ -531,6 +595,17 @@ func (t *Toolbox) cpRestore(ts turnSnap) ([]string, error) {
 	}
 	sort.Strings(rels)
 	return paths, t.cp.Restore(ts.cpStart, rels)
+}
+
+// CheckpointOff is why /undo does not cover bash here ("" when it does).
+func (t *Toolbox) CheckpointOff() string {
+	c := t.checkpoints()
+	if c == nil || c.usable() {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.off
 }
 
 // BashTracked reports whether /undo and /rewind also cover changes made through bash.

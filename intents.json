@@ -37,6 +37,7 @@
     },
     {
       "name": "git_status",
+      "literal": ["git status", "git st", "git status (?:-s|--short|-sb|--short --branch)"],
       "cmd": "{{git}} status --short --branch",
       "patterns": [
         "git status|git st|status|status do git|status do repo|status do repositorio",
@@ -58,6 +59,7 @@
     },
     {
       "name": "last_commit",
+      "literal": ["git log -1", "git log -1 --stat", "git show"],
       "cmd": "{{git}} log -1 --stat",
       "patterns": [
         "(?:qual|qual e|qual foi|quem fez|quando foi)(?: o)? ultimo commit|(?:o )?ultimo commit|(?:mostra|mostre|me mostra|ver)(?: o)? ultimo commit",
@@ -67,6 +69,7 @@
     },
     {
       "name": "log_n",
+      "literal": ["git log -n ?(?P<n>\\d{1,3})", "git log --oneline -n ?(?P<n>\\d{1,3})"],
       "cmd": "{{git}} log --oneline -n {{n}}",
       "patterns": [
         "(?:(?:mostra|mostre|me mostra|ver|lista|quais sao|quais foram) )?(?:os )?ultimos (?P<n>\\d{1,3}) commits",
@@ -91,6 +94,7 @@
     },
     {
       "name": "untracked",
+      "literal": ["git status --untracked-files=all", "git status -u"],
       "cmd": "{{git}} status --short --untracked-files=all",
       "patterns": [
         "(?:tem|ha|existe)(?: algum| algums| alguns)? arquivos?(?: novos?)? (?:untracked|nao rastreados?|nao versionados?|fora do git)|(?:quais|que)(?: sao os)? arquivos (?:estao |tao )?(?:untracked|nao rastreados|nao versionados)|arquivos untracked|o que (?:ta|esta) untracked",
@@ -100,6 +104,7 @@
     },
     {
       "name": "commit_count",
+      "literal": ["git rev-list --count head"],
       "cmd": "{{git}} rev-list --count HEAD",
       "patterns": [
         "quantos commits (?:tem|ha|existem|ja tem|foram feitos)(?: (?:no|neste|nesse|aqui no) (?:repo|repositorio|projeto|branch))?|quantos commits|numero de commits",
@@ -108,6 +113,7 @@
     },
     {
       "name": "diff_file",
+      "literal": ["git diff (?P<path>[\\w.][\\w./-]*)"],
       "cmd": "{{git}} diff -- {{path}}",
       "patterns": [
         "(?:(?:mostra|mostre|me mostra|ver|show|show me) )?(?:o |the )?diff (?:do|da|de|of|for|in|no|na) (?:arquivo |file )?(?P<path>[\\w./-]+)",
@@ -181,6 +187,7 @@
     },
     {
       "name": "tracked_files",
+      "literal": ["git ls-files"],
       "cmd": "{{git}} ls-files",
       "patterns": [
         "(?:quais|que) arquivos (?:o git )?(?:ta|esta|tao|estao) (?:rastreando|rastreados|versionando|versionados|no git|sendo rastreados)(?: pelo git)?|arquivos (?:rastreados|versionados)(?: pelo git)?|git ls-files",
@@ -189,6 +196,7 @@
     },
     {
       "name": "last_commit_files",
+      "literal": ["git show --stat"],
       "cmd": "{{git}} show --stat --format='%h %an %ad %s' --date=short HEAD",
       "patterns": [
         "(?:quais|que) arquivos (?:mudaram|foram alterados|foram modificados|entraram|foram mexidos) (?:no|n[oa] meu) (?:ultimo|ultmo) commit|arquivos do ultimo commit|o que (?:mudou|entrou|foi alterado) no ultimo commit",
@@ -197,6 +205,7 @@
     },
     {
       "name": "log",
+      "literal": ["git log", "git log --oneline"],
       "cmd": "{{git}} log --oneline -n 15",
       "patterns": [
         "(?:os )?ultimos commits|git log|recent commits|(?:the )?last commits|historico(?: de commits| do git)?",
@@ -279,6 +288,48 @@
         "algo",
         "something"
       ]
+    },
+    {
+      "name": "sys_whoami",
+      "cmd": "whoami",
+      "patterns": [],
+      "literal": ["whoami"]
+    },
+    {
+      "name": "sys_pwd",
+      "cmd": "pwd",
+      "patterns": [],
+      "literal": ["pwd"]
+    },
+    {
+      "name": "sys_uptime",
+      "cmd": "uptime",
+      "patterns": [],
+      "literal": ["uptime"]
+    },
+    {
+      "name": "sys_df",
+      "cmd": "df -h",
+      "patterns": [],
+      "literal": ["df -h", "df"]
+    },
+    {
+      "name": "sys_free",
+      "cmd": "free -m",
+      "patterns": [],
+      "literal": ["free -m", "free"]
+    },
+    {
+      "name": "sys_tailscale",
+      "cmd": "tailscale status",
+      "patterns": [],
+      "literal": ["tailscale status"]
+    },
+    {
+      "name": "sys_docker",
+      "cmd": "docker ps",
+      "patterns": [],
+      "literal": ["docker ps"]
     }
   ]
 }

@@ -361,8 +361,9 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 		wantWarn string
 	}{
 		{401, `{"error":{"message":"bad key"}}`, "recusou a credencial (401)"},
-		{403, `{"error":{"message":"forbidden"}}`, "recusou a credencial (403)"},
-		{404, `{"error":{"message":"no such model"}}`, "fake/m1"},
+		{403, `{"error":{"message":"forbidden"}}`, "recusou acesso a m1 (403)"},
+		{403, `{"error":{"message":"invalid api key"}}`, "recusou a credencial (403)"},
+		{404, `{"error":{"message":"no such model"}}`, "m1 foi aposentado/removido"},
 		{400, `{"error":{"message":"invalid parameter foo"}}`, "fake/m1"},
 	}
 	for _, tc := range cases {
@@ -372,7 +373,12 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 					return fakeResp{Status: tc.status, Body: tc.body}
 				}
 				return fakeResp{Text: "from m2"}
-			}, func(c *Config) { c.Fallback = []string{"fake/m2"} })
+			}, func(c *Config) {
+				// m2 on another provider: a refused credential (401/403)
+				// takes the whole provider out of the chain (PROV-3)
+				c.Providers["fake2"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true}
+				c.Fallback = []string{"fake2/m2"}
+			})
 			t0 := time.Now()
 			if err := h.run(t, "go"); err != nil {
 				t.Fatalf("Run: %v", err)
@@ -396,7 +402,10 @@ func TestAgentAuthAndClientErrorsMoveToNextCandidate(t *testing.T) {
 func TestAgentAllCandidatesFailReturnsError(t *testing.T) {
 	h := newHarness(t, func(n int, r recReq) fakeResp {
 		return fakeResp{Status: 401, Body: `{"error":"nope"}`}
-	}, func(c *Config) { c.Fallback = []string{"fake/m2", "missing/x"} })
+	}, func(c *Config) {
+		c.Providers["fake2"] = &ProviderConf{Type: "openai", BaseURL: c.Providers["fake"].BaseURL, NoKey: true}
+		c.Fallback = []string{"fake2/m2", "missing/x"}
+	})
 	err := h.run(t, "go")
 	var ae *APIError
 	if err == nil || (!errors.As(err, &ae) && !strings.Contains(err.Error(), "missing")) {
@@ -444,16 +453,16 @@ func TestAgentLoopDetectionWarnsThenStops(t *testing.T) {
 	// request k (0-based) carries results of calls 1..k
 	for k := 1; k < len(reqs); k++ {
 		res := reqs[k].toolResults()[fmt.Sprintf("call_%d_0", k-1)]
-		warned := strings.Contains(res, "exact call")
+		warned := strings.Contains(res, "mesma chamada já foi feita")
 		if want := k >= 3; warned != want {
 			t.Errorf("call #%d: warned=%v want %v (%q)", k, warned, want, res)
 		}
-		if k >= 3 && !strings.Contains(res, fmt.Sprintf("%d times", k)) {
+		if k >= 3 && !strings.Contains(res, fmt.Sprintf("%d vezes", k)) {
 			t.Errorf("call #%d: warning should count repetitions: %q", k, res)
 		}
 	}
 	lm := lastMsg(h.ag.Msgs)
-	if lm.Role != "user" || !strings.Contains(lm.Content, "stuck repeating") {
+	if lm.Role != "user" || !strings.Contains(lm.Content, "ficou repetindo a mesma chamada") {
 		t.Errorf("last message should be loop reminder: %+v", lm)
 	}
 	if !anyContains(h.ui.warns, "loop") {
@@ -477,7 +486,7 @@ func TestAgentLoopDetectionCatchesAlternatingCycle(t *testing.T) {
 		t.Fatalf("ABAB loop should stop well before the step budget; requests=%d", len(reqs))
 	}
 	lm := lastMsg(h.ag.Msgs)
-	if lm.Role != "user" || !strings.Contains(lm.Content, "stuck repeating") {
+	if lm.Role != "user" || !strings.Contains(lm.Content, "ficou repetindo a mesma chamada") {
 		t.Errorf("last message should be loop reminder: %+v", lm)
 	}
 	if !anyContains(h.ui.warns, "loop") {
@@ -520,7 +529,7 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 	}
 	for _, r := range h.fs.requests() {
 		for _, c := range r.toolResults() {
-			if strings.Contains(c, "exact call") {
+			if strings.Contains(c, "mesma chamada já foi feita") {
 				t.Fatalf("false-positive loop warning: %q", c)
 			}
 		}
@@ -531,25 +540,69 @@ func TestAgentLoopDetectionNotTriggeredByDifferentResults(t *testing.T) {
 }
 
 func TestAgentEmptyReplyNudgedOnce(t *testing.T) {
-	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
-	if err := h.run(t, "go"); err != nil {
-		t.Fatal(err)
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, seq(fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	// empty: three silent resends, then one nudge, then an error in PT — never a silent "done"
+	err := h.run(t, "go")
+	if err == nil || !strings.Contains(err.Error(), "resposta vazia duas vezes") {
+		t.Fatalf("want the empty-reply error, got %v", err)
 	}
 	reqs := h.fs.requests()
-	if len(reqs) != 2 {
-		t.Fatalf("empty reply nudged exactly once => 2 requests, got %d", len(reqs))
+	if len(reqs) != 5 {
+		t.Fatalf("3 resends + one nudge => 5 requests, got %d", len(reqs))
 	}
-	if !reqs[1].contains("user", "Your last reply was empty") {
-		t.Errorf("nudge missing from 2nd request")
+	if reqs[3].contains("user", "última resposta veio vazia") || len(reqs[3].Messages) != len(reqs[0].Messages) {
+		t.Errorf("the resends must be the same request (the empty turn is not recorded)")
+	}
+	if !reqs[4].contains("user", "última resposta veio vazia") {
+		t.Errorf("nudge missing from 5th request")
 	}
 	n := 0
 	for _, m := range h.ag.Msgs {
-		if strings.Contains(m.Content, "Your last reply was empty") {
+		if strings.Contains(m.Content, "última resposta veio vazia") {
 			n++
 		}
 	}
 	if n != 1 {
 		t.Errorf("nudge count = %d", n)
+	}
+}
+
+// Work done, then the model goes empty twice: the turn keeps the work and says so in PT.
+func TestAgentEmptyReplyResendRecovers(t *testing.T) {
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, seq(fakeResp{}, fakeResp{Text: "ok"}), nil)
+	if err := h.run(t, "responda apenas: ok"); err != nil {
+		t.Fatal(err)
+	}
+	if lm := lastMsg(h.ag.Msgs); lm.Content != "ok" {
+		t.Errorf("final = %+v", lm)
+	}
+	for _, m := range h.ag.Msgs {
+		if m.Role == "assistant" && m.Content == "" && len(m.ToolCalls) == 0 {
+			t.Errorf("the empty reply must not stay in the history")
+		}
+	}
+}
+
+func TestAgentEmptyAfterWorkKeepsTurn(t *testing.T) {
+	ls := fakeCall{ID: "b1", Name: "bash", Args: `{"command":"echo oi"}`}
+	defer func(w time.Duration) { acEmptyWait = w }(acEmptyWait)
+	acEmptyWait = time.Millisecond
+	h := newHarness(t, seq(fakeResp{Calls: []fakeCall{ls}}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{}, fakeResp{Text: "never reached"}), nil)
+	if err := h.run(t, "go"); err != nil {
+		t.Fatalf("work was done: want no error, got %v", err)
+	}
+	found := false
+	for _, n := range h.ui.notices {
+		if strings.Contains(n, "parou sem resumo final") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing PT notice, notices=%q", h.ui.notices)
 	}
 }
 
@@ -582,7 +635,7 @@ func TestAgentVerifyNudge(t *testing.T) {
 			if len(reqs) != tc.wantReqs {
 				t.Fatalf("requests=%d want %d", len(reqs), tc.wantReqs)
 			}
-			got := reqs[len(reqs)-1].contains("user", "You changed code but did not run anything")
+			got := reqs[len(reqs)-1].contains("user", "Você mudou código e não rodou nada")
 			if got != tc.wantNudge {
 				t.Errorf("verify nudge = %v, want %v", got, tc.wantNudge)
 			}
@@ -610,7 +663,7 @@ func TestAgentOpenTodoNudge(t *testing.T) {
 	}
 	l := reqs[2].last()
 	c, _ := l["content"].(string)
-	if l["role"] != "user" || !strings.Contains(c, "unfinished items") || !strings.Contains(c, "add tests") {
+	if l["role"] != "user" || !strings.Contains(c, "itens abertos") || !strings.Contains(c, "add tests") {
 		t.Errorf("todo nudge = %q", c)
 	}
 	if strings.Contains(c, "write parser") {
@@ -631,7 +684,7 @@ func TestAgentNoTodoNudgeWhenAllCompleted(t *testing.T) {
 
 func TestAgentMaxStepsForcesFinalNoToolsRequest(t *testing.T) {
 	h := newHarness(t, func(n int, r recReq) fakeResp {
-		if r.contains("user", "Step limit reached") {
+		if r.contains("user", "Limite de passos atingido") {
 			return fakeResp{Text: "summary of work"}
 		}
 		return fakeResp{Calls: []fakeCall{{Name: "bash", Args: fmt.Sprintf(`{"command":"echo step%d"}`, n)}}}
@@ -656,7 +709,7 @@ func TestAgentMaxStepsForcesFinalNoToolsRequest(t *testing.T) {
 		t.Errorf("final request tool_choice = %v, want none", tc)
 	}
 	l := reqs[2].last()
-	if c, _ := l["content"].(string); l["role"] != "user" || !strings.Contains(c, "Step limit reached") {
+	if c, _ := l["content"].(string); l["role"] != "user" || !strings.Contains(c, "Limite de passos atingido") {
 		t.Errorf("last message of final request = %v", l)
 	}
 	if lm := lastMsg(h.ag.Msgs); lm.Content != "summary of work" {

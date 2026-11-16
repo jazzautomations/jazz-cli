@@ -234,8 +234,10 @@ func TestSandboxRealHomeSSH(t *testing.T) {
 	}
 	r := sh.Run(context.Background(), "cat ~/.ssh/known_hosts | head -c 64; ls -a ~/.ssh", 20*time.Second, nil)
 	for _, e := range real {
-		if strings.Contains(r.Output, e.Name()) && !strings.Contains(r.Output, e.Name()+": No such") {
-			t.Errorf("real ~/.ssh entry %q visible inside the sandbox: exit %d %q", e.Name(), r.ExitCode, r.Output)
+		for _, line := range strings.Split(r.Output, "\n") {
+			if strings.TrimSpace(line) == e.Name() {
+				t.Errorf("real ~/.ssh entry %q listed inside the sandbox: exit %d %q", e.Name(), r.ExitCode, r.Output)
+			}
 		}
 	}
 	if kh, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")); err == nil && len(kh) > 0 {
@@ -357,5 +359,34 @@ func TestSbGitPointerDirs(t *testing.T) {
 	}
 	if got := sbGitPointerDirs(root); got != nil {
 		t.Fatalf("ponteiro forjado => %v, quero nil", got)
+	}
+}
+
+// An installed skill gets ~/.cache/<skill> writable, and nothing else of ~/.cache.
+func TestSandboxSkillCacheWritable(t *testing.T) {
+	jh := t.TempDir()
+	t.Setenv("JAZZ_HOME", jh)
+	if err := os.MkdirAll(filepath.Join(jh, "skills", "video-lite"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		// sbNew uses os.UserHomeDir, which reads %USERPROFILE% on Windows.
+		t.Setenv("USERPROFILE", home)
+	}
+	sb := sbNew("auto", sbBwrap, "/usr/bin/bwrap", false, []string{t.TempDir()})
+	want := sbReal(filepath.Join(home, ".cache", "video-lite"))
+	found := false
+	for _, d := range sb.CacheRW {
+		if d == want {
+			found = true
+		}
+		if d == sbReal(filepath.Join(home, ".cache")) {
+			t.Errorf("the whole ~/.cache must not be writable")
+		}
+	}
+	if !found {
+		t.Errorf("skill cache %s not writable: %v", want, sb.CacheRW)
 	}
 }

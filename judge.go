@@ -562,6 +562,7 @@ func (a *Agent) ojStartTurn(ctx context.Context, request, model, input string) (
 	if a.sub {
 		return model, input
 	}
+	a.rtBeginTurn() // a "use X this turn" answer ends with the turn (router_pin.go)
 	if m := a.ojBeginTurn(request); m != "" {
 		model = m
 		a.turnModel = m
@@ -590,13 +591,18 @@ func (a *Agent) ojBeginTurn(input string) string {
 	st.input = strings.TrimSpace(acStripReminders(input))
 	st.task = rtClassify(input, *st.repo)
 	st.typed = true
-	if a.cfg.ojJudgeOn() && st.task.Ambiguous {
+	if a.cfg.ojJudgeOn() && st.task.Ambiguous && !a.chatLane { // small talk: no LLM call to route "oi" (chatlane.go)
 		if t := a.ojClassifyLLM(input); t != "" {
 			st.task.Type, st.task.Via = t, "llm"
 		}
 	}
 	dbg("route", map[string]any{"role": "classify", "task": st.task.Type, "size": string(st.task.Size), "ambiguous": st.task.Ambiguous, "via": st.task.Via, "scores": st.task.Scores, "files": st.repo.Files, "tests": st.repo.HasTests})
 	if !a.cfg.ojJudgeOn() {
+		return ""
+	}
+	if pin := a.acPin("main"); pin != "" {
+		// the user chose the model: the judge does not pick another (PROV-1)
+		dbg("route", map[string]any{"role": "editor", "task": st.task.Type, "chosen": pin, "reason": "pinned (-m/model)"})
 		return ""
 	}
 	if r := ojPinned(a.cfg.Roles.Editor); r != "" {

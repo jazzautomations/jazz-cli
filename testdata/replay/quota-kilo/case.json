@@ -1,0 +1,21 @@
+{
+  "name": "quota-kilo",
+  "origin": "macbookpro 261111-100735-4515 (corpo do 429 reconstruído do evento request.end, sem conta/IP)",
+  "why": "PROMOTION no 1º modelo do kilo e a cascata gastou mais requests no mesmo kilo (406 casos); a mensagem final repassou 'Sign up for free' em inglês",
+  "entry": "agent",
+  "mode": "auto",
+  "headless": true,
+  "model": "kilo/cohere/north-mini-code:free",
+  "presets": ["kilo"],
+  "provider": {
+    "repeat": true,
+    "seq": [{"status": 429, "body": "{\"error\":{\"code\":\"PROMOTION_MODEL_LIMIT_REACHED\",\"message\":\"Free promotion limit reached for this model. Sign up for free to continue using it, or come back later.\",\"retry_after_ms\":900000,\"daily\":true}}"}]
+  },
+  "turns": ["lista os arquivos daqui"],
+  "expect": {
+    "err": "some",
+    "max_requests": 1,
+    "err_has_any": ["/key", "omni add"],
+    "err_absent": ["Sign up", "{\""]
+  }
+}

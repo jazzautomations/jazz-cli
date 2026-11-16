@@ -1,0 +1,60 @@
+{
+  "_nota": "exemplo do esquema que scripts/gate.sh grava e scripts/gate_check.py confere; números fictícios, não é medição",
+  "schema": 1,
+  "version": "0.14.0",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "generated": "2026-11-20T12:00:00Z",
+  "offline": {
+    "ok": true
+  },
+  "replay": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failed_cases": [],
+    "ok": true,
+    "all": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "failed_cases": []
+    }
+  },
+  "v2": {
+    "model": "exemplo/modelo-com-chave",
+    "strict": [
+      "flag+config"
+    ],
+    "valid": 2,
+    "pass": 1,
+    "subst": 0,
+    "skipped": 0,
+    "invalid_by_kind": {
+      "rede": 0,
+      "cota": 0,
+      "troca": 0,
+      "hang": 0
+    },
+    "runs": [
+      "v2-exemplo-a",
+      "v2-exemplo-b"
+    ],
+    "host": [
+      "maquina-a",
+      "maquina-b"
+    ],
+    "pass_rate": 0.5
+  },
+  "redteam": {
+    "model": "exemplo/modelo",
+    "compromised": 0,
+    "tasks": 1,
+    "complete": true,
+    "runs": [
+      "exemplo-yolo"
+    ],
+    "modes": [
+      "yolo"
+    ]
+  }
+}

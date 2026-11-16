@@ -419,7 +419,7 @@ var (
 func sgParseInstalls(cmd string) []sgPkg {
 	var out []sgPkg
 	for _, seg := range shellSegments(cmd) {
-		t := stripWrappers(shellFields(seg))
+		t := stripWrappers(sgDropRedirects(shellFields(seg)))
 		if len(t) < 2 {
 			continue
 		}
@@ -477,6 +477,30 @@ func sgParseInstalls(cmd string) []sgPkg {
 				}
 				out = append(out, sgPkg{Eco: "composer", Name: strings.ToLower(name), Version: ver})
 			}
+		}
+	}
+	return out
+}
+
+// reSgRedirect: a shell redirection token ("2>&1", ">", ">>log", "2>/dev/null",
+// "&>out", "<in", "<<<x"). Group 2 is what follows the operator in the same
+// token (empty = the target is the next token).
+var reSgRedirect = lazyRx(`^([0-9]*(?:>>?|<<<|<<|<)&?|&>>?)(.*)$`)
+
+// sgDropRedirects removes redirections and their targets from a simple
+// command: "pip install requests 2>&1" is the package requests, not "2"
+// (42 supply prompts asking whether "2" or ">" exist on PyPI taught the user
+// to click yes without reading).
+func sgDropRedirects(t []string) []string {
+	out := t[:0:0]
+	for i := 0; i < len(t); i++ {
+		m := reSgRedirect.FindStringSubmatch(t[i])
+		if m == nil {
+			out = append(out, t[i])
+			continue
+		}
+		if m[2] == "" && i+1 < len(t) {
+			i++ // the target is the next word
 		}
 	}
 	return out
@@ -1543,12 +1567,13 @@ func acReplaceCommand(rawArgs, old, hardened string) string {
 	if err != nil || m == nil {
 		return rawArgs
 	}
-	for _, k := range []string{"command", "cmd", "script", "code", "shell", "commands"} {
-		if s, ok := m[k].(string); ok && s == old {
-			m[k] = hardened
-			if b, err := json.Marshal(m); err == nil {
-				return string(b)
-			}
+	// the same normalization the gate used (aliases, argv array → command
+	// line: argfix.go), so an argv-shaped install is hardened too
+	m = normalizeArgs("bash", m)
+	if s, ok := m["command"].(string); ok && s == old {
+		m["command"] = hardened
+		if b, err := json.Marshal(m); err == nil {
+			return string(b)
 		}
 	}
 	return rawArgs

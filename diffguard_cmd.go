@@ -39,7 +39,7 @@ func dgGitFiles(root, ref string) ([]dgFile, error) {
 	var files []dgFile
 	add := func(rel string, tracked bool) {
 		rel = filepath.ToSlash(rel)
-		if seen[rel] || dgSkipPath(rel) {
+		if seen[rel] || dgSkipPath(rel) || dgInVenv(root, rel) {
 			return
 		}
 		seen[rel] = true

@@ -1,0 +1,21 @@
+{
+  "name": "wifi-auto-pergunta",
+  "origin": "d610 261109-164340-694a",
+  "why": "em auto o comando de sistema caiu em CRÍTICO e foi bloqueado sem perguntar; o dono queria que o jazz fizesse, com consentimento",
+  "entry": "agent",
+  "mode": "auto",
+  "stubs": {"bins": ["modprobe"]},
+  "approve": "allow",
+  "provider": {"seq": [
+    {"calls": [{"name": "bash", "args": {"command": "modprobe iwlwifi"}}]},
+    {"text": "módulo carregado."}
+  ]},
+  "turns": ["carrega o modulo do wifi (iwlwifi)"],
+  "expect": {
+    "err": "none",
+    "min_approvals": 1,
+    "bins_ran": ["modprobe"],
+    "tool_absent": ["CRÍTICO"],
+    "ui_absent": ["CRÍTICO"]
+  }
+}

@@ -972,6 +972,9 @@ func (r *Redactor) Restore(args string) (string, bool) {
 // them in a command), then the older one-way redaction (redactSecrets,
 // safety.go) hides whatever shape is left as [REDACTED].
 func rdToolText(s, where string) string {
+	// a sudo password typed this session is one-way [REDACTED] before the
+	// placeholder pass: a <secreto:…> marker would let a command use it
+	s = nlRedactKnown(s)
 	if rdSess.Mode() != rdOff {
 		s = rdSess.Text(s, where)
 	}

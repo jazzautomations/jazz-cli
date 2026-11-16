@@ -40,8 +40,12 @@ func TestPlanCacheMatch(t *testing.T) {
 	if m := pcMatch(plans, "deploy to production", 3); len(m) != 0 {
 		t.Errorf("unrelated request matched: %+v", m)
 	}
-	if m := pcMatch(plans, "parser", 3); len(m) == 0 {
-		t.Error("a one-word query that matches should find plans")
+	// one content word is not a task: "parser" alone (like "porra" or
+	// "marcha" before 0.14) matched plans it had nothing to do with
+	for _, q := range []string{"parser", "porra", "marcha", "bora", "porra arruma ae essa merda", "bora caralho"} {
+		if m := pcMatch(plans, q, 3); len(m) != 0 {
+			t.Errorf("%q: fewer than 2 content words must not match: %+v", q, m)
+		}
 	}
 	if m := pcMatch(plans, "config parser crash", 1); len(m) != 1 {
 		t.Errorf("k=1 must cap the result: %d", len(m))

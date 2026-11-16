@@ -1007,16 +1007,37 @@ func brHostList(cx *brCtx, in map[string]string) brStep {
 // brNetStatus reports the connectivity the environment profile measured.
 func brNetStatus(cx *brCtx, in map[string]string) brStep {
 	p := cx.env.Profile
-	if p == nil {
-		p = epGet(false)
+	if p == nil || p.Light || epNetUntested(p) {
+		// the light profile never dials (its Dial is a stub that always
+		// fails): reading it said "offline" while the Groq answered 200
+		// (d610 163734). Measure now — one TCP dial — or say it was not tested.
+		if epNoNet || os.Getenv("JAZZ_ENV_NO_NET") == "1" {
+			cx.say("não testei a rede (sonda de rede desligada) — não sei dizer se está online")
+			cx.task.AddEvidence("env", "online=? (não testado)")
+			return brStep{obs: rvNoCmd(), why: "rede não testada"}
+		}
+		online, why := epOnline(epRealSys())
+		cx.say("%s — testei agora: %s", map[bool]string{true: "online", false: "sem saída pra internet"}[online], why)
+		cx.task.AddEvidence("probe", fmt.Sprintf("dial 1.1.1.1:443 online=%v (%s)", online, why))
+		return brStep{val: &epProfile{Online: online, OnlineWhy: why}, obs: rvNoCmd(), ok: true}
+	}
+	when := ""
+	if !p.Probed.IsZero() {
+		when = " há " + time.Since(p.Probed).Round(time.Second).String()
 	}
 	if p.Online {
-		cx.say("online — o perfil de ambiente confirmou saída pra internet")
+		cx.say("online — o perfil de ambiente confirmou saída pra internet (medido%s)", when)
 	} else {
-		cx.say("offline — o perfil de ambiente não conseguiu sair pra internet")
+		cx.say("sem saída pra internet — o teste do perfil de ambiente falhou%s: %s", when, p.OnlineWhy)
 	}
 	cx.task.AddEvidence("env", fmt.Sprintf("online=%v", p.Online))
 	return brStep{val: p, obs: rvNoCmd(), ok: true}
+}
+
+// epNetUntested: the profile's online bit came from a stubbed or switched
+// off dial ("sonda leve…", "sonda de rede desligada"), not from a probe.
+func epNetUntested(p *epProfile) bool {
+	return p != nil && !p.Online && strings.HasPrefix(p.OnlineWhy, "sonda ")
 }
 
 // brProjCmd runs the project's detected build/lint command (fpDetect), like
@@ -2551,9 +2572,21 @@ func brScript(cx *brCtx, name string, in map[string]string) brStep {
 		obs.Output = truncateHeadTail(redactSecrets(tail), 4000)
 		return brStep{obs: obs, why: fmt.Sprintf("%s não devolveu JSON (exit %d): %s", name, res.Exit, oneLine(tail, 200))}
 	}
+	masked := scSandboxMark(v, args, cx.env.Root)
+	if b, err := json.Marshal(v); err == nil && sbCurrent().Isolates() {
+		res.Stdout = b // the sandbox marks reach the observation too
+	}
 	obs.Output = truncateHeadTail(string(res.Stdout), 4000)
 	ok, conf, errMsg := scStatus(v)
-	t.AddEvidence("script", fmt.Sprintf("%s → exit %d, ok=%v, conf %.2f", desc, res.Exit, ok, conf))
+	where := ""
+	if sbCurrent().Isolates() {
+		where = ", inside the sandbox"
+	}
+	t.AddEvidence("script", fmt.Sprintf("%s → exit %d, ok=%v, conf %.2f%s", desc, res.Exit, ok, conf, where))
+	if masked != "" {
+		t.AddEvidence("sandbox", masked)
+		cx.say("aviso: %s", masked)
+	}
 	if !ok {
 		if errMsg == "" {
 			errMsg = "o script reportou falha"
@@ -2855,6 +2888,9 @@ func (cx *brCtx) lastQuery() string {
 
 func brAskSlot(cx *brCtx, in map[string]string) brStep {
 	slot, q := in["slot"], in["q"]
+	if value := strings.TrimSpace(cx.task.Slots[slot]); value != "" {
+		return brStep{val: value, obs: rvNoCmd(), ok: true}
+	}
 	cx.questions++
 	if cx.env.AskText != nil {
 		if a, ok := cx.env.AskText(q); ok && strings.TrimSpace(a) != "" {

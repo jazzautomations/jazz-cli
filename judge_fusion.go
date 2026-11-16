@@ -68,9 +68,9 @@ func (a *Agent) ojIsSidekick() bool { return a.oj != nil && a.oj.sideFor != nil 
 // ojTaskSpecs: the delegation tools of the main agent.
 func (a *Agent) ojTaskSpecs() []ToolSpec {
 	if a.ojFusionActive() {
-		return []ToolSpec{taskSpec, askUserSpec, ojSidekickSpec}
+		return []ToolSpec{taskSpec, askUserSpec, ojSidekickSpec, factSpec()}
 	}
-	return []ToolSpec{taskSpec, askUserSpec}
+	return []ToolSpec{taskSpec, askUserSpec, factSpec()} // fact: the offline brain as a tool (brain_tool.go)
 }
 
 // ojTurnInput runs after the judge picked the model: the fusion lead note and,
@@ -258,11 +258,28 @@ func ojStampTree(root string) map[string]ojStamp {
 // sidekick) and the edit counters of the honest-done guard. Returns the
 // relative paths.
 func (a *Agent) ojRegisterSidekickEdits(before map[string]ojStamp) []string {
+	bt := a.bgTurnState()
+	changed, code := a.qgRegisterTree(bt, before)
+	if bt != nil && len(changed) > 0 {
+		bt.edited = true
+		bt.seq++
+		bt.lastEdit = bt.seq
+	}
+	if h := a.hg; h != nil && code {
+		h.seq++
+		h.codeEdited, h.lastEdit = true, h.seq // the lead must re-run the tests after the sidekick
+	}
+	return changed
+}
+
+// qgRegisterTree diffs a tree stamp taken before a change (a sidekick run, a
+// writing bash command) against the tree now and gives every new, changed or
+// deleted file a quality-gate pre-image on bt (the first one wins: write/edit
+// pre-images are older and stay). It moves no counters. Returns the relative
+// paths (sorted) and whether any is a code file.
+func (a *Agent) qgRegisterTree(bt *bgTurn, before map[string]ojStamp) (changed []string, code bool) {
 	after := ojStampTree(a.tools.Root)
 	snaps, _ := a.tools.ojTurnFiles()
-	var changed []string
-	bt := a.bgTurnState()
-	code := false
 	mark := func(p string, existed bool, old []byte, haveOld bool) {
 		changed = append(changed, a.tools.rel(p))
 		code = code || isCodeFile(p)
@@ -281,9 +298,6 @@ func (a *Agent) ojRegisterSidekickEdits(before map[string]ojStamp) []string {
 			}
 			bt.order = append(bt.order, p)
 		}
-		bt.edited = true
-		bt.seq++
-		bt.lastEdit = bt.seq
 	}
 	for p, n := range after {
 		o, ok := before[p]
@@ -299,12 +313,8 @@ func (a *Agent) ojRegisterSidekickEdits(before map[string]ojStamp) []string {
 			mark(p, true, before[p].data, before[p].have)
 		}
 	}
-	if h := a.hg; h != nil && code {
-		h.seq++
-		h.codeEdited, h.lastEdit = true, h.seq // the lead must re-run the tests after the sidekick
-	}
 	sort.Strings(changed)
-	return changed
+	return changed, code
 }
 
 // ---------- panel ----------

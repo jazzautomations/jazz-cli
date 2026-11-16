@@ -16,12 +16,14 @@ type HeadlessUI struct {
 	Verbose bool
 	Last    string
 
-	mu    sync.Mutex
-	cur   strings.Builder
-	steps int // model requests, from TurnStats
-	tools int // tool calls, from TurnStats
-	errw  io.Writer
-	outw  io.Writer
+	mu     sync.Mutex
+	cur    strings.Builder
+	kept   string // final answer saved before a harness gate reopened the turn
+	failed bool   // that gate ended the turn as failed (GateFailed)
+	steps  int    // model requests, from TurnStats
+	tools  int    // tool calls, from TurnStats
+	errw   io.Writer
+	outw   io.Writer
 }
 
 func (h *HeadlessUI) stderr() io.Writer {
@@ -53,6 +55,39 @@ func (h *HeadlessUI) StreamText(s string) {
 func (h *HeadlessUI) StreamReasoning(s string) {}
 func (h *HeadlessUI) Thinking(string)          {}
 func (h *HeadlessUI) StopThinking()            {}
+
+// KeepAnswer: a harness gate (quality checklist, auto-review, todo/verify/
+// fake-action/stall nudge, Stop hook) reopens the turn after the model's
+// final answer. That answer is kept, so stdout does not end up with only the
+// reply to the gate (answer.go).
+func (h *HeadlessUI) KeepAnswer() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.flushText()
+	h.kept = acMergeAnswer(h.kept, h.Last)
+	h.Last = ""
+}
+
+// GateFailed: the gate that reopened the turn still fails and ends it; the
+// kept answer is printed with the reply instead of being replaced (answer.go).
+func (h *HeadlessUI) GateFailed() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.failed = true
+}
+
+// endAnswer folds the kept answer into Last at the end of a turn (h.mu held).
+func (h *HeadlessUI) endAnswer() {
+	if h.kept != "" {
+		if h.failed {
+			h.Last = acMergeFailed(h.kept, h.Last)
+		} else {
+			h.Last = acMergeAnswer(h.kept, h.Last)
+		}
+		h.kept = ""
+	}
+	h.failed = false
+}
 
 // flushText ends the current assistant message (h.mu held).
 func (h *HeadlessUI) flushText() {
@@ -121,8 +156,57 @@ func (h *HeadlessUI) Approve(ctx context.Context, tool, detail, reason string) (
 			spec = fmt.Sprintf("Bash(%s:*)", prefix)
 		}
 	}
+	if hlSecretReason(reason) {
+		// credentials: no flag is the answer; never point at --yolo for a secret
+		fmt.Fprintln(h.stderr(), msg+" — mexe em credenciais: nenhuma flag libera isso no -p; se precisar, abra o arquivo você mesmo")
+		return Deny, ""
+	}
+	if !hlRuleCovers(tool, detail, reason) {
+		// a rule does not cover this risk (agent.permit): suggesting one
+		// would send the user to a flag that changes nothing
+		fmt.Fprintln(h.stderr(), msg+" — isso uma regra --allow-tools não libera: rode no modo interativo (jazz) pra aprovar, ou --yolo se você confia no comando")
+		return Deny, ""
+	}
 	fmt.Fprintln(h.stderr(), msg+" — use --allow-tools '"+spec+"' ou --yolo")
 	return Deny, ""
+}
+
+// hlRuleCovers: an allow rule naming this call would let it run (mirrors
+// agent.permit). A prompt with no risk of its own (untrusted folder, ask
+// mode) is covered; with a risk, only sudo of a benign command and a
+// CRITICAL system change are — a dangerous command, a secret read, egress,
+// the fence or an injection suspicion are confirmed every time.
+func hlRuleCovers(tool, detail, reason string) bool {
+	if reason == "" {
+		return true
+	}
+	if CanonicalTool(tool) != "bash" {
+		return false // the hint would name the whole tool, which never covers a risk
+	}
+	cmd := strings.TrimSpace(detail)
+	if cmd == "" {
+		return false
+	}
+	if nlSudoCmd(cmd) {
+		return DangerReason(nlStripSudo(cmd)) == "" && nlHostSecret(cmd) == ""
+	}
+	if DangerReason(cmd) != "" || SecretReason(cmd) != "" {
+		return false
+	}
+	if _, eg := EgressTarget(cmd); eg {
+		return false
+	}
+	for _, bad := range []string{"injection", "hook", "alvo de build", "fora da pasta", "dados do jazz"} {
+		if strings.Contains(reason, bad) {
+			return false
+		}
+	}
+	for _, seg := range shellSegments(cmd) {
+		if cbSegCritical(seg) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *HeadlessUI) SetMode(string) {}
@@ -143,6 +227,7 @@ func (h *HeadlessUI) Finish(res RunResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.flushText()
+	h.endAnswer()
 	text := res.Text
 	if text == "" {
 		text = h.Last
@@ -173,6 +258,7 @@ func (h *HeadlessUI) TurnEnd(st TurnStats) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.flushText()
+	h.endAnswer()
 	h.steps += st.Steps
 	h.tools += st.Tools
 	line := fmt.Sprintf("✓ %s · %d ferramentas · in %d out %d", st.Dur.Round(time.Second), st.Tools, st.Usage.In, st.Usage.Out)
@@ -183,4 +269,10 @@ func (h *HeadlessUI) TurnEnd(st TurnStats) {
 		line += " · " + rdTotalsText(st.Redacted)
 	}
 	h.logf("%s", line)
+}
+
+// hlSecretReason: the prompt is about credentials or sensitive config.
+func hlSecretReason(reason string) bool {
+	r := strings.ToLower(reason)
+	return strings.Contains(r, "credenc") || strings.Contains(r, "secret") || strings.Contains(r, "segredo") || strings.Contains(r, "chave privada")
 }

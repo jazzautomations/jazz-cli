@@ -21,7 +21,7 @@ import (
 	"jazzcli/internal/early" // GC tuned before this package's init (internal/early)
 )
 
-var version = "0.13.4"
+var version = "0.14.0"
 
 func usage() {
 	fmt.Print(`jazz — agente de código no terminal
@@ -77,6 +77,8 @@ opções:
   --turbo | --yolo | --ask | --smart  modo de permissão só nesta sessão (padrão: auto — pede confirmação em comando perigoso;
                          turbo/--full-auto: com sandbox do sistema, só pergunta o realmente necessário)
   --ack-no-sandbox                  confirma YOLO headless sem sandbox do sistema; não cria isolamento
+  --strict-model         só o modelo do -m, nem o "fallback" do config (eval: mede o modelo pedido);
+                         também JAZZ_STRICT_MODEL=1. Com modelo escolhido, falha sai com código 75
   -v                     (com -p) mostra o progresso no stderr
   --output-format F      (com -p) text (padrão) · json (só o resultado final) · stream-json (um evento por linha)
   --max-steps N          limite de passos do modelo por turno
@@ -196,9 +198,11 @@ var pfHardExitGrace = 15 * time.Second
 
 func main() {
 	pfProfileStart() // JAZZ_CPUPROFILE=path (cpuprofile.go)
+	defer pfDebugEnd()
 	defer pfProfileStop()
 	defer pfCrashGuard()
 	pfCleanOldExe()
+	spFixPath() // /sbin e /usr/sbin fora do PATH no antiX/Debian (sbinpath.go)
 	fs := flag.NewFlagSet("jazz", flag.ContinueOnError)
 	fs.Usage = usage
 	pr := fs.Bool("p", false, "")
@@ -213,6 +217,8 @@ func main() {
 	yolo := fs.Bool("yolo", false, "")
 	fresh := fs.Bool("fresh", false, "") // janela de contexto sem memória (fresh.go)
 	ackNoSandbox := fs.Bool("ack-no-sandbox", false, "")
+	allowUnsandboxed := fs.Bool("allow-unsandboxed", false, "")
+	strictModel := fs.Bool("strict-model", false, "") // only the -m model, not even the configured fallback (evals)
 	ask := fs.Bool("ask", false, "")
 	smart := fs.Bool("smart", false, "")
 	turbo := fs.Bool("turbo", false, "")
@@ -349,6 +355,7 @@ func main() {
 		fatal(err.Error())
 	}
 	pfNoteConfig(cfg)
+	x11Autodetect() // own X socket + SSH → real GUI opens (x11.go)
 	if err := otlpConfigure(cfg, *otlpEndpoint); err != nil {
 		pfUsageErr(err.Error())
 	}
@@ -377,6 +384,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "jazz: nenhuma sessão anterior em", d, "— começando uma nova")
 		}
 	}
+	if *allowUnsandboxed {
+		usAllow = true // bash sandbox:false runs without a question (unsandboxed.go)
+	}
 	rest := fs.Args()
 	if wtOn && (len(rest) == 0 || !pfSubcommands[rest[0]]) {
 		r, err := wtStart(root, wtName, os.Stderr)
@@ -399,6 +409,9 @@ func main() {
 			pfUsageErr(err.Error())
 		}
 	}
+	// the private temp dir goes with the process (it was never removed: only
+	// the prune of the next jazz cleaned it, by age)
+	defer func() { sbCurrent().Close() }()
 	if len(rest) > 0 {
 		switch rest[0] {
 		case "login":
@@ -482,6 +495,12 @@ func main() {
 			pfQuit(cmdScript(root, rest[1:]))
 		case "mcp":
 			pfQuit(cmdMCP(rest[1:], os.Stdout)) // presets (mcp_presets.go)
+		case "skill", "skills": // skill_install.go
+			if err := cmdSkill(root, rest[1:], os.Stdin, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "jazz:", err)
+				os.Exit(1)
+			}
+			return
 		case "worktree", "worktrees":
 			pfQuit(cmdWorktree(root, rest[1:], os.Stdin, os.Stdout))
 		case "scan":
@@ -574,7 +593,17 @@ func main() {
 	o := pfOpts{cont: *cont, resumeID: *resume, verbose: *verbose, format: *format, systemAppend: *sysAppend, timeout: *timeout, banner: *bannerFlag}
 	o.loop = LoopOpts{Until: *untilFlag, UntilRounds: *untilRounds, Review: *reviewFlag, Budget: *budgetFlag, Quality: *qualityFlag, Guards: *guardsFlag, Recover: *recoverFlag}
 	o.scripts, o.fastPath, o.offline = *scriptsFlag, *fastPathFlag, *offlineFlag
-	o.modelPinned = *model != "" || (cfg.Model != "" && cfg.Model != "kilo/"+kiloDefaultModel)
+	o.modelPinned = cfgModelChosen(*model, cfg)
+	// the user's choice is a contract: no hidden swap (router_pin.go)
+	cfg.Pinned = o.modelPinned && !isOmniRef(ref)
+	cfg.StrictModel = *strictModel || os.Getenv("JAZZ_STRICT_MODEL") == "1"
+	if cfg.StrictModel && !cfg.Pinned {
+		why := ""
+		if cfg.Model == "kilo/"+kiloDefaultModel {
+			why = "; o model da config (" + cfg.Model + ") é o padrão da instalação, não conta como escolha — passe -m ou mude o model na config"
+		}
+		pfUsageErr("--strict-model precisa de um modelo escolhido (-m provedor/modelo)" + why)
+	}
 	o.askStdin = *askStdinFlag
 	lowPowerFlag.apply()
 	o.uiLint = *uiLintFlag
@@ -592,13 +621,16 @@ func main() {
 	if n := len(rest); n > 0 && rest[n-1] == "-" { // `jazz -p "x" -` / `jazz -p -`: read stdin to EOF
 		rest, forceStdin = rest[:n-1], true
 	}
+	if o.askStdin && forceStdin {
+		pfUsageErr("--ask-stdin reserva o stdin para respostas; passe o prompt como argumento, sem --stdin ou '-'")
+	}
 	prompt := strings.Join(rest, " ")
 	stdinTTY := isTTY(os.Stdin)
 	if pfHeadlessYoloNeedsAck(cfg.EffMode(), turboSandboxOK(), *pr || !stdinTTY || forceStdin) && !*ackNoSandbox {
 		pfUsageErr("YOLO headless sem sandbox do sistema não é isolado; passe --ack-no-sandbox para confirmar explicitamente")
 	}
 	if *pr || !stdinTTY || forceStdin {
-		if !stdinTTY || forceStdin {
+		if (!stdinTTY || forceStdin) && !o.askStdin {
 			wait := siWaitArg
 			if prompt == "" {
 				wait = siWaitNoArg
@@ -629,7 +661,7 @@ func main() {
 // pfSubcommands are the first words that take their own flags.
 var pfSubcommands = map[string]bool{"login": true, "logout": true, "key": true, "models": true, "provider": true, "providers": true,
 	"omni": true, "export": true, "trust": true, "update": true, "upgrade": true, "bug": true, "doctor": true, "version": true, "help": true,
-	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true, "distill": true, "alexandria": true, "ax": true}
+	"script": true, "deps": true, "sanitize": true, "trace": true, "sessions": true, "resume": true, "setup": true, "audit": true, "changes": true, "blame": true, "improve": true, "worktree": true, "worktrees": true, "scan": true, "mcp": true, "env": true, "eval": true, "forge": true, "distill": true, "alexandria": true, "ax": true, "skill": true, "skills": true}
 
 // pfGlobalAfterSub are the global flags still honoured after a subcommand word.
 var pfGlobalAfterSub = map[string]bool{"--yolo": true, "-yolo": true, "--ask": true, "-ask": true, "--smart": true, "-smart": true, "--turbo": true, "-turbo": true, "--full-auto": true, "-full-auto": true, "-v": true, "--debug": true, "-debug": true, "-C": true, "--sandbox": true, "-sandbox": true}
@@ -745,7 +777,10 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	default:
 		ui = &HeadlessUI{Verbose: o.verbose}
 	}
-	pfTrustGateWith(root, true, false, nil, os.Stderr)
+	// the "bash bloqueado" warning only when it is true: not with --yolo
+	// (UntrustedBash off below) nor with --allow-tools (the user set the rules;
+	// a call still blocked says so itself, with the exact rule)
+	pfTrustGateBash(root, true, false, pfHeadlessBashGated(cfg, o), nil, os.Stderr)
 	tools := NewToolbox(root)
 	tools.Web = cfg.Web
 	tools.MaxJobs = cfg.MaxJobs
@@ -854,6 +889,9 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	if forcedOff {
 		ui.Thinking("offline · interpretando")
 	}
+	if n := siHeadlessTurn(root, prompt, os.Stderr); n != "" { // a skill URL in the request (skill_install.go)
+		ag.Note(n)
+	}
 	fp, mprompt := olHeadless(ctx, ag, tools, ui, cfg, prompt, o)
 	if forcedOff {
 		ui.StopThinking()
@@ -866,7 +904,8 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	if fp == nil {
 		early.Restore()                           // the model loop is long-lived: GC back on (internal/early)
 		stop, err = ag.qRunHeadless(ctx, mprompt) // + --follow-up turns, JAZZ_STEER_FILE (queue.go)
-		if err != nil && ctx.Err() == nil {
+		var pe *acPinError
+		if err != nil && ctx.Err() == nil && !errors.As(err, &pe) { // a failed pin is the answer, exit 75
 			fp = olHeadlessFallback(ctx, ag, tools, ui, err, prompt)
 		}
 	}
@@ -882,7 +921,11 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 	}
 	res := RunResult{Status: stop, Usage: ag.Usage, Cost: ag.Usage.Cost, Duration: time.Since(t0), SessionID: ag.SessionID, Model: ag.TurnModel(), Recover: ag.LastRecovery()}
 	if err != nil && stop != StopInterrupted {
-		res.Status, res.Err = StopError, friendlyErr(err)
+		res.Status, res.Err = StopError, pfHeadlessRemedy(friendlyErr(err))
+		var pe *acPinError
+		if errors.As(err, &pe) {
+			res.Status = StopModelUnavailable
+		}
 	}
 	if fp != nil && ctx.Err() == nil {
 		fp.SessionID, fp.Duration = ag.SessionID, time.Since(t0)
@@ -900,7 +943,14 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		res.Err = pfTimeoutMsg(o.timeout) + " (parado antes, com folga, e salvo)"
 	}
 	// no work lost: checkpoint, handoff note, end record, fsync (obs.go)
+	if err := ag.sess.Err(); err != nil {
+		res.Status, res.Err = StopError, err.Error()
+	}
 	end := obFinishRun(ag, tools, res, res.Status.ExitCode())
+	if err := ag.sess.Err(); err != nil {
+		res.Status, res.Err = StopError, err.Error()
+		end.Outcome = obIncomplete
+	}
 	if o.metricsOut != "" && ag.sess != nil {
 		if err := obWriteMetrics(o.metricsOut, ag.sess.Path); err != nil {
 			fmt.Fprintln(os.Stderr, "jazz: --metrics-out:", err)
@@ -917,14 +967,16 @@ func runHeadless(cfg *Config, root, ref, prompt string, o pfOpts) int {
 		}
 		if end.Outcome != obCompleted {
 			j.Extra["checkpoint"], j.Extra["handoff"] = end.Checkpoint, end.Handoff
-			j.Extra["resume"] = "jazz -p -r " + ag.SessionID
+			if ag.sess.Err() == nil {
+				j.Extra["resume"] = "jazz -p -r " + ag.SessionID
+			}
 		}
 	}
 	ui.Finish(res)
 	if res.Err != "" && o.format == "text" {
 		fmt.Fprintln(os.Stderr, "jazz:", res.Err)
 	}
-	if end.Outcome != obCompleted && ag.SessionID != "" {
+	if end.Outcome != obCompleted && ag.SessionID != "" && ag.sess.Err() == nil {
 		if res.Model == "offline-brain" && strings.HasSuffix(res.Err, "blocked") {
 			// the brain gave a deliberate terminal answer ("não é repo", "sem
 			// método"): resuming changes nothing, so no "retome com" hint
@@ -997,7 +1049,17 @@ func pfTimeoutMsg(d time.Duration) string {
 	return fmt.Sprintf("tempo esgotado: a execução passou de --timeout %s", d)
 }
 
+// pfHeadlessRemedy: in -p there is no /model to type — the remedy is the
+// flag. friendlyErr is shared with the TUI, so -p rewrites only the hint.
+func pfHeadlessRemedy(msg string) string {
+	return strings.ReplaceAll(msg, "troque de modelo (/model)", "troque de modelo (-m provedor/modelo)")
+}
+
 func friendlyErr(err error) string {
+	var pe *acPinError
+	if errors.As(err, &pe) {
+		return pinErrText(pe)
+	}
 	var re *RefusalError
 	if errors.As(err, &re) {
 		return re.Error() + " — reformule o pedido ou troque de modelo (/model)"
@@ -1033,31 +1095,41 @@ func friendlyErr(err error) string {
 	}
 	var ae *APIError
 	if errors.As(err, &ae) {
+		// one classifier (pvClassify) and never raw JSON (pvPlainErr)
+		kind := pvClassify(ae)
 		switch {
-		case pvClassify(ae) == "toolcall":
-			// belt and suspenders for a rejection that never met the retry
-			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
-		case ae.Status == 401 || ae.Status == 403:
-			return "credencial recusada pelo provedor (" + firstSentence(ae.Body) + ") — use /key ou /login"
-		case ae.Status == 402 || pvClassify(ae) == "credit":
-			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
-		case ae.Status == 429:
-			msg := "limite de requisições atingido (" + firstSentence(pvErrMessage(ae.Body)) + ")"
-			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
-				msg += ". Na OpenRouter grátis o limite é baixo"
-			}
-			return msg + "; espere ou troque de modelo (/model)"
 		case ae == errNoNet:
 			if p := pvProxyFor(); p != "" {
 				return "o proxy " + p + " (HTTPS_PROXY) não responde"
 			}
 			return "nenhuma conexão: nem o provedor nem 1.1.1.1 responderam"
+		case kind == "toolcall":
+			// belt and suspenders for a rejection that never met the retry
+			return "o provedor recusou a chamada de ferramenta gerada pelo modelo (ferramenta inexistente ou argumentos inválidos) — troque de modelo (/model)"
+		case kind == "auth":
+			return "credencial recusada pelo provedor (" + pvPlainErr(ae.Body) + ") — use /key ou /login"
+		case kind == "gone":
+			return "o modelo foi aposentado/removido pelo provedor (" + pvPlainErr(ae.Body) + ") — escolha outro com /model"
+		case ae.Status == 402 || kind == "credit":
+			return "sem crédito nesse provedor — troque de modelo (/model) ou adicione crédito"
+		case ae.Quota || pvIsQuotaBody(ae.Status, ae.Body):
+			return pvQuotaAdvice(ae)
+		case ae.Status == 429:
+			msg := "limite de requisições atingido (" + pvPlainErr(ae.Body) + ")"
+			if strings.Contains(strings.ToLower(ae.Body), "openrouter") {
+				msg += ". Na OpenRouter grátis o limite é baixo"
+			}
+			return msg + "; espere ou troque de modelo (/model)"
+		case kind == "toobig":
+			return "o pedido ficou grande demais para esse modelo (" + pvPlainErr(ae.Body) + ") — /compact ou troque de modelo (/model)"
+		case kind == "toomanytools":
+			return "ferramentas demais para esse provedor (" + pvPlainErr(ae.Body) + ") — desligue servidores MCP que não usa ou troque de modelo (/model)"
 		case ae.Status == 0:
-			return "falha de rede: " + firstSentence(ae.Body)
+			return "falha de rede: " + pvPlainErr(ae.Body)
 		case ae.Status >= 400 && ae.Status < 500:
-			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, firstSentence(pvErrMessage(ae.Body)))
+			return fmt.Sprintf("o provedor recusou o pedido (HTTP %d: %s) — troque de modelo (/model); detalhes: jazz doctor --provider <nome>", ae.Status, pvPlainErr(ae.Body))
 		}
-		return ae.Error()
+		return fmt.Sprintf("o provedor falhou (HTTP %d: %s) — tente de novo ou troque de modelo (/model)", ae.Status, pvPlainErr(ae.Body))
 	}
 	if errors.Is(err, errStreamIdle) {
 		return err.Error() + " — tente de novo ou troque de modelo"
@@ -1087,6 +1159,7 @@ type App struct {
 	warnedModel map[string]bool // ModelWarning already shown per ref
 
 	ol olState // offline mode (offline.go)
+	sy syState // online/offline hand-off: last offline result, kept request (synergy.go)
 
 	// mode chip (P5): the offline↔online transitions seen recently, so a
 	// flapping link reads "rede instável" instead of a permanent alarm.
@@ -1101,8 +1174,9 @@ type App struct {
 	olBack     atomic.Bool  // the background probe found a provider
 	olNext     atomic.Int64 // when the background probe runs next (unix ns)
 
-	untrusted    bool // the folder is not trusted (F1, /trust)
-	untrustedAsk bool // ModeOverride "ask" was set because of that
+	untrusted     bool   // the folder is not trusted (F1, /trust)
+	untrustedAsk  bool   // ModeOverride "ask" was set because of that
+	untrustedPrev string // ModeOverride before that (restored by /trust)
 }
 
 func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
@@ -1137,13 +1211,13 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 		}
 	}
 	// the trust question (a menu) runs before anything project-level starts
-	pfTrustGateUI(root, cfg, ui)
+	declined := !pfTrustGateUI(root, cfg, ui)
 	untrusted := !pfFolderTrusted(root)
-	untrustedAsk := false
+	untrustedAsk, untrustedPrev := false, ""
 	if untrusted {
-		if m := pfUntrustedMode(cfg); m != "" {
-			cfg.ModeOverride, untrustedAsk = m, true // F1: ask until the folder is trusted
-		}
+		// F1: ask until the folder is trusted; "Não" on the menu means ask
+		// even over a yolo from the global config or a flag
+		untrustedPrev, untrustedAsk = pfStartUntrustedMode(cfg, declined)
 	}
 	tools := NewToolbox(root)
 	tools.Web = cfg.Web
@@ -1155,11 +1229,12 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 	pfOnCrash(mcp.pfKillAll)
 	pfOnCrash(tools.Shell.killGroup)
 	tools.MaxJobs = cfg.MaxJobs
-	app := &App{cfg: cfg, ui: ui, tools: tools, mcp: mcp, root: root, opts: o, untrusted: untrusted, untrustedAsk: untrustedAsk}
+	app := &App{cfg: cfg, ui: ui, tools: tools, mcp: mcp, root: root, opts: o, untrusted: untrusted, untrustedAsk: untrustedAsk, untrustedPrev: untrustedPrev}
 	app.agent = NewAgent(cfg, ui, tools, mcp, ref)
 	pfSetupAgent(app.agent, cfg, root, o)
 	app.agent.PrivacyCheck = true
 	app.agent.NetOffline = true                     // a person is waiting: no network = offline mode now (netfast.go)
+	app.agent.Interactive = true                    // a failed pinned model asks before switching (router_pin.go)
 	app.agent.FastFirst = !o.modelPinned            // interactive: the fastest acceptable free model first
 	pfOnCrash(func() { obCrash(app.agent, tools) }) // checkpoint + handoff (obs.go)
 	auConfigStart(cfg, root, ref, pfSandboxStatus(), pfAuditFields(app.agent, o, false))
@@ -1265,6 +1340,10 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 		}
 		line = strings.TrimRight(line, " \t")
 		if strings.TrimSpace(line) == "" {
+			app.syEscalate() // Enter on an empty line: the last offline answer goes to the model (synergy.go)
+			continue
+		}
+		if strings.TrimSpace(line) == "/m" && app.syEscalate() {
 			continue
 		}
 		switch {
@@ -1276,7 +1355,16 @@ func runInteractive(cfg *Config, root, ref, initial string, o pfOpts) {
 			app.send(line)
 		}
 	}
-	ui.print(ui.T.fg(cGray, 90) + "  até mais " + ui.T.G().dot + " sessão " + app.agent.SessionID + " (jazz -c continua)" + ui.T.sgr("0") + "\n")
+	ui.print(ui.T.fg(cGray, 90) + uiByeLine(ui.T.G().dot, app.agent.SessionID) + ui.T.sgr("0") + "\n")
+}
+
+// uiByeLine is the exit line: the session to continue, or just goodbye when
+// nothing was sent (no session was started, so there is no id to give).
+func uiByeLine(dot, id string) string {
+	if strings.TrimSpace(id) == "" {
+		return "  até mais"
+	}
+	return "  até mais " + dot + " sessão " + id + " (jazz -c continua)"
 }
 
 func mustProvider(ref string) string {
@@ -1517,7 +1605,9 @@ func (a *App) send(text string) {
 	if text, ok = a.confirmPastedToolTranscript(text); !ok {
 		return
 	}
-	defer a.qSend()() // message queue: next queued turn, or back to the editor (queue.go)
+	a.skillOffer(text) // a skill URL in the message: install it first (main_skill.go)
+	orig := text       // the request as typed: what a takeover answers or keeps (synergy.go)
+	defer a.qSend()()  // message queue: next queued turn, or back to the editor (queue.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	a.turnMu.Lock()
 	a.cancelTurn = cancel
@@ -1546,6 +1636,7 @@ func (a *App) send(text string) {
 		a.agent.Attach(imgs...)
 	}
 	stop := a.ui.WatchTurn(cancel, a.agent.Steer)
+	n0 := len(a.agent.Msgs)
 	reason, err := a.agent.Run(ctx, text)
 	stop()
 	FlushRateLimits()
@@ -1555,8 +1646,19 @@ func (a *App) send(text string) {
 	}
 	a.pfShowProviderWarnings()
 	a.ui.Jobs(a.tools.RunningJobs())
-	if a.olAfter(err) { // no model reachable: offline mode banner instead of a bare error
+	reported := a.olAfter(err) // no model reachable: offline mode banner instead of a bare error
+	var turn []Message
+	if n0 <= len(a.agent.Msgs) {
+		turn = a.agent.Msgs[n0:]
+	}
+	if a.syTakeover(ctx, orig, err, turn) { // the offline brain answers what it can, and says so
 		return
+	}
+	if reported {
+		return
+	}
+	if err == nil {
+		a.syPendingNotice()
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {
 		a.ui.Error(friendlyErr(err))
@@ -1661,7 +1763,11 @@ func (a *App) shellEscape(cmd string) {
 	if out != "" && !strings.HasSuffix(out, "\n") {
 		a.ui.print("\n")
 	}
-	a.ui.Notice(fmt.Sprintf("exit %d %s %s", r.ExitCode, a.ui.T.G().dot, strings.Trim(r.Note, "[]")))
+	exitMsg := fmt.Sprintf("código de saída %d", r.ExitCode)
+	if note := strings.TrimSpace(strings.Trim(r.Note, "[]")); note != "" {
+		exitMsg += " " + a.ui.T.G().dot + " " + note
+	}
+	a.ui.Notice(exitMsg)
 	a.agent.Note(fmt.Sprintf("<system-reminder>The user ran `%s` in the shell themselves (exit %d). Output:\n%s</system-reminder>", cmd, r.ExitCode, truncateHeadTail(redactSecrets(out), 8000)))
 	if r.ExitCode != 0 && (a.ol.on || a.ol.forced) {
 		a.olOffer("o comando falhou e estou sem modelo — quer:", olShellFailMenu(cmd, out, a.root, a.tools.hasRg))
@@ -1775,6 +1881,9 @@ var slashCommands = []struct{ name, help string }{
 	{"/cost", "tokens e custo desta sessão"},
 	{"/expand", "mostra a saída inteira da última ferramenta (ctrl+o)"},
 	{"/init", "cria um AGENTS.md analisando o projeto"},
+	{"/remember", "guarda uma regra ou fato no AGENTS.md (projeto ou global): /remember sempre rode os testes com -v"},
+	{"/memory", "mostra os AGENTS.md carregados (global e do projeto)"},
+	{"/btw", "pergunta paralela sobre a conversa, sem ferramentas e sem entrar no histórico: /btw qual arquivo a gente mexeu?"},
 	{"/doctor", "diagnóstico"},
 	{"/exit", "sair"},
 }
@@ -1908,7 +2017,10 @@ func (a *App) command(line string) {
 			ui.Error("uso: /logout <provedor>")
 			return
 		}
-		_ = SaveCred(args[0], nil)
+		if err := SaveCred(args[0], nil); err != nil {
+			ui.Error("não consegui remover a credencial: " + err.Error())
+			return
+		}
 		ui.Notice("credencial de " + args[0] + " removida")
 	case "/mode":
 		if len(args) == 0 {
@@ -1990,7 +2102,11 @@ func (a *App) command(line string) {
 			if a.tools.BashTracked() {
 				ui.Notice("nada pra desfazer")
 			} else {
-				ui.Notice("nada pra desfazer (mudanças feitas via bash não são rastreadas)")
+				msg := "nada pra desfazer (mudanças feitas via bash não são rastreadas"
+				if why := a.tools.CheckpointOff(); why != "" {
+					msg += ": " + why
+				}
+				ui.Notice(msg + ")")
 			}
 			return
 		}
@@ -2094,12 +2210,16 @@ func (a *App) command(line string) {
 	case "/cost", "/usage":
 		u := a.agent.Usage
 		msg := fmt.Sprintf("sessão: entrada %s · saída %s · cache lido %s · escrito %s", fmtK(u.In), fmtK(u.Out), fmtK(u.CacheRead), fmtK(u.CacheWrite))
-		if u.Cost > 0 {
-			msg += fmt.Sprintf(" · US$ %.4f", u.Cost)
-		}
+		msg += costNote(a.cfg, u, rlLastOK(), a.agent.Model)
 		ui.Notice(msg)
 	case "/init":
 		a.send(initPrompt)
+	case "/remember": // main_memory.go
+		a.rememberCmd(argStr)
+	case "/memory":
+		a.memoryCmd()
+	case "/btw": // btw.go
+		a.btwCmd(argStr)
 	case "/doctor":
 		cmdDoctor(a.cfg, a.root, nil, false)
 	default:

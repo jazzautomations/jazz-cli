@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,10 +33,11 @@ type Session struct {
 	Path string
 	f    *os.File
 
-	mu     sync.Mutex
-	leaf   string   // id of the last entry on the active branch
-	base   string   // id of the meta or newest compact entry on the active branch
-	msgIDs []string // entry ids of the live messages (index = position in Agent.Msgs)
+	mu       sync.Mutex
+	writeErr error    // sticky: stop rather than advance a history we could not persist
+	leaf     string   // id of the last entry on the active branch
+	base     string   // id of the meta or newest compact entry on the active branch
+	msgIDs   []string // entry ids of the live messages (index = position in Agent.Msgs)
 	// unaligned: msgIDs does not match Agent.Msgs (a load repaired missing
 	// tool results); rewinds then rely on the N of the rewind entry alone
 	unaligned bool
@@ -200,6 +202,9 @@ func (s *Session) write(e sessEntry) string {
 }
 
 func (s *Session) writeLocked(e sessEntry) string {
+	if s.writeErr != nil {
+		return ""
+	}
 	if e.ID == "" {
 		e.ID = sessNewID(nil)
 	}
@@ -209,9 +214,21 @@ func (s *Session) writeLocked(e sessEntry) string {
 	if e.TS == 0 {
 		e.TS = time.Now().UnixMilli()
 	}
-	b, _ := json.Marshal(e)
+	b, err := json.Marshal(e)
+	if err != nil {
+		s.writeErr = fmt.Errorf("não consegui salvar a sessão: %w", err)
+		return ""
+	}
 	b = h2SignLine(b) // HMAC trailer (hardening2.go)
-	s.f.Write(append(b, '\n'))
+	line := append(b, '\n')
+	n, err := s.f.Write(line)
+	if err == nil && n != len(line) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		s.writeErr = fmt.Errorf("não consegui salvar a sessão: %w", err)
+		return ""
+	}
 	s.leaf = e.ID
 	switch e.T {
 	case "meta", "compact":
@@ -222,10 +239,24 @@ func (s *Session) writeLocked(e sessEntry) string {
 	return e.ID
 }
 
+// Err exposes a persistence failure to callers before they execute more work.
+func (s *Session) Err() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writeErr
+}
+
 // Sync flushes the file to disk (abnormal end only: the Dell has a slow disk).
 func (s *Session) Sync() {
 	if s != nil && s.f != nil {
-		_ = s.f.Sync()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if err := s.f.Sync(); err != nil && s.writeErr == nil {
+			s.writeErr = fmt.Errorf("não consegui sincronizar a sessão: %w", err)
+		}
 	}
 }
 
@@ -322,6 +353,7 @@ func (s *Session) Rewind(n int) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	oldLeaf, oldIDs := s.leaf, s.msgIDs
 	if !s.unaligned && n >= 0 && n <= len(s.msgIDs) {
 		if n == 0 {
 			s.leaf = s.base
@@ -330,7 +362,9 @@ func (s *Session) Rewind(n int) {
 		}
 		s.msgIDs = s.msgIDs[:n]
 	}
-	s.writeLocked(sessEntry{T: "rewind", N: n})
+	if s.writeLocked(sessEntry{T: "rewind", N: n}) == "" {
+		s.leaf, s.msgIDs = oldLeaf, oldIDs
+	}
 }
 
 func blobsDir() string { return filepath.Join(dataDir(), "blobs") }

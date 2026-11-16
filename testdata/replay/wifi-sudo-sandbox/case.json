@@ -1,0 +1,19 @@
+{
+  "name": "wifi-sudo-sandbox",
+  "origin": "d610 261109-211058-1884",
+  "why": "em yolo o gate libera, mas o sudo roda dentro do bwrap ('no new privileges') e o modelo conclui 'sem root, rode você'; elevado tem de agir no host (com permit + audit)",
+  "entry": "agent",
+  "mode": "yolo",
+  "stubs": {"bins": ["sudo", "modprobe"], "sudo_probe": "ok", "sudo_runner": true, "sandbox": true},
+  "provider": {"seq": [
+    {"calls": [{"name": "bash", "args": {"command": "sudo modprobe iwlwifi"}}]},
+    {"text": "carreguei o módulo do wifi."}
+  ]},
+  "turns": ["porra arruma ae o wifi, carrega o modulo iwlwifi"],
+  "expect": {
+    "err": "none",
+    "sudo_run": true,
+    "bins_not_ran": ["sudo"],
+    "tool_absent": ["no new privileges"]
+  }
+}

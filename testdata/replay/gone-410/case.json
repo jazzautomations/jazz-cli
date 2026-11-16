@@ -1,0 +1,23 @@
+{
+  "name": "gone-410",
+  "origin": "eventos nvidia/z-ai/glm-5.3, 14 runs entre 02/11 e 10/11",
+  "why": "410 'end of life' cai em 'other', não é Retryable e a run morre com a reserva configurada na fila",
+  "entry": "agent",
+  "mode": "auto",
+  "headless": true,
+  "model": "nvidia/z-ai/glm-5.3",
+  "fallback": ["fake/reserva"],
+  "extra": ["nvidia"],
+  "provider": {
+    "repeat": true,
+    "by_ref": {
+      "nvidia/z-ai/glm-5.3": [{"status": 410, "body": "{\"status\":410,\"title\":\"Gone\",\"detail\":\"The model 'z-ai/glm-5.3' has reached its end of life on 2026-10-28. Please use a different model.\"}"}],
+      "reserva": [{"text": "ok"}]
+    }
+  },
+  "turns": ["responda apenas: ok"],
+  "expect": {
+    "err": "none",
+    "models_some": ["reserva"]
+  }
+}

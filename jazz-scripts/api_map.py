@@ -185,6 +185,27 @@ def rs_symbols(lines):
 PARSE = {"py": py_symbols, "go": go_symbols, "js": js_symbols, "rs": rs_symbols}
 PREFILTER = {"py": ("def ", "class "), "go": ("func ", "type "), "js": ("export",), "rs": ("pub ",)}
 
+# not the project's API: eval/test fixtures, virtualenvs, installed packages
+# and nested repositories (a fixture's `ajuda()` was offered as the
+# project's own function, cwd=$HOME)
+API_SKIP = set("evals eval testdata fixtures fixture site-packages dist-packages .venv venv env".split())
+_nested = {}
+
+
+def skipped_path(p):
+    parts = os.path.relpath(p, top).split(os.sep)[:-1]
+    if any(x in API_SKIP or x.endswith("env") or x.endswith("-venv") for x in parts):
+        return True
+    d = top
+    for x in parts:
+        d = os.path.join(d, x)
+        if d not in _nested:
+            _nested[d] = os.path.exists(os.path.join(d, ".git"))
+        if _nested[d]:
+            return True
+    return False
+
+
 if os.path.isfile(top):
     files = [top]
 else:
@@ -193,6 +214,8 @@ else:
         ext = os.path.splitext(p)[1].lower()
         lg = LANG.get(ext)
         if not lg or (lang_only != "any" and lg != lang_only) or TEST_RE.search(os.path.basename(p)):
+            continue
+        if skipped_path(p):
             continue
         files.append(p)
         if len(files) >= MAX_FILES:

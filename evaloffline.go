@@ -131,6 +131,9 @@ func cmdEval(root string, args []string, w io.Writer) int {
 	if len(args) >= 2 && args[0] == "parse" {
 		return erParse(root, strings.Join(args[1:], " "), w)
 	}
+	if len(args) >= 1 && args[0] == "context" {
+		return cmdEvalContext(root, args[1:], w) // replay de decisões gravadas sob uma política de contexto (evalctx.go)
+	}
 	if len(args) == 0 || args[0] != "offline" && args[0] != "real" {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
@@ -138,6 +141,13 @@ func cmdEval(root string, args []string, w io.Writer) int {
 	suite := args[0]
 	out, only, verbose, gate := filepath.Join(root, "results"), map[string]bool{}, false, ""
 	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--out", "-out", "--only", "-only", "--tasks", "-tasks", "--gate", "-gate":
+			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" || strings.HasPrefix(args[i+1], "--") {
+				fmt.Fprintln(os.Stderr, usage)
+				return 2
+			}
+		}
 		switch args[i] {
 		case "--out", "-out":
 			if i+1 < len(args) {
@@ -212,6 +222,8 @@ func cmdEval(root string, args []string, w io.Writer) int {
 			return 1
 		}
 		fmt.Fprintf(w, "gate: ok (%d falha(s) conhecida(s), nenhuma nova)\n", len(known))
+	} else if rep.Summary.Success != rep.Summary.N {
+		return 1
 	}
 	return 0
 }
@@ -271,8 +283,7 @@ func eoRun(only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 func eoRunSuite(name string, only map[string]bool, verbose bool, w io.Writer) (*eoReport, error) {
 	// fixtures are not the owner's requests, and the numbers are the
 	// embedded grammar's: no ledger writes, no forge overlay (nlu_overlay.go)
-	sigMuted.Store(true)
-	defer sigMuted.Store(false)
+	defer sigMuted.Store(sigMuted.Swap(true))
 	defer nuOverlayOff.Store(nuOverlayOff.Swap(true))
 	var suite struct {
 		Tasks []eoTask `json:"tasks"`
@@ -289,6 +300,25 @@ func eoRunSuite(name string, only map[string]bool, verbose bool, w io.Writer) (*
 	}
 	if name == "real" && erVariants {
 		suite.Tasks = erExpandVariants(suite.Tasks)
+	}
+	if len(suite.Tasks) == 0 {
+		return nil, fmt.Errorf("%s: nenhuma tarefa para avaliar", src)
+	}
+	if len(only) > 0 {
+		known := make(map[string]bool, len(suite.Tasks))
+		for _, tk := range suite.Tasks {
+			known[tk.ID] = true
+		}
+		var unknown []string
+		for id := range only {
+			if !known[id] {
+				unknown = append(unknown, id)
+			}
+		}
+		if len(unknown) > 0 {
+			sort.Strings(unknown)
+			return nil, fmt.Errorf("tarefa(s) desconhecida(s): %s", strings.Join(unknown, ", "))
+		}
 	}
 	rep := &eoReport{Version: version, Started: time.Now(), Host: runtime.GOOS + "/" + runtime.GOARCH + fmt.Sprintf(" %d cpu", runtime.NumCPU()), Model: "none"}
 	base, err := eoFixtureBase(sbCurrent())
@@ -519,6 +549,7 @@ func eoOne(tk eoTask, base string, prof *epProfile) eoRow {
 		fail("categoria %s, esperada %s", orDash(string(r.Category)), exp.Category)
 	}
 	for _, c := range exp.Contains {
+		c = strings.ReplaceAll(c, "${version}", version)
 		c = strings.ReplaceAll(c, "$VERSION", version) // the task follows the binary, not a release number frozen in the fixture
 		c = strings.ReplaceAll(c, "$YEAR", time.Now().Format("2006"))
 		if !strings.Contains(r.Text, c) {
@@ -623,6 +654,7 @@ func eoFixture(base, id, kind string) (string, error) {
 			"ana.txt":                  "ana\n",
 
 			"v5_file_find.txt":    "alvo\n",
+			"v5_perm_find.txt":    "fixture com permissão 777\n",
 			"v5_text_extract.txt": "ana@x.com bruno 10.0.0.1\n",
 			"v5_line_slice.txt":   "l1\nl2\nl3\nl4\nl5\n",
 			"v5_text_count.txt":   "ana\nbruno\nana\n",
@@ -652,8 +684,17 @@ func eoFixture(base, id, kind string) (string, error) {
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(abs, []byte(c), 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		if kind == "cardapio" && p == "v5_perm_find.txt" {
+			mode = 0o777
+		}
+		if err := os.WriteFile(abs, []byte(c), mode); err != nil {
 			return "", err
+		}
+		if mode != 0o644 {
+			if err := os.Chmod(abs, mode); err != nil {
+				return "", err
+			}
 		}
 	}
 	if git {

@@ -552,6 +552,15 @@ func TestDocsInjectAPIMapAndPrefetch(t *testing.T) {
 	}
 	dcTestEnv(t)
 	root := t.TempDir()
+	// outside a project (no marker) nothing is injected
+	tb0 := NewToolbox(root)
+	ag0 := NewAgent(&Config{Mode: "auto"}, &recUI{}, tb0, nil, "fake/m")
+	dcWrite(t, root, "ponto/calculo.py", "def horas_extras(registros, referencia) -> int:\n    return 0\n")
+	if n := ag0.dcInject(context.Background(), "Implemente a função horas_extras de ponto/calculo.py"); n != "" {
+		t.Errorf("no project marker, still a note:\n%s", n)
+	}
+	tb0.Shell.Close()
+	dcWrite(t, root, "pyproject.toml", "[project]\nname='ponto'\n")
 	dcWrite(t, root, "ponto/calculo.py", "def horas_extras(registros, referencia) -> int:\n    \"\"\"Minutos de hora extra da semana.\"\"\"\n    raise NotImplementedError\n\n\ndef total_minutos(registros) -> int:\n    return 0\n")
 	dcWrite(t, root, "ponto/datas.py", "def semana_iso(d):\n    \"\"\"(segunda, domingo) da semana ISO.\"\"\"\n")
 	tb := NewToolbox(root)
@@ -566,6 +575,15 @@ func TestDocsInjectAPIMapAndPrefetch(t *testing.T) {
 	}
 	if n := ag.dcInject(context.Background(), "o que é isso?"); strings.Contains(n, "APIs do projeto") {
 		t.Errorf("question got a note: %s", n)
+	}
+	// plain Portuguese with no code in it: no note, first turn or not
+	if n := ag.dcInject(context.Background(), "me ajuda a arrumar o wifi"); n != "" {
+		t.Errorf("plain request got a note: %s", n)
+	}
+	// a fixture under evals/ is not the project's API
+	dcWrite(t, root, "evals/v2/ajuda.py", "def horas_extras_fake(x):\n    return 0\n")
+	if n := ag.dcInject(context.Background(), "Implemente horas_extras_fake em ponto/calculo.py"); strings.Contains(n, "evals/") {
+		t.Errorf("eval fixture offered as API:\n%s", n)
 	}
 	t.Setenv("JAZZ_API_MAP", "off")
 	if n := ag.dcInject(context.Background(), "Implemente a função horas_extras de ponto/calculo.py"); n != "" {

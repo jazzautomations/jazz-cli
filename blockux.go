@@ -23,7 +23,7 @@ import (
 )
 
 // blockSteer is the instruction every block result ends with.
-const blockSteer = "Continue the user's original task without this content/action. Do not retry or look for workarounds."
+const blockSteer = "Do not retry it or look for workarounds. Continue the parts of the user's task that do not need it; if the task cannot be finished without it, say so plainly: which step was blocked and why. Never describe the task as done or ready while a required step was blocked."
 
 // Spiral breaker limits.
 const (

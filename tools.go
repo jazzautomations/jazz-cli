@@ -84,6 +84,10 @@ type Toolbox struct {
 	Scripts bool
 	// UILint runs ui_lint after each write/edit of a UI file (uilint.go).
 	UILint bool
+	// SysWrite writes an approved system file (/etc …) as root when the
+	// plain write gets EACCES: backup, then sudo on the host (consent.go,
+	// nlSysWrite). It returns a note for the model. nil = no elevation.
+	SysWrite func(p string, data []byte, mode os.FileMode) (string, error)
 
 	mu         sync.Mutex
 	readState  map[string]fileStamp
@@ -166,6 +170,7 @@ func buildToolSpecs(hasRg, web bool) []ToolSpec {
 				"command":    str("The command to run"),
 				"timeout":    integer("Timeout in seconds (default 120, max 600)"),
 				"background": map[string]any{"type": "boolean", "description": "Start as a detached background job and return immediately"},
+				"sandbox":    map[string]any{"type": "boolean", "description": "false = run this one command outside the OS sandbox. Only after the same command failed BECAUSE of the sandbox (a headless browser such as Chrome/Remotion/Puppeteer that will not start, 'Operation not permitted' writing a cache under ~). jazz asks the user every time."},
 				"job":        str("Job id (from a background run) to act on instead of running a command"),
 				"action":     map[string]any{"type": "string", "enum": []string{"output", "kill", "list"}, "description": "With job: output = new log lines since last check, kill = stop it, list = all jobs"},
 			})},
@@ -389,7 +394,7 @@ func normalizeArgs(tool string, m map[string]any) map[string]any {
 		}
 		out[k] = v
 	}
-	return out
+	return afRepair(tool, out) // argv command, dirty key (argfix.go)
 }
 
 func argStr(m map[string]any, k string) (string, bool) {
@@ -441,7 +446,7 @@ func validationErr(tool, msg, raw string) ToolOutput {
 	if len(raw) > 600 {
 		raw = raw[:600] + "…"
 	}
-	return ToolOutput{IsErr: true, Text: fmt.Sprintf("Validation failed for tool %q: %s. Received arguments: %s", tool, msg, raw),
+	return ToolOutput{IsErr: true, Text: fmt.Sprintf("Validation failed for tool %q: %s. Received arguments: %s.", tool, msg, raw) + afExampleLine(tool),
 		Display: Display{Summary: "argumentos inválidos: " + msg}}
 }
 
@@ -561,8 +566,15 @@ func (t *Toolbox) wasRead(p string) bool {
 }
 
 // BeginTurn opens a new checkpoint for /undo and /rewind.
-func (t *Toolbox) BeginTurn(msgIndex int) {
-	tree := t.cpSnapshot()
+func (t *Toolbox) BeginTurn(msgIndex int) { t.beginTurn(msgIndex, true) }
+
+// beginTurn opens the turn; snap=false skips the shadow-git snapshot (a
+// conversation turn: write/edit keep their in-memory snapshots).
+func (t *Toolbox) beginTurn(msgIndex int, snap bool) {
+	tree := ""
+	if snap {
+		tree = t.cpSnapshot()
+	}
 	if tree != "" {
 		t.obCommit(t.checkpoints(), tree, "turn-start") // hand edits between turns (checkpoint_trace.go)
 	}
@@ -980,6 +992,24 @@ func isProseFile(p string) bool {
 	return false
 }
 
+// sysWritable: err is a permission error on a system path that SysWrite can
+// write as root.
+func (t *Toolbox) sysWritable(p string, err error) bool {
+	return err != nil && t.SysWrite != nil && os.IsPermission(err) && cbSysPath(p) != ""
+}
+
+// writeFileSys is os.WriteFile, falling back to the elevated SysWrite for an
+// approved system file the user cannot write (the call already went through
+// permit: menor intervenção asked, or yolo). In-process root writes are never
+// attempted.
+func (t *Toolbox) writeFileSys(p string, data []byte, mode os.FileMode) (string, error) {
+	err := os.WriteFile(p, data, mode)
+	if !t.sysWritable(p, err) {
+		return "", err
+	}
+	return t.SysWrite(p, data, mode)
+}
+
 func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 	ps, ok := argStr(m, "path")
 	if !ok || strings.TrimSpace(ps) == "" {
@@ -1017,16 +1047,18 @@ func (t *Toolbox) write(m map[string]any, raw string) ToolOutput {
 			return ToolOutput{IsErr: true, Text: fmt.Sprintf("Refused: the content contains the placeholder %q, which would replace real code with a comment. Write the complete content; for a long file, write it in parts (write a skeleton, then edit).", mk), Display: Display{Summary: "bloqueado: placeholder no lugar de código", Path: t.rel(p)}}
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil && !t.sysWritable(p, err) {
 		return ToolOutput{IsErr: true, Text: "Cannot create directory: " + errText(err)}
 	}
 	if t.TurnWritten()+int64(len(content)) > defTurnWriteMB<<20 {
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("Refused: this write would exceed the per-turn disk-write cap of %d MB (max_turn_write_mb). Write less, or split the work across turns.", defTurnWriteMB), Display: Display{Summary: "bloqueado: limite de escrita do turno", Path: t.rel(p)}}
 	}
 	t.snap(p)
-	if err := os.WriteFile(p, []byte(content), mode); err != nil {
+	sysNote, err := t.writeFileSys(p, []byte(content), mode)
+	if err != nil {
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("Cannot write %s: %v", ps, errText(err))}
 	}
+	simNote += sysNote
 	t.addWritten(int64(len(content)))
 	t.stampData(p, []byte(content))
 	n := strings.Count(content, "\n")
@@ -1092,7 +1124,8 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 		out = "\uFEFF" + out
 	}
 	t.snap(p)
-	if err := os.WriteFile(p, []byte(out), fi.Mode().Perm()); err != nil {
+	sysNote, err := t.writeFileSys(p, []byte(out), fi.Mode().Perm())
+	if err != nil {
 		return ToolOutput{IsErr: true, Text: "Cannot write file: " + errText(err)}
 	}
 	t.stampData(p, []byte(out))
@@ -1102,7 +1135,10 @@ func (t *Toolbox) edit(m map[string]any, raw string) ToolOutput {
 		b.WriteString("s")
 	}
 	b.WriteString(").")
-	if res.Fuzzy {
+	b.WriteString(sysNote)
+	if res.Indent {
+		b.WriteString(" Note: old_string matched only after ignoring indentation; your replacement was re-indented to the file's indentation. Check the snippet below.")
+	} else if res.Fuzzy {
 		b.WriteString(" Note: matched after normalizing whitespace/Unicode quotes; the touched lines were rewritten.")
 	}
 	if len(res.Hunks) > 0 {
@@ -1148,6 +1184,17 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	if argBool(m, "background") {
 		return t.startJob(ctx, cmd)
 	}
+	// servers go to the background, followers are refused (fg_guard.go)
+	switch kind, why := fgKind(cmd); kind {
+	case "server":
+		out := t.startJob(ctx, cmd)
+		if !out.IsErr {
+			out.Text = "Note: `" + why + "` is a server, so jazz started it as a background job instead of blocking the shell.\n" + out.Text
+		}
+		return out
+	case "follow":
+		return ToolOutput{IsErr: true, Text: fmt.Sprintf(fgFollowMsg, why), Display: Display{Summary: "não termina sozinho: " + why}}
+	}
 	to, ok := argInt(m, "timeout")
 	if !ok || to <= 0 {
 		to = 120
@@ -1175,6 +1222,14 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 		if t.Window == nil {
 			window = nil
 		}
+	} else if usWanted("bash", m) && usSecretRead(cmd) != "" {
+		// defense in depth: permit refuses this first (agent.go)
+		return ToolOutput{IsErr: true, Text: "Blocked: " + usSecretBlockEN(usSecretRead(cmd)) + ".",
+			Display: Display{Summary: usSecretBlockPT(usSecretRead(cmd))}}
+	} else if usWanted("bash", m) {
+		r = t.runHost(ctx, sh, cmd, time.Duration(to)*time.Second) // approved escape (unsandboxed.go)
+		t.cpAfterBash(cmd)
+		cwd = sh.Cwd
 	} else {
 		r = sh.Run(ctx, cmd, time.Duration(to)*time.Second, onOut)
 		t.cpAfterBash(cmd)
@@ -1188,6 +1243,9 @@ func (t *Toolbox) bash(ctx context.Context, m map[string]any, raw string) ToolOu
 	}
 	if !r.Reset {
 		fmt.Fprintf(&b, "[exit code %d]", r.ExitCode)
+		if h := bhExitHint(cmd, r.ExitCode, r.Output); h != "" { // what the status means (bash_hints.go)
+			b.WriteString(" " + h)
+		}
 	}
 	if r.Note != "" {
 		b.WriteString(r.Note)

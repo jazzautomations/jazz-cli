@@ -53,7 +53,7 @@ func (u *TermUI) ApproveBatch(ctx context.Context, items []apBatchItem) ([]Appro
 		{Label: "Não, nenhuma", Key: 'n'},
 	}
 	sp := mnSpec{Tag: fmt.Sprintf("%d confirmações", len(items)), Body: body, Title: fmt.Sprintf("Fazer estas %d ações?", len(items)),
-		Items: opts, Color: border, Guard: true, Since: lastKey,
+		Items: opts, Color: border, Guard: true, Settle: true, SettleOnly: map[int]bool{0: true}, Since: lastKey,
 		Keys: "enter sim pra tudo " + g.dot + " u uma por uma " + g.dot + " n/esc nenhuma " + g.dot + " v ver tudo"}
 	sp.View = func() string {
 		var b strings.Builder
@@ -72,6 +72,11 @@ func (u *TermUI) ApproveBatch(ctx context.Context, items []apBatchItem) ([]Appro
 	defer release()
 	i := u.menuKeys(ctx, keys, &sp)
 	what := fmt.Sprintf("%d ações", len(items))
+	if sp.aborted { // Ctrl+C/Ctrl+D: stop the whole turn
+		u.menuDone(false, "não, turno interrompido "+dim+g.dot+" "+what)
+		u.abortTurn()
+		return make([]Approval, len(items)), false
+	}
 	switch i {
 	case 0:
 		u.menuDone(true, "sim pra tudo "+dim+g.dot+" "+what)

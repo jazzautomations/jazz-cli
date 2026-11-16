@@ -162,7 +162,7 @@ func TestPTYApproveTypeAhead(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	s.typeSlow("e depois explica")
 	s.waitFor("the approval", 10*time.Second, func(sc string) bool { return strings.Contains(sc, "Rodar este comando?") })
-	if sc := s.screen(); !strings.Contains(sc, "na fila: e depois explica") || !strings.Contains(sc, "▸ 1. Sim") {
+	if sc := s.screen(); !strings.Contains(sc, "digitando: e depois explica") || !strings.Contains(sc, "▸ 1. Sim") {
 		t.Errorf("queued text or highlight missing:\n%s", sc)
 	}
 	time.Sleep(uiApproveIdle + 100*time.Millisecond)

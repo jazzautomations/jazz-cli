@@ -1,0 +1,10 @@
+{
+  "session_id": "261110-085349-83bf",
+  "status": "done",
+  "outcome": "completed",
+  "requests": 14,
+  "request_errors": 1,
+  "models": {
+    "kilo/cohere/north-mini-code:free": 13
+  }
+}

@@ -44,6 +44,13 @@ func TestCardapioServiceStatus(t *testing.T) {
 	}
 
 	// a running process is observed as active via kind=process
+	if _, err := os.Stat("/proc/self"); err != nil {
+		v, out := scCall(t, tb, "service_status", map[string]any{"name": "sleep", "kind": "process"})
+		if scOK(v) || !out.IsErr || !strings.Contains(fmt.Sprint(v["error"]), "/proc") {
+			t.Fatalf("unsupported process backend must not claim 'not found': %v", v)
+		}
+		return
+	}
 	if _, err := exec.LookPath("sleep"); err != nil {
 		t.Skip("sleep not available for the live-process check")
 	}

@@ -66,6 +66,8 @@ type Sandbox struct {
 	ReadOK   []string // readable inside Hide (scripts, skills)
 	WriteOK  []string // read-write inside Hide (spill, jobs)
 	Env      []string // extra env for children
+	GUISock  string   // X11 socket to re-expose ("" = no display)
+	GUIAuth  string   // xauthority to re-expose alongside GUISock
 
 	once    sync.Once
 	profile string   // seatbelt: SBPL text
@@ -165,6 +167,17 @@ func sbSetup(cfg *Config, root, flag string) (*Sandbox, error) {
 		return nil, nil
 	}
 	sb := sbNew(mode, backend, bin, sbNetAllowed(mode, cfg), sbProjectRoots(root))
+	// GUI display is a setup-time decision: sbBwrapArgs stays a pure function
+	// of the struct (golden-argv tests) instead of reading ambient env mid-build.
+	if sock := x11Socket(os.Getenv("DISPLAY")); sock != "" {
+		if fi, err := os.Stat(sock); err == nil && fi.Mode()&os.ModeSocket != 0 {
+			sb.GUISock = sock
+			sb.GUIAuth = os.Getenv("XAUTHORITY")
+			if sb.GUIAuth == "" {
+				sb.GUIAuth = x11Xauth()
+			}
+		}
+	}
 	if backend != sbJobObject {
 		if err := sb.prepare(); err != nil {
 			sbStatus.Store("falhou ao preparar: " + err.Error())
@@ -302,6 +315,22 @@ func sbNew(mode, backend, bin string, net bool, roots []string) *Sandbox {
 			}
 		}
 	}
+	// an installed skill keeps its own cache in ~/.cache/<skill> (video-lite:
+	// voice and SFX WAVs); only that folder, created here so the bind exists
+	if mode != "strict" && sb.Home != "" {
+		if ents, err := os.ReadDir(filepath.Join(configDir(), "skills")); err == nil {
+			for _, e := range ents {
+				n := e.Name()
+				if !e.IsDir() || strings.HasPrefix(n, ".") || strings.ContainsAny(n, "/\\") || strings.HasSuffix(n, ".installing") || strings.HasSuffix(n, ".old") {
+					continue
+				}
+				d := filepath.Join(sb.Home, ".cache", n)
+				if os.MkdirAll(d, 0o755) == nil {
+					sb.CacheRW = append(sb.CacheRW, sbReal(d))
+				}
+			}
+		}
+	}
 	// worktree/submodule roots keep .git as a file ("gitdir: <abs>") pointing
 	// into the real metadata — usually under $HOME or /tmp, which the sandbox
 	// masks with tmpfs. Bind the resolved gitdir read-only so git plumbing
@@ -328,7 +357,7 @@ func sbNew(mode, backend, bin string, net bool, roots []string) *Sandbox {
 
 // sbHomeRO are toolchain dirs under $HOME a build needs to read (the fence's
 // list plus binaries and git's user config).
-var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".local/lib", ".local/bin", ".local/share/pnpm",
+var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".local/lib", ".local/bin", ".local/opt", ".local/share/fonts", ".fonts", ".local/share/pnpm",
 	".m2", ".gradle", ".yarn", ".pnpm-store", "Library/pnpm", ".bun", ".deno", ".volta", ".asdf", ".sdkman",
 	".gitconfig", ".config/git", ".gitignore_global", ".npm"}
 
@@ -337,7 +366,7 @@ var sbHomeRO = []string{"go", "sdk", ".cargo", ".rustup", ".pyenv", ".nvm", ".lo
 var sbHomeRW = []string{"go/pkg/mod", ".npm/_cacache", ".npm/_logs", ".cargo/registry", ".cargo/git",
 	".cache/go-build", ".cache/pip", ".cache/uv", ".cache/yarn", ".cache/pnpm", ".cache/node-gyp", ".cache/ms-playwright",
 	"Library/Caches/go-build", "Library/Caches/pip", "Library/Caches/Yarn", "Library/Caches/pnpm", "Library/Caches/node-gyp",
-	"Library/Caches/ms-playwright", ".m2/repository", ".gradle/caches", ".yarn/berry/cache", ".pnpm-store", "Library/pnpm/store", ".bun/install/cache"}
+	"Library/Caches/ms-playwright", ".cache/huggingface", "Library/Caches/huggingface", ".m2/repository", ".gradle/caches", ".yarn/berry/cache", ".pnpm-store", "Library/pnpm/store", ".bun/install/cache"}
 
 // sbHomeSecrets stay unreadable even when the project is $HOME.
 var sbHomeSecrets = []string{".ssh", ".aws", ".gnupg", ".azure", ".kube", ".docker", ".netrc", ".git-credentials",
@@ -454,20 +483,69 @@ func (s *Sandbox) bwrapCacheEnv(getenv func(string) string) []string {
 	return out
 }
 
-// sbPruneTmp removes private temp dirs left by jazz processes that are gone
-// (older than a day: a dead pid may be reused).
+// sbPruneTmp removes private temp dirs left by jazz processes that are gone.
+// The dir is named "<pid>-…": only a dead pid's dir goes. Age alone is not
+// enough — a session open for more than a day had its temp dir pruned by the
+// next jazz started on the machine, and every command after that died with
+// bwrap's "Can't find source path" (d610, v0.12.1).
 func sbPruneTmp(base string) {
 	ents, err := os.ReadDir(base)
 	if err != nil {
 		return
 	}
 	for _, e := range ents {
-		fi, err := e.Info()
-		if err != nil || time.Since(fi.ModTime()) < 24*time.Hour {
+		pre, _, ok := strings.Cut(e.Name(), "-")
+		pid, err := strconv.Atoi(pre)
+		if !ok || err != nil || pid == os.Getpid() || procAlive(pid) {
 			continue
 		}
 		_ = os.RemoveAll(filepath.Join(base, e.Name()))
 	}
+}
+
+// sbStarted is when this process started (the uptime in sandbox.tmp_recreated).
+var sbStarted = time.Now()
+
+// ensureTmp recreates the private temp dir when something removed it under a
+// live session (a /tmp cleaner, a reboot-less tmpfs reset, a prune): bwrap
+// binds it, and a missing source kills every command with "Can't find source
+// path". It reports whether the dir had to be recreated.
+func (s *Sandbox) ensureTmp() bool {
+	if s == nil || s.Tmp == "" {
+		return false
+	}
+	if _, err := os.Stat(s.Tmp); err == nil || !os.IsNotExist(err) {
+		return false
+	}
+	if err := os.MkdirAll(s.Tmp, 0o700); err != nil {
+		dbg("sandbox", map[string]any{"tmp_recreate_err": err.Error()})
+		return false
+	}
+	f := map[string]any{"pid": os.Getpid(), "uptime_s": int(time.Since(sbStarted).Seconds())}
+	if fi, err := os.Stat(filepath.Dir(s.Tmp)); err == nil {
+		f["base_mtime"] = fi.ModTime().UTC().Format(time.RFC3339)
+	}
+	obEmit("sandbox.tmp_recreated", f)
+	dbg("sandbox", f)
+	return true
+}
+
+// sbSourceMissing: bwrap could not bind a path that vanished — and that is
+// all the shell printed, so the command never started (a command whose own
+// output mentions the message must not be run twice).
+func sbSourceMissing(out string) bool {
+	seen := false
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" {
+			continue
+		}
+		if !strings.HasPrefix(l, "bwrap:") {
+			return false
+		}
+		seen = seen || strings.Contains(l, "Can't find source path")
+	}
+	return seen
 }
 
 // Close removes the private temp dir.
@@ -481,6 +559,26 @@ func (s *Sandbox) Close() {
 // Windows job object).
 func (s *Sandbox) Isolates() bool {
 	return s != nil && (s.Backend == sbSeatbelt || s.Backend == sbBwrap)
+}
+
+// MasksHome reports whether a scan of p (absolute) from inside the sandbox
+// sees only part of the real $HOME: the home is hidden (bwrap tmpfs, seatbelt
+// deny) and p is the home, contains it (/, /home) or lies under it outside
+// what is given back (project, toolchain dirs, jazz's scripts). A du of ~
+// there measured a 1 GB tmpfs for a 3.1 GB home with confidence 1.00 (Dell
+// QA, 0.14).
+func (s *Sandbox) MasksHome(p string) bool {
+	if !s.Isolates() || !s.HideHome || s.Home == "" || p == "" {
+		return false
+	}
+	rp := resolvePath(p)
+	if pathIn(s.Home, rp) || pathIn(resolvePath(s.Home), rp) {
+		return true // the home is inside the scanned tree
+	}
+	if !pathIn(rp, s.Home) {
+		return false
+	}
+	return !sbUnder(rp, s.Roots, s.CacheRO, s.CacheRW, s.ReadOK, s.WriteOK, []string{s.Tmp})
 }
 
 // PidNamespace: background jobs cannot report host pids with $! (bwrap).
@@ -513,6 +611,7 @@ func (s *Sandbox) Wrap(cmd *exec.Cmd) {
 	if !s.Isolates() || cmd == nil || cmd.Err != nil || cmd.Path == "" {
 		return
 	}
+	s.ensureTmp()
 	dir := cmd.Dir
 	if dir == "" {
 		dir, _ = os.Getwd()
@@ -719,6 +818,16 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	}
 	for _, p := range s.WriteOK {
 		a = append(a, "--bind-try", p, p)
+	}
+	// X11 inside the sandbox: the /tmp tmpfs above hides the socket, which
+	// turned "open in the GUI" into a silent failure the model narrated as
+	// success (d610). With a display available, give it back read-only; the
+	// xauth file gets re-exposed even under a masked HOME or /run/user.
+	if s.GUISock != "" {
+		a = append(a, "--ro-bind-try", s.GUISock, s.GUISock)
+		if s.GUIAuth != "" {
+			a = append(a, "--ro-bind-try", s.GUIAuth, s.GUIAuth)
+		}
 	}
 	for _, p := range ro {
 		if !sbBwrapCovered(a, p) {

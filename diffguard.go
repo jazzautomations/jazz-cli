@@ -638,11 +638,35 @@ func (c *cpStore) Show(tree, rel string) (string, bool) {
 	return string(out), true
 }
 
-// dgSkipPath: places jazz and git own; never reviewed.
+// dgThirdParty: directories of installed or generated code — dependencies a
+// package manager wrote, caches, build output. The diff review is for the
+// changes the agent made to the user's code; reviewing (and, with nobody to
+// approve, restoring) pip's site-packages broke a skill's venv (video-forge
+// on 13/11: 43 library files reverted, the environment dead).
+var dgThirdParty = []string{".git/", ".jazz/", "node_modules/", "site-packages/", "dist-packages/", "__pycache__/",
+	".venv/", "venv/", ".tox/", ".nox/", ".mypy_cache/", ".pytest_cache/", ".ruff_cache/", ".cache/",
+	"vendor/", "bower_components/", ".pnpm-store/", ".yarn/", ".gradle/", ".m2/", ".cargo/", "Pods/",
+	".next/", ".nuxt/", ".svelte-kit/", ".turbo/", ".parcel-cache/", ".eggs/"}
+
+// dgSkipPath: places jazz and git own, and third-party/generated code; never reviewed.
 func dgSkipPath(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	for _, p := range []string{".git/", ".jazz/", "node_modules/"} {
+	for _, p := range dgThirdParty {
 		if strings.HasPrefix(rel, p) || strings.Contains(rel, "/"+p) {
+			return true
+		}
+	}
+	return strings.HasSuffix(rel, ".egg-info") || strings.Contains(rel, ".egg-info/")
+}
+
+// dgInVenv: rel lies inside a Python virtual environment of any name (a
+// directory holding pyvenv.cfg, like video-forge's .video-forge-tools).
+func dgInVenv(root, rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	dir := root
+	for _, p := range parts[:max(0, len(parts)-1)] {
+		dir = filepath.Join(dir, p)
+		if _, err := os.Stat(filepath.Join(dir, "pyvenv.cfg")); err == nil {
 			return true
 		}
 	}
@@ -683,7 +707,7 @@ func (t *Toolbox) dgTurnFiles() []dgFile {
 		display := filepath.ToSlash(rel)
 		if outside {
 			display = filepath.ToSlash(p)
-		} else if dgSkipPath(rel) {
+		} else if dgSkipPath(rel) || dgInVenv(t.Root, rel) {
 			continue
 		}
 		f := dgFile{Path: display, Outside: outside}

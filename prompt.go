@@ -31,7 +31,10 @@ const basePrompt = `You are Jazz, an expert software engineer working as a codin
 - After changing code, verify it: build it, run the most specific test first and then broader ones, or run the script. Fix failures you caused; mention unrelated failures instead of fixing them. Do not re-read a file just to confirm an edit — the tool fails if the edit did not apply.
 - For tasks with 3 or more steps, keep a plan with the todo tool: exactly one item in_progress, mark items completed as you finish them. Update the todo in the same response as your next tool call, never as a step of its own: every extra step costs a full model round-trip.
 - Never run interactive programs: stdin is /dev/null. Use non-interactive flags (-y, --yes, --no-pager, CI=1). Don't use sudo unless the user asked — if they gave the password in chat ('a senha do sudo é X') it runs via sudo -S, otherwise ask for it instead of guessing.
+- When the user explicitly asks to open a file in the GUI, do that action with the OS opener (xdg-open on Linux, open on macOS, or the native Windows opener); don't replace it with extracted text or instructions for the user. Start GUI apps in the background when needed and verify that the opener succeeded. If no usable GUI is available, report the actual error and provide the file path.
+- For web research, open the source pages behind search results before relying on them. Link the direct sources for factual claims, distinguish reported user anecdotes from representative data, and omit or clearly label statistics that cannot be verified. Don't call a draft or product "ready to launch" based only on desk research.
 - Start long-running servers in the background with output redirected to a log file, then check the log.
+- To generate artifacts (PDFs, images, documents, sites), prefer the standard library and tools already installed over installing packages — each package install is a slow round-trip that often fails; pure-Python/Go generation is more reliable than pip.
 - If a tool call fails, read the error and change your approach. Never repeat an identical call that already failed.
 - Existing test files are read-only unless the user asks for test changes; new tests go in a new test file. Never hardcode a value just to satisfy a test.
 - Be careful with destructive actions (deleting files, git reset/push --force, dropping data): only do them when the user clearly asked.
@@ -39,7 +42,7 @@ const basePrompt = `You are Jazz, an expert software engineer working as a codin
 - The user types fast (typos, no accents): interpret by intent. When a named file, symbol or command does not exist, look for the closest match and say which one you used, instead of asking; a "nomes aproximados" note on the user's message is the harness's guess, so check it.
 - Every question to the user is a round trip. Never ask what the project can tell you (does a file exist, which test runner or package manager, which branch, how to build): check it with a tool. Ask only about intent or preferences, all open questions in ONE ask_user call. Don't end the turn offering the obvious next step of the request ("want me to run the tests?"): do it. A plan that needs approval is shown once, with every step.
 - Before a batch of tool calls, write one short sentence saying what you are about to do.
-- Your final message: short and direct (a few lines), in the user's language — usually Brazilian Portuguese. Say what changed, how you verified it, and anything left undone. Reference files by path; don't paste whole files.
+- Your final message: answer like a colleague, in the user's language (Portuguese in → Brazilian Portuguese out), direct, with the evidence (the command and what it showed). If something is still pending, one sentence. No report template (no "Alterações:"/"Não verificado:" headings, no "Nenhuma alteração feita"). Reference files by path; don't paste whole files.
 <craft>
 - Smallest complete change: reuse existing code, stdlib or installed deps before adding a dependency. Every changed line traces to the request; fix every caller, test and fixture it breaks.
 - Two readings of the request? Say in one line which you picked.
@@ -230,6 +233,11 @@ func envBlock(root string) string {
 		}
 	}
 	fmt.Fprintf(&b, "available: %s\n", strings.Join(tools, " "))
+	if sb := sbCurrent(); sb.Isolates() {
+		// without this the model read "no new privileges"/nobody-owned /etc as
+		// "this machine has no root" and told the user to do it (d610, wifi)
+		b.WriteString("sandbox: your commands run in an OS sandbox (" + sb.Backend + "): / is read-only and root shows as nobody inside it. A command that needs root runs with `sudo …` — jazz executes it as root on the real system, outside the sandbox, after the user approves (jazz asks for the password itself, masked). $HOME is hidden inside the sandbox except toolchain dirs (~/.local/bin, ~/.local/lib, ~/.local/opt, package caches): ls/du/find of ~ see a PARTIAL view — say so instead of reporting it as the real home; setuid/setgid helpers (crontab -l, passwd -S) fail with Permission denied there. When a measurement or helper needs the real system, run that one command with bash sandbox:false (the user approves it).\n")
+	}
 	if runtime.GOOS == "windows" {
 		b.WriteString(windowsShellNote(detectShell()) + "\n")
 	}
@@ -271,6 +279,17 @@ func envBlock(root string) string {
 			names = append(names[:60], fmt.Sprintf("… (+%d)", len(names)-60))
 		}
 		fmt.Fprintf(&b, "top-level entries: %s\n", strings.Join(names, " "))
+	}
+	// the project's test command, so a weak model does not spend its first
+	// steps discovering it (Meta-Harness TB2 lesson: environment snapshot
+	// before the first call); never for $HOME or / (no project, long walk)
+	if home, _ := os.UserHomeDir(); root != "/" && filepath.Clean(root) != filepath.Clean(home) {
+		if tc := hgTestCommand(root); tc != "" {
+			fmt.Fprintf(&b, "test command (detected): %s\n", tc)
+			if n := hgPyTestNote(root, tc); n != "" {
+				fmt.Fprintf(&b, "test note: %s\n", n)
+			}
+		}
 	}
 	return b.String()
 }

@@ -35,6 +35,9 @@ func uiTestStdout(t *testing.T) func() string {
 
 func uiTestUI(t *testing.T) (*TermUI, chan Key) {
 	t.Helper()
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("JAZZ_ASCII", "0")
+	t.Setenv("JAZZ_PALETTE", "")
 	uiTestStdout(t)
 	t.Setenv("JAZZ_HOME", t.TempDir())
 	edCoalesce = false
@@ -141,10 +144,11 @@ func TestUiApproveLeftoverKeysDoNotAnswerNextPrompt(t *testing.T) {
 	defer stop()
 	res := uiApproveAsync(u, context.Background(), "bash", "npm test", "")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
-	uiSendRunes(keys, "sss") // one answer plus two extra keys
+	uiSendRunes(keys, "s") // one answer (a lone letter answers after uiApproveIdle)…
 	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Allow {
 		t.Fatalf("first approve = %v", r.ap)
 	}
+	uiSendRunes(keys, "ss") // …plus two extra keys right after it
 	time.Sleep(50 * time.Millisecond)
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
@@ -191,9 +195,14 @@ func TestUiApproveBurstDoesNotHangWatcher(t *testing.T) {
 	stop := u.WatchTurn(func() {}, func(string) {})
 	res := uiApproveAsync(u, context.Background(), "bash", "npm i", "")
 	time.Sleep(uiApproveGrace + 50*time.Millisecond)
+	// a typed sentence is text for the agent, never an approval (Settle)…
 	uiSendRunes(keys, "sim, use pnpm please and also run the tests afterwards "+strings.Repeat("x", 200))
-	if r := uiWaitApprove(t, res, 2*time.Second); r.ap != Allow {
-		t.Fatalf("approve = %v", r.ap)
+	time.Sleep(uiApproveIdle + 100*time.Millisecond)
+	keys <- Key{Code: KEsc} // the first Esc clears the typed text ("esc apaga")…
+	time.Sleep(100 * time.Millisecond)
+	keys <- Key{Code: KEsc} // …the second closes the box: an explicit answer
+	if r := uiWaitApprove(t, res, 2*time.Second); r.ap == Allow {
+		t.Fatalf("a typed sentence approved the command: %v", r.ap)
 	}
 	done := make(chan struct{})
 	go func() { stop(); close(done) }()

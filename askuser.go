@@ -116,6 +116,9 @@ func (a *Agent) runAskUser(ctx context.Context, tc ToolCall) ToolOutput {
 	if asker, ok := a.ui.(uiAsker); ok {
 		a.obEv("ask.user", map[string]any{"options": len(q.Options)})
 		ans, ok := asker.AskUser(ctx, q)
+		if !ok && ctx.Err() != nil {
+			return ToolOutput{Text: "The user interrupted the turn at this question (no answer).", Display: Display{Summary: "turno interrompido"}}
+		}
 		if !ok {
 			return ToolOutput{Text: "The user skipped the question (Esc). Choose the most reasonable default, state the assumption, and continue.", Display: Display{Summary: "pergunta pulada"}}
 		}
@@ -132,7 +135,12 @@ func (a *Agent) runAskUser(ctx context.Context, tc ToolCall) ToolOutput {
 		}
 		fmt.Fprint(os.Stderr, "> ")
 		askStdinMu.Lock()
-		line, err := bufio.NewReader(askStdin).ReadString('\n')
+		rd, ok := askStdin.(*bufio.Reader)
+		if !ok {
+			rd = bufio.NewReader(askStdin)
+			askStdin = rd // keep prefetched answers for the next question
+		}
+		line, err := rd.ReadString('\n')
 		askStdinMu.Unlock()
 		if ans := askResolve(q, strings.TrimSpace(line)); ans != "" {
 			return ToolOutput{Text: "The user answered: " + ans, Display: Display{Summary: "resposta: " + oneLine(ans, 80)}}
@@ -192,6 +200,11 @@ func (u *TermUI) AskUser(ctx context.Context, q askArgs) (string, bool) {
 	keys, release := u.grabKeys(ctx)
 	defer release()
 	i := u.menuKeys(ctx, keys, sp)
+	if sp.aborted { // Ctrl+C/Ctrl+D: stop the whole turn, not just skip the question
+		u.menuDone(false, question+"  "+t.fg(cGray, 90)+"turno interrompido")
+		u.abortTurn()
+		return "", false
+	}
 	switch {
 	case i >= 0 && i < len(q.Options):
 		u.menuDone(true, question+"  "+t.fg(cGray, 90)+q.Options[i].Label)

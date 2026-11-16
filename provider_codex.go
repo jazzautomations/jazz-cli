@@ -81,6 +81,24 @@ func pvResponsesInput(msgs []Message, prov string) []map[string]any {
 	return in
 }
 
+// codexHeaders builds the request headers for the Codex backend. The
+// "version" header is the codex-protocol client version — the backend
+// gates models on it, so it must NOT be jazz's own version (codexHeaders
+// exists as a function so a test can pin this).
+func codexHeaders(cr *Cred, sessionID string) map[string]string {
+	h := map[string]string{
+		"Authorization":      "Bearer " + cr.Access,
+		"ChatGPT-Account-ID": cr.AccountID,
+		"originator":         originator,
+		"version":            codexClientVersion,
+		"User-Agent":         originator + "/" + version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")",
+	}
+	if sessionID != "" {
+		h["session-id"] = sessionID
+	}
+	return h
+}
+
 func (p *CodexProvider) Chat(ctx context.Context, req ChatRequest, fn StreamFn) (*ChatResponse, error) {
 	req = rdOutbound(req, "") // secrets never leave the machine (redact.go)
 	resp, err := p.chatOnce(ctx, req, fn, false)
@@ -124,16 +142,7 @@ func (p *CodexProvider) chatOnce(ctx context.Context, req ChatRequest, fn Stream
 	if p.SessionID != "" {
 		body["prompt_cache_key"] = p.SessionID
 	}
-	h := map[string]string{
-		"Authorization":      "Bearer " + cr.Access,
-		"ChatGPT-Account-ID": cr.AccountID,
-		"originator":         originator,
-		"version":            version,
-		"User-Agent":         originator + "/" + version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")",
-	}
-	if p.SessionID != "" {
-		h["session-id"] = p.SessionID
-	}
+	h := codexHeaders(cr, p.SessionID)
 	resp, touch, done, idleCtx, err := postStream(ctx, strings.TrimRight(p.BaseURL, "/")+"/responses", h, body, 150*time.Second)
 	if err != nil {
 		return nil, err

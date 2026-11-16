@@ -31,8 +31,8 @@ func TestNLCredentialNeverLeavesMemory(t *testing.T) {
 		if err := h.run(t, in); err != nil {
 			t.Fatalf("%q: %v", in, err)
 		}
-		if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-			t.Fatalf("%q: a credencial tem que continuar capturada na memória: %+v", in, c)
+		if h.ag.nl.cred != nil {
+			t.Fatalf("%q: senha colada no chat não vira credencial (o jazz pede mascarada): %+v", in, h.ag.nl.cred)
 		}
 		if len(sent) == 0 {
 			t.Fatalf("%q: o provedor falso não recebeu nada", in)
@@ -71,13 +71,15 @@ func TestNLCredentialScrubbedInSteerAndQueue(t *testing.T) {
 	if got := h.ag.nlScanConsent("a senha do sudo é " + pw); strings.Contains(got, pw) || !strings.Contains(got, nlCredMark) {
 		t.Errorf("nlScanConsent tem que devolver o texto sem a senha: %q", got)
 	}
-	if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-		t.Fatalf("credencial não capturada: %+v", c)
+	if h.ag.nl.cred != nil {
+		t.Fatalf("senha do chat não vira credencial: %+v", h.ag.nl.cred)
 	}
-	// escanear de novo o texto já limpo não troca a credencial pelo marcador
+	// escanear de novo o texto já limpo não registra o marcador como senha
 	h.ag.nlScanConsent(h.ag.nlScanConsent("a senha do sudo é " + pw))
-	if c := h.ag.nlCredFor(); c == nil || c.pass != pw {
-		t.Errorf("o marcador não pode virar credencial: %+v", c)
+	for _, v := range nlKnownCreds() {
+		if strings.Contains(v, "credencial") {
+			t.Errorf("o marcador não pode virar valor de redação: %q", v)
+		}
 	}
 	if p := qPreview("root ana " + pw); strings.Contains(p, pw) {
 		t.Errorf("prévia da fila com senha: %q", p)
@@ -94,6 +96,23 @@ func TestNLCredScrub(t *testing.T) {
 		"a senha é forte demais":                "a senha é forte demais",
 		"qual a senha do wifi?":                 "qual a senha do wifi?",
 		"roda os testes e me diz o que quebrou": "roda os testes e me diz o que quebrou",
+		// QA 0.14.0: forma real das sessões que passava crua pro provedor
+		"instala o qa-pkg, tenta com " + pw + " no sudo": "instala o qa-pkg, tenta com " + nlCredMark + " no sudo",
+		"usa com a senha " + pw + " pro root":            "usa com a senha " + nlCredMark + " pro root",
+		"tenta com apt-get no lugar do snap":             "tenta com apt-get no lugar do snap",
+		"roda com sudo no servidor":                      "roda com sudo no servidor",
+		// a mensagem que é só "sudo <senha>"
+		"sudo " + pw:        "sudo " + nlCredMark,
+		"sudo Hunter2":      "sudo " + nlCredMark,
+		"  sudo: 'abc#9'  ": "  sudo: '" + nlCredMark + "'  ",
+		"sudo reboot":       "sudo reboot",
+		"sudo ls":           "sudo ls",
+		"sudo !!":           "sudo !!",
+		"sudo ./instala.sh": "sudo ./instala.sh",
+		"sudo apt update":   "sudo apt update",
+		"sudo -v":           "sudo -v",
+		"sudo /usr/bin/x1":  "sudo /usr/bin/x1",
+		"sudo FOO=1":        "sudo FOO=1",
 	} {
 		if got := nlCredScrub(in); got != want {
 			t.Errorf("nlCredScrub(%q) = %q, quero %q", in, got, want)

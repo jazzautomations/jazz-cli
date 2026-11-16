@@ -121,3 +121,27 @@ func TestSessionTreeMigratesV1(t *testing.T) {
 		t.Fatalf("after append: %v (the torn line must not swallow it)", sessContents(msgs))
 	}
 }
+
+func TestSessionWriteFailurePreservesPosition(t *testing.T) {
+	t.Setenv("JAZZ_HOME", t.TempDir())
+	s, err := NewSession(t.TempDir(), "fake/m1", "system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Append(Message{Role: "user", Content: "saved"})
+	leaf := s.Leaf()
+	n := len(s.msgIDs)
+	if err := s.f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if id := s.write(sessEntry{T: "msg", Msg: &Message{Role: "user", Content: "unsaved"}}); id != "" {
+		t.Fatalf("failed write returned id %s", id)
+	}
+	if s.Err() == nil || s.Leaf() != leaf || len(s.msgIDs) != n {
+		t.Fatalf("failure not recorded atomically: err=%v leaf=%s ids=%v", s.Err(), s.Leaf(), s.msgIDs)
+	}
+	s.Rewind(0)
+	if s.Leaf() != leaf || len(s.msgIDs) != n {
+		t.Fatal("failed rewind advanced history")
+	}
+}

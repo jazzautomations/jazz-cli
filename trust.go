@@ -33,6 +33,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -494,6 +495,37 @@ func pfInstructionsBlob(root string) []byte {
 	return b
 }
 
+// pfRetrustInstructions keeps the user's trust after jazz itself changed the
+// project's instruction files (/remember): pre is the instructions blob read
+// right before the write. Trust moves to the new content only in the scope
+// the user had given to pre (remembered, or this session only), and never
+// when pre was not trusted: a /remember must not approve somebody else's
+// earlier edits to AGENTS.md. With no instruction files before, the folder's
+// own trust decides (the new file holds only what jazz wrote).
+func pfRetrustInstructions(root string, pre []byte) error {
+	post := pfInstructionsBlob(root)
+	if len(post) == 0 || bytes.Equal(pre, post) {
+		return nil
+	}
+	kind, content := "instructions", pre
+	if len(pre) == 0 {
+		kind, content = "folder", pfFolderMark
+	}
+	pfTrustMu.Lock()
+	r, h := pfTrustRoot(root), pfHash(content)
+	sess := pfSessTrust[r+"\x00"+kind] == h
+	saved := pfLoadTrust()[r]
+	persisted := saved[kind] == h && saved["folder"] == pfHash(pfFolderMark)
+	if sess {
+		pfSessTrust[r+"\x00instructions"] = pfHash(post)
+	}
+	pfTrustMu.Unlock()
+	if persisted {
+		return Trust(root, "instructions", post)
+	}
+	return nil
+}
+
 // pfFolderTrusted reports whether the user trusted this folder and its
 // current instruction files. Untrusted folders run in ask mode (F1).
 func pfFolderTrusted(root string) bool {
@@ -709,6 +741,20 @@ func pfTrustGate(root string, interactive bool, in io.Reader, w io.Writer) bool 
 
 // pfTrustGateWith is pfTrustGate; folder also covers folder trust (F1).
 func pfTrustGateWith(root string, folder, interactive bool, in io.Reader, w io.Writer) bool {
+	return pfTrustGateBash(root, folder, interactive, true, in, w)
+}
+
+// pfHeadlessBashGated: in -p, does an untrusted folder block bash that is not
+// read-only with no rule from the user? Not with --yolo, not with --allow-tools.
+func pfHeadlessBashGated(cfg *Config, o pfOpts) bool {
+	return cfg.EffMode() != "yolo" && len(o.allowTools) == 0
+}
+
+// pfTrustGateBash is pfTrustGateWith; bashGated=false (headless --yolo or
+// --allow-tools: the untrusted folder does not block bash by itself, or the
+// user already chose the rules) drops the "bash bloqueado" warning, which
+// would be false there. The ignored-config warning stays.
+func pfTrustGateBash(root string, folder, interactive, bashGated bool, in io.Reader, w io.Writer) bool {
 	st := pfTrustCollect(root, folder)
 	if len(st.kinds) == 0 {
 		return true
@@ -726,7 +772,7 @@ func pfTrustGateWith(root string, folder, interactive bool, in io.Reader, w io.W
 		if len(cfgKinds) > 0 {
 			fmt.Fprintf(w, "jazz: aviso: configuração do projeto não confiável ignorada (%s). Para confiar: jazz trust\n", strings.Join(cfgKinds, ", "))
 		}
-		if folderUntrusted {
+		if folderUntrusted && bashGated {
 			fmt.Fprintln(w, "jazz: aviso: pasta não confiável: comandos bash que não são só leitura ficam bloqueados (use --allow-tools, --yolo ou jazz trust --yes)")
 		}
 		return false

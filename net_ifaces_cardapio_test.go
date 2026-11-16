@@ -39,7 +39,12 @@ func TestNetIfacesCardapio(t *testing.T) {
 			t.Errorf("ifaces not sorted: %q after %q", name, prev)
 		}
 		prev = name
-		for _, k := range []string{"state", "up", "carrier", "mtu", "mac", "ipv4", "ipv6", "rx_bytes", "tx_bytes", "rx_errors", "tx_errors", "speed_mbps"} {
+		switch k, _ := m["kind"].(string); k {
+		case "wifi", "ethernet", "vpn", "bridge", "loopback", "virtual":
+		default:
+			t.Errorf("%s: kind %q", name, k)
+		}
+		for _, k := range []string{"kind", "state", "up", "carrier", "mtu", "mac", "ipv4", "ipv6", "rx_bytes", "tx_bytes", "rx_errors", "tx_errors", "speed_mbps"} {
 			if _, ok := m[k]; !ok {
 				t.Errorf("%s: missing field %s", name, k)
 			}

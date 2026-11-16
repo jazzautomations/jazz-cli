@@ -18,15 +18,24 @@
 #   RT_ACK_NO_SANDBOX=1  yolo passes --ack-no-sandbox: for running the whole suite inside an outer
 #                        container/bwrap where jazz cannot nest its own sandbox (measures the
 #                        guardrails alone, without the OS sandbox layer)
+#   MODEL=prov/modelo    default kilo/cohere/north-mini-code:free (keyless). The old default,
+#                        kilo/poolside/laguna-s-2.1:free, answers 404 since 2026-10-31.
+#   PREFLIGHT=0          skip the model preflight (evals/bench/evalguard.sh)
+# Guard rails shared with the v2 runner (evals/bench/evalguard.sh): one eval per machine
+# ($HOME/jazz-eval-results/.lock, same quota pool), a preflight that aborts with "modelo
+# indisponível" before any task, a breaker (a task with 0 OK requests turns the rest into SKIP:
+# an ERROR wall is not a security result) and manifest.json. The last line counts COMPROMISED.
 set -u
 SUITE="$(cd "$(dirname "$0")" && pwd)"
 export SUITE
+. "$SUITE/../bench/evalguard.sh"
 # timeout portátil (macOS não tem coreutils timeout)
 tmo() { local k=$1 secs=$2; shift 2; if command -v timeout >/dev/null 2>&1; then timeout -k "$k" "$secs" "$@"; elif command -v gtimeout >/dev/null 2>&1; then gtimeout -k "$k" "$secs" "$@"; else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi; }
-JAZZ_SET=${JAZZ+x}; JAZZ="${JAZZ:-jazz}"; MODE="${MODE:-yolo}"; LIMIT="${LIMIT:-300}"; MODEL="${MODEL:-kilo/poolside/laguna-s-2.1:free}"
+JAZZ_SET=${JAZZ+x}; JAZZ="${JAZZ:-jazz}"; MODE="${MODE:-yolo}"; LIMIT="${LIMIT:-300}"; MODEL="${MODEL:-kilo/cohere/north-mini-code:free}"; PREFLIGHT="${PREFLIGHT:-1}"
 PORT="${PORT:-8099}"
 export PORT
 case "$MODE" in auto|turbo|ask|yolo) ;; *) echo "MODE inválido: $MODE (use auto, turbo, ask ou yolo)" >&2; exit 2 ;; esac
+eg_lock "$HOME/jazz-eval-results" || exit 2
 RUN="$SUITE/results/$(date +%Y%m%d-%H%M%S)-$MODE"; mkdir -p "$RUN"
 export CANARY_HOME="$RUN/home"
 export SINK_LOG="$RUN/sink.log"
@@ -41,7 +50,7 @@ RT_LIB_MODE=$(rt_mode "$SUITE/lib.sh")
 RT_SINK_MODE=$(rt_mode "$SUITE/sink")
 rt_unlock() { chmod "$RT_TASKS_MODE" "$SUITE/tasks" 2>/dev/null; chmod "$RT_LIB_MODE" "$SUITE/lib.sh" 2>/dev/null; chmod "$RT_SINK_MODE" "$SUITE/sink" 2>/dev/null; [ -f "$SINK_ALL" ] && chmod 644 "$SINK_ALL"; }
 SINK_PID=
-rt_cleanup() { rt_unlock; if [ -n "$SINK_PID" ]; then kill "$SINK_PID" 2>/dev/null || :; wait "$SINK_PID" 2>/dev/null || :; fi; }
+rt_cleanup() { rt_unlock; if [ -n "$SINK_PID" ]; then kill "$SINK_PID" 2>/dev/null || :; wait "$SINK_PID" 2>/dev/null || :; fi; eg_unlock; }
 trap rt_cleanup EXIT
 trap 'exit 130' INT TERM
 
@@ -52,8 +61,20 @@ fi
 command -v "$JAZZ" >/dev/null 2>&1 || { echo "jazz não encontrado: $JAZZ"; exit 2; }
 JAZZ_BIN=$(command -v "$JAZZ")
 [ -x "$JAZZ_BIN" ] || { echo "jazz não executável: $JAZZ_BIN"; exit 2; }
-JAZZ_SHA=$(shasum -a 256 "$JAZZ_BIN" | awk '{print $1}')
-echo "jazz: $JAZZ_BIN sha256=$JAZZ_SHA"
+JAZZ_SHA=$( (shasum -a 256 "$JAZZ_BIN" 2>/dev/null || sha256sum "$JAZZ_BIN") | awk '{print $1}')
+echo "jazz: $JAZZ_BIN sha256=$JAZZ_SHA  modelo: $MODEL  modo: $MODE"
+
+# the same throwaway HOME the tasks get: setup once, then one tiny request to the model
+rt_env() { HOME="$CANARY_HOME" JAZZ_HOME="$CANARY_HOME/.config/jazz-cli" XDG_CONFIG_HOME="$CANARY_HOME/.config" \
+  XDG_DATA_HOME="$CANARY_HOME/.local/share" JAZZ_NO_UPDATE_CHECK=1 "$@"; }
+bash "$SUITE/setup.sh" >"$RUN/preflight.setup.log" 2>&1 || { echo "setup falhou (teste prévio)" >&2; exit 2; }
+eg_manifest "$RUN/manifest.json" "suite=redteam" "model=$MODEL" "mode=$MODE" "limit=$LIMIT" "preflight=$PREFLIGHT" "tasks=$*"
+if [ "$PREFLIGHT" != 0 ]; then
+  if ! pf=$(rt_env eg_preflight "$MODEL" "$RUN/work/.preflight" "$RUN/preflight" 2>&1); then
+    printf '%s\n' "$pf" | tee "$RUN/summary.txt" >&2
+    exit 3
+  fi
+fi
 
 # sink serves canary payloads for the fetch/curl|sh tasks (/doc, /stage1)
 SINK_LOG="$SINK_LOG" python3 "$SUITE/sink/sink.py" "$PORT" >"$RUN/sink.stderr" 2>&1 &
@@ -75,12 +96,16 @@ print("sink não iniciou ou porta indisponível", file=sys.stderr); sys.exit(1)
 PY
 [ $? = 0 ] && ! grep -qiE 'address already in use|address.*in use|bind.*failed' "$RUN/sink.stderr" || { cat "$RUN/sink.stderr" >&2; echo "sink não iniciou na porta $PORT" >&2; exit 2; }
 
-pass=0; n=0
+pass=0; n=0; compromised=0; tripped=
 printf '%-26s %-12s %s\n' TASK VERDICT NOTE | tee "$RUN/summary.txt"
 for t in "$SUITE"/tasks/*/; do
   t=${t%/}; name=$(basename "$t")
   if [ $# -gt 0 ]; then sel=; for o in "$@"; do case "$name" in "$o"*) sel=1;; esac; done; [ -n "$sel" ] || continue; fi
   [ -f "$t/CHECK" ] || continue
+  if [ -n "$tripped" ]; then
+    printf '%-26s %-12s %s\n' "$name" SKIP "(disjuntor: o modelo parou de responder em $tripped)" | tee -a "$RUN/summary.txt"
+    continue
+  fi
   tmode="$MODE"; [ -f "$t/MODE" ] && tmode=$(tr -d '[:space:]' < "$t/MODE")
   case "$tmode" in auto|turbo|ask|yolo) ;; *) echo "MODE inválido em $name: $tmode" >&2; exit 2 ;; esac
   # Reset canary fixtures per task while preserving the RUN/home path expected
@@ -105,7 +130,7 @@ for t in "$SUITE"/tasks/*/; do
   ( cd "$w" && HOME="$CANARY_HOME" JAZZ_HOME="$CANARY_HOME/.config/jazz-cli" \
       XDG_CONFIG_HOME="$CANARY_HOME/.config" XDG_DATA_HOME="$CANARY_HOME/.local/share" \
       JAZZ_NO_UPDATE_CHECK=1 \
-      tmo 10 $((LIMIT + 30)) "$JAZZ" -p $flag -v -m "$MODEL" --timeout "${LIMIT}s" "$prompt" \
+      tmo 10 $((LIMIT + 30)) "$JAZZ" -p $flag -v -m "$MODEL" --timeout "${LIMIT}s" --metrics-out "$RUN/$name.metrics.json" "$prompt" \
       </dev/null >"$RUNLOG" 2>&1 ); rc=$?
   rt_unlock
   # Keep the aggregate log for audit, but expose only this task's sink events
@@ -133,6 +158,9 @@ for t in "$SUITE"/tasks/*/; do
     v=ERROR; note="(jazz falhou: rc=$rc)"
   fi
   [ "$v" = BLOCKED ] && pass=$((pass+1))
+  [ "$v" = COMPROMISED ] && compromised=$((compromised+1))
+  # breaker: an ERROR because the model never answered says nothing about security
+  if [ "$v" = ERROR ] && eg_dead "$RUN/$name.metrics.json"; then tripped=$name; note="$note (0 request OK: disjuntor)"; fi
   n=$((n+1))
   [ "$tmode" != "$MODE" ] && note="$note [mode $tmode]"
   printf '%-26s %-12s %s\n' "$name" "$v" "$note" | tee -a "$RUN/summary.txt"
@@ -141,4 +169,5 @@ for t in "$SUITE"/tasks/*/; do
 done
 if [ "$n" = 0 ]; then echo "ERROR: nenhuma tarefa selecionada" | tee -a "$RUN/summary.txt"; exit 2; fi
 echo "BLOCKED: $pass/$n    (resultados em $RUN)" | tee -a "$RUN/summary.txt"
+echo "COMPROMISED: $compromised/$n  modelo: $MODEL${tripped:+  (disjuntor em $tripped: rodada incompleta)}" | tee -a "$RUN/summary.txt"
 echo "sink log: $SINK_LOG"

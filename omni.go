@@ -55,6 +55,10 @@ type Need struct {
 	Tools  bool   // the request carries native tool specs
 	Role   string // main | compact | fast | sub
 	Prefer string // sticky ref (last pick) for prompt-cache affinity
+	// Pin: the model the user chose (router_pin.go). The chain is the pin +
+	// cfg.Fallback (consent), never the implicit free chain or omni/free, and
+	// the pin is never dropped for being dead.
+	Pin string
 }
 
 // ---------- presets ----------
@@ -114,7 +118,10 @@ func omniPresetsBase() map[string]*ProviderConf {
 			Free: true, Quirks: []string{"effort"},
 			Limits: pvLim(Limits{RPM: 30, RPD: 1000, TPM: 8000, TPD: 200000, MaxReq: 7500}), Signup: "https://console.groq.com/keys",
 			KeyHint: "começa com gsk_", KeyRE: `^gsk_`, Title: "Groq"},
-		"nvidia": {Type: "openai", BaseURL: "https://integrate.api.nvidia.com/v1", KeyEnv: "NVIDIA_API_KEY", DefaultModel: "z-ai/glm-5.3",
+		// z-ai/glm-5.3 reached end of life on 2026-10-28 (HTTP 410 in 14 runs);
+		// nemotron-3-ultra is listed by /v1/models (2026-11-12) and answers
+		// 98% over OpenRouter.
+		"nvidia": {Type: "openai", BaseURL: "https://integrate.api.nvidia.com/v1", KeyEnv: "NVIDIA_API_KEY", DefaultModel: "nvidia/nemotron-3-ultra-550b-a55b",
 			Free: true, Train: true, Probe: "chat1",
 			Limits: pvLim(Limits{RPM: 40, Scope: "key"}), Signup: "https://build.nvidia.com/settings/api-keys",
 			KeyHint: "começa com nvapi-", KeyRE: `^nvapi-`, Title: "NVIDIA API Catalog"},
@@ -159,13 +166,16 @@ func pvTiers(t ...string) []string { return t }
 
 // presetModels: Q is a prior (to be calibrated by an eval); tiers decide the aliases.
 var presetModels = []presetModel{
-	{"nvidia/z-ai/glm-5.3", ModelConf{Q: 86, Tiers: pvTiers("coder", "smart")}},
-	{"nvidia/moonshotai/kimi-k2.6", ModelConf{Q: 85, Tiers: pvTiers("coder", "smart")}},
-	{"gemini/gemini-3.8-flash", ModelConf{Q: 84, Context: 1048576, Tiers: pvTiers("smart", "coder", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
-	{"gemini/gemini-3.6-flash", ModelConf{Q: 80, Context: 1048576, Tiers: pvTiers("smart", "coder", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
+	// removed 2026-11: nvidia/z-ai/glm-5.3 (410 end of life 28/10),
+	// nvidia/moonshotai/kimi-k2.6 (9/9 404) and nvidia/deepseek-v4.1-flash (0/37 ok).
+	// gemini 3.x-flash left the coder tier: 20 requests/day is ~1 task.
+	{"gemini/gemini-3.8-flash", ModelConf{Q: 84, Context: 1048576, Tiers: pvTiers("smart", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
+	{"gemini/gemini-3.6-flash", ModelConf{Q: 80, Context: 1048576, Tiers: pvTiers("smart", "long"), Limits: pvLim(Limits{RPD: 20, Reset: "PT"})}},
 	{"gemini/gemini-2.5-pro", ModelConf{Q: 78, Context: 1048576, Tiers: pvTiers("smart"), Limits: pvLim(Limits{RPD: 50, Reset: "PT"})}},
 	{"gemini/gemini-3.5-flash-lite", ModelConf{Q: 65, Context: 1048576, Tiers: pvTiers("fast", "long", "free"), Limits: pvLim(Limits{RPD: 500, Reset: "PT"})}},
-	{"nvidia/deepseek-ai/deepseek-v4.1-flash", ModelConf{Q: 80, Tiers: pvTiers("coder", "smart", "fast")}},
+	// the NVIDIA route of the model that answers 98% via OpenRouter (122/124);
+	// listed by integrate.api.nvidia.com/v1/models on 2026-11-12
+	{"nvidia/nvidia/nemotron-3-ultra-550b-a55b", ModelConf{Q: 75, Context: 1000000, Tiers: pvTiers("smart", "coder", "long")}},
 	{"cloudflare/@cf/moonshotai/kimi-k2.5", ModelConf{Q: 80, Tiers: pvTiers("coder")}},
 	{"mistral/devstral-medium-latest", ModelConf{Q: 78, Tiers: pvTiers("coder")}},
 	{"openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", ModelConf{Q: 75, Context: 1000000, Tiers: pvTiers("smart", "coder", "free", "long")}},
@@ -192,6 +202,7 @@ var presetModels = []presetModel{
 	{"chatgpt/gpt-6.1-terra", ModelConf{Q: 90, Tiers: pvTiers("coder", "smart")}},
 	{"chatgpt/gpt-6-luna", ModelConf{Q: 84, Tiers: pvTiers("coder", "fast")}},
 	{"anthropic/claude-sonnet-5-5", ModelConf{Q: 94, Context: 200000, Tiers: pvTiers("coder", "smart")}},
+	{"anthropic/claude-haiku-5-5", ModelConf{Q: 86, Context: 200000, Tiers: pvTiers("coder", "fast")}},
 	{"deepseek/deepseek-flash", ModelConf{Q: 82, Context: 1000000, Tiers: pvTiers("coder", "smart", "long")}},
 }
 
@@ -336,6 +347,9 @@ func (c *Config) Candidates(refs ...string) []string {
 // omni/free chain is appended; without omni, a free primary with no fallback gets
 // the implicit free chain (kilo, groq when keyed, reachable local servers).
 func (c *Config) CandidatesFor(n Need, refs ...string) []string {
+	if n.Pin != "" {
+		return c.pinnedCandidates(n, refs...)
+	}
 	var out []string
 	seen := map[string]bool{}
 	add := func(r string) {
@@ -371,7 +385,7 @@ func (c *Config) CandidatesFor(n Need, refs ...string) []string {
 			add(x)
 		}
 	} else if !c.Omni.Enabled && len(c.Fallback) == 0 && primary != "" && !isOmniRef(primary) && c.pvIsFreeish(primary) {
-		for _, x := range c.implicitFreeChain() {
+		for _, x := range c.implicitFreeChain(n) {
 			add(x)
 		}
 	}
@@ -388,14 +402,70 @@ func (c *Config) CandidatesFor(n Need, refs ...string) []string {
 	return out
 }
 
+// pinnedCandidates is the chain of a pinned model (PROV-1): the pin, then
+// cfg.Fallback (configured = consent; omni aliases in it expand). refs only
+// count when they are one of those — the turn's sticky fallback goes first so
+// a pin that just failed is not asked again on every step. StrictModel: the
+// pin alone. Dead fallbacks drop out; the pin never does (the caller warns).
+func (c *Config) pinnedCandidates(n Need, refs ...string) []string {
+	if c.StrictModel {
+		return []string{n.Pin}
+	}
+	var fb []string
+	for _, r := range c.Fallback {
+		if r == "" {
+			continue
+		}
+		if isOmniRef(r) {
+			_, tier := SplitModel(r)
+			if tier == "" {
+				tier = "coder"
+			}
+			fb = append(fb, c.omniRank(tier, n)...)
+			continue
+		}
+		fb = append(fb, r)
+	}
+	allowed := map[string]bool{n.Pin: true}
+	for _, r := range fb {
+		allowed[r] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(r string) {
+		if r != "" && allowed[r] && !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	for _, r := range refs {
+		if r != n.Pin {
+			add(r) // sticky fallback of this turn
+		}
+	}
+	add(n.Pin)
+	for _, r := range fb {
+		add(r)
+	}
+	live := out[:0:0]
+	for _, r := range out {
+		if r == n.Pin || !c.pvState(r, 0).Dead {
+			live = append(live, r)
+		}
+	}
+	return live
+}
+
 func (c *Config) pvIsFreeish(ref string) bool {
 	prov, model := SplitModel(ref)
 	return c.isFreeRef(ref) || pvFreeID(model) || prov == "zen" || prov == "kilo"
 }
 
 // implicitFreeChain (G4): kilo's keyless default and its fast free models, groq
-// when it has a key, reachable local servers.
-func (c *Config) implicitFreeChain() []string {
+// when it has a key, reachable local servers. Groq is left out of the main
+// agent's chain (gpt-oss-120b: 177/577 ok there, PROV-4) and of any request
+// that is over half its tokens-per-minute or while it cools down.
+func (c *Config) implicitFreeChain(n Need) []string {
 	var out []string
 	if pc := c.Providers["kilo"]; pc != nil && pc.DefaultModel != "" && !c.omniExcluded("kilo") {
 		out = append(out, "kilo/"+pc.DefaultModel)
@@ -405,8 +475,13 @@ func (c *Config) implicitFreeChain() []string {
 			}
 		}
 	}
-	if pc := c.Providers["groq"]; pc != nil && pc.DefaultModel != "" && c.HasCreds("groq") {
-		out = append(out, "groq/"+pc.DefaultModel)
+	if pc := c.Providers["groq"]; pc != nil && pc.DefaultModel != "" && c.HasCreds("groq") && n.Role != "main" && n.Role != "compact" {
+		r := "groq/" + pc.DefaultModel
+		lim, _ := c.pvEffLimits(r)
+		st := c.pvState(r, n.Tokens)
+		if (lim.TPM == 0 || n.Tokens < lim.TPM/2) && (st.Ready || st.Wait <= acSkipWait) && !st.Dead && !st.TooBig {
+			out = append(out, r)
+		}
 	}
 	for _, name := range c.ProviderNames() {
 		if pc := c.Providers[name]; pc != nil && pc.Local && pc.DefaultModel != "" && c.HasCreds(name) {

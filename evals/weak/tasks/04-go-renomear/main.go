@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"catlog"
+	"fmt"
 )
 
 func main() {

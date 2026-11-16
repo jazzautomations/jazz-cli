@@ -103,7 +103,14 @@ type pcPlan struct {
 	Kind    string `json:"kind,omitempty"` // bgClassify: size + kind, e.g. "M/bugfix"
 	Repo    string `json:"repo,omitempty"` // lrRepoSig of the project when stored
 	Session string `json:"session,omitempty"`
+	// V is the plan schema: below pcSchema the plan went through the 0.14
+	// migration (pcMigrate) on load.
+	V int `json:"v,omitempty"`
 }
+
+// pcSchema 1 (0.14): "verified" needs a real verifier, no literal of a
+// text command is kept, and fewer than 2 content words is no task.
+const pcSchema = 1
 
 // pcEnabled: JAZZ_PLAN_CACHE > config plan_cache > on.
 func pcEnabled(c *Config) bool {
@@ -147,15 +154,103 @@ func pcLoad(root string) []pcPlan {
 	}
 	defer f.Close()
 	var out []pcPlan
+	old := false
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64<<10), 4<<20)
 	for sc.Scan() {
 		var p pcPlan
 		if json.Unmarshal(sc.Bytes(), &p) == nil && p.ID != "" && h2PlanPoison(p) == "" { // poisoned plans are never reused (hardening2.go)
 			out = append(out, p)
+			old = old || p.V < pcSchema
 		}
 	}
+	if old {
+		f.Close()
+		out = pcMigrate(root, out)
+	}
 	return out
+}
+
+// pcBadIDs are plans known to be poisoned by the old rules: stored as
+// "verified" from turns that failed (d610: "Não consegui arrumar o wifi",
+// reinjected in 5 sessions, "oi" included).
+var pcBadIDs = smSet("dc2e261ebfea", "55031196017e")
+
+// pcMigrate brings plans stored before pcSchema to the 0.14 rules, once,
+// with a backup of the file: known-bad plans, plans "verified" only by a
+// probe (ls/stat/wc/test) that names nothing they changed, plans whose
+// task is fewer than 2 content words and plans whose reply admitted
+// failure go; text-command literals are re-redacted.
+func pcMigrate(root string, plans []pcPlan) []pcPlan {
+	path := pcPath(root)
+	if b, err := os.ReadFile(path); err == nil {
+		bak := path + ".pre-0.14.bak"
+		if _, err := os.Stat(bak); err != nil {
+			_ = os.WriteFile(bak, b, 0o600)
+		}
+	}
+	var keep []pcPlan
+	dropped := 0
+	for _, p := range plans {
+		if p.V >= pcSchema {
+			keep = append(keep, p)
+			continue
+		}
+		if why := pcMigrateDrop(p); why != "" {
+			dropped++
+			dbg("plan_cache", map[string]any{"migrate_drop": p.ID, "why": why})
+			continue
+		}
+		for i := range p.Cmds {
+			p.Cmds[i] = nlCredScrub(pcSafeCmd(p.Cmds[i]))
+		}
+		for i := range p.Steps {
+			if rest, ok := strings.CutPrefix(p.Steps[i], "bash "); ok {
+				p.Steps[i] = "bash " + pcSafeCmd(rest)
+			}
+			p.Steps[i] = nlCredScrub(p.Steps[i])
+		}
+		for i := range p.Witnesses {
+			for j := range p.Witnesses[i].Cmds {
+				p.Witnesses[i].Cmds[j] = nlCredScrub(pcSafeCmd(p.Witnesses[i].Cmds[j]))
+			}
+		}
+		p.Verify = nlCredScrub(pcSafeCmd(p.Verify))
+		p.Keys = pcUniq(pcTerms(strings.Join(p.Keys, " ")))
+		p.V = pcSchema
+		keep = append(keep, p)
+	}
+	if err := pcSave(root, keep); err != nil {
+		dbg("plan_cache", map[string]any{"migrate_error": err.Error()})
+	} else if dropped > 0 {
+		auditRec("plan.migrated", map[string]any{"dropped": dropped, "kept": len(keep)})
+	}
+	return keep
+}
+
+// pcMigrateDrop says why an old plan does not survive the 0.14 rules.
+func pcMigrateDrop(p pcPlan) string {
+	if pcBadIDs[p.ID] {
+		return "known_bad"
+	}
+	if len(pcUniq(pcTerms(p.Task))) < pcMinTerms {
+		return "few_terms"
+	}
+	if pcFailRE.MatchString(p.Task + " " + p.Hint) {
+		return "admitted_failure"
+	}
+	if v := strings.TrimSpace(p.Verify); v != "" && !rcIsBuildTest(v) {
+		rc := &rcTurn{mutPaths: append([]string(nil), p.Files...)}
+		for _, c := range p.Cmds {
+			if !IsReadOnly(c) && !rcIsVerifyCmd(c) {
+				rc.mutPaths = append(rc.mutPaths, rcPathWords(c)...)
+			}
+		}
+		if !rcProbeOK(rc, v) {
+			return "probe_only"
+		}
+	}
+	return ""
 }
 
 // pcSave rewrites the project's plan file atomically (0600).
@@ -176,6 +271,7 @@ func pcSave(root string, plans []pcPlan) error {
 	}
 	var b strings.Builder
 	for _, pl := range plans {
+		pl.V = pcSchema // written by this version: under its rules (old files migrate on load)
 		j, err := json.Marshal(pl)
 		if err != nil {
 			return err
@@ -205,7 +301,25 @@ var pcStop = smSet(
 	"esta", "aqui", "ali", "ser", "ter", "tem", "está", "esta", "estao", "favor", "faz", "faça", "faca", "fazer",
 	"tudo", "todo", "toda", "todos", "todas", "seu", "sua", "seus", "suas", "meu", "minha", "depois", "antes",
 	"também", "tambem", "agora", "ainda", "já", "pelo", "pela", "pelos", "pelas", "entre", "sobre", "sem",
+	// interjections, curse words and "go on" markers: this user curses in
+	// greetings and follow-ups ("porra arruma ae essa merda", "bora",
+	// "marcha"); as keywords they matched plans on one word (26 injections,
+	// none relevant)
+	"porra", "caralho", "caraio", "krl", "crl", "merda", "bosta", "foda", "fodase", "marcha", "bora", "borá",
+	"vamo", "vamos", "mano", "manow", "ae", "aê", "aí", "então", "entao", "kkk", "kkkk", "kkkkk", "pô",
+	"tipo", "cara", "véi", "vei", "mermão", "mermao", "vai", "beleza", "blz", "isso", "ok", "okay", "valeu",
+	"tranquilo", "massa", "pode", "manda", "veja", "olha",
+	"fala", "diz", "porfavor", "pfv", "pls", "pff", "tá", "ta", "tô", "to", "né", "ne", "hein", "aqui",
+	"essa", "esse", "nessa", "nesse", "dessa", "desse", "coisa", "parada", "negócio", "negocio", "treco",
 )
+
+// pcMinTerms: a request with fewer content words than this neither looks
+// up nor stores a plan — one word ("porra", "marcha") matched anything.
+const pcMinTerms = 2
+
+// pcFailRE: a final reply that says it did not work. A turn that ends
+// like this is never stored, and a plan reused in it counts as a fail.
+var pcFailRE = lazyRx(`(?i)(n[ãa]o consegui|n[ãa]o foi poss[íi]vel|n[ãa]o deu (certo|pra)|falhou|falharam|precisa(ria)? de root|precisa de sudo|bloquead|nenhuma altera[çc][ãa]o|couldn'?t|could not|unable to|failed to|did not work|didn'?t work)`)
 
 // pcFold lowercases and strips the common Latin accents.
 func pcFold(r rune) rune {
@@ -272,8 +386,8 @@ func pcDocTerms(p pcPlan) []string {
 }
 
 // pcMatch ranks plans for a request with BM25 and returns at most k that
-// share enough distinct keywords with it (≥ 2, or all of a 1–2 word query,
-// and ≥ 40% of the query).
+// share enough distinct keywords with it: ≥ 2 and ≥ half of the query
+// (a query of fewer than 2 content words matches nothing).
 func pcMatch(plans []pcPlan, query string, k int) []pcPlan {
 	q := pcUniq(pcTerms(query))
 	if len(q) == 0 || len(plans) == 0 {
@@ -293,10 +407,10 @@ func pcMatch(plans []pcPlan, query string, k int) []pcPlan {
 	if avg == 0 {
 		avg = 1
 	}
-	need := 2
-	if len(q) < 2 {
-		need = len(q)
+	if len(q) < pcMinTerms {
+		return nil
 	}
+	need := max(pcMinTerms, (len(q)+1)/2) // ≥ 2 shared terms and ≥ half of the query
 	const k1, b = 1.2, 0.75
 	n := float64(len(plans))
 	type scored struct {
@@ -319,7 +433,7 @@ func pcMatch(plans []pcPlan, query string, k int) []pcPlan {
 			idf := math.Log(1 + (n-float64(df[w])+0.5)/(float64(df[w])+0.5))
 			score += idf * f * (k1 + 1) / (f + k1*(1-b+b*float64(len(d))/avg))
 		}
-		if matched < need || float64(matched) < 0.4*float64(len(q)) {
+		if matched < need {
 			continue
 		}
 		score *= 1 + 0.1*float64(min(plans[i].Wins, 5)) // proven plans first
@@ -381,6 +495,7 @@ func (a *Agent) pcInject(lt *acTurnLoop) string {
 	if req == "" {
 		return ""
 	}
+	a.pcCorrection(req)
 	plans := pcLoad(a.tools.Root)
 	top := pcMatch(plans, req, pcMaxInject)
 	hint := a.lrHint(plans, top, req) // "da última vez: …" (lessons_reuse.go), first turn only
@@ -412,10 +527,23 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 		return
 	}
 	rc := lt.rcState()
+	if len(rc.plans) > 0 {
+		a.pcPrev = pcPrevTurn{ids: append([]string(nil), rc.plans...), req: strings.TrimSpace(acStripReminders(lt.input))}
+	}
 	verified := stop == StopDone && (rc.untilPassed || rc.gateOK || (a.loop.opts.Until == "" && rc.verifyOK))
+	// "Não consegui arrumar o wifi" after an `ls` exit 0 is not a success,
+	// whatever the checks said (d610 dc2e261ebfea)
+	saidFail := pcFailRE.MatchString(a.pcFinalReply())
+	if saidFail {
+		verified = false
+	}
 	root := a.tools.Root
-	if len(rc.plans) > 0 && (verified || pcFailed(stop)) {
-		if err := pcScore(root, rc.plans, verified); err != nil {
+	if len(rc.plans) > 0 && (verified || saidFail || pcFailed(stop)) {
+		ids := rc.plans
+		if verified { // a win only for a plan the turn actually followed
+			ids = pcFollowed(root, ids, a.pcTrajectory(lt))
+		}
+		if err := pcScore(root, ids, verified); err != nil {
 			dbg("plan_cache", map[string]any{"score_error": err.Error()})
 		}
 	}
@@ -423,6 +551,10 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 		return
 	}
 	p := a.pcBuild(lt, steps)
+	if len(p.Keys) < pcMinTerms {
+		dbg("plan_cache", map[string]any{"skip": "few_terms"})
+		return
+	}
 	if hdSetting(a.cfg) != "" {
 		p.Hint = a.hdWrite(ctx, lt, p)
 	}
@@ -432,6 +564,105 @@ func (a *Agent) acTurnDone(ctx context.Context, lt *acTurnLoop, stop StopReason,
 	}
 	dbg("plan_cache", map[string]any{"stored": p.ID, "steps": steps, "hint": p.Hint != ""})
 	dsNote(a, root, p) // a ponte online→offline avisa quando o plano vira candidato
+}
+
+// pcPrevTurn remembers the plans injected in the last turn and its request.
+type pcPrevTurn struct {
+	ids []string
+	req string
+}
+
+// pcCorrection: the request right after a turn that got plans injected
+// says whether they helped. An explicit negation at the start ("não, to
+// falando da sessão do claude") or the same request again (Jaccard ≥ 0.6)
+// counts a fail on each of them and records a "rejected" signal. A curse
+// word alone is not a correction ("porra, ficou bom").
+func (a *Agent) pcCorrection(req string) {
+	prev := a.pcPrev
+	a.pcPrev = pcPrevTurn{}
+	if len(prev.ids) == 0 {
+		return
+	}
+	how := ""
+	switch {
+	case syIsCorrection(req):
+		how = "negation"
+	case pcJaccard(pcUniq(pcTerms(req)), pcUniq(pcTerms(prev.req))) >= 0.6 && len(pcUniq(pcTerms(req))) >= pcMinTerms:
+		how = "repeat"
+	default:
+		return
+	}
+	if err := pcScore(a.tools.Root, prev.ids, false); err != nil {
+		dbg("plan_cache", map[string]any{"score_error": err.Error()})
+	}
+	dbg("plan_cache", map[string]any{"corrected": prev.ids, "how": how})
+	if sigEnabled() {
+		s := sigOf("rejected", prev.req, Intent{}, map[string]string{"how": "next_msg", "kind": how, "plans": strings.Join(prev.ids, ",")})
+		s.Class = "plan"
+		_ = sigAppend(s)
+	}
+}
+
+// pcFinalReply is the text of the turn's last assistant message.
+func (a *Agent) pcFinalReply() string {
+	for i := len(a.Msgs) - 1; i >= 0; i-- {
+		switch a.Msgs[i].Role {
+		case "assistant":
+			if strings.TrimSpace(a.Msgs[i].Content) != "" {
+				return a.Msgs[i].Content
+			}
+		case "user":
+			return ""
+		}
+	}
+	return ""
+}
+
+// pcTrajectory is what the turn touched: changed files and bash commands.
+func (a *Agent) pcTrajectory(lt *acTurnLoop) []string {
+	var out []string
+	if a.tools != nil {
+		out = append(out, a.tools.rcTurnFiles()...)
+	}
+	for _, e := range lt.rcState().log {
+		if e.tool == "bash" || e.mut {
+			out = append(out, e.target)
+		}
+	}
+	return out
+}
+
+// pcTrajTerms are the comparable words of files and commands.
+func pcTrajTerms(items []string) []string {
+	var out []string
+	for _, it := range items {
+		for _, w := range strings.Fields(it) {
+			out = append(out, pcTerms(strings.TrimSuffix(filepath.Base(w), filepath.Ext(w)))...)
+			out = append(out, pcTerms(w)...)
+		}
+	}
+	return pcUniq(out)
+}
+
+// pcFollowed keeps the injected plans whose files and commands overlap
+// what the turn did (Jaccard ≥ 0.3): an injected plan the model ignored
+// does not earn a win from someone else's success.
+func pcFollowed(root string, ids []string, traj []string) []string {
+	tt := pcTrajTerms(traj)
+	if len(tt) == 0 {
+		return nil
+	}
+	want := smSet(ids...)
+	var out []string
+	for _, p := range pcLoad(root) {
+		if !want[p.ID] {
+			continue
+		}
+		if pcJaccard(pcTrajTerms(append(append([]string(nil), p.Files...), p.Cmds...)), tt) >= 0.3 {
+			out = append(out, p.ID)
+		}
+	}
+	return out
 }
 
 // pcStepsFloor: JAZZ_PC_MIN_STEPS > pcMinSteps. The harvest pipeline lowers it
@@ -576,7 +807,7 @@ func pcShapeEnts(text string, w *nuWorld) (string, []pcEnt) {
 // succeeded later become dead ends.
 func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 	rc := lt.rcState()
-	req := redactSecrets(strings.TrimSpace(acStripReminders(lt.input)))
+	req := redactSecrets(nlCredScrub(a.pcTaskReq(strings.TrimSpace(acStripReminders(lt.input)))))
 	p := pcPlan{
 		Time:   time.Now().Unix(),
 		Task:   oneLine(req, 300),
@@ -584,6 +815,7 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 		Files:  a.tools.rcTurnFiles(),
 		NSteps: steps,
 		Wins:   1,
+		V:      pcSchema,
 	}
 	p.Shape, p.Ents = pcShapeEnts(req, nuRuntimeWorld(a.tools.Root, nil))
 	p.Kind, p.Repo, p.Session = lrTaskClass(req), lrRepoSig(a.tools.Root), a.SessionID
@@ -609,19 +841,23 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 	}
 	for _, e := range rc.log {
 		if e.tool == "bash" && e.isErr && !ok["bash "+e.target] && len(p.Dead) < pcMaxDeadEnds {
-			d := "`" + oneLine(e.target, 80) + "`"
+			d := "`" + oneLine(pcSafeCmd(e.target), 80) + "`"
 			if e.errTxt != "" {
 				d += " (" + oneLine(e.errTxt, 60) + ")"
 			}
 			p.Dead = append(p.Dead, redactSecrets(d))
 		}
 		if e.tool == "bash" && len(p.Cmds) < pcMaxCmds {
-			p.Cmds = append(p.Cmds, redactSecrets(e.target))
+			p.Cmds = append(p.Cmds, redactSecrets(nlCredScrub(pcSafeCmd(e.target))))
 		}
 		if !(e.verify || e.mut && !e.isErr) {
 			continue
 		}
-		s := e.tool + " " + oneLine(e.target, 70)
+		tgt := e.target
+		if e.tool == "bash" {
+			tgt = pcSafeCmd(tgt)
+		}
+		s := e.tool + " " + oneLine(tgt, 70)
 		if e.verify {
 			s += fmt.Sprintf(" (exit %d)", e.exit)
 		}
@@ -637,7 +873,7 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 		p.Steps = append(append(append([]string(nil), p.Steps[:3]...), "…"), p.Steps[len(p.Steps)-(pcMaxApproach-4):]...)
 	}
 	for i := range p.Steps {
-		p.Steps[i] = redactSecrets(p.Steps[i])
+		p.Steps[i] = redactSecrets(nlCredScrub(p.Steps[i]))
 	}
 	if rc.fired != "" {
 		p.Dead = append(p.Dead, "the first attempt stalled ("+rc.fired+") and was handed off")
@@ -650,7 +886,89 @@ func (a *Agent) pcBuild(lt *acTurnLoop, steps int) pcPlan {
 	default:
 		p.Verify = rc.verifyCmd
 	}
+	p.Verify = redactSecrets(nlCredScrub(pcSafeCmd(p.Verify)))
 	return p
+}
+
+// pcTaskReq: a short follow-up ("bora", "marcha", "continua") is not the
+// task — the last substantive request of the session is.
+func (a *Agent) pcTaskReq(req string) string {
+	if len(pcUniq(pcTerms(req))) >= pcMinTerms {
+		return req
+	}
+	for i := len(a.Msgs) - 1; i >= 0; i-- {
+		m := a.Msgs[i]
+		if m.Role != "user" {
+			continue
+		}
+		prev := strings.TrimSpace(acStripReminders(m.Content))
+		if strings.Contains(prev, "## Task (the user's request)") {
+			break // a handoff replaced the history: what came before is gone
+		}
+		if prev != req && len(pcUniq(pcTerms(prev))) >= pcMinTerms && !strings.HasPrefix(prev, "<") {
+			return prev
+		}
+	}
+	return req
+}
+
+// pcLitMark replaces the literal argument of a text command in a stored
+// plan: `sed 's/^SENHA.*/…/'` carried a password fragment to disk and to a
+// free provider.
+const pcLitMark = "«literal omitido»"
+
+// pcLitVerbs are commands whose quoted/literal arguments are data that may
+// hold a secret; only the verb and the path words are kept.
+var pcLitVerbs = smSet("sed", "echo", "printf", "grep", "egrep", "fgrep", "rg", "awk", "perl", "tee")
+
+// pcSafeCmd keeps verb, redirections and file operands of a text command
+// with literal arguments; any other command passes through unchanged.
+func pcSafeCmd(cmd string) string {
+	f := strings.Fields(cmd)
+	i := 0
+	for i < len(f) && (f[i] == "sudo" || strings.Contains(f[i], "=") && !strings.HasPrefix(f[i], "-")) {
+		i++
+	}
+	if i >= len(f) || !pcLitVerbs[filepath.Base(f[i])] {
+		return cmd
+	}
+	verb := filepath.Base(f[i])
+	out := append([]string(nil), f[:i+1]...)
+	out = append(out, pcLitMark)
+	inQ := byte(0)
+	pattern := verb == "echo" || verb == "printf" || verb == "tee" // no pattern operand
+	redirect := false
+	for _, w := range f[i+1:] {
+		switch {
+		case inQ != 0:
+			if strings.HasSuffix(w, string(inQ)) {
+				inQ = 0
+			}
+		case w[0] == '\'' || w[0] == '"':
+			if len(w) == 1 || !strings.HasSuffix(w, string(w[0])) {
+				inQ = w[0]
+			}
+			if !redirect {
+				pattern = true
+			}
+			redirect = false
+		case w == "|" || w == "&&" || w == ";" || w == "||":
+			return strings.Join(out, " ") + " " + w + " …" // the rest is another command
+		case strings.HasPrefix(w, ">") || strings.HasPrefix(w, "<") || w == "2>&1":
+			out = append(out, w)
+			redirect = len(strings.TrimLeft(w, "<>&12")) == 0
+		case redirect:
+			out = append(out, w)
+			redirect = false
+		case strings.HasPrefix(w, "-"):
+		case verb == "echo" || verb == "printf":
+		case !pattern:
+			pattern = true // grep SENHA f: the first operand is the pattern
+		case !strings.ContainsAny(w, "^$*[]\\"):
+			out = append(out, w)
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // ---------- hindsight (A3) ----------

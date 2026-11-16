@@ -166,18 +166,6 @@ func newGuardHarness(t *testing.T, files map[string]string, script ...fakeResp) 
 
 const gTest = "import unittest\nfrom calc import soma\n\nclass T(unittest.TestCase):\n    def test_soma(self):\n        self.assertEqual(soma(2, 3), 5)\n"
 
-func editCall(id, path, old, new string) fakeCall {
-	return fakeCall{ID: id, Name: "edit", Args: jsonArgs(map[string]string{"path": path, "old_string": old, "new_string": new})}
-}
-
-func writeCall(id, path, content string) fakeCall {
-	return fakeCall{ID: id, Name: "write", Args: jsonArgs(map[string]string{"path": path, "content": content})}
-}
-
-func bashCall(id, cmd string) fakeCall {
-	return fakeCall{ID: id, Name: "bash", Args: jsonArgs(map[string]string{"command": cmd})}
-}
-
 // Eval v2: laguna and minimax edited test_pedidos.py / tests/test_util.py
 // although the request never asked for test changes.
 func TestGuardRefusesEditOfExistingTest(t *testing.T) {
@@ -352,6 +340,9 @@ func TestGuardExtractionLeavesNoCopies(t *testing.T) {
 	reqs := h.fs.requests()
 	if !reqs[2].contains("user", "pagamentos/boleto.py:4 still defines validar_valor") {
 		t.Errorf("the leftover copy must be reported")
+	}
+	if len(reqs) < 4 || !reqs[3].contains("user", "This is the second time. Delete each listed definition") {
+		t.Errorf("the second round must spell out the fix (requests=%d)", len(reqs))
 	}
 	if stop != StopQualityFailed {
 		t.Errorf("stop=%s", stop)
@@ -570,4 +561,332 @@ func lastToolText(r recReq) string {
 		}
 	}
 	return ""
+}
+
+func TestVsIsFull(t *testing.T) {
+	cases := []struct {
+		cmd, full string
+		want      bool
+	}{
+		{"python3 -m unittest -q", "python3 -m unittest", true},
+		{"python -m unittest discover -v", "python3 -m unittest", true},
+		{"cd /x && python3 -m unittest 2>&1 | tail -5", "python3 -m unittest", false}, // 2>&1 stays: unsure → harness runs it
+		{"python3 -m unittest tests.test_novo", "python3 -m unittest", false},
+		{"go test -count=1 ./...", "go test ./...", true},
+		{"go test -run TestX ./...", "go test ./...", false},
+		{"", "go test ./...", false},
+	}
+	for _, c := range cases {
+		if got := vsIsFull(c.cmd, c.full); got != c.want {
+			t.Errorf("vsIsFull(%q, %q)=%v want %v", c.cmd, c.full, got, c.want)
+		}
+	}
+	if !vsRed(ToolOutput{Text: "....F\nFAILED (failures=1)\n"}) {
+		t.Error("a piped unittest failure is red")
+	}
+	if vsRed(ToolOutput{Text: "Ran 0 tests in 0.000s\n\nNO TESTS RAN", IsErr: true}) {
+		t.Error("no tests is not a verdict")
+	}
+}
+
+// The model ran only its new test file (green) but broke an existing test:
+// the harness runs the full suite before accepting "pronto".
+func TestGuardSuiteRunsFullBeforeDone(t *testing.T) {
+	files := map[string]string{
+		"tests/__init__.py":   "",
+		"tests/test_calc.py":  gTest,
+		"tests/test_extra.py": "import unittest\n\n\nclass E(unittest.TestCase):\n    def test_ok(self):\n        self.assertTrue(True)\n",
+		"calc.py":             "def soma(a, b):\n    return a + b\n",
+	}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest tests.test_extra")}},
+		fakeResp{Text: "tudo funcionando"},
+		fakeResp{Text: "a mudança quebrou tests/test_calc.py (soma(2, 3) agora dá -1)"})
+	stop, err := h.ag.Run(context.Background(), "Mude calc.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) != 3 || !reqs[2].contains("user", "harness ran the project's full test suite, and it FAILS") {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.300v", i, m["role"], m["content"])
+		}
+		t.Fatalf("want the full-suite reminder, requests=%d", len(reqs))
+	}
+	if stop != StopQualityFailed {
+		// the suite is still red after its reminder: never a success (0.14.0)
+		t.Errorf("stop=%s, want quality_failed", stop)
+	}
+	// JAZZ_SUITE_GUARD=off: no harness run
+	t.Setenv("JAZZ_SUITE_GUARD", "off")
+	h = newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest tests.test_extra")}},
+		fakeResp{Text: "tudo funcionando"})
+	if err := h.run(t, "Mude calc.py"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("suite guard off: requests=%d", n)
+	}
+}
+
+// The last test run after the edit was red (exit hidden by a pipe): one
+// reminder instead of accepting "tudo funcionando".
+func TestGuardSuiteLastRunRed(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "a + b", "a - b"), bashCall("b1", "python3 -m unittest 2>&1 | tail -3")}},
+		fakeResp{Text: "tudo funcionando"},
+		fakeResp{Text: "a suíte falha: soma está errada e não consegui corrigir"})
+	if _, err := h.ag.Run(context.Background(), "Mude calc.py"); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) < 3 || !reqs[2].contains("user", "Your last test run after the edits FAILED") {
+		t.Fatalf("want the red-run reminder, requests=%d", len(reqs))
+	}
+}
+
+// The model "updates" an old assertion to fit a regression and its own suite
+// is green: the original test, run against the new code, catches it.
+func TestGuardSuiteOriginalTestsCatchRewrite(t *testing.T) {
+	files := map[string]string{
+		"tests/__init__.py":  "",
+		"tests/test_calc.py": gTest,
+		"calc.py":            "def soma(a, b):\n    return a + b\n\n\ndef dobro(a):\n    return 2 * a\n",
+	}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{
+			editCall("e1", "calc.py", "    return a + b", "    return a + b + (1 if a == 2 else 0)"),
+			editCall("e2", "tests/test_calc.py", "soma(2, 3), 5", "soma(2, 3), 6"),
+			bashCall("b1", "python3 -m unittest -q"),
+		}},
+		fakeResp{Text: "pronto, testes atualizados e passando"},
+		fakeResp{Text: "a mudança quebrava soma(2, 3) == 5; não mexo nisso"})
+	if _, err := h.ag.Run(context.Background(), "Adicione um teste para dobro em tests/ e atualize os testes que precisar."); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	if len(reqs) != 3 || !reqs[2].contains("user", "ran their ORIGINAL version") || !reqs[2].contains("user", "tests/test_calc.py") {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.300v", i, m["role"], m["content"])
+		}
+		t.Fatalf("want the original-tests reminder, requests=%d", len(reqs))
+	}
+	// the copy is gone and the project is untouched by the check
+	if b, _ := os.ReadFile(filepath.Join(h.root, "tests/test_calc.py")); !strings.Contains(string(b), "soma(2, 3), 6") {
+		t.Errorf("the check must not restore files in the project")
+	}
+}
+
+// Adding new tests only (old ones untouched): no extra run.
+func TestGuardSuiteOriginalTestsOnlyWhenChanged(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{
+			writeCall("w1", "tests/test_novo.py", "import unittest\nfrom calc import soma\n\nclass N(unittest.TestCase):\n    def test_zero(self):\n        self.assertEqual(soma(0, 0), 0)\n"),
+			bashCall("b1", "python3 -m unittest -q"),
+		}},
+		fakeResp{Text: "pronto"})
+	if err := h.run(t, "Adicione um teste para soma(0, 0) em tests/."); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("no reminder when old tests are untouched, requests=%d", n)
+	}
+}
+
+func TestVsInfraErr(t *testing.T) {
+	for _, s := range []string{"sh: 1: cd: can't cd to /tmp/jazz-origtests-1", "bash: python3: command not found", "/usr/bin/python3: No module named pytest"} {
+		if !vsInfraErr(s) {
+			t.Errorf("infra error not detected: %q", s)
+		}
+	}
+	for _, s := range []string{"FAIL: test_x (t.T)\nFAILED (failures=1)", "Ran 3 tests\nOK", "--- FAIL: TestX"} {
+		if vsInfraErr(s) {
+			t.Errorf("a test verdict is not an infra error: %q", s)
+		}
+	}
+}
+
+func TestArSpecHeavy(t *testing.T) {
+	if !arSpecHeavy("Adicione prioridade.\n- add aceita --prioridade\n- novo comando prioridade\n- list filtra") {
+		t.Error("three bullets are a spec")
+	}
+	if arSpecHeavy("corrige o bug do parser e roda os testes") {
+		t.Error("a one-liner is not a spec")
+	}
+}
+
+// A request listing requirements: after the model says done, a fresh-context
+// reviewer checks it item by item (no git needed) and its findings go back.
+func TestAutoReviewSpecRequest(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "1. \"- mul(a, b) multiplica\": calc.py does not define mul."},
+		fakeResp{Text: "faltou mul; anotado"})
+	req := "Adicione em calc.py:\n- sub(a, b) subtrai\n- mul(a, b) multiplica\n- div(a, b) divide"
+	if _, err := h.ag.Run(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	reqs := h.fs.requests()
+	var sub, fed bool
+	for _, r := range reqs {
+		if r.contains("user", "You have no tools: everything you need is below") && r.contains("user", `<file path="calc.py">`) && r.contains("user", "   5  def sub(a, b):") {
+			sub = true // one-shot review with the file inline
+		}
+		if r.contains("user", "checked your change against the request, requirement by requirement") && r.contains("user", "does not define mul") {
+			fed = true
+		}
+	}
+	if !sub || !fed {
+		for i, r := range reqs {
+			m := r.Messages[len(r.Messages)-1]
+			t.Logf("req %d last %v: %.200v", i, m["role"], m["content"])
+		}
+		t.Fatalf("reviewer ran=%v, findings fed back=%v", sub, fed)
+	}
+	if m, _ := filepath.Glob(filepath.Join(h.root, ".jazz", "review-pre-*")); len(m) != 0 {
+		t.Errorf("pre-images left behind: %v", m)
+	}
+	// JAZZ_REVIEW_GUARD=off: no review
+	t.Setenv("JAZZ_REVIEW_GUARD", "off")
+	h = newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"})
+	if err := h.run(t, req); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.fs.requests()); n != 2 {
+		t.Errorf("review guard off: requests=%d", n)
+	}
+}
+
+// Extraction that left one shared helper behind in every module (it never
+// reached the new module): reported as a copy.
+func TestGuardExtractHelperLeftInSiblings(t *testing.T) {
+	h := newGuardHarness(t, map[string]string{
+		"pagamentos/__init__.py": "",
+		"pagamentos/comum.py":    "def validar_cpf(c):\n    return True\n",
+		"pagamentos/boleto.py":   "from .comum import validar_cpf\n\n\ndef formatar_reais(v):\n    return 'R$ %.2f' % v\n",
+		"pagamentos/pix.py":      "from .comum import validar_cpf\n\n\ndef formatar_reais(v):\n    return 'R$ %.2f' % v\n",
+		"pagamentos/outro.py":    "def formatar_reais(v):\n    return v\n", // does not import comum: not judged
+	},
+		fakeResp{Calls: []fakeCall{editCall("e1", "pagamentos/pix.py", "from .comum import validar_cpf\n", "from .comum import validar_cpf  # ok\n")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto"})
+	if _, err := h.ag.Run(context.Background(), "Extraia as funções auxiliares para um módulo novo pagamentos/comum.py e faça os módulos usarem de lá, sem deixar cópias."); err != nil {
+		t.Fatal(err)
+	}
+	r := h.fs.requests()[2]
+	if !r.contains("user", "formatar_reais is still defined in pagamentos/boleto.py:4, pagamentos/pix.py:4") {
+		t.Errorf("the helper left in the siblings must be reported")
+	}
+	if r.contains("user", "outro.py") {
+		t.Errorf("a module that does not use comum is not part of the extraction")
+	}
+}
+
+func TestHgImportsModule(t *testing.T) {
+	for _, s := range []string{"from .comum import x", "from pagamentos.comum import (a, b)", "import pagamentos.comum", "import { a } from './comum'", "const c = require('../lib/comum')"} {
+		if !hgImportsModule(s, "comum") {
+			t.Errorf("not detected: %q", s)
+		}
+	}
+	for _, s := range []string{"from .comumx import a", "# comum", "import comumente"} {
+		if hgImportsModule(s, "comum") {
+			t.Errorf("false positive: %q", s)
+		}
+	}
+}
+
+// Extract that merged copies which differed before (pix rounded one way,
+// boleto another): the model hears it once, with both old versions.
+func TestGuardExtractDivergedCopies(t *testing.T) {
+	boleto := "def fmt(v):\n    return '%.2f' % round(v, 2)\n\n\ndef gerar(v):\n    return fmt(v)\n"
+	pix := "def fmt(v):\n    \"\"\"doc\"\"\"\n    return '%.2f' % v  # sem round\n\n\ndef cobrar(v):\n    return fmt(v)\n"
+	h := newGuardHarness(t, map[string]string{"pag/__init__.py": "", "pag/boleto.py": boleto, "pag/pix.py": pix},
+		fakeResp{Calls: []fakeCall{
+			writeCall("w1", "pag/comum.py", "def fmt(v):\n    return '%.2f' % round(v, 2)\n"),
+			editCall("e1", "pag/boleto.py", "def fmt(v):\n    return '%.2f' % round(v, 2)\n\n\n", "from .comum import fmt\n\n\n"),
+			editCall("e2", "pag/pix.py", "def fmt(v):\n    \"\"\"doc\"\"\"\n    return '%.2f' % v  # sem round\n\n\n", "from .comum import fmt\n\n\n"),
+		}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "pronto, mantive as duas versões"})
+	if _, err := h.ag.Run(context.Background(), "Extraia as funções auxiliares para um módulo novo pag/comum.py e faça os módulos usarem de lá, sem deixar cópias."); err != nil {
+		t.Fatal(err)
+	}
+	r := h.fs.requests()[2]
+	if !r.contains("user", "fmt was NOT the same in every module before your change (2 different versions)") || !r.contains("user", "sem round") {
+		t.Errorf("diverged copies must be reported with the old versions")
+	}
+}
+
+func TestHgNormBodySameCode(t *testing.T) {
+	a := hgNormBody("def f(x):\n    \"\"\"Doc.\"\"\"\n    # c\n    return x  # n\n")
+	b := hgNormBody("def f(x):\n\n        return x\n")
+	if a != b {
+		t.Errorf("formatting/comments must not count: %q vs %q", a, b)
+	}
+}
+
+// A change too big to inline goes to the read-only subagent (pre-images for diff).
+func TestAutoReviewBigChangeUsesSubagent(t *testing.T) {
+	big := "def soma(a, b):\n    return a + b\n" + strings.Repeat("# filler line for size\n", 900)
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": big}
+	h := newGuardHarness(t, files,
+		fakeResp{Calls: []fakeCall{editCall("e1", "calc.py", "    return a + b\n", "    return a + b\n\n\ndef sub(a, b):\n    return a - b\n"), bashCall("b1", "python3 -m unittest -q")}},
+		fakeResp{Text: "pronto"},
+		fakeResp{Text: "LGTM"},
+		fakeResp{Text: "pronto"})
+	if _, err := h.ag.Run(context.Background(), "Adicione em calc.py:\n- sub(a, b) subtrai\n- mul(a, b) multiplica\n- div(a, b) divide"); err != nil {
+		t.Fatal(err)
+	}
+	var sub bool
+	for _, r := range h.fs.requests() {
+		if r.contains("user", "Go through the request requirement by requirement") && r.contains("user", "calc.py (before: .jazz/review-pre-") {
+			sub = true
+		}
+	}
+	if !sub {
+		t.Error("a big change must be reviewed by the subagent")
+	}
+}
+
+// A user's test deleted and recreated in a turn stays the user's (protected).
+func TestOwnTestNeverClaimsUserTest(t *testing.T) {
+	files := map[string]string{"tests/__init__.py": "", "tests/test_calc.py": gTest, "calc.py": "def soma(a, b):\n    return a + b\n"}
+	h := newGuardHarness(t, files, fakeResp{Text: "ok"})
+	if err := h.run(t, "olha o projeto"); err != nil {
+		t.Fatal(err)
+	}
+	st := h.ag.hg
+	if st == nil || st.own == nil {
+		t.Skip("own-test tracking not active in this harness")
+	}
+	abs := filepath.Join(h.root, "tests", "test_calc.py")
+	h.ag.hgNoteOwnTest(abs)
+	if st.own[h.ag.hgNorm(abs)] {
+		t.Error("a test present at turn start must never become the agent's own")
+	}
+}
+
+func TestVsPreexistingPhrases(t *testing.T) {
+	for _, s := range []string{
+		"A falha é anterior à minha mudança: test_x já falha no commit original (HEAD).",
+		"esse teste já falhava no HEAD antes de eu mexer",
+		"the test already fails on HEAD",
+	} {
+		if !vsPreexistingRE.MatchString(s) {
+			t.Errorf("not recognised as pre-existing: %q", s)
+		}
+	}
+	if vsPreexistingRE.MatchString("tudo passando, fiz a mudança") {
+		t.Error("false positive")
+	}
 }

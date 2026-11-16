@@ -205,11 +205,11 @@ type outBuf struct {
 	head, tail []byte
 	headCap    int
 	tailCap    int
-	total      int
+	total      int64 // cumulative output can exceed 2 GiB on linux/386
 }
 
 func (o *outBuf) write(p []byte) {
-	o.total += len(p)
+	o.total += int64(len(p))
 	if len(o.head) < o.headCap {
 		n := o.headCap - len(o.head)
 		if n > len(p) {
@@ -229,19 +229,19 @@ func (o *outBuf) write(p []byte) {
 
 // upTo returns the stream content before absolute offset end, and the number
 // of bytes that were dropped from the middle.
-func (o *outBuf) upTo(end int) (string, int) {
-	if end <= len(o.head) {
+func (o *outBuf) upTo(end int64) (string, int64) {
+	if end <= int64(len(o.head)) {
 		return string(o.head[:end]), 0
 	}
-	tailStart := o.total - len(o.tail)
-	if tailStart < len(o.head) {
-		tailStart = len(o.head)
+	tailStart := o.total - int64(len(o.tail))
+	if tailStart < int64(len(o.head)) {
+		tailStart = int64(len(o.head))
 	}
-	tailOff := o.total - len(o.tail)
+	tailOff := o.total - int64(len(o.tail))
 	from := tailStart - tailOff
 	to := end - tailOff
-	if to > len(o.tail) {
-		to = len(o.tail)
+	if to > int64(len(o.tail)) {
+		to = int64(len(o.tail))
 	}
 	if from < 0 {
 		from = 0
@@ -249,10 +249,10 @@ func (o *outBuf) upTo(end int) (string, int) {
 	if from > to {
 		from = to
 	}
-	if to-from > o.tailCap { // tail may hold up to 2*tailCap between trims
-		from = to - o.tailCap
+	if to-from > int64(o.tailCap) { // tail may hold up to 2*tailCap between trims
+		from = to - int64(o.tailCap)
 	}
-	dropped := tailOff + from - len(o.head)
+	dropped := tailOff + from - int64(len(o.head))
 	if dropped < 0 {
 		dropped = 0
 	}
@@ -264,6 +264,41 @@ func (o *outBuf) upTo(end int) (string, int) {
 
 // Run executes one command. onChunk (optional) receives live output for the UI.
 func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, onChunk func([]byte)) ShellResult {
+	r := s.runOnce(ctx, command, timeout, onChunk)
+	if r.Reset && sbSourceMissing(r.Output) && ctx.Err() == nil {
+		// the sandbox lost its temp dir: bwrap refused before the command
+		// started, so running it again is safe. Wrap recreates the dir.
+		sbCurrent().ensureTmp()
+		r2 := s.runOnce(ctx, command, timeout, onChunk)
+		if r2.Reset && sbSourceMissing(r2.Output) {
+			r2.Note = "[jazz: o sandbox não conseguiu montar o temporário privado duas vezes seguidas; o comando não rodou. Avise o usuário: `jazz doctor` mostra o sandbox, e `--sandbox off` roda sem isolamento se ele quiser]"
+		}
+		return r2
+	}
+	return r
+}
+
+// shDrainDead collects what a shell that already exited printed (up to 1s).
+func shDrainDead(inst *shellInst) string {
+	var b []byte
+	timeout := time.NewTimer(time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case c, ok := <-inst.out:
+			if !ok {
+				return strings.TrimSpace(string(b))
+			}
+			if len(b) < 8<<10 {
+				b = append(b, c...)
+			}
+		case <-timeout.C:
+			return strings.TrimSpace(string(b))
+		}
+	}
+}
+
+func (s *Shell) runOnce(ctx context.Context, command string, timeout time.Duration, onChunk func([]byte)) ShellResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.gen.Add(1)
@@ -284,13 +319,14 @@ func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, 
 	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta(marker) + `(-?\d+)_(.*?)_` + regexp.QuoteMeta(marker) + `E\r?\n`)
 	line := s.d.wrapLine(command, marker)
 	if _, err := io.WriteString(inst.stdin, line); err != nil {
+		out := shDrainDead(inst) // what the dying shell said (bwrap's mount error)
 		s.kill()
-		return ShellResult{Output: "", ExitCode: -1, Reset: true, Note: "[shell was dead and has been reset — run the command again]", Duration: time.Since(t0)}
+		return ShellResult{Output: out, ExitCode: -1, Reset: true, Note: "[shell was dead and has been reset — run the command again]", Duration: time.Since(t0)}
 	}
 
 	ob := &outBuf{headCap: s.maxKeep / 4, tailCap: s.maxKeep - s.maxKeep/4}
-	var win []byte // sliding window used only to find the marker line
-	winOff := 0    // absolute offset of win[0]
+	var win []byte   // sliding window used only to find the marker line
+	var winOff int64 // absolute offset of win[0], including discarded output
 	const maxLine = 8192
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -313,7 +349,7 @@ func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, 
 				if loc := re.FindSubmatchIndex(win[i:]); loc != nil {
 					code, _ := strconv.Atoi(string(win[i+loc[2] : i+loc[3]]))
 					cwd := string(win[i+loc[4] : i+loc[5]])
-					out, dropped := ob.upTo(winOff + i)
+					out, dropped := ob.upTo(winOff + int64(i))
 					out = strings.TrimSuffix(out, "\n")
 					if onChunk != nil {
 						onChunk(nil)
@@ -331,12 +367,12 @@ func (s *Shell) Run(ctx context.Context, command string, timeout time.Duration, 
 				// marker seen but line incomplete: keep from the marker on
 				if i > 0 {
 					win = win[i:]
-					winOff += i
+					winOff += int64(i)
 				}
 			} else if len(win) > maxLine {
 				cut := len(win) - len(mb) - 1
 				win = win[cut:]
-				winOff += cut
+				winOff += int64(cut)
 			}
 			if onChunk != nil {
 				onChunk(chunk)

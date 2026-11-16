@@ -27,11 +27,20 @@ func TestOutBufKeepsAtMostCaps(t *testing.T) {
 		if len(body) != ob.headCap+ob.tailCap {
 			t.Errorf("chunk %d: kept %d bytes, want %d", chunk, len(body), ob.headCap+ob.tailCap)
 		}
-		if dropped != total-ob.headCap-ob.tailCap {
+		if dropped != int64(total-ob.headCap-ob.tailCap) {
 			t.Errorf("chunk %d: dropped %d, want %d", chunk, dropped, total-ob.headCap-ob.tailCap)
 		}
 		if !strings.HasSuffix(out, "END") {
 			t.Errorf("chunk %d: tail lost the end", chunk)
 		}
+	}
+}
+
+func TestOutBufBeyond32BitStream(t *testing.T) {
+	ob := &outBuf{head: []byte("HEAD"), tail: []byte("TAIL"), headCap: 4, tailCap: 4, total: (1 << 31) - 2}
+	ob.write([]byte("END"))
+	out, dropped := ob.upTo(ob.total)
+	if ob.total != (1<<31)+1 || dropped != ob.total-8 || !strings.HasPrefix(out, "HEAD") || !strings.HasSuffix(out, "END") {
+		t.Fatalf("total=%d dropped=%d output=%q", ob.total, dropped, out)
 	}
 }

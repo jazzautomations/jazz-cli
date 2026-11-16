@@ -57,12 +57,13 @@ type acLoop struct {
 
 // acTurnLoop is the per-turn state of the checks.
 type acTurnLoop struct {
-	untilRuns int
-	reviewed  bool
-	input     string          // the user's request, for the reviewer
-	gitBase   string          // tree-ish of the worktree before the turn ("" = no review)
-	untracked map[string]bool // untracked files before the turn
-	rc        *rcTurn         // recovery and plan cache state (agent_recover.go)
+	untilRuns    int
+	reviewed     bool
+	delivChecked bool            // named-deliverables gate already ran (deliverables.go)
+	input        string          // the user's request, for the reviewer
+	gitBase      string          // tree-ish of the worktree before the turn ("" = no review)
+	untracked    map[string]bool // untracked files before the turn
+	rc           *rcTurn         // recovery and plan cache state (agent_recover.go)
 }
 
 // LoopOpts returns the current completion checks.
@@ -162,6 +163,9 @@ func (a *Agent) acStopGate(ctx context.Context, lt *acTurnLoop) (again bool, why
 	} else if hWhy != "" {
 		return false, hWhy
 	}
+	if a.hgOn("deliverables") && a.acDeliverablesGate(ctx, lt) { // named output files must hold (deliverables.go)
+		return true, ""
+	}
 	// near the --timeout (obDeadlineWarned): skip ONLY the quality gate, the
 	// harness's own nicety. The user's explicit criteria stay: hgDoneGate,
 	// --until, --review and --verifier still run.
@@ -186,6 +190,8 @@ func (a *Agent) acStopGate(ctx context.Context, lt *acTurnLoop) (again bool, why
 		if a.acReview(ctx, lt) {
 			return true, ""
 		}
+	} else if !qFailed && a.arAutoReview(ctx, lt) { // a request listing requirements (autoreview.go)
+		return true, ""
 	}
 	if qFailed {
 		return false, StopQualityFailed
@@ -355,7 +361,7 @@ func (a *Agent) acReview(ctx context.Context, lt *acTurnLoop) bool {
 		return false
 	}
 	a.ui.Notice("revisão apontou problemas — o modelo vai corrigir")
-	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your changes (git diff) and reported these possible defects:\n" + report + "\nFix the ones that are real and verify the fix. If a point is wrong, say why in one line. Then give your final answer. This review runs only once.</system-reminder>"})
+	a.append(Message{Role: "user", Content: "<system-reminder>A reviewer with a fresh context checked your changes (git diff) and reported these possible defects:\n" + report + "\nFix the ones that are real and verify the fix. If a point is wrong, say why in one line. This review runs only once. " + acGateAnswerNote + "</system-reminder>"})
 	return true
 }
 

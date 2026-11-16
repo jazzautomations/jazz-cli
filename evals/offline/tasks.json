@@ -1069,7 +1069,7 @@
     "intent": "self_info",
     "contains": [
      "jazz",
-     "0.13"
+     "${version}"
     ],
     "questions": 0
    }
@@ -1735,9 +1735,13 @@
    "prompt": "mostra linhas v5_line_slice.txt",
    "needs": "python3",
    "expect": {
-    "status": "succeeded",
+    "status": "needs_input",
     "intent": "line_slice",
-    "questions": 0
+    "questions": 1,
+    "commands": 0,
+    "contains": [
+     "Qual"
+    ]
    }
   },
   {
@@ -1759,13 +1763,15 @@
    "id": "cardapio-v5-perm_find",
    "cat": "cardapio",
    "fixture": "cardapio",
-   "prompt": "perm_find arquivos \"777\"",
+   "prompt": "arquivos com permissão 777",
    "needs": "python3",
    "expect": {
     "status": "succeeded",
     "intent": "perm_find",
-    "questions": 0
-   }
+    "questions": 0,
+    "contains": ["v5_perm_find.txt"]
+   },
+   "doc": "Filtra por modo; a chamada literal ao script é coberta nos testes do script."
   },
   {
    "id": "cardapio-v5-env_get",
@@ -1783,13 +1789,14 @@
    "id": "cardapio-v5-file_users",
    "cat": "cardapio",
    "fixture": "cardapio",
-   "prompt": "dono dos arquivos",
+   "prompt": "quem está usando o arquivo v5_line_slice.txt",
    "needs": "python3",
    "expect": {
     "status": "succeeded",
     "intent": "file_users",
     "questions": 0
-   }
+   },
+   "doc": "Processos com arquivo aberto; dono de arquivo é outra consulta."
   },
   {
    "id": "cardapio-v5-net_route",
@@ -1822,9 +1829,13 @@
    "prompt": "compara diretórios",
    "needs": "python3",
    "expect": {
-    "status": "succeeded",
+    "status": "needs_input",
     "intent": "dir_diff",
-    "questions": 0
+    "questions": 1,
+    "commands": 0,
+    "contains": [
+     "Qual"
+    ]
    }
   }
  ]

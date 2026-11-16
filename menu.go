@@ -47,8 +47,33 @@ type mnSpec struct {
 	View   func() string // v: printed above the menu for good (whole command, diff)
 	Guard  bool          // approvals: grace period and the typing-pause rule
 	Since  time.Time     // last key the user typed before the menu opened (Guard)
-	Text   bool          // ask_user: a letter that is no shortcut starts a free answer (mnText)
-	typed  rune          // that letter
+	// Pending (Guard): the unfinished line the user was typing when the box
+	// opened; what is typed in the box continues it (shown as one line).
+	Pending string
+	// TypedHint (Guard): what happens to the line being typed ("" = Enter
+	// sends it to the agent, as in a turn). Set, the text ended with Enter
+	// stays listed above the box ("no editor").
+	TypedHint string
+	// Settle (Guard): an option's letter or digit answers only when no other
+	// key follows it within uiApproveIdle; otherwise it was the first letter
+	// of a message ("sim oi" must not pick "Sim"). For questions where a
+	// stray key costs a lot (the startup trust question).
+	Settle bool
+	// SettleOnly (with Settle): only these answers wait (the ones that
+	// approve something); nil = every option letter waits. A deny or an
+	// "instruct" letter followed by typing is still an answer.
+	SettleOnly map[int]bool
+	Text       bool // ask_user: a letter that is no shortcut starts a free answer (mnText)
+	typed      rune // that letter
+
+	// Typed (Guard): keys the user typed as text while the menu was open —
+	// letters in the grace/typing window, letters that are no option, and
+	// everything after them up to the Enter that ends the line. They are
+	// never answers: the caller hands them back to the steering buffer.
+	Typed []Key
+	// aborted: the menu closed on Ctrl+C or Ctrl+D (stop the whole turn),
+	// not on Esc (decline this one).
+	aborted bool
 }
 
 const (
@@ -131,6 +156,9 @@ func (m *mnState) key(k Key) (res int, done bool) {
 			m.refilter()
 			return 0, false
 		}
+		if k.Code != KEsc {
+			m.sp.aborted = true
+		}
 		return mnCancel, true
 	case KBackspace:
 		if m.sp.Filter && len(m.filter) > 0 {
@@ -203,6 +231,136 @@ func (m *mnState) isAnswer(k Key) bool {
 		return true
 	}
 	return false
+}
+
+// isOption reports whether the rune key k picks something (a digit in range,
+// an item's letter, an Alt code, v for View).
+func (m *mnState) isOption(k Key) bool {
+	if k.Code != KRune || m.sp.Filter {
+		return false
+	}
+	r := unicode.ToLower(k.R)
+	if r >= '1' && r <= '9' {
+		return int(r-'1') < len(m.vis)
+	}
+	if r == 'v' && m.sp.View != nil {
+		return true
+	}
+	for _, i := range m.vis {
+		it := m.sp.Items[i]
+		if it.Key != 0 && unicode.ToLower(it.Key) == r || strings.ContainsRune(strings.ToLower(it.Keys), r) {
+			return true
+		}
+	}
+	_, ok := m.sp.Alt[r]
+	return ok
+}
+
+// typingOpen reports whether the user is in the middle of a line typed
+// while the menu is open (Typed not yet ended by Enter).
+func (sp *mnSpec) typingOpen() bool {
+	return len(sp.Typed) > 0 && sp.Typed[len(sp.Typed)-1].Code != KEnter
+}
+
+// typingRow is the row above the box about typed text: the line being
+// typed (the part typed before the box plus what was typed in it, still
+// unsent), or, for a menu with TypedHint, the text that goes back to the
+// editor. label "" = no row.
+func (sp *mnSpec) typingRow(dot string) (label, line, hint string) {
+	ended := false
+	for _, k := range sp.Typed {
+		if k.Code == KEnter {
+			ended = true
+			break
+		}
+	}
+	open := sp.typingOpen()
+	if open {
+		hint = sp.typedHint() + " " + dot + " esc apaga"
+	}
+	switch {
+	case !ended && (sp.Pending != "" || open):
+		// the line the box interrupted, still unfinished: shown as one line
+		line = string(uiApplyTyped([]rune(sp.Pending), sp.Typed))
+		if line == "" {
+			return "", "", ""
+		}
+		return "digitando", line, hint
+	case open:
+		return "digitando", sp.typedLine(), hint
+	case len(sp.Typed) > 0 && sp.TypedHint != "":
+		// ended with Enter: kept for the editor, not sent
+		return "no editor", strings.TrimSpace(string(uiApplyTyped(nil, sp.Typed))), ""
+	}
+	return "", "", ""
+}
+
+func (sp *mnSpec) typedHint() string {
+	if sp.TypedHint != "" {
+		return sp.TypedHint
+	}
+	return "enter manda pro agente"
+}
+
+// typedLine is the text of the line being typed in the menu (after the
+// last Enter), for the row that shows it.
+func (sp *mnSpec) typedLine() string {
+	start := 0
+	for i, k := range sp.Typed {
+		if k.Code == KEnter {
+			start = i + 1
+		}
+	}
+	return string(uiApplyTyped(nil, sp.Typed[start:]))
+}
+
+// mnTakeTyping decides whether k, under Guard, is text being typed (true:
+// it goes to sp.Typed, not to the menu). inWin: within the grace window or
+// the typing pause of the previous key. Enter ends an open line and is
+// never an answer then; editing keys edit that line.
+func (m *mnState) takeTyping(k Key, inWin bool) bool {
+	open := m.sp.typingOpen()
+	switch k.Code {
+	case KRune:
+		if inWin { // a letter typed right after another one: still typing
+			return true
+		}
+		// after a pause an option's letter answers (the typing-pause rule);
+		// any other letter starts or continues a line of text
+		r := unicode.ToLower(k.R)
+		return !m.sp.Filter && r != 'j' && r != 'k' && !m.isOption(k) && unicode.IsPrint(k.R)
+	case KPaste:
+		return true
+	case KBackspace, KCtrlU, KCtrlW, KAltEnter:
+		return open
+	case KEnter:
+		return open || inWin
+	}
+	return false
+}
+
+// uiApplyTyped applies text-editing keys to buf (runes, paste, backspace,
+// Ctrl+U/W, Alt+Enter). Enter is ignored: the caller decides what it means.
+func uiApplyTyped(buf []rune, keys []Key) []rune {
+	for _, k := range keys {
+		switch k.Code {
+		case KRune:
+			buf = append(buf, k.R)
+		case KPaste:
+			buf = append(buf, []rune(strings.ReplaceAll(strings.ReplaceAll(k.Text, "\r\n", "\n"), "\r", "\n"))...)
+		case KBackspace:
+			if len(buf) > 0 {
+				buf = buf[:len(buf)-1]
+			}
+		case KCtrlU:
+			buf = nil
+		case KCtrlW:
+			buf = uiDelWord(buf)
+		case KAltEnter:
+			buf = append(buf, '\n')
+		}
+	}
+	return buf
 }
 
 func (m *mnState) page() int {
@@ -290,6 +448,17 @@ func (m *mnState) render(t Theme, w, h int) []string {
 	var top []string
 	if sp.Above != "" {
 		top = append(top, mnClip(sp.Above, w))
+	}
+	if label, line, hint := sp.typingRow(g.dot); label != "" {
+		line = sanitizeTerm(strings.ReplaceAll(line, "\n", " "))
+		if lw := w - 40; lw > 8 && uiStrW(line) > lw { // the end of the line is what matters
+			r := []rune(line)
+			line = string(r[max(len(r)-lw, 0):])
+		}
+		if hint != "" {
+			hint = dim + "  (" + hint + ")"
+		}
+		top = append(top, mnClip("  "+dim+g.arrow+" "+label+": "+reset+line+hint+reset, w))
 	}
 	if sp.Tag != "" {
 		tag := " " + bold + sp.Tag + reset + border + " "
@@ -431,6 +600,11 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 	draw()
 	since := time.Now()
 	prev := sp.Since
+	// Settle: an answer key waiting to see whether more typing follows
+	var pend *Key
+	var pendAt time.Time
+	var pendRes int
+	var settle <-chan time.Time
 	for {
 		var k Key
 		var ok bool
@@ -438,10 +612,14 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 		case k, ok = <-io.keys:
 			if ok && k.Code == KCtrlD {
 				ok = false
+				sp.aborted = true
 			}
 		case <-io.resize:
 			draw()
 			continue
+		case <-settle: // nothing followed the letter: it was the answer
+			erase()
+			return pendRes
 		case <-ctx.Done():
 		}
 		if !ok {
@@ -449,6 +627,30 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 			return mnCancel
 		}
 		now := time.Now()
+		if pend != nil {
+			// another key right after the letter: it was the start of a
+			// message, never an answer (the letter goes with the text)
+			sp.Typed = append(sp.Typed, *pend)
+			prev, pend, settle = pendAt, nil, nil
+		}
+		if sp.Guard {
+			inWin := now.Sub(since) < uiApproveGrace || now.Sub(prev) < uiApproveIdle
+			if m.takeTyping(k, inWin) {
+				// typed text, never an answer: kept for the steering buffer
+				sp.Typed = append(sp.Typed, k)
+				prev = now
+				draw()
+				continue
+			}
+			if k.Code == KEsc && sp.typingOpen() {
+				// Esc while typing erases that line (like Esc in the turn)
+				for len(sp.Typed) > 0 && sp.Typed[len(sp.Typed)-1].Code != KEnter {
+					sp.Typed = sp.Typed[:len(sp.Typed)-1]
+				}
+				draw()
+				continue
+			}
+		}
 		if now.Sub(since) < uiApproveGrace {
 			if k.Code == KRune || k.Code == KPaste {
 				prev = now
@@ -475,6 +677,12 @@ func mnRun(ctx context.Context, t Theme, io mnTermIO, sp *mnSpec) int {
 			io.write(sp.View())
 			sp.View = nil
 			draw()
+			continue
+		}
+		if sp.Guard && sp.Settle && k.Code == KRune && (sp.SettleOnly == nil || sp.SettleOnly[res]) {
+			kk := k
+			pend, pendAt, pendRes = &kk, now, res
+			settle = time.After(uiApproveIdle)
 			continue
 		}
 		erase()
@@ -510,7 +718,9 @@ func (u *TermUI) menuKeys(ctx context.Context, keys <-chan Key, sp *mnSpec) int 
 		size:   func() (int, int) { return termWidth(), termHeight() },
 		resize: u.menuResize,
 	}
-	return mnRun(ctx, u.T, io, sp)
+	res := mnRun(ctx, u.T, io, sp)
+	u.handBackTyped(sp.Typed)
+	return res
 }
 
 // menuDone prints the one-line summary that replaces a closed menu.
