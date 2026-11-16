@@ -806,6 +806,16 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	for _, p := range s.WriteOK {
 		a = append(a, "--bind-try", p, p)
 	}
+	// X11 inside the sandbox: the /tmp tmpfs above hides the socket, which
+	// turned "open in the GUI" into a silent failure the model narrated as
+	// success (d610). With a display available, give it back read-only; the
+	// xauth file gets re-exposed even under a masked HOME or /run/user.
+	if sock := x11Socket(os.Getenv("DISPLAY")); sock != "" {
+		a = append(a, "--ro-bind-try", sock, sock)
+		if x := os.Getenv("XAUTHORITY"); x != "" {
+			a = append(a, "--ro-bind-try", x, x)
+		}
+	}
 	for _, p := range ro {
 		if !sbBwrapCovered(a, p) {
 			a = append(a, "--remount-ro", p)

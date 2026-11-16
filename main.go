@@ -355,6 +355,7 @@ func main() {
 		fatal(err.Error())
 	}
 	pfNoteConfig(cfg)
+	x11Autodetect() // own X socket + SSH → real GUI opens (x11.go)
 	if err := otlpConfigure(cfg, *otlpEndpoint); err != nil {
 		pfUsageErr(err.Error())
 	}
