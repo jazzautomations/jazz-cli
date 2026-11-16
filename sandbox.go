@@ -66,6 +66,8 @@ type Sandbox struct {
 	ReadOK   []string // readable inside Hide (scripts, skills)
 	WriteOK  []string // read-write inside Hide (spill, jobs)
 	Env      []string // extra env for children
+	GUISock  string   // X11 socket to re-expose ("" = no display)
+	GUIAuth  string   // xauthority to re-expose alongside GUISock
 
 	once    sync.Once
 	profile string   // seatbelt: SBPL text
@@ -165,6 +167,17 @@ func sbSetup(cfg *Config, root, flag string) (*Sandbox, error) {
 		return nil, nil
 	}
 	sb := sbNew(mode, backend, bin, sbNetAllowed(mode, cfg), sbProjectRoots(root))
+	// GUI display is a setup-time decision: sbBwrapArgs stays a pure function
+	// of the struct (golden-argv tests) instead of reading ambient env mid-build.
+	if sock := x11Socket(os.Getenv("DISPLAY")); sock != "" {
+		if fi, err := os.Stat(sock); err == nil && fi.Mode()&os.ModeSocket != 0 {
+			sb.GUISock = sock
+			sb.GUIAuth = os.Getenv("XAUTHORITY")
+			if sb.GUIAuth == "" {
+				sb.GUIAuth = x11Xauth()
+			}
+		}
+	}
 	if backend != sbJobObject {
 		if err := sb.prepare(); err != nil {
 			sbStatus.Store("falhou ao preparar: " + err.Error())
@@ -810,10 +823,10 @@ func sbBwrapArgs(s *Sandbox, dir string) []string {
 	// turned "open in the GUI" into a silent failure the model narrated as
 	// success (d610). With a display available, give it back read-only; the
 	// xauth file gets re-exposed even under a masked HOME or /run/user.
-	if sock := x11Socket(os.Getenv("DISPLAY")); sock != "" {
-		a = append(a, "--ro-bind-try", sock, sock)
-		if x := os.Getenv("XAUTHORITY"); x != "" {
-			a = append(a, "--ro-bind-try", x, x)
+	if s.GUISock != "" {
+		a = append(a, "--ro-bind-try", s.GUISock, s.GUISock)
+		if s.GUIAuth != "" {
+			a = append(a, "--ro-bind-try", s.GUIAuth, s.GUIAuth)
 		}
 	}
 	for _, p := range ro {

@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,26 @@ func TestX11XauthPrefersHome(t *testing.T) {
 	}
 	if got := x11Xauth(); got != xa {
 		t.Fatalf("x11Xauth = %q, want %q", got, xa)
+	}
+}
+
+// The X11 binds re-expose the socket the /tmp tmpfs hid. They are resolved at
+// sbSetup (fields), not inside sbBwrapArgs, so the golden-argv tests stay pure.
+func TestBwrapArgsReexposesX11(t *testing.T) {
+	sb := &Sandbox{Mode: "strict", Backend: sbBwrap, Bin: "/usr/bin/bwrap",
+		Tmp: "/tmp/x", GUISock: "/tmp/.X11-unix/X0", GUIAuth: "/u/.Xauthority"}
+	a := strings.Join(sbBwrapArgs(sb, ""), " ")
+	if !strings.Contains(a, "--ro-bind-try /tmp/.X11-unix/X0 /tmp/.X11-unix/X0") {
+		t.Fatalf("socket bind ausente: %s", a)
+	}
+	if !strings.Contains(a, "--ro-bind-try /u/.Xauthority /u/.Xauthority") {
+		t.Fatalf("xauth bind ausente: %s", a)
+	}
+	// sem display resolvido, nada muda
+	sb2 := &Sandbox{Mode: "strict", Backend: sbBwrap, Bin: "/usr/bin/bwrap", Tmp: "/tmp/x"}
+	for _, tok := range sbBwrapArgs(sb2, "") {
+		if strings.Contains(tok, "X11-unix") || strings.Contains(tok, "Xauthority") {
+			t.Fatalf("bind X11 sem display: %v", sbBwrapArgs(sb2, ""))
+		}
 	}
 }
