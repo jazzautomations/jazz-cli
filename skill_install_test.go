@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -71,8 +72,10 @@ func TestSiInstallLocalRepoWithManySkills(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "skills", "evil-name", "SKILL.md")); err != nil {
 		t.Error("an unsafe name must be sanitized inside the skills dir")
 	}
-	if fi, err := os.Stat(filepath.Join(home, "skills", "pdf", "scripts", "setup.py")); err != nil || fi.Mode()&0o100 == 0 {
-		t.Error("script must keep its exec bit")
+	if runtime.GOOS != "windows" { // Windows has no exec bit: chmod 0o755 is a no-op there
+		if fi, err := os.Stat(filepath.Join(home, "skills", "pdf", "scripts", "setup.py")); err != nil || fi.Mode()&0o100 == 0 {
+			t.Error("script must keep its exec bit")
+		}
 	}
 	// findSkills (the prompt list) sees it
 	var names []string

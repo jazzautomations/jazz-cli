@@ -371,6 +371,10 @@ func TestSandboxSkillCacheWritable(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		// sbNew uses os.UserHomeDir, which reads %USERPROFILE% on Windows.
+		t.Setenv("USERPROFILE", home)
+	}
 	sb := sbNew("auto", sbBwrap, "/usr/bin/bwrap", false, []string{t.TempDir()})
 	want := sbReal(filepath.Join(home, ".cache", "video-lite"))
 	found := false

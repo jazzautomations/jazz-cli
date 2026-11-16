@@ -1,8 +1,16 @@
 package main
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestSbinPathAppended(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		// spWithSbin só roda no Linux (spFixPath sai cedo nos outros OS):
+		// /sbin não existe no Windows/macOS e o separador de lista muda.
+		t.Skip("spWithSbin only runs on Linux")
+	}
 	all := func(string) bool { return true }
 	none := func(string) bool { return false }
 	cases := []struct {

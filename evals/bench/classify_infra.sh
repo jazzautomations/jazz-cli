@@ -98,7 +98,9 @@ classify_infra() {
     if [ "$rc" = 0 ]; then result=PASS; else result=FAIL; fi
   fi
   if [ -n "$metrics" ] && [ -r "$metrics" ] && command -v python3 >/dev/null 2>&1; then
-    read -r ok served < <(classify_metrics "$metrics")
+    # tr -d '\r': o python3 do Windows imprime CRLF — o \r ficaria grudado no
+    # fim de "served" e toda comparação de modelo sairia SUBST.
+    read -r ok served < <(classify_metrics "$metrics" | tr -d '\r')
   fi
   if [ -r "$log" ]; then
     # só as linhas que interessam (grep -a: o log pode ter bytes fora do UTF-8)

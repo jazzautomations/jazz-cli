@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -23,8 +24,16 @@ import (
 
 const factToolName = "fact"
 
-// factTimeout bounds one fact call (a probe, not a job).
-const factTimeout = 10 * time.Second
+// factTimeout bounds one fact call (a probe, not a job). On Windows scripts
+// run under Git Bash (MSYS2): every fork/exec costs ~100 ms, so a script
+// that is instant on Linux (git_state and its ~30 subshells) can take well
+// over 10 s — the bound is relaxed there instead of reporting a fake hang.
+var factTimeout = func() time.Duration {
+	if runtime.GOOS == "windows" {
+		return 30 * time.Second
+	}
+	return 10 * time.Second
+}()
 
 // factDeny are level-0 intents the tool never offers: what may hold a
 // secret goes to third-party providers otherwise, and what runs on another

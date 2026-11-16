@@ -35,9 +35,12 @@ func TestSandboxMasksHome(t *testing.T) {
 	proj := filepath.Join(home, "proj")
 	tools := filepath.Join(home, ".local", "bin")
 	sb := &Sandbox{Backend: sbBwrap, Home: home, HideHome: true, Roots: []string{proj}, CacheRO: []string{tools}}
+	// fsRoot is "/" on Unix and "C:\" on Windows: the tree that contains the
+	// home ("/" alone means nothing on Windows — it is not a parent of C:\…).
+	fsRoot := filepath.VolumeName(home) + string(filepath.Separator)
 	for p, want := range map[string]bool{
 		home:                             true,
-		"/":                              true,
+		fsRoot:                           true,
 		filepath.Dir(home):               true,
 		filepath.Join(home, "Downloads"): true,
 		filepath.Join(home, ".config"):   true,

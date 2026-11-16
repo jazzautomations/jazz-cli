@@ -23,6 +23,12 @@ import sys
 
 OK, PRE, FAIL = 0, 10, 1
 
+# O log do Actions é lido como UTF-8; no Windows o print cai no codepage do
+# console (cp1252/cp850) e os acentos viram mojibake. Força UTF-8 na saída.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 
 def main():
     ap = argparse.ArgumentParser()

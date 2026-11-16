@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,7 +85,8 @@ func TestInstalledSkillWriteAsks(t *testing.T) {
 	var f string
 	h := newHarness(t, func(n int, r recReq) fakeResp {
 		if n == 0 {
-			args := `{"path":"` + f + `","old_string":"x = 1","new_string":"x = 2"}`
+			pf, _ := json.Marshal(f) // a Windows path has `\`: interpolating raw makes invalid JSON
+			args := `{"path":` + string(pf) + `,"old_string":"x = 1","new_string":"x = 2"}`
 			return fakeResp{Calls: []fakeCall{{ID: "e1", Name: "edit", Args: args}}}
 		}
 		return fakeResp{Text: "a skill tem um bug; avisei"}

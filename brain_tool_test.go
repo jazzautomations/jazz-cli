@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -88,6 +89,11 @@ func TestFactToolEndToEnd(t *testing.T) {
 func TestFactRefusesSecretFiles(t *testing.T) {
 	h := newHarness(t, seq(fakeResp{Text: "ok"}), nil)
 	t.Setenv("HOME", h.root)
+	if runtime.GOOS == "windows" {
+		// os.UserHomeDir reads %USERPROFILE% on Windows, not $HOME: without
+		// this the credential guard looks for .netrc under the real profile.
+		t.Setenv("USERPROFILE", h.root)
+	}
 	key := "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n-----END OPENSSH PRIVATE KEY-----\n"
 	scWrite(t, h.root, ".ssh/id_ed25519", key)
 	scWrite(t, h.root, ".netrc", "machine x login u password hunter2supersecret\n")
