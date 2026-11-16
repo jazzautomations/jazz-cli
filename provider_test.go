@@ -1373,7 +1373,7 @@ func TestProviderCodexStream(t *testing.T) {
 		t.Fatalf("path %q", cap.path)
 	}
 	h := cap.headers
-	if h.Get("Authorization") != "Bearer "+access || h.Get("ChatGPT-Account-ID") != "acct-1" || h.Get("session-id") != "sess-9" || h.Get("originator") != originator || h.Get("version") != version {
+	if h.Get("Authorization") != "Bearer "+access || h.Get("ChatGPT-Account-ID") != "acct-1" || h.Get("session-id") != "sess-9" || h.Get("originator") != originator || h.Get("version") != codexClientVersion {
 		t.Fatalf("headers %v", h)
 	}
 	if !strings.HasPrefix(h.Get("User-Agent"), originator+"/"+version+" (") {
