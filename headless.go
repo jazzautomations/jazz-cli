@@ -161,6 +161,11 @@ func (h *HeadlessUI) Approve(ctx context.Context, tool, detail, reason string) (
 		fmt.Fprintln(h.stderr(), msg+" — mexe em credenciais: nenhuma flag libera isso no -p; se precisar, abra o arquivo você mesmo")
 		return Deny, ""
 	}
+	if reason == usReason {
+		// the model asked to leave the sandbox: --yolo does not cover that (unsandboxed.go)
+		fmt.Fprintln(h.stderr(), msg+" — o modelo pediu pra sair do sandbox; ele foi orientado a repetir dentro dele. Pra liberar no -p: --allow-unsandboxed")
+		return Deny, ""
+	}
 	if !hlRuleCovers(tool, detail, reason) {
 		// a rule does not cover this risk (agent.permit): suggesting one
 		// would send the user to a flag that changes nothing

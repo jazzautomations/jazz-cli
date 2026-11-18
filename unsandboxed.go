@@ -20,6 +20,24 @@ import (
 // usAllow: the user's headless opt-in.
 var usAllow = os.Getenv("JAZZ_ALLOW_UNSANDBOXED") == "1"
 
+// usReason: why a sandbox:false call is a question every time (agent.permit).
+const usReason = "roda FORA do sandbox do sistema, sem isolamento (lê e escreve onde o seu usuário pode)"
+
+// usDeniedMsg is what the model reads when the escape alone was refused. The
+// command is fine inside the sandbox, so the next step is the same command
+// without the argument; "do not retry" made weak models give the command up
+// or repeat the escape until the turn stopped (d610, 17/11). It does not start
+// with "BLOCKED: ": a refused escape is not a blocked attempt (blockux.go).
+func usDeniedMsg(what string, headless bool) string {
+	who := "the user did not approve it"
+	if headless {
+		who = "nobody can approve it in this non-interactive run (the user opts in with --allow-unsandboxed)"
+	}
+	return "NOT RUN: " + what + " asked to leave the OS sandbox (\"sandbox\": false) and " + who +
+		". Run the same command again without the sandbox argument: inside the sandbox it needs no approval. " +
+		"Only if it then fails because of the sandbox, tell the user which command has to run outside it."
+}
+
 // usWanted: the call asks to leave the sandbox and there is one to leave.
 func usWanted(tool string, args map[string]any) bool {
 	if tool != "bash" {

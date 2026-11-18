@@ -2258,7 +2258,7 @@ func (a *Agent) permit(ctx context.Context, tc ToolCall, detail string, isMCP bo
 		}
 		if !usAllow {
 			// outside the sandbox: a question every time, also in yolo (unsandboxed.go)
-			usWhy, repoAsk = "roda FORA do sandbox do sistema, sem isolamento (lê e escreve onde o seu usuário pode)", true
+			usWhy, repoAsk = usReason, true
 		}
 	}
 	skillWhy := ""
@@ -2611,6 +2611,9 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 	}
 	if fb := strings.TrimSpace(feedback); fb != "" {
 		return false, "The user denied this and said: " + fb, true
+	}
+	if reason == usReason { // only the escape was refused: the command runs inside the sandbox (unsandboxed.go)
+		return false, usDeniedMsg(blockWhat(tool, apDetail), a.Headless), true
 	}
 	if a.blockUX() {
 		a.blockWhy = reason
