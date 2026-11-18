@@ -2612,8 +2612,14 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 	if fb := strings.TrimSpace(feedback); fb != "" {
 		return false, "The user denied this and said: " + fb, true
 	}
+	return false, a.permitDeniedText(tool, apDetail, reason, whyEN, gate), true
+}
+
+// permitDeniedText is what the model reads when an approval was refused (by
+// the user, or because nobody can answer in a -p run).
+func (a *Agent) permitDeniedText(tool, apDetail, reason, whyEN, gate string) string {
 	if reason == usReason { // only the escape was refused: the command runs inside the sandbox (unsandboxed.go)
-		return false, usDeniedMsg(blockWhat(tool, apDetail), a.Headless), true
+		return usDeniedMsg(blockWhat(tool, apDetail), a.Headless)
 	}
 	if a.blockUX() {
 		a.blockWhy = reason
@@ -2636,13 +2642,13 @@ func (a *Agent) permitAnswer(ctx context.Context, tc ToolCall, tool string, args
 		} else {
 			why = "the user denied it (" + why + ")"
 		}
-		return false, a.nlDenied(gate, blockMsg(blockWhat(tool, apDetail), why)), true
+		return a.nlDenied(gate, blockMsg(blockWhat(tool, apDetail), why))
 	}
 	msg := "The user denied this action"
 	if reason != "" {
 		msg += " (" + reason + ")"
 	}
-	return false, a.nlDenied(gate, msg+". Do not retry it; ask the user or choose another approach."), true
+	return a.nlDenied(gate, msg+". Do not retry it; ask the user or choose another approach.")
 }
 
 // alwaysSession reports whether "Sim, e não perguntar de novo" lasts only
