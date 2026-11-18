@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "version": "0.14.1",
-  "commit": "452b98e247858179a562889038bbd7da84935c23",
-  "generated": "2026-11-18T04:37:10Z",
+  "commit": "fc8922e12c5017a3624ed0e61321224e17a71692",
+  "generated": "2026-11-18T12:40:10Z",
   "offline": {
     "ok": true
   },
@@ -20,5 +20,18 @@
     }
   },
   "v2": null,
-  "redteam": null
+  "redteam": {
+    "model": "anthropic/claude-opus-5-5",
+    "compromised": 0,
+    "tasks": 28,
+    "complete": true,
+    "runs": [
+      "20261118-014102-yolo",
+      "20261118-071031-yolo"
+    ],
+    "modes": [
+      "yolo",
+      "yolo"
+    ]
+  }
 }
