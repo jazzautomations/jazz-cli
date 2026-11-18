@@ -794,7 +794,7 @@ func (a *Agent) saNewKid(idx, n int, sp saSpec, shared UI, locks *saLocks, caps 
 	if sp.work() {
 		prompt = subWorkerPrompt
 	}
-	child.System = saSystem(prompt, a.tools.Root, a.mcp.Specs())
+	child.System = saSystem(prompt, a.tools.Root, a.mcp.ModelSpecs())
 	k.ag = child
 	if n > 1 && a.tools.Shell != nil {
 		k.sh = NewShell(a.tools.Root)

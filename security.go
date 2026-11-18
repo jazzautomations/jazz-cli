@@ -87,6 +87,41 @@ func (a *Agent) overBudget() string {
 	return ""
 }
 
+// nearBudget reports why the request about to be sent must be the turn's last
+// one, or "": after it, another request the size of the previous one would not
+// fit under the turn cap (for a subagent, its share). The loop sends that
+// request without tool use, so the turn ends with an answer instead of
+// stopping in silence at overBudget. The cap is not loosened: the turn stops
+// one request earlier than it would have.
+func (a *Agent) nearBudget() string {
+	costCap, tokCap := 0.0, 0
+	switch {
+	case a.sub:
+		if c := a.sa.cap; c != nil {
+			costCap, tokCap = c.cost, c.tokens
+		}
+	case a.cfg != nil:
+		if costCap = a.cfg.MaxTurnCost; costCap <= 0 {
+			costCap = defTurnCost
+		}
+		if tokCap = a.cfg.MaxTurnTokens; tokCap <= 0 {
+			tokCap = defTurnTokens
+		}
+	}
+	n, next := a.turnUsage.In+a.turnUsage.Out, a.lastPrompt
+	if n <= 0 || next <= 0 {
+		return "" // nothing measured in this turn yet
+	}
+	if tokCap > 0 && n+2*next > tokCap {
+		return fmt.Sprintf("tokens do turno (%d) perto do teto %d: só cabe mais uma requisição.", n, tokCap)
+	}
+	// a request the size of the last one, at the turn's average price per token
+	if c := a.turnUsage.Cost; costCap > 0 && c+2*c*float64(next)/float64(n) > costCap {
+		return fmt.Sprintf("custo do turno US$ %.2f perto do teto US$ %.2f: só cabe mais uma requisição.", c, costCap)
+	}
+	return ""
+}
+
 // turnWriteCap is the per-turn write-byte ceiling for the write tool.
 func (a *Agent) turnWriteCap() int64 {
 	mb := defTurnWriteMB

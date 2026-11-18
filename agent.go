@@ -61,6 +61,8 @@ type Agent struct {
 	textRefs   map[string]bool // refs that rejected native tools in this session (G15)
 	textSys    string          // cached System + text-tools block
 	textSysFor string          // the System textSys was built from
+	swSys      string          // cached short system prompt for a small-window model (smallwin.go)
+	swTextSys  string          // swSys + text-tools block of the core tools
 	retryDelay func(err error, attempt int) time.Duration
 
 	sub      bool    // research subagent (G7): read-only, no task tool, no session
@@ -226,7 +228,7 @@ func (a *Agent) toolSpecs() []ToolSpec {
 	} else {
 		out = append(append(out, a.tools.Specs()...), a.ojTaskSpecs()...) // task (+ sidekick with --fusion on)
 	}
-	return append(out, a.mcp.Specs()...)
+	return append(out, a.mcp.ModelSpecs()...) // every MCP schema, or only the loaded ones (mcp_lazy.go)
 }
 
 // knownTool maps a tool name written by the model to a real tool ("" = unknown).
@@ -254,7 +256,7 @@ func (a *Agent) EnsureSystem() {
 		a.ui.StopThinking()
 	}
 	skConfigure(a.cfg) // skills.claude_dir for the user skill list
-	sys, dirs := buildSystemPrompt(a.tools.Root, a.mcp.Specs())
+	sys, dirs := buildSystemPrompt(a.tools.Root, a.mcp.ModelSpecs())
 	a.System = sys
 	a.tools.MarkInstrSeen(dirs)
 	if i := strings.Index(sys, "<untrusted suspected_injection="); i >= 0 && a.injMode() != "off" && !a.sub {
@@ -576,6 +578,12 @@ turnLoop:
 		if atLimit {
 			a.bgAtLimit()
 			a.append(Message{Role: "user", Content: stepLimitReminder})
+		} else if why := a.nearBudget(); why != "" {
+			// room for this request and not for another: it is the final
+			// answer, so the turn does not stop in silence at overBudget
+			atLimit = true
+			a.ui.Warn("limite do turno chegando: " + why)
+			a.append(Message{Role: "user", Content: "<system-reminder>" + why + " Esta é a última resposta deste turno: não chame ferramentas, diga o que foi feito e o que falta.</system-reminder>"})
 		}
 		steps++
 		if turnModel != a.Model && !stickSince.IsZero() && time.Since(stickSince) >= acStickyTTL {
@@ -1278,6 +1286,10 @@ func (a *Agent) buildRequest(ref, mid string, o acChatOpt) ChatRequest {
 		msgs = acStripImages(msgs, ref)
 	}
 	req := ChatRequest{Model: mid, System: a.System, Messages: msgs, MaxTokens: maxOut, Effort: effort, Temperature: ms.Temperature, NoToolUse: o.noToolUse}
+	small := a.smallWin(ref) // short prompt and core tools only (smallwin.go)
+	if small {
+		req.System = a.swSystem(ref)
+	}
 	switch {
 	case ms.Tools == "none":
 		req.TextTools = true
@@ -1285,9 +1297,15 @@ func (a *Agent) buildRequest(ref, mid string, o acChatOpt) ChatRequest {
 	case a.textMode(ref):
 		req.TextTools = true
 		req.System = a.textSystem()
+		if small {
+			req.System = a.swTextSystem(ref)
+		}
 		req.Messages = acTextHistory(msgs)
 	default:
 		req.Tools = a.toolSpecs()
+		if small {
+			req.Tools = a.swSpecs()
+		}
 	}
 	return req
 }
@@ -2664,7 +2682,7 @@ func toolDetail(name, raw string) string {
 	}
 	m = normalizeArgs(CanonicalTool(name), m)
 	switch CanonicalTool(name) {
-	case mcpResTool, mcpPromptTool:
+	case mcpResTool, mcpPromptTool, mcpFindTool:
 		return mcpMetaDetail(CanonicalTool(name), m)
 	case "read":
 		p, _ := argStr(m, "path")
@@ -3112,7 +3130,7 @@ func (a *Agent) ContextBreakdown() []ContextPart {
 	parts = append(parts, ContextPart{Label: "ferramentas embutidas", Tokens: tok(specLen(append(append([]ToolSpec{}, a.tools.Specs()...), taskSpec)))})
 	byServer := map[string][]ToolSpec{}
 	var servers []string
-	for _, s := range a.mcp.Specs() {
+	for _, s := range a.mcp.ModelSpecs() {
 		srv := acMCPServer(s.Name)
 		if _, ok := byServer[srv]; !ok {
 			servers = append(servers, srv)

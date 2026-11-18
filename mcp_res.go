@@ -33,7 +33,9 @@ const (
 	mcpCatalogLimit = 5000    // entries kept per list
 )
 
-func pfMCPMeta(tool string) bool { return tool == mcpResTool || tool == mcpPromptTool }
+func pfMCPMeta(tool string) bool {
+	return tool == mcpResTool || tool == mcpPromptTool || tool == mcpFindTool
+}
 
 // mcpResOff reports JAZZ_MCP_RESOURCES=off (global switch for both tools).
 func mcpResOff() bool { return olOffWord(os.Getenv("JAZZ_MCP_RESOURCES")) }
@@ -298,6 +300,9 @@ func (m *MCPManager) metaHas(tool string) bool {
 	if tool == mcpResTool {
 		return m.meta.res
 	}
+	if tool == mcpFindTool {
+		return m.lazyLocked()
+	}
 	return m.meta.prompt
 }
 
@@ -337,6 +342,10 @@ func acMCPServerFor(tc ToolCall) string {
 
 // mcpMetaDetail is the one-line description of a meta call (prompts, UI).
 func mcpMetaDetail(tool string, m map[string]any) string {
+	if tool == mcpFindTool {
+		q, _ := argStr(m, "query")
+		return oneLine(pfMCPDesc(q), 80)
+	}
 	srv, _ := argStr(m, "server")
 	srv = pfMCPDesc(srv)
 	if srv == "" {
@@ -402,6 +411,9 @@ func mcpErr(text, summary string) ToolOutput {
 func (m *MCPManager) callMeta(ctx context.Context, tool, rawArgs string) ToolOutput {
 	if !m.metaHas(tool) {
 		return mcpErr(fmt.Sprintf("MCP tool %q is not available.", tool), "MCP indisponível")
+	}
+	if tool == mcpFindTool {
+		return m.find(rawArgs)
 	}
 	args, _, err := parseArgs(rawArgs)
 	if err != nil {

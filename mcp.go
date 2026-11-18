@@ -161,6 +161,12 @@ type MCPManager struct {
 	baseline map[string]string              // exposed name -> hash of its first description+schema (rug-pull, ASI04)
 	meta     mcpMeta                        // mcp_resource / mcp_prompt (mcp_res.go)
 	closed   bool
+
+	// schemas on demand (mcp_lazy.go)
+	lazy      bool            // more than mcpEagerMax tools: sticky for the session
+	findSpec  ToolSpec        // mcp_find, built once
+	loaded    []string        // tools whose schema is sent, in load order (append-only)
+	loadedSet map[string]bool // same, for lookups
 }
 
 // mcpToolHash fingerprints a tool's description and input schema, so a server
@@ -518,6 +524,7 @@ func (m *MCPManager) Call(ctx context.Context, tool, rawArgs string) ToolOutput 
 	if !ok {
 		return ToolOutput{IsErr: true, Text: fmt.Sprintf("MCP tool %q not found", tool)}
 	}
+	m.markLoaded(tool) // called by name: its schema goes in the next requests (mcp_lazy.go)
 	if st, serr, _ := e.srv.State(); st != "ready" {
 		msg := st
 		if serr != nil {

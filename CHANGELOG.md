@@ -11,6 +11,9 @@
 - `--ask-stdin` reserva a entrada para as respostas, sem anexá-las ao prompt; perguntas consecutivas preservam as linhas já lidas no buffer. Combinar com `--stdin`/`-` é erro de uso.
 - Fixtures corrigidas: dono de arquivo não é processo com arquivo aberto; filtro de permissão recebe arquivo com modo conferido independentemente do umask. Conjuntos cegos permanecem intactos.
 - Testes de terminal independem do ambiente; testes de procfs conferem indisponibilidade no macOS; helpers compartilhados permitem compilar a suíte Windows.
+- Turno perto do teto de tokens/custo (`max_turn_tokens`, `max_turn_cost`) faz uma última requisição sem ferramentas e termina com resposta, em vez de parar mudo; subagente no teto devolve relatório em vez de "without a report". O teto não afrouxa: o turno para uma requisição antes.
+- MCP com mais de 40 tools: a requisição leva só `mcp_find` e as tools já carregadas (busca por palavra-chave ou chamada pelo nome carregam o schema), no pai e nos subagentes. Até 40 tools nada muda; permissões e a checagem de rug-pull seguem iguais.
+- Modelo com janela de contexto até 8.192 tokens recebe um prompt de sistema curto e só `read`/`write`/`edit`/`bash` (19 KB → 5,6 KB na primeira requisição); instruções de projeto acima de 2 KB viram um aviso para ler o arquivo. Acima de 8.192 nada muda.
 
 ## 0.14.0 — 2026-11-16
 
