@@ -399,10 +399,50 @@ func hgWalk(root string, fn func(abs, rel string)) {
 	})
 }
 
-// snapshot records the protected files that exist when the turn starts.
-func (st *hgState) snapshot() {
-	hgWalk(st.root, func(abs, rel string) {
-		if len(st.snap) >= hgMaxSnap || hgKind(rel) == "" {
+// hgToolTree: rel runs through a hidden directory that is not CI
+// configuration (~/.cargo, .yarn/cache, .local/share): a tool's own tree, not
+// the project's tests. The guard does not snapshot it, so it never writes
+// back what a cache cleanup removed there.
+func hgToolTree(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for _, part := range parts[:len(parts)-1] {
+		if strings.HasPrefix(part, ".") && part != "." && part != ".." {
+			return part != ".github" && part != ".circleci"
+		}
+	}
+	return false
+}
+
+// scanRoot is where the snapshot starts. Opened in the home directory, the
+// project is the one the shell is in (its git top, or cwd itself): the
+// snapshot budget would otherwise go to whatever sorts first under home.
+func (st *hgState) scanRoot(cwd string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || cwd == "" || !pathEq(st.root, home) {
+		return st.root
+	}
+	norm := func(p string) string { // as hgNorm, which needs Agent.hg
+		p = filepath.Clean(p)
+		if st.rootReal != "" && pathUnder(p, st.rootReal) {
+			p = st.root + p[len(st.rootReal):]
+		}
+		return p
+	}
+	inside := func(p string) bool { return pathUnder(p, st.root) && !pathEq(p, st.root) }
+	if cwd = norm(cwd); !inside(cwd) {
+		return st.root
+	}
+	if top := gitRoot(cwd); top != "" && inside(norm(top)) {
+		return norm(top)
+	}
+	return cwd
+}
+
+// snapshot records the protected files under dir that exist when the turn
+// starts.
+func (st *hgState) snapshot(dir string) {
+	hgWalk(dir, func(abs, rel string) {
+		if len(st.snap) >= hgMaxSnap || hgKind(rel) == "" || hgToolTree(rel) {
 			return
 		}
 		fi, err := os.Stat(abs)
@@ -736,7 +776,11 @@ func (a *Agent) hgBeginTurn(input string) {
 	}
 	st.own, st.sess = a.hgOwn, a.sess
 	if a.hgOn("tests") || a.hgOn("hardcode") {
-		st.snapshot()
+		cwd := ""
+		if a.tools.Shell != nil {
+			cwd = a.tools.Shell.Cwd
+		}
+		st.snapshot(st.scanRoot(cwd))
 	}
 	a.hg = st
 	dbg("guard", map[string]any{"policy": st.policy.String(), "snap": len(st.snap), "remove": st.removeIDs, "extract": st.extract})

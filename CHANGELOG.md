@@ -18,6 +18,7 @@ Correções sobre a 0.14.0, e o que os modelos pequenos e grátis precisavam par
 - MCP com mais de 40 tools: a requisição leva só `mcp_find` e as tools já carregadas (busca por palavra-chave ou chamada pelo nome carregam o schema), no pai e nos subagentes. Até 40 tools nada muda; permissões e a checagem de rug-pull seguem iguais.
 - Modelo com janela de contexto até 8.192 tokens recebe um prompt de sistema curto e só `read`/`write`/`edit`/`bash` (19 KB → 5,6 KB na primeira requisição); instruções de projeto acima de 2 KB viram um aviso para ler o arquivo. Acima de 8.192 nada muda.
 - `bash` com `sandbox:false` recusado (sem aprovação, ou no `-p`) orienta o modelo a repetir o mesmo comando dentro do sandbox, em vez de "não tente de novo", e não conta como tentativa bloqueada que encerra o turno. A pergunta continua igual, também no yolo. No `-p` o aviso aponta `--allow-unsandboxed` em vez de `--yolo`. Medido no d610 com `glm-4.7-flash` na tarefa `12-py-flag-cli`: antes 3 recusas e turno encerrado como `denied` (rc 5); depois 4 recusas, comandos refeitos no sandbox, `done` (rc 0).
+- Guarda de testes: árvore oculta de ferramenta (`~/.cargo`, `.yarn/cache`, `.local`) não entra mais na foto do início do turno, então uma limpeza de cache não é "desfeita" com arquivos de teste e CI regravados. Com o jazz aberto no home, a foto parte do projeto onde o shell está (raiz do git, ou o diretório atual), e não do que vier primeiro em ordem alfabética sob `~`; `.github` e `.circleci` do projeto seguem protegidos.
 
 ## 0.14.0 — 2026-11-16
 
