@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +19,12 @@ type AnthropicProvider struct {
 	Key     string
 	Headers map[string]string
 	cfg     *Config
+	// dropBind is armed the first time the API rejects a replayed thinking
+	// block as bound to a different conversation: the prefix change (resume,
+	// compaction, an edited earlier message) is permanent for the session, so
+	// every later request asks the API to drop the dead blocks instead of
+	// failing with the same 400 forever.
+	dropBind atomic.Bool
 }
 
 // pvAnthExtra is what an Anthropic answer stores in Message.Extra: the thinking
@@ -111,6 +119,42 @@ func pvAnthMessages(msgs []Message, prov string, thinking bool) []map[string]any
 		blocks[len(blocks)-1]["cache_control"] = map[string]any{"type": "ephemeral"}
 	}
 	return out
+}
+
+// pvAnthBindingBeta gates thinking.block_binding on the Messages API.
+const pvAnthBindingBeta = "thinking-binding-controls-2026-08-01"
+
+// pvAnthBoundSig reports whether err is the preserved-thinking prefix check
+// rejecting a replayed block (HTTP 400 "Invalid `signature` in `thinking`
+// block ... bound to a different conversation"). Those blocks stay invalid on
+// every later request while the prefix stays changed, so the answer is to
+// drop them (pvAnthDropBinding), never to retry the same payload.
+func pvAnthBoundSig(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.Status == 400 &&
+		strings.Contains(ae.Body, "`thinking` block") &&
+		strings.Contains(ae.Body, "signature")
+}
+
+// pvAnthDropBinding asks the API to drop thinking blocks that fail the prefix
+// check instead of erroring. The control only exists for adaptive thinking;
+// a modern-model request without an explicit thinking object gets one (those
+// models think by default anyway, so the shape does not change).
+func pvAnthDropBinding(body map[string]any, h map[string]string) {
+	t, _ := body["thinking"].(map[string]any)
+	if t == nil {
+		t = map[string]any{"type": "adaptive"}
+		body["thinking"] = t
+	}
+	if t["type"] != "adaptive" {
+		return
+	}
+	t["block_binding"] = map[string]any{"prefix_mismatch_behavior": "drop_block"}
+	if b := h["anthropic-beta"]; b != "" {
+		h["anthropic-beta"] = b + "," + pvAnthBindingBeta
+	} else {
+		h["anthropic-beta"] = pvAnthBindingBeta
+	}
 }
 
 // pvThinkingBudget maps an effort hint to a thinking budget below maxTok (0 = off).
@@ -233,15 +277,27 @@ func (p *AnthropicProvider) Chat(ctx context.Context, req ChatRequest, fn Stream
 	for k, v := range p.Headers {
 		h[k] = v
 	}
+	if p.dropBind.Load() {
+		pvAnthDropBinding(body, h)
+	}
 	ref := p.Name + "/" + req.Model
 	tokens := pvEstTokens(req)
-	p.cfg.rlBegin(ref, tokens)
-	out, err := p.stream(ctx, h, body, fn)
-	var u Usage
-	if out != nil {
-		u = out.Usage
+	send := func() (*ChatResponse, error) {
+		p.cfg.rlBegin(ref, tokens)
+		out, err := p.stream(ctx, h, body, fn)
+		var u Usage
+		if out != nil {
+			u = out.Usage
+		}
+		p.cfg.rlEnd(ref, tokens, u, err)
+		return out, err
 	}
-	p.cfg.rlEnd(ref, tokens, u, err)
+	out, err := send()
+	if err != nil && modern && !p.dropBind.Load() && pvAnthBoundSig(err) {
+		p.dropBind.Store(true)
+		pvAnthDropBinding(body, h)
+		out, err = send()
+	}
 	return out, err
 }
 

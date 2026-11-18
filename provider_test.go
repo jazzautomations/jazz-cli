@@ -2251,6 +2251,82 @@ func TestProviderAnthropicThinkingRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProviderAnthropicBoundSigDropBlock(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []map[string]any
+	var betas []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		json.NewDecoder(r.Body).Decode(&b)
+		mu.Lock()
+		bodies = append(bodies, b)
+		betas = append(betas, r.Header.Get("anthropic-beta"))
+		n := len(bodies)
+		mu.Unlock()
+		if n == 1 {
+			w.WriteHeader(400)
+			io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `+"`signature`"+` in `+"`thinking`"+` block. The block is bound to a different conversation."}}`)
+			return
+		}
+		provWriteSSE(w,
+			provAnthEv("message_start", `{"type":"message_start","message":{"id":"m1","type":"message","role":"assistant","content":[],"model":"claude-fable-5-2","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+			provAnthEv("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+			provAnthEv("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`),
+			provAnthEv("content_block_stop", `{"type":"content_block_stop","index":0}`),
+			provAnthEv("message_stop", `{"type":"message_stop"}`),
+		)
+	}))
+	defer srv.Close()
+	p := &AnthropicProvider{Name: "anthropic", BaseURL: srv.URL, Key: "k"}
+	req := ChatRequest{Model: "claude-fable-5-2", Effort: "medium", Messages: []Message{{Role: "user", Content: "hi"}}}
+	out, err := p.Chat(context.Background(), req, nil)
+	if err != nil || out.Text != "ok" {
+		t.Fatalf("out %+v err %v", out, err)
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("requests %d", len(bodies))
+	}
+	th, _ := bodies[0]["thinking"].(map[string]any)
+	if _, ok := th["block_binding"]; ok || betas[0] != "" {
+		t.Fatalf("first request must go clean: thinking %v beta %q", th, betas[0])
+	}
+	th, _ = bodies[1]["thinking"].(map[string]any)
+	bb, _ := th["block_binding"].(map[string]any)
+	if th["type"] != "adaptive" || bb["prefix_mismatch_behavior"] != "drop_block" {
+		t.Fatalf("retry must carry drop_block: %v", bodies[1]["thinking"])
+	}
+	if !strings.Contains(betas[1], pvAnthBindingBeta) {
+		t.Fatalf("retry beta %q", betas[1])
+	}
+	// armed: the next request sends drop_block from the start, no new 400
+	if _, err := p.Chat(context.Background(), req, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 3 {
+		t.Fatalf("requests %d", len(bodies))
+	}
+	th, _ = bodies[2]["thinking"].(map[string]any)
+	if _, ok := th["block_binding"]; !ok || !strings.Contains(betas[2], pvAnthBindingBeta) {
+		t.Fatalf("armed request: thinking %v beta %q", th, betas[2])
+	}
+}
+
+func TestProviderAnthropicBoundSigLegacyNoRetry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `+"`signature`"+` in `+"`thinking`"+` block."}}`)
+	}))
+	defer srv.Close()
+	p := &AnthropicProvider{Name: "anthropic", BaseURL: srv.URL}
+	// legacy model (budget thinking): no drop_block retry — error propagates
+	if _, err := p.Chat(context.Background(), ChatRequest{Model: "claude-sonnet-4-0", Effort: "low", Messages: []Message{{Role: "user", Content: "hi"}}}, nil); err == nil {
+		t.Fatal("want error")
+	}
+	if p.dropBind.Load() {
+		t.Fatal("dropBind armed on a legacy model")
+	}
+}
+
 func TestProviderAnthropicImagesAndIDs(t *testing.T) {
 	msgs := []Message{
 		{Role: "user", Content: "look", Images: []ImagePart{{Mime: "image/jpeg", Data: "SU1H"}}},

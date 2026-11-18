@@ -4,6 +4,7 @@
 
 Correções sobre a 0.14.0, e o que os modelos pequenos e grátis precisavam para terminar o turno direito.
 
+- Anthropic: o 400 de `signature` em bloco de `thinking` preso a outra conversa (retomada, compactação) deixa de travar a sessão: a requisição é reenviada uma vez pedindo para a API descartar os blocos, e as seguintes já saem assim.
 - Saída do shell usa contadores de 64 bits, inclusive a janela do marcador, para não estourar em linux/386.
 - Cache de nomes valida comprimentos antes de converter/slicar: um `.idx` inválido vira cache miss.
 - Falha de gravação da sessão preserva a posição, interrompe ferramentas e aparece como erro; não anuncia retomada salva.
