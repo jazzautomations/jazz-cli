@@ -1,6 +1,8 @@
 # Changelog
 
-## Correções em desenvolvimento sobre 0.14.0
+## 0.14.1 — 2026-11-18
+
+Correções sobre a 0.14.0, e o que os modelos pequenos e grátis precisavam para terminar o turno direito.
 
 - Saída do shell usa contadores de 64 bits, inclusive a janela do marcador, para não estourar em linux/386.
 - Cache de nomes valida comprimentos antes de converter/slicar: um `.idx` inválido vira cache miss.
