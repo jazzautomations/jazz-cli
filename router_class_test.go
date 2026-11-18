@@ -82,7 +82,7 @@ func TestClassifierPersistsGoneAndAuthByKey(t *testing.T) {
 	c := pvTestCfg(t)
 	now := pvSetClock(t, time.Now())
 	ref := "nvidia/z-ai/glm-5.3"
-	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 410, Body: rcBody410})
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 410, Body: rcBody410}, "")
 	if st := c.pvState(ref, 0); !st.Dead {
 		t.Fatal("410 must mark the model dead")
 	}
@@ -100,7 +100,7 @@ func TestClassifierPersistsGoneAndAuthByKey(t *testing.T) {
 
 	t.Setenv("GEMINI_API_KEY", "AIza-old-key")
 	gem := "gemini/gemini-3.8-flash"
-	c.rlEnd(gem, 0, Usage{}, &APIError{Status: 400, Body: rcBodyGemKey})
+	c.rlEnd(gem, 0, Usage{}, &APIError{Status: 400, Body: rcBodyGemKey}, "")
 	if st := c.pvState(gem, 0); !st.Dead || !strings.Contains(st.Why, "credencial") {
 		t.Fatalf("400 bad key must mark the key refused: %+v", st)
 	}
@@ -224,7 +224,7 @@ func TestLocalGoneIsNotATombstone(t *testing.T) {
 	c.Providers["ollama"] = &ProviderConf{Type: "openai", BaseURL: "http://127.0.0.1:11434/v1", NoKey: true, Local: true}
 	now := pvSetClock(t, time.Now())
 	ref := "ollama/qwen3:8b"
-	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 404, Body: `{"error":{"message":"model \"qwen3:8b\" not found, try pulling it first"}}`})
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 404, Body: `{"error":{"message":"model \"qwen3:8b\" not found, try pulling it first"}}`}, "")
 	if st := c.pvState(ref, 0); !st.Dead {
 		t.Fatal("a local 404 leaves the chain for now")
 	}

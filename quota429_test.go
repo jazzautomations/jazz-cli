@@ -97,8 +97,8 @@ func TestQuota429RotatesAcrossProviders(t *testing.T) {
 	defer srv.Close()
 	ae := quotaPost(t, srv.URL)
 	ojTakeAcc() // reset judge counters
-	c.rlBegin(first, 100)
-	c.rlEnd(first, 100, Usage{}, ae)
+	c.rlBegin(first, 100, "")
+	c.rlEnd(first, 100, Usage{}, ae, "")
 
 	after := c.Candidates(first)
 	for _, r := range after {

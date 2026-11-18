@@ -277,8 +277,8 @@ func ojChildMain(t *testing.T) {
 		ojRecord("lane/m", rtFeature, ojStat{OK: 1, Reqs: 2})
 		bgScoreRecord("lane/m", "quality", true)
 		bgScoresFlush()
-		cfg.rlBegin("lane/m", 10)
-		cfg.rlEnd("lane/m", 10, Usage{In: 5, Out: 5}, nil)
+		cfg.rlBegin("lane/m", 10, "")
+		cfg.rlEnd("lane/m", 10, Usage{In: 5, Out: 5}, nil, "")
 		FlushRateLimits()
 		time.Sleep(time.Millisecond)
 	}

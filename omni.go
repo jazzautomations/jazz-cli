@@ -1133,8 +1133,8 @@ func pvRefreshORQuota(ctx context.Context, cfg *Config) {
 	}
 	switch {
 	case f != nil && f.Limit > 0:
-		cfg.rlSetDaily("openrouter/x:free", f.Used, f.Limit)
+		cfg.rlSetDaily("openrouter/x:free", f.Used, f.Limit, pvKeyPrint(key))
 	case r.Data.IsFreeTier != nil && !*r.Data.IsFreeTier:
-		cfg.rlSetDaily("openrouter/x:free", -1, 1000) // bought credits once: 1000/day
+		cfg.rlSetDaily("openrouter/x:free", -1, 1000, pvKeyPrint(key)) // bought credits once: 1000/day
 	}
 }

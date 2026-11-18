@@ -1439,7 +1439,7 @@ func refreshSecrets() {
 		}
 	}
 	for _, c := range LoadAuth() {
-		for _, v := range []string{c.Key, c.Access, c.Refresh, c.IDToken} {
+		for _, v := range append([]string{c.Key, c.Access, c.Refresh, c.IDToken}, c.Keys...) {
 			if len(v) >= 12 {
 				vals = append(vals, v)
 			}

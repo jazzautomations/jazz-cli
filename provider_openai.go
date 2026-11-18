@@ -336,13 +336,19 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest, fn StreamFn)
 	}
 
 	tokens := pvEstTokens(req)
-	p.cfg.rlBegin(ref, tokens)
+	if p.cfg != nil {
+		if k := p.cfg.APIKeyFor(ref); k != "" {
+			p.Key = k // key pools: re-pick now that the model (and its scope) is known
+		}
+	}
+	fp := pvKeyPrint(p.Key)
+	p.cfg.rlBegin(ref, tokens, fp)
 	out, hdrErr := p.chatStream(ctx, body, fn)
 	var u Usage
 	if out != nil {
 		u = out.Usage
 	}
-	p.cfg.rlEnd(ref, tokens, u, hdrErr)
+	p.cfg.rlEnd(ref, tokens, u, hdrErr, fp)
 	if hdrErr == nil && p.cfg != nil && router == "openrouter" && pvFreeID(model) {
 		go func() {
 			defer func() { _ = recover() }()
@@ -363,7 +369,7 @@ func (p *OpenAIProvider) chatStream(ctx context.Context, body map[string]any, fn
 	defer resp.Body.Close()
 	if p.cfg != nil {
 		model, _ := body["model"].(string)
-		p.cfg.rlObserve(p.Name+"/"+model, p.BaseURL, resp.Header)
+		p.cfg.rlObserve(p.Name+"/"+model, p.BaseURL, resp.Header, pvKeyPrint(p.Key))
 	}
 
 	type acc struct {

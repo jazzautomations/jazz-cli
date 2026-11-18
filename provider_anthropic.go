@@ -273,6 +273,12 @@ func (p *AnthropicProvider) Chat(ctx context.Context, req ChatRequest, fn Stream
 			body["tool_choice"] = map[string]any{"type": "none"}
 		}
 	}
+	ref := p.Name + "/" + req.Model
+	if p.cfg != nil {
+		if k := p.cfg.APIKeyFor(ref); k != "" {
+			p.Key = k // key pools: re-pick now that the model (and its scope) is known
+		}
+	}
 	h := map[string]string{"x-api-key": p.Key, "anthropic-version": "2023-06-01"}
 	for k, v := range p.Headers {
 		h[k] = v
@@ -280,16 +286,16 @@ func (p *AnthropicProvider) Chat(ctx context.Context, req ChatRequest, fn Stream
 	if p.dropBind.Load() {
 		pvAnthDropBinding(body, h)
 	}
-	ref := p.Name + "/" + req.Model
 	tokens := pvEstTokens(req)
+	fp := pvKeyPrint(p.Key)
 	send := func() (*ChatResponse, error) {
-		p.cfg.rlBegin(ref, tokens)
+		p.cfg.rlBegin(ref, tokens, fp)
 		out, err := p.stream(ctx, h, body, fn)
 		var u Usage
 		if out != nil {
 			u = out.Usage
 		}
-		p.cfg.rlEnd(ref, tokens, u, err)
+		p.cfg.rlEnd(ref, tokens, u, err, fp)
 		return out, err
 	}
 	out, err := send()

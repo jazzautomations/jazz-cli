@@ -44,29 +44,30 @@ type Limits struct {
 }
 
 type rlBucket struct {
-	Day       string     `json:"day,omitempty"`
-	Req       int        `json:"req,omitempty"`
-	Tok       int        `json:"tok,omitempty"`
-	Month     string     `json:"month,omitempty"`
-	MReq      int        `json:"mreq,omitempty"`
-	Life      int        `json:"life,omitempty"`
-	Recent    []int64    `json:"recent,omitempty"`     // unix ms of requests in the last hour
-	RecentTok [][2]int64 `json:"recent_tok,omitempty"` // [ms, tokens] in the last minute
-	CoolUntil int64      `json:"cool,omitempty"`       // short cooldown (unix ms)
-	DeadUntil int64      `json:"dead,omitempty"`       // quota exhausted / gone (unix ms)
-	Strikes   int        `json:"strikes,omitempty"`    // consecutive 429s
-	Trans     int        `json:"trans,omitempty"`      // consecutive transient errors
-	HdrReq    int        `json:"hdr_req,omitempty"`    // remaining requests (day) learned from headers
-	HdrAt     int64      `json:"hdr_at,omitempty"`     // when HdrReq was learned (0 = unknown)
-	HdrReset  int64      `json:"hdr_reset,omitempty"`  // when HdrReq resets (unix ms)
-	LRPD      int        `json:"lrpd,omitempty"`       // learned daily request limit (OpenRouter /key)
-	AuthBad   string     `json:"auth_bad,omitempty"`   // fingerprint of a refused key
-	Gone      int64      `json:"gone,omitempty"`       // model retired/removed by the provider (unix ms; no expiry)
-	MaxReq    int        `json:"max_req,omitempty"`    // learned from 413 "Limit N"
-	LastErr   string     `json:"last_err,omitempty"`
-	LastAt    int64      `json:"last_at,omitempty"`
-	LastKind  string     `json:"last_kind,omitempty"` // class of the last error: quota | daily | rate | auth | …
-	OKAt      int64      `json:"ok_at,omitempty"`     // last success (unix ms), on the provider bucket
+	Day       string           `json:"day,omitempty"`
+	Req       int              `json:"req,omitempty"`
+	Tok       int              `json:"tok,omitempty"`
+	Month     string           `json:"month,omitempty"`
+	MReq      int              `json:"mreq,omitempty"`
+	Life      int              `json:"life,omitempty"`
+	Recent    []int64          `json:"recent,omitempty"`     // unix ms of requests in the last hour
+	RecentTok [][2]int64       `json:"recent_tok,omitempty"` // [ms, tokens] in the last minute
+	CoolUntil int64            `json:"cool,omitempty"`       // short cooldown (unix ms)
+	DeadUntil int64            `json:"dead,omitempty"`       // quota exhausted / gone (unix ms)
+	Strikes   int              `json:"strikes,omitempty"`    // consecutive 429s
+	Trans     int              `json:"trans,omitempty"`      // consecutive transient errors
+	HdrReq    int              `json:"hdr_req,omitempty"`    // remaining requests (day) learned from headers
+	HdrAt     int64            `json:"hdr_at,omitempty"`     // when HdrReq was learned (0 = unknown)
+	HdrReset  int64            `json:"hdr_reset,omitempty"`  // when HdrReq resets (unix ms)
+	LRPD      int              `json:"lrpd,omitempty"`       // learned daily request limit (OpenRouter /key)
+	AuthBad   string           `json:"auth_bad,omitempty"`   // fingerprint of a refused key
+	AuthBadS  map[string]int64 `json:"auth_bad_s,omitempty"` // refused key fingerprints → when (key pools)
+	Gone      int64            `json:"gone,omitempty"`       // model retired/removed by the provider (unix ms; no expiry)
+	MaxReq    int              `json:"max_req,omitempty"`    // learned from 413 "Limit N"
+	LastErr   string           `json:"last_err,omitempty"`
+	LastAt    int64            `json:"last_at,omitempty"`
+	LastKind  string           `json:"last_kind,omitempty"` // class of the last error: quota | daily | rate | auth | …
+	OKAt      int64            `json:"ok_at,omitempty"`     // last success (unix ms), on the provider bucket
 	inflight  int
 	// this process's increments since its last successful write: the merge
 	// adds them to the file's counters, so concurrent jazz processes (eval
@@ -371,6 +372,94 @@ func (c *Config) pvEffLimits(ref string) (Limits, string) {
 	return lim, key
 }
 
+// ---- key pools (Cred.Keys) ----
+//
+// With more than one key for a provider, the limiter tracks per-key state so an
+// exhausted or refused key only takes itself down. Counter/dead/cool buckets
+// get the key's fingerprint suffix ("<scope>@<fp>": each key keeps its own
+// daily/monthly budget). Account-level outcomes (quota 429, no credit) and
+// refusals also mark the "<prov>@<fp>" shadow bucket and the provider's
+// AuthBadS set, which pickPoolKey consults without knowing the model. Nothing
+// changes for single-key providers: no suffix, no shadow, same buckets as
+// before.
+
+// rlPoolKey names the counter/dead bucket for (scope bucket, key fingerprint).
+func (c *Config) rlPoolKey(prov, bucket, fp string) string {
+	if fp == "" || fp == "nokey" || bucket == "" {
+		return bucket
+	}
+	if pc := c.Providers[prov]; pc == nil || pc.Type == "codex" {
+		return bucket
+	}
+	if len(c.APIKeys(prov)) <= 1 {
+		return bucket
+	}
+	return bucket + "@" + fp
+}
+
+// rlKeyBad reports whether fingerprint fp was refused for prov.
+func (rl *rateLimiter) rlKeyBad(pb *rlBucket, fp string) bool {
+	if pb == nil || fp == "" || fp == "nokey" {
+		return false
+	}
+	return pb.AuthBad == fp || pb.AuthBadS[fp] > 0
+}
+
+// pickPoolKey returns the first pool key still alive for prov — not refused,
+// not account-dead (prov@fp shadow) and, when ref is given, not dead on that
+// ref's per-key scope bucket. A key in cooldown is only used when nothing else
+// is ready; with every key bad or dead it falls back to keys[0] so the caller
+// gets a deterministic key (and the request a clear auth/quota error).
+func (c *Config) pickPoolKey(prov, ref string, keys []string) string {
+	rl := omniRL
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.loadLocked()
+	now := rlNow()
+	ms := now.UnixMilli()
+	var lim Limits
+	scope := ""
+	if ref != "" {
+		lim, scope = c.pvEffLimits(ref)
+	}
+	pb := rl.B[prov]
+	var cooled string
+	for _, k := range keys {
+		fp := pvKeyPrint(k)
+		if rl.rlKeyBad(pb, fp) {
+			continue
+		}
+		ready := true
+		if kb := rl.B[prov+"@"+fp]; kb != nil {
+			if kb.DeadUntil > ms {
+				continue
+			}
+			if kb.CoolUntil > ms {
+				ready = false
+			}
+		}
+		if ready && scope != "" {
+			st := rl.stateLocked(ref, prov, scope+"@"+fp, fp, lim, 0, now)
+			if st.Dead {
+				continue
+			}
+			if !st.Ready {
+				ready = false
+			}
+		}
+		if ready {
+			return k
+		}
+		if cooled == "" {
+			cooled = k
+		}
+	}
+	if cooled != "" {
+		return cooled
+	}
+	return keys[0]
+}
+
 func pvOverlayLimits(dst *Limits, s Limits) {
 	set := func(d *int, v int) {
 		if v > 0 {
@@ -424,8 +513,9 @@ func (c *Config) pvState(ref string, tokens int) rlState {
 	prov, _ := SplitModel(ref)
 	fp := ""
 	if pc := c.Providers[prov]; pc != nil && pc.Type != "codex" {
-		fp = pvKeyPrint(c.APIKey(prov))
+		fp = pvKeyPrint(c.APIKeyFor(ref))
 	}
+	key = c.rlPoolKey(prov, key, fp)
 	rl := omniRL
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -439,7 +529,7 @@ func (rl *rateLimiter) stateLocked(ref, prov, key, fp string, lim Limits, tokens
 	dead := func(until int64, why string) rlState {
 		return rlState{Dead: true, Until: time.UnixMilli(until), Wait: time.Duration(until-ms) * time.Millisecond, Why: why}
 	}
-	if pb := rl.B[prov]; pb != nil && pb.AuthBad != "" && fp != "" && pb.AuthBad == fp {
+	if pb := rl.B[prov]; rl.rlKeyBad(pb, fp) {
 		return rlState{Dead: true, Until: now.Add(100 * 365 * 24 * time.Hour), Why: "credencial recusada — rode /omni add " + prov}
 	}
 	if mb := rl.B[ref]; mb != nil && mb.Gone > 0 && !rlGoneRevived(ref, mb.Gone) {
@@ -448,7 +538,11 @@ func (rl *rateLimiter) stateLocked(ref, prov, key, fp string, lim Limits, tokens
 		return rlState{Dead: true, Until: now.Add(100 * 365 * 24 * time.Hour), Why: "modelo aposentado/removido pelo provedor"}
 	}
 	var cool int64
-	for _, k := range rlKeys(ref, prov, key) {
+	check := rlKeys(ref, prov, key)
+	if fp != "" && fp != "nokey" {
+		check = append(check, prov+"@"+fp) // per-key shadow (key pools)
+	}
+	for _, k := range check {
 		b := rl.B[k]
 		if b == nil {
 			continue
@@ -585,8 +679,9 @@ func rlKeys(ref, prov, key string) []string {
 
 // ---- request accounting (called by the providers) ----
 
-// rlBegin records a request about to be sent (no-op for unlimited refs).
-func (c *Config) rlBegin(ref string, tokens int) {
+// rlBegin records a request about to be sent (no-op for unlimited refs). fp is
+// the fingerprint of the key actually used ("" = derive, as before).
+func (c *Config) rlBegin(ref string, tokens int, fp string) {
 	if c == nil {
 		return
 	}
@@ -594,6 +689,11 @@ func (c *Config) rlBegin(ref string, tokens int) {
 	if !lim.has() {
 		return
 	}
+	prov, _ := SplitModel(ref)
+	if fp == "" {
+		fp = pvKeyPrint(c.APIKey(prov))
+	}
+	key = c.rlPoolKey(prov, key, fp)
 	now := rlNow()
 	ms := now.UnixMilli()
 	rl := omniRL
@@ -630,18 +730,22 @@ func (c *Config) rlBegin(ref string, tokens int) {
 	rl.saveLocked(false)
 }
 
-// rlEnd records the outcome of a request started with rlBegin.
-func (c *Config) rlEnd(ref string, tokens int, u Usage, err error) {
+// rlEnd records the outcome of a request started with rlBegin. fp is the
+// fingerprint of the key the request used — the provider pins it at build
+// time, so a rotated pick cannot split the accounting across buckets.
+func (c *Config) rlEnd(ref string, tokens int, u Usage, err error, fp string) {
 	if c == nil {
 		return
 	}
 	ojObserveReq(ref, err) // per-turn request/429 counts for the judge (judge.go)
 	lim, key := c.pvEffLimits(ref)
 	prov, _ := SplitModel(ref)
-	fp := ""
-	if pc := c.Providers[prov]; pc != nil && pc.Type != "codex" {
-		fp = pvKeyPrint(c.APIKey(prov))
+	if fp == "" {
+		if pc := c.Providers[prov]; pc != nil && pc.Type != "codex" {
+			fp = pvKeyPrint(c.APIKey(prov))
+		}
 	}
+	key = c.rlPoolKey(prov, key, fp)
 	now := rlNow()
 	rl := omniRL
 	rl.mu.Lock()
@@ -817,6 +921,21 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		}
 	}
 	rl.dirty = true
+	// key pools: account-level outcomes (quota, credit, refusal) belong to the
+	// key, model-level ones to its scope bucket. shadow() is the "<prov>@<fp>"
+	// bucket pickPoolKey checks without knowing the model; model-scope marks
+	// (a daily cap that lives on "<ref>@<fp>") must not poison the key for
+	// other models, so they only shadow when the scope is provider-wide.
+	pooled := fp != "" && fp != "nokey" && c != nil && len(c.APIKeys(prov)) > 1
+	shadow := func(force bool) *rlBucket {
+		if !pooled {
+			return nil
+		}
+		if !force && strings.TrimSuffix(key, "@"+fp) == ref {
+			return nil
+		}
+		return rl.bucketLocked(prov + "@" + fp)
+	}
 	switch kind {
 	case "rate":
 		b := rl.bucketLocked(key)
@@ -824,15 +943,23 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		ladder := []time.Duration{20 * time.Second, 60 * time.Second, 180 * time.Second, 600 * time.Second}
 		cool := max(ra, ladder[min(b.Strikes-1, 3)])
 		b.CoolUntil = max(b.CoolUntil, now.Add(cool).UnixMilli())
+		if s := shadow(false); s != nil {
+			s.CoolUntil = max(s.CoolUntil, b.CoolUntil)
+		}
 		note(b)
 		return false
 	case "daily":
 		b := rl.bucketLocked(key)
 		if ae != nil && ae.Quota {
 			// a quota 429 (e.g. kilo PROMOTION_MODEL_LIMIT_REACHED) cools the whole
-			// provider, so the router rotates to other providers, not just other
-			// models of the same one; it is not a quality signal (judge.go)
-			b = rl.bucketLocked(prov)
+			// account: with a key pool that is this key's shadow (rotation → next
+			// key), without one the provider bucket (rotation → other providers);
+			// it is not a quality signal (judge.go)
+			if s := shadow(true); s != nil {
+				b = s
+			} else if !pooled {
+				b = rl.bucketLocked(prov)
+			}
 			until := now.Add(pvQuotaDefault)
 			if ra > 0 {
 				until = now.Add(ra)
@@ -858,6 +985,9 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 			until = time.UnixMilli(b.HdrReset)
 		}
 		b.DeadUntil = max(b.DeadUntil, until.UnixMilli())
+		if s := shadow(false); s != nil {
+			s.DeadUntil = max(s.DeadUntil, b.DeadUntil)
+		}
 		note(b)
 		return true
 	case "toobig":
@@ -877,7 +1007,12 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 		note(b)
 		return true
 	case "credit":
+		// out of credit is an account condition: the key's shadow when pooling,
+		// the provider bucket otherwise
 		b := rl.bucketLocked(prov)
+		if s := shadow(true); s != nil {
+			b = s
+		}
 		b.DeadUntil = max(b.DeadUntil, now.Add(6*time.Hour).UnixMilli())
 		note(b)
 		return true
@@ -895,7 +1030,14 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 			// no key to blame (keyless gateway, local server): retry later instead
 			b.DeadUntil = max(b.DeadUntil, now.Add(10*time.Minute).UnixMilli())
 		} else {
-			b.AuthBad = fp
+			b.AuthBad = fp // last refused fp, kept for older binaries reading the file
+			if b.AuthBadS == nil {
+				b.AuthBadS = map[string]int64{}
+			}
+			b.AuthBadS[fp] = ms
+			if s := shadow(true); s != nil {
+				s.DeadUntil = max(s.DeadUntil, now.Add(100*365*24*time.Hour).UnixMilli())
+			}
 		}
 		note(b)
 		return true
@@ -957,7 +1099,7 @@ func (rl *rateLimiter) classifyLocked(c *Config, ref, prov, key, fp string, lim 
 // rlObserve learns remaining quota from response headers (successful answers).
 // Groq: x-ratelimit-*-requests = DAY, *-tokens = MINUTE (Go durations).
 // SambaNova: *-requests = MINUTE, *-requests-day = DAY.
-func (c *Config) rlObserve(ref, base string, h http.Header) {
+func (c *Config) rlObserve(ref, base string, h http.Header, fp string) {
 	if c == nil || h == nil {
 		return
 	}
@@ -972,6 +1114,12 @@ func (c *Config) rlObserve(ref, base string, h http.Header) {
 	now := rlNow()
 	ms := now.UnixMilli()
 	_, key := c.pvEffLimits(ref)
+	prov, _ := SplitModel(ref)
+	if fp == "" {
+		fp = pvKeyPrint(c.APIKey(prov))
+	}
+	key = c.rlPoolKey(prov, key, fp)
+	ref = c.rlPoolKey(prov, ref, fp)
 	rl := omniRL
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -1018,9 +1166,15 @@ func (c *Config) rlObserve(ref, base string, h http.Header) {
 	}
 }
 
-// rlSetDaily records an exact daily count (OpenRouter GET /api/v1/key).
-func (c *Config) rlSetDaily(ref string, used, limit int) {
+// rlSetDaily records an exact daily count (OpenRouter GET /api/v1/key). fp is
+// the fingerprint of the key the quota was read from ("" = the current pick).
+func (c *Config) rlSetDaily(ref string, used, limit int, fp string) {
 	lim, key := c.pvEffLimits(ref)
+	prov, _ := SplitModel(ref)
+	if fp == "" {
+		fp = pvKeyPrint(c.APIKey(prov))
+	}
+	key = c.rlPoolKey(prov, key, fp)
 	now := rlNow()
 	rl := omniRL
 	rl.mu.Lock()
@@ -1128,7 +1282,7 @@ func ResetRateLimits(prov string) {
 	defer rl.mu.Unlock()
 	rl.loadLocked()
 	for k := range rl.B {
-		if p, _ := SplitModel(k); prov == "" || p == prov {
+		if p, _ := SplitModel(k); prov == "" || p == prov || strings.HasPrefix(k, prov+"@") {
 			delete(rl.B, k)
 		}
 	}

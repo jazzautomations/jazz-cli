@@ -428,7 +428,7 @@ func main() {
 			return
 		case "key":
 			if len(rest) < 2 {
-				pfUsageErr("uso: jazz key <provedor>   (a chave é lida escondida, ou do stdin)")
+				pfUsageErr("uso: jazz key <provedor>   (a chave é lida escondida, ou do stdin — várias linhas = pool)")
 			}
 			cmdKey(cfg, rest[1], nil)
 			return
@@ -2489,15 +2489,39 @@ func pfMaskKey(key string) string {
 // storeKey checks and saves an API key for provider (auth.json) and makes it
 // redacted from tool output from now on. warns are format/account notes.
 func storeKey(cfg *Config, provider, key string) (warns []string, err error) {
+	return storeKeys(cfg, provider, []string{key})
+}
+
+// storeKeys saves keys[0] as the provider's primary credential and keys[1:] as
+// the rotation pool (Cred.Keys). A single key keeps an existing pool
+// untouched — the rescue path swaps a dead primary without forcing the user
+// to re-enter the rest.
+func storeKeys(cfg *Config, provider string, keys []string) (warns []string, err error) {
 	pc := cfg.Providers[provider]
 	if pc == nil {
 		return nil, fmt.Errorf("provedor desconhecido: %s", provider)
 	}
-	key = pkCleanKey(key) // every entry path: jazz key, /key, onboarding (pastekey.go)
-	if w := KeyFormatWarning(cfg, provider, key); w != "" {
+	var clean []string
+	seen := map[string]bool{}
+	for _, k := range keys {
+		k = pkCleanKey(k) // every entry path: jazz key, /key, onboarding (pastekey.go)
+		if k != "" && !seen[k] {
+			seen[k] = true
+			clean = append(clean, k)
+		}
+	}
+	if len(clean) == 0 {
+		return nil, errors.New("nenhuma chave recebida")
+	}
+	if w := KeyFormatWarning(cfg, provider, clean[0]); w != "" {
 		warns = append(warns, w)
 	}
-	cred := &Cred{Type: "api", Key: key}
+	cred := &Cred{Type: "api", Key: clean[0]}
+	if len(clean) > 1 {
+		cred.Keys = clean[1:]
+	} else if old := LoadAuth()[provider]; old != nil {
+		cred.Keys = old.Keys
+	}
 	if pc.Account && pc.AccountEnv != "" {
 		// Cloudflare-style URLs need an account id too: keep it with the key
 		if id := strings.TrimSpace(os.Getenv(pc.AccountEnv)); id != "" {
@@ -2532,7 +2556,7 @@ func cmdKey(cfg *Config, provider string, app *App) {
 		}
 		fatal(msg)
 	}
-	var key string
+	var keys []string
 	if app != nil {
 		// cbreak mode is active and echo is off: read keys, show bullets (ui_onboard.go)
 		k, ok := app.ui.readSecret(fmt.Sprintf("  cole a chave de %s (fica escondida) %s ", provider, app.ui.T.G().prompt))
@@ -2540,7 +2564,7 @@ func cmdKey(cfg *Config, provider string, app *App) {
 			app.ui.Notice("cancelado")
 			return
 		}
-		key = k
+		keys = []string{k}
 	} else if isTTY(os.Stdin) {
 		fmt.Printf("cole a chave de %s (fica escondida): ", provider)
 		restore, err := enterCbreak(int(os.Stdin.Fd()))
@@ -2568,22 +2592,30 @@ func cmdKey(cfg *Config, provider string, app *App) {
 				}
 			}
 			restore()
-			key = strings.ReplaceAll(strings.ReplaceAll(string(b), "\x1b[200~", ""), "\x1b[201~", "")
+			keys = []string{strings.ReplaceAll(strings.ReplaceAll(string(b), "\x1b[200~", ""), "\x1b[201~", "")}
 		}
 		fmt.Println()
 	} else {
+		// piped stdin: one key per line (also , ; space) — several = key pool
 		b, _ := io.ReadAll(io.LimitReader(os.Stdin, 64<<10))
-		key = string(b)
+		keys = strings.FieldsFunc(string(b), func(r rune) bool {
+			return r == '\n' || r == '\r' || r == ',' || r == ';' || r == ' ' || r == '\t'
+		})
 	}
-	key = pkCleanKey(key)
-	if key == "" {
+	var clean []string
+	for _, k := range keys {
+		if k = pkCleanKey(k); k != "" {
+			clean = append(clean, k)
+		}
+	}
+	if len(clean) == 0 {
 		if app != nil {
 			app.ui.Notice("nenhuma chave digitada")
 			return
 		}
 		fatal("nenhuma chave recebida")
 	}
-	warns, err := storeKey(cfg, provider, key)
+	warns, err := storeKeys(cfg, provider, clean)
 	for _, w := range warns {
 		if app != nil {
 			app.ui.Warn(w)
@@ -2598,7 +2630,10 @@ func cmdKey(cfg *Config, provider string, app *App) {
 		}
 		fatal(err.Error())
 	}
-	msg := fmt.Sprintf("chave de %s salva (%s) em %s", provider, pfMaskKey(key), authPath())
+	msg := fmt.Sprintf("chave de %s salva (%s) em %s", provider, pfMaskKey(clean[0]), authPath())
+	if len(clean) > 1 {
+		msg += fmt.Sprintf(" — pool de %d chaves, roda sozinho quando uma esgota", len(clean))
+	}
 	if app != nil {
 		app.ui.Notice(msg)
 		if !app.cfg.HasCreds(mustProvider(app.agent.Model)) {

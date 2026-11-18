@@ -626,14 +626,15 @@ func (c *Config) ProviderNames() []string {
 // ---- credentials (auth.json, 0600) ----
 
 type Cred struct {
-	Type        string `json:"type"` // api | oauth
-	Key         string `json:"key,omitempty"`
-	Access      string `json:"access,omitempty"`
-	Refresh     string `json:"refresh,omitempty"`
-	IDToken     string `json:"id_token,omitempty"`
-	Expires     int64  `json:"expires,omitempty"` // unix ms
-	AccountID   string `json:"account_id,omitempty"`
-	LastRefresh int64  `json:"last_refresh,omitempty"` // unix ms
+	Type        string   `json:"type"` // api | oauth
+	Key         string   `json:"key,omitempty"`
+	Keys        []string `json:"keys,omitempty"` // pool: extra API keys, rotated on exhaustion/refusal (ratelimit.go)
+	Access      string   `json:"access,omitempty"`
+	Refresh     string   `json:"refresh,omitempty"`
+	IDToken     string   `json:"id_token,omitempty"`
+	Expires     int64    `json:"expires,omitempty"` // unix ms
+	AccountID   string   `json:"account_id,omitempty"`
+	LastRefresh int64    `json:"last_refresh,omitempty"` // unix ms
 }
 
 var (
@@ -724,22 +725,63 @@ func SaveCred(provider string, c *Cred) error {
 	return writeFileAtomic(authPath(), b, 0o600)
 }
 
-// APIKey returns the key for a provider: env var wins, then auth.json.
-func (c *Config) APIKey(provider string) string {
+// APIKeys returns every usable key for a provider: the env var wins and is a
+// single key (explicit override), then auth.json's Key + pool Keys, deduped,
+// order preserved.
+func (c *Config) APIKeys(provider string) []string {
 	if pc, ok := c.Providers[provider]; ok && pc.KeyEnv != "" {
 		if v := strings.TrimSpace(os.Getenv(pc.KeyEnv)); v != "" {
-			return v
+			return []string{v}
 		}
 		for _, alt := range pvAltKeyEnv[pc.KeyEnv] {
 			if v := strings.TrimSpace(os.Getenv(alt)); v != "" {
-				return v
+				return []string{v}
 			}
 		}
 	}
 	if cr := LoadAuth()[provider]; cr != nil && cr.Type == "api" {
-		return cr.Key
+		out := make([]string, 0, 1+len(cr.Keys))
+		seen := map[string]bool{}
+		for _, k := range append([]string{cr.Key}, cr.Keys...) {
+			k = strings.TrimSpace(k)
+			if k != "" && !seen[k] {
+				seen[k] = true
+				out = append(out, k)
+			}
+		}
+		return out
 	}
-	return ""
+	return nil
+}
+
+// APIKey returns the key for a provider: env var wins, then auth.json. With a
+// key pool (Cred.Keys), the first key still alive wins — refused (AuthBad) and
+// account-dead keys are skipped, so a request that killed one key rotates to
+// the next on the following attempt.
+func (c *Config) APIKey(provider string) string {
+	keys := c.APIKeys(provider)
+	switch len(keys) {
+	case 0:
+		return ""
+	case 1:
+		return keys[0]
+	}
+	return c.pickPoolKey(provider, "", keys)
+}
+
+// APIKeyFor is APIKey scoped to a model ref: a pooled key is only chosen when
+// it is alive for that ref (its per-key budget bucket is not dead). Called by
+// the providers at request time, when the model is known.
+func (c *Config) APIKeyFor(ref string) string {
+	prov, _ := SplitModel(ref)
+	keys := c.APIKeys(prov)
+	switch len(keys) {
+	case 0:
+		return ""
+	case 1:
+		return keys[0]
+	}
+	return c.pickPoolKey(prov, ref, keys)
 }
 
 // pvAltKeyEnv lists alternative env var names accepted for a key.

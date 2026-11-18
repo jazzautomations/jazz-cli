@@ -206,8 +206,8 @@ func TestOmniLimiterRPMAndRPD(t *testing.T) {
 		if st := c.pvState(ref, 10); !st.Ready {
 			t.Fatalf("request %d not ready: %+v", i, st)
 		}
-		c.rlBegin(ref, 10)
-		c.rlEnd(ref, 10, Usage{In: 5, Out: 5}, nil)
+		c.rlBegin(ref, 10, "")
+		c.rlEnd(ref, 10, Usage{In: 5, Out: 5}, nil, "")
 	}
 	st := c.pvState(ref, 10)
 	if st.Ready || st.Dead || st.Wait <= 0 || st.Wait > time.Minute {
@@ -217,8 +217,8 @@ func TestOmniLimiterRPMAndRPD(t *testing.T) {
 	if st := c.pvState(ref, 10); !st.Ready {
 		t.Fatalf("ready after a minute: %+v", st)
 	}
-	c.rlBegin(ref, 10)
-	c.rlEnd(ref, 10, Usage{}, nil)
+	c.rlBegin(ref, 10, "")
+	c.rlEnd(ref, 10, Usage{}, nil, "")
 	st = c.pvState(ref, 10)
 	if !st.Dead || !strings.Contains(st.Why, "diário") {
 		t.Fatalf("RPD 3 reached: %+v", st)
@@ -238,8 +238,8 @@ func TestOmniLimiterRPMAndRPD(t *testing.T) {
 func TestOmniLimiterUnlimitedRefsLeaveNoState(t *testing.T) {
 	c := pvTestCfg(t)
 	c.Providers["t"] = &ProviderConf{Type: "openai", BaseURL: "http://x", NoKey: true}
-	c.rlBegin("t/m", 100)
-	c.rlEnd("t/m", 100, Usage{In: 1}, nil)
+	c.rlBegin("t/m", 100, "")
+	c.rlEnd("t/m", 100, Usage{In: 1}, nil, "")
 	FlushRateLimits()
 	if _, err := os.Stat(rlPath()); err == nil {
 		b, _ := os.ReadFile(rlPath())
@@ -260,11 +260,11 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 
 	// rate: cooldown ladder 20s, 60s; success resets strikes
 	ref := "groq/openai/gpt-oss-120b"
-	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "slow"})
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "slow"}, "")
 	if st := c.pvState(ref, 0); st.Ready || st.Wait != 20*time.Second {
 		t.Fatalf("first 429 → 20s: %+v", st)
 	}
-	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "slow", RetryAfter: 30 * time.Second})
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "slow", RetryAfter: 30 * time.Second}, "")
 	if st := c.pvState(ref, 0); st.Wait != 60*time.Second {
 		t.Fatalf("second 429 → 60s: %+v", st)
 	}
@@ -272,13 +272,13 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 		t.Fatalf("strikes %d last %q", s, last)
 	}
 	*now = now.Add(2 * time.Minute)
-	c.rlEnd(ref, 0, Usage{}, nil)
+	c.rlEnd(ref, 0, Usage{}, nil, "")
 	if s, last, _ := rlInfo(ref); s != 0 || last != "" {
 		t.Fatalf("success must reset: %d %q", s, last)
 	}
 
 	// toobig: learn MaxReq from "Limit N", no cooldown
-	c.rlEnd(ref, 9000, Usage{}, &APIError{Status: 413, Body: "Request too large for model: Limit 8000, Requested 9512"})
+	c.rlEnd(ref, 9000, Usage{}, &APIError{Status: 413, Body: "Request too large for model: Limit 8000, Requested 9512"}, "")
 	if _, _, mr := rlInfo(ref); mr != 7200 {
 		t.Fatalf("MaxReq %d", mr)
 	}
@@ -290,7 +290,7 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 	}
 
 	// daily: dead until reset, visible through ExhaustedUntil
-	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "requests per day (RPD): Limit 1000", Daily: true})
+	c.rlEnd(ref, 0, Usage{}, &APIError{Status: 429, Body: "requests per day (RPD): Limit 1000", Daily: true}, "")
 	until, ok := ExhaustedUntil(ref)
 	if !ok || !until.Equal(time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("exhausted until %v %v", until, ok)
@@ -298,7 +298,7 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 
 	// auth: refused key → credencial recusada; a new key clears it
 	ref2 := "groq/qwen/qwen3.8-27b"
-	c.rlEnd(ref2, 0, Usage{}, &APIError{Status: 401, Body: "invalid api key"})
+	c.rlEnd(ref2, 0, Usage{}, &APIError{Status: 401, Body: "invalid api key"}, "")
 	if st := c.pvState(ref2, 0); !st.Dead || !strings.Contains(st.Why, "credencial") {
 		t.Fatalf("auth: %+v", st)
 	}
@@ -309,7 +309,7 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 
 	// 403 without a bad-key body: only that model is parked, the provider
 	// (and its other models) stays in the rotation
-	c.rlEnd("groq/locked", 0, Usage{}, &APIError{Status: 403, Body: `{"error":{"message":"model not available on your plan"}}`})
+	c.rlEnd("groq/locked", 0, Usage{}, &APIError{Status: 403, Body: `{"error":{"message":"model not available on your plan"}}`}, "")
 	if st := c.pvState("groq/locked", 0); !st.Dead {
 		t.Fatalf("403 must park the model: %+v", st)
 	}
@@ -317,25 +317,25 @@ func TestOmniLimiterErrorKinds(t *testing.T) {
 		t.Fatalf("403 on one model must not kill the provider: %+v", st)
 	}
 	// 403 that names the key is still a provider-wide refused credential
-	c.rlEnd("groq/k", 0, Usage{}, &APIError{Status: 403, Body: "invalid api key"})
+	c.rlEnd("groq/k", 0, Usage{}, &APIError{Status: 403, Body: "invalid api key"}, "")
 	if st := c.pvState("groq/other", 0); !st.Dead {
 		t.Fatalf("403 invalid api key is the key: %+v", st)
 	}
 	t.Setenv("GROQ_API_KEY", "gsk_third")
 
 	// notools: persisted as text tools in the models cache
-	c.rlEnd("groq/x", 0, Usage{}, &APIError{Status: 400, Body: "tool calling is not supported for this model"})
+	c.rlEnd("groq/x", 0, Usage{}, &APIError{Status: 400, Body: "tool calling is not supported for this model"}, "")
 	if ms := c.ModelSettings("groq/x"); ms.Tools != "text" {
 		t.Fatalf("notools → %+v", ms)
 	}
 	// gone: dead for a day for that model only
-	c.rlEnd("groq/y", 0, Usage{}, &APIError{Status: 404, Body: "model not found"})
+	c.rlEnd("groq/y", 0, Usage{}, &APIError{Status: 404, Body: "model not found"}, "")
 	if st := c.pvState("groq/y", 0); !st.Dead {
 		t.Fatalf("gone: %+v", st)
 	}
 	// overflow: learned window
 	c.Models["groq/z"] = &ModelConf{Context: 131072}
-	c.rlEnd("groq/z", 50000, Usage{}, &APIError{Status: 400, Body: "This model's maximum context length is 32768 tokens"})
+	c.rlEnd("groq/z", 50000, Usage{}, &APIError{Status: 400, Body: "This model's maximum context length is 32768 tokens"}, "")
 	if w, _ := c.Limits("groq/z"); w != 45000 {
 		t.Fatalf("learned ctx %d", w)
 	}
@@ -361,7 +361,7 @@ func TestOmniLimiterPersistsAndMerges(t *testing.T) {
 	if err := os.WriteFile(rlPath(), nb, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c.rlEnd("groq/m", 0, Usage{}, &APIError{Status: 401, Body: "x"}) // urgent save → merge
+	c.rlEnd("groq/m", 0, Usage{}, &APIError{Status: 401, Body: "x"}, "") // urgent save → merge
 	omniRL.mu.Lock()
 	omniRL.path = "" // force a reload from disk
 	omniRL.mu.Unlock()
@@ -392,7 +392,7 @@ func TestOmniLimiterHeaders(t *testing.T) {
 	h := http.Header{}
 	h.Set("x-ratelimit-remaining-requests", "0")
 	h.Set("x-ratelimit-reset-requests", "2h0m0s")
-	c.rlObserve("groq/openai/gpt-oss-120b", "https://api.groq.com/openai/v1", h)
+	c.rlObserve("groq/openai/gpt-oss-120b", "https://api.groq.com/openai/v1", h, "")
 	st := c.pvState("groq/openai/gpt-oss-120b", 0)
 	if !st.Dead || !st.Until.Equal(time.Date(2026, 10, 19, 14, 0, 0, 0, time.UTC)) {
 		t.Fatalf("groq remaining-requests is per DAY: %+v", st)
@@ -401,7 +401,7 @@ func TestOmniLimiterHeaders(t *testing.T) {
 	h.Set("x-ratelimit-remaining-requests", "0")
 	h.Set("x-ratelimit-reset-requests", "20")
 	h.Set("x-ratelimit-remaining-requests-day", "7")
-	c.rlObserve("sambanova/DeepSeek-V3.1", "https://api.sambanova.ai/v1", h)
+	c.rlObserve("sambanova/DeepSeek-V3.1", "https://api.sambanova.ai/v1", h, "")
 	st = c.pvState("sambanova/DeepSeek-V3.1", 0)
 	if st.Dead || st.Ready || st.Wait != 20*time.Second {
 		t.Fatalf("sambanova minute cooldown: %+v", st)
