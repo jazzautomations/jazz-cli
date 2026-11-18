@@ -460,6 +460,29 @@ func (c *Config) pickPoolKey(prov, ref string, keys []string) string {
 	return keys[0]
 }
 
+// poolRateTries caps the rotations one request spends on plain 429s: a 429 may
+// be the upstream model being busy, not the key, and then every key gets it.
+const poolRateTries = 2
+
+// poolNext reports whether a request to ref that just failed with kind (the
+// limiter has recorded it) should go again with another key of the provider's
+// pool: the failure is the key's (refused, out of quota or credit, rate
+// limited) and a key is ready right now. tried counts the rotations this
+// request already made; they never exceed the pool size.
+func (c *Config) poolNext(ref, kind string, tokens, tried int) bool {
+	switch kind {
+	case "auth", "daily", "credit":
+	case "rate":
+		if tried >= poolRateTries {
+			return false
+		}
+	default:
+		return false
+	}
+	prov, _ := SplitModel(ref)
+	return tried+1 < len(c.APIKeys(prov)) && c.pvState(ref, tokens).Ready
+}
+
 func pvOverlayLimits(dst *Limits, s Limits) {
 	set := func(d *int, v int) {
 		if v > 0 {

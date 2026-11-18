@@ -1526,6 +1526,7 @@ chain:
 		}
 		why = ""
 		triedText, netWaits := false, 0
+		poolTries := 0       // key-pool rotations spent on this ref (ratelimit.go)
 		toolRetried := false // the one rejected-tool-call retry this ref gets
 		var repairNote string
 		var waited time.Duration // PROV-5: backoff spent on this ref
@@ -1655,6 +1656,18 @@ chain:
 					triedText = true
 					a.markText(ref)
 					a.ui.Notice(ref + " não aceita tools nativas — usando tools em modo texto")
+					continue
+				}
+				// key pool: rlEnd already retired or cooled the key this request
+				// used. While another key of the provider is ready for ref, the
+				// same model goes again with it, instead of leaving the model
+				// (or ending the turn, when the user picked it).
+				if !gotText && a.cfg.poolNext(ref, pvClassify(err), need.Tokens, poolTries) {
+					poolTries++
+					attempt-- // a rotation is not a retry with the same key
+					if !o.quiet {
+						a.ui.Notice(pname + ": chave recusada ou no limite, usando a próxima do pool")
+					}
 					continue
 				}
 				switch kind := pvClassify(err); kind {

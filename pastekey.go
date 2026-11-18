@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"io"
+	"strings"
+)
 
 // pastekey.go — a chave colada chega limpa.
 //
@@ -15,6 +19,26 @@ import "strings"
 // ou no meio. "~" e "[" não aparecem em chave de API de nenhum provedor
 // suportado, então o resto do marcador nunca é parte de uma chave válida.
 var pkPasteRe = lazyRx(`\x1b?\[?20[01]~`)
+
+// pkKeysMax bounds what `jazz key` reads from a pipe. It is a guard against a
+// runaway input, not a pool size: 16 MiB is some 200 thousand keys.
+const pkKeysMax = 16 << 20
+
+// pkReadKeys reads piped keys: one per line, also split on , ; space and tab.
+// Input longer than max is an error, never a silent cut: a cut would store
+// the last key in halves and drop the rest of the pool.
+func pkReadKeys(r io.Reader, max int64) ([]string, error) {
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, fmt.Errorf("entrada grande demais: mais de %d MiB de chaves", max>>20)
+	}
+	return strings.FieldsFunc(string(b), func(r rune) bool {
+		return r == '\n' || r == '\r' || r == ',' || r == ';' || r == ' ' || r == '\t'
+	}), nil
+}
 
 // pkCleanKey removes paste markers, control characters and surrounding
 // whitespace or quotes from a pasted credential.

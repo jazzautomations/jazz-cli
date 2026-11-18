@@ -2597,10 +2597,10 @@ func cmdKey(cfg *Config, provider string, app *App) {
 		fmt.Println()
 	} else {
 		// piped stdin: one key per line (also , ; space) — several = key pool
-		b, _ := io.ReadAll(io.LimitReader(os.Stdin, 64<<10))
-		keys = strings.FieldsFunc(string(b), func(r rune) bool {
-			return r == '\n' || r == '\r' || r == ',' || r == ';' || r == ' ' || r == '\t'
-		})
+		var err error
+		if keys, err = pkReadKeys(os.Stdin, pkKeysMax); err != nil {
+			fatal(err.Error())
+		}
 	}
 	var clean []string
 	for _, k := range keys {
